@@ -10,11 +10,11 @@ const OBSTACLE_PATTERNS = [
     { id: 'belt', weight: 3 },
     { id: 'gapWall', weight: 2 },
     { id: 'arc', weight: 2 },
-    { id: 'swarm', weight: 2 },
+    { id: 'swarm', weight: 1 },
     { id: 'boulder', weight: 2 },
     { id: 'stream', weight: 2 }
 ];
-const OBSTACLE_MAX_ALIVE = 70;
+const OBSTACLE_MAX_ALIVE = 48;
 const OBSTACLE_RAMP_MS = 90000; // density ramps up over the first 90 s
 const OBSTACLE_SCROLL_SPEED = 0.55; // px/frame the level scrolls in regular stages
 const TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel', 'terraces', 'bulges', 'zigzag', 'gorge',
@@ -120,7 +120,7 @@ extendClass(ObstacleManager, {
         pts.slice(0, budget).forEach((pt) => {
             const def = pt.big ? (palette.slice().sort((a, b) => (b.width || 10) - (a.width || 10))[0])
                 : this.pickWeightedDef(palette);
-            const scale = pt.scale || (0.7 + Math.random() * 0.6);
+            const scale = pt.scale || (0.9 + Math.random() * 0.45);
             const w = (def.width || 10) * scale;
             const h = (def.height || 10) * scale;
             const x = ex - vx * pt.u + px * pt.w - w / 2;
@@ -196,8 +196,8 @@ extendClass(ObstacleManager, {
                     const w = -half + (across * (i + Math.random() * 0.6)) / n;
                     if (Math.abs(w - gapW) < gapSize / 2) continue;
                     pts.push({ u: (w + half) * Math.abs(slope) + rand(0, 10), w: w, scale: rand(0.8, 1.3) });
-                    if (Math.random() < 0.35 + intensity * 0.3) {
-                        pts.push({ u: (w + half) * Math.abs(slope) + rand(12, 22), w: w + rand(-6, 6), scale: rand(0.5, 0.9) });
+                    if (Math.random() < 0.12 + intensity * 0.15) {
+                        pts.push({ u: (w + half) * Math.abs(slope) + rand(12, 22), w: w + rand(-6, 6), scale: rand(0.75, 1.05) });
                     }
                 }
                 break;
@@ -229,24 +229,24 @@ extendClass(ObstacleManager, {
                 break;
             }
             case 'swarm': {
-                // Many small, slightly faster pebbles in a loose cloud.
-                const n = count(12, 26);
+                // Compact mid-size pack — used to flood the lane with dust pebbles.
+                const n = count(5, 10);
                 const centerW = rand(-half * 0.5, half * 0.5);
-                const spread = rand(half * 0.35, half * 0.7);
+                const spread = rand(half * 0.25, half * 0.5);
                 for (let i = 0; i < n; i++) {
-                    pts.push({ u: rand(0, 50), w: centerW + rand(-spread, spread), scale: rand(0.45, 0.75), speedMul: rand(1.1, 1.4) });
+                    pts.push({ u: rand(0, 50), w: centerW + rand(-spread, spread), scale: rand(0.75, 1.05), speedMul: rand(1.05, 1.25) });
                 }
                 break;
             }
             case 'boulder': {
-                // One big rock with a halo of debris.
+                // One big rock with a thin halo of readable chunks (not dust).
                 const centerW = rand(-half * 0.6, half * 0.6);
                 pts.push({ u: 34, w: centerW, scale: 2, big: true });
-                const n = count(5, 10);
+                const n = count(2, 5);
                 for (let i = 0; i < n; i++) {
                     const a = (Math.PI * 2 * i) / n + rand(-0.3, 0.3);
                     const r = rand(18, 30);
-                    pts.push({ u: 34 + Math.cos(a) * r, w: centerW + Math.sin(a) * r, scale: rand(0.4, 0.7) });
+                    pts.push({ u: 34 + Math.cos(a) * r, w: centerW + Math.sin(a) * r, scale: rand(0.7, 1.0) });
                 }
                 break;
             }
@@ -263,11 +263,11 @@ extendClass(ObstacleManager, {
             case 'field':
             default: {
                 // Scattered field across the whole width, rocks kept apart.
-                const n = count(8, 18);
+                const n = count(6, 12);
                 let tries = 0;
                 while (pts.length < n && tries++ < n * 8) {
-                    const p = { u: rand(0, 70), w: rand(-half + 4, half - 4), scale: rand(0.6, 1.4) };
-                    if (pts.every((q) => Math.hypot(q.u - p.u, q.w - p.w) > 12)) pts.push(p);
+                    const p = { u: rand(0, 70), w: rand(-half + 4, half - 4), scale: rand(0.85, 1.35) };
+                    if (pts.every((q) => Math.hypot(q.u - p.u, q.w - p.w) > 14)) pts.push(p);
                 }
                 break;
             }
@@ -289,6 +289,7 @@ extendClass(ObstacleManager, {
         let frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
         // Transit stages: the level eases to a stop as the sluice / warp ring slides in, and stays stopped.
         const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        const ending = !!(om && om.isLevelEnding && om.isLevelEnding());
         if (om && om.goal) {
             const g = om.goal;
             frameScale *= Math.max(0, Math.min(1, (g.restY - g.y) / (g.restY + 30)));
@@ -303,7 +304,9 @@ extendClass(ObstacleManager, {
         this.scrollDistance = (this.scrollDistance || 0) + this.scrollSpeed() * frameScale;
         // Side terrain scrolls with the level (render/draw-environment.js).
         this.terrainOffset = (this.terrainOffset || 0) + this.scrollSpeed() * frameScale;
-        const spacing = OBSTACLE_LAYER_SPACING - this.patternIntensity() * 30;
+        // Exit gate / sluice: keep terrain scrolling, but never queue another obstacle layer.
+        if (ending) return;
+        const spacing = OBSTACLE_LAYER_SPACING - this.patternIntensity() * 18;
         if (this.scrollDistance < spacing) return;
         this.scrollDistance = 0;
         this.spawnScrollLayer(gameState);
@@ -336,12 +339,12 @@ extendClass(ObstacleManager, {
             : lane.top + Math.random() * (lane.bottom - lane.top);
 
         // Walk along the train: group, hole, group, hole ...
-        const trainLen = W * (1.0 + Math.random() * 0.4);
-        const minHole = Math.max(56, 80 - intensity * 20);
+        const trainLen = W * (0.85 + Math.random() * 0.35);
+        const minHole = Math.max(72, 96 - intensity * 18);
         let cursor = Math.random() * 20;
         let spawned = 0;
         while (cursor < trainLen && alive + spawned < OBSTACLE_MAX_ALIVE) {
-            const groupSize = 1 + Math.floor(Math.random() * (1.6 + intensity * 1.2));
+            const groupSize = 1 + Math.floor(Math.random() * (1.2 + intensity * 0.8));
             // A minority of groups also drift down/up slightly while flying across.
             const vSpeed = Math.random() < 0.25
                 ? this.scrollSpeed() * (0.25 + Math.random() * 0.35) * (Math.random() < 0.5 ? -1 : 1)
@@ -350,11 +353,11 @@ extendClass(ObstacleManager, {
             let groupEnd = cursor;
             for (let g = 0; g < groupSize; g++) {
                 const useFog = fog.length && Math.random() < 0.06;
-                // Mostly mid-sized, some pebbles, the odd big chunk.
+                // Mid-sized rocks dominate; rare small (readable) and rare big.
                 const roll = Math.random();
-                const scale = roll < 0.25 ? 0.55 + Math.random() * 0.25
-                    : roll > 0.88 ? 1.7 + Math.random() * 0.6
-                        : 0.85 + Math.random() * 0.6;
+                const scale = roll < 0.08 ? 0.75 + Math.random() * 0.15
+                    : roll > 0.9 ? 1.55 + Math.random() * 0.45
+                        : 0.95 + Math.random() * 0.35;
                 let obs;
                 if (defs && (solid.length || useFog)) {
                     const def = this.pickWeightedDef(useFog ? fog : solid);

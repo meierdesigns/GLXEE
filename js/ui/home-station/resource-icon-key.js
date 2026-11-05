@@ -98,6 +98,28 @@ extendClass(HomeStationUI, {
         return MENU_AREAS.find((area) => area.tabs.indexOf(tabId) !== -1) || null;
     },
 
+    /** Remember the last sub-tab visited inside an area (SHIPYARD, UPGRADE, …). */
+    rememberAreaTab(tabId) {
+        const area = this.getTabArea(tabId);
+        if (!area || tabId === 'play') return;
+        if (!this._areaLastTab || typeof this._areaLastTab !== 'object') this._areaLastTab = {};
+        if (this._areaLastTab[area.id] === tabId) return;
+        this._areaLastTab[area.id] = tabId;
+        try {
+            localStorage.setItem('vf_hs_area_last_tab', JSON.stringify(this._areaLastTab));
+        } catch (e) { /* ignore */ }
+    },
+
+    /** Where a click on an area button should land: last section, else ★ default. */
+    getAreaLandingTab(area, pages) {
+        const list = pages && pages.length ? pages : (area && area.tabs) || [];
+        if (!list.length) return null;
+        const remembered = this._areaLastTab && this._areaLastTab[area.id];
+        if (remembered && list.indexOf(remembered) !== -1) return remembered;
+        if (area.defaultTab && list.indexOf(area.defaultTab) !== -1) return area.defaultTab;
+        return list[0];
+    },
+
     renderTabs() {
         if (typeof MENU_AREAS !== 'undefined') return this.renderAreaTabs();
         return this.renderOrderedTabs();
@@ -144,11 +166,11 @@ extendClass(HomeStationUI, {
             const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
             if (!tabs.length) return '';
             const active = activeArea === area;
-            // A click on the area always lands on its ★ default tab — except
-            // PLAY (the map is never entered just by switching areas).
+            // Land on the last section visited in this area (cached), else ★ default.
+            // PLAY stays out of the landing set so area clicks never open the map.
             const modal = (id) => id === 'play';
             const pages = tabs.filter((id) => !modal(id));
-            const target = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
+            const target = this.getAreaLandingTab(area, pages) || pages[0] || tabs[0];
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
             return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item>` +
@@ -363,7 +385,8 @@ extendClass(HomeStationUI, {
         };
         document.addEventListener('mousemove', this._mouseMoveHandler);
         const opts = options || {};
-        // No stage cleared yet on the start planet: always land on PLAY, ignore any persisted tab.
+        // No stage cleared yet: default new sessions to PLAY, but never clobber a
+        // section the pilot already opened (hangar/station/…) — that was wiping the cache.
         if (typeof profileManager !== 'undefined' && typeof planetConfigManager !== 'undefined' && profileManager.getPlanetStageState) {
             const tutorialProfile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
             if (tutorialProfile) {
@@ -372,7 +395,10 @@ extendClass(HomeStationUI, {
                 const tutorialPlanetId = tutorialMap.startPlanetId || (tutorialMap.nodes && tutorialMap.nodes[0] && tutorialMap.nodes[0].planetId);
                 if (tutorialPlanetId) {
                     const st = profileManager.getPlanetStageState(tutorialGalaxyId, tutorialPlanetId);
-                    if (!(st && st.highestStage >= 1)) opts.tab = 'play';
+                    if (!(st && st.highestStage >= 1)) {
+                        const preferred = opts.tab || (typeof menuStateManager !== 'undefined' && menuStateManager.get().tab);
+                        if (!preferred || preferred === 'play') opts.tab = 'play';
+                    }
                 }
             }
         }
@@ -421,6 +447,7 @@ extendClass(HomeStationUI, {
         const tab = this.tab === 'menu'
             ? ((this._prevTab && this._prevTab !== 'menu') ? this._prevTab : 'station')
             : this.tab;
+        this.rememberAreaTab(tab);
         this.captureShopPrefs();
         const extra = {
             tab: tab,

@@ -56,7 +56,7 @@ extendClass(HomeStationUI, {
         if (!profile) {
             this.overlay.dataset.hsTab = 'station';
             this.setOverlayHtml(`
-                <div class="profile-selection-content home-station-content">
+                <div class="profile-selection-content home-station-content vf-glass">
                     <div class="hs-header">
                         <div class="hs-topbar">
                             <span class="hs-home-label">HOME STATION</span>
@@ -92,7 +92,7 @@ extendClass(HomeStationUI, {
         const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
         const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
         this.setOverlayHtml(`
-            <div class="vf-browser-shell">
+            <div class="vf-browser-shell vf-glass">
               <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
                 <div class="hs-header hs-header-split">
                     <div class="hs-pilot-card">
@@ -170,6 +170,11 @@ extendClass(HomeStationUI, {
                 const el = wrap.firstElementChild;
                 if (el) {
                     header.insertBefore(el, headerMain);
+                    el.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.launchPlay();
+                    });
                     playBtn = el;
                 }
             }
@@ -306,13 +311,13 @@ extendClass(HomeStationUI, {
                     </div>
                     <div class="hs-panel hs-panel-stack hs-panel-parts hs-panel-ships hs-panel-storage${this.stationLayoutSideBySide() ? ' is-side-by-side' : ''}">
                         <button type="button" class="hs-panel-layout-toggle" data-station-layout-toggle aria-pressed="${this.stationLayoutSideBySide()}" aria-label="Switch layout" data-ui-tip="SWITCH LAYOUT">⇄</button>
-                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
-                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
-                            <div class="hs-row hs-ship-row">${ownedHtml}</div>
-                        </section>
                         <section class="hs-station-section${this.stationCollapsedSections().storage ? ' is-collapsed' : ''}" data-station-section="storage">
                             ${this.stationSectionHeaderHtml('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile), 'storage', !!this.stationCollapsedSections().storage)}
                             <div class="hs-row hs-station-storage-row">${this.renderStationStorage(profile)}</div>
+                        </section>
+                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
+                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
+                            <div class="hs-row hs-ship-row">${ownedHtml}</div>
                         </section>
                     </div>
                     <div class="hs-panel hs-panel-chambers">
@@ -457,13 +462,34 @@ extendClass(HomeStationUI, {
     _syncSoftNavChrome(content, bodyEl, hideTabsForTutorial) {
         if (hideTabsForTutorial) return false;
         const activeArea = this.getTabArea(this.tab);
+        const onProfiles = this.tab === 'menu' && typeof startScreenManager !== 'undefined'
+            && startScreenManager.embeddedMenuTab === 'profiles';
+        const onMenu = this.isMenuRowTab() && !onProfiles;
         const areaId = activeArea ? activeArea.id
-            : (this.isMenuRowTab() ? 'menu' : (this.tab === 'play' ? 'play' : null));
+            : (onProfiles ? 'profiles' : (onMenu ? 'menu' : (this.tab === 'play' ? 'play' : null)));
 
-        content.querySelectorAll('.hs-area-btn[data-area]').forEach((btn) => {
-            const on = !!(activeArea && btn.getAttribute('data-area') === activeArea.id);
+        content.querySelectorAll('.hs-area-btn').forEach((btn) => {
+            let on = false;
+            if (btn.hasAttribute('data-menu-open-tab')) {
+                on = onProfiles && btn.getAttribute('data-menu-open-tab') === 'profiles';
+            } else if (btn.hasAttribute('data-open-menu')) {
+                on = onMenu;
+            } else if (btn.hasAttribute('data-area')) {
+                on = !!(activeArea && btn.getAttribute('data-area') === activeArea.id);
+            }
             btn.classList.toggle('active', on);
             btn.classList.remove('hs-anim-activate', 'holo-on', 'hs-anim-from-left', 'hs-anim-from-right');
+            // Keep area → landing-tab cache hot across soft switches (stale data-tab
+            // was sending clicks back to the area's ★ default, or worse).
+            if (btn.hasAttribute('data-area') && typeof MENU_AREAS !== 'undefined'
+                && typeof this.getAreaLandingTab === 'function') {
+                const area = MENU_AREAS.find((a) => a.id === btn.getAttribute('data-area'));
+                if (area && area.tabs && area.tabs.length) {
+                    const pages = area.tabs.filter((id) => id !== 'play');
+                    const land = this.getAreaLandingTab(area, pages) || pages[0] || area.tabs[0];
+                    if (land) btn.setAttribute('data-tab', land);
+                }
+            }
         });
         content.querySelectorAll('.hs-home-btn[data-tab="station"]').forEach((btn) => {
             btn.classList.toggle('active', this.tab === 'station');
@@ -576,7 +602,7 @@ extendClass(HomeStationUI, {
                 if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
                 // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
                 if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
-                if (t === 'hangar') this.bindHangarTabEvents();
+                if (t === 'hangar') { this.bindHangarTabEvents(); this.bindStorageDragAndDrop(); }
                 // Storage grid is rebuilt on soft switch — reattach the 2-column resize grip.
                 if (t === 'station') {
                     this.bindStationColumnResize();

@@ -757,9 +757,10 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 
 /* Faction selection: favor readable facts over four cramped columns. */
 .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row {
-    flex: 0 1 clamp(180px, calc(24 * var(--sv-h)), 240px);
+    flex: 0 1 clamp(180px, calc(30 * var(--sv-h)), 320px);
     grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    max-height: 240px;
+    max-height: 320px;
+    min-height: 0;
 }
 .profile-selection-name-mode:not(.is-name-step) .profile-faction-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));

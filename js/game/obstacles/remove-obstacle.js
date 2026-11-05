@@ -1,8 +1,8 @@
 "use strict";
 
 // ObstacleManager methods, split from obstacles.js.
-const FRAGMENT_MIN_PARENT = 16; // px: smaller rocks only burst into debris
-const FRAGMENT_MIN_SIZE = 10;   // px: smallest collidable chunk
+const FRAGMENT_MIN_PARENT = 18; // px: smaller rocks only burst into debris
+const FRAGMENT_MIN_SIZE = 12;   // px: smallest collidable chunk (no dust pebbles)
 const DEBRIS_MAX = 260;
 
 extendClass(ObstacleManager, {
@@ -184,6 +184,13 @@ extendClass(ObstacleManager, {
             return;
         }
         if (obstacle && !obstacle.isFog) {
+            const ox = obstacle.x + obstacle.width / 2;
+            const oy = obstacle.y + obstacle.height / 2;
+            const span = Math.max(obstacle.width, obstacle.height);
+            // Breaking rock flings nearby pebbles before it's removed from the list.
+            if (this.blastSteerObstacles) {
+                this.blastSteerObstacles(ox, oy, Math.max(22, span * 1.6), Math.max(0.85, span / 14), obstacle);
+            }
             this.spawnDebris(obstacle);
             // Only big rocks split into real (collidable) chunks; small ones
             // just burst into debris instead of littering the field.
@@ -246,7 +253,10 @@ extendClass(ObstacleManager, {
                 fragmentDamage: Math.max(1, Math.round((parent.fragmentDamage || 8) * 0.7)),
                 fragmentHealth: 1,
                 childFragmentChance: Math.max(0, (parent.childFragmentChance || 0) * 0.7),
-                collisionDamage: Math.max(1, parent.fragmentDamage != null ? parent.fragmentDamage : 8),
+                collisionDamage: this.scaleCollisionDamage
+                    ? this.scaleCollisionDamage(
+                        Math.max(1, parent.fragmentDamage != null ? parent.fragmentDamage : 8), fw, fh)
+                    : Math.max(1, parent.fragmentDamage != null ? parent.fragmentDamage : 8),
                 opticalMode: isCrystal
                     ? (parent.opticalMode === 'kaleidoscope' ? 'prism' : (parent.opticalMode || 'none'))
                     : 'none',
@@ -254,6 +264,8 @@ extendClass(ObstacleManager, {
                 prismAngleDeg: parent.prismAngleDeg || 25,
                 explosionId: parent.explosionId || (isCrystal ? 'crystal_shatter' : 'asteroid_burst'),
                 fragmentGeneration: generation,
+                pushVx: 0,
+                pushVy: 0,
                 sprite: isCrystal ? 'crystal' : 'obstacleSmall',
                 opacity: 1,
                 lightIntensity: isCrystal ? 0.3 : 0,

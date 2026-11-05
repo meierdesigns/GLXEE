@@ -491,10 +491,14 @@
             applyFrameStyle();
         }
         else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
-            const pct = Math.max(0, Math.min(100, v)) / 100;
-            if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
-            else if (parts[1] === 'sound') volumeControlsManager.setSoundVolume(pct);
-            else if (parts[1] === 'music') volumeControlsManager.setMusicVolume(pct);
+            if (parts[1] === 'speed' && volumeControlsManager.setMusicSpeed) {
+                volumeControlsManager.setMusicSpeed(Math.max(0.5, Math.min(4, v)));
+            } else {
+                const pct = Math.max(0, Math.min(100, v)) / 100;
+                if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
+                else if (parts[1] === 'sound') volumeControlsManager.setSoundVolume(pct);
+                else if (parts[1] === 'music') volumeControlsManager.setMusicVolume(pct);
+            }
         }
     }
     const FXOPEN_KEY = 'vf-fx-open';

@@ -26,18 +26,29 @@
         }
         return z;
     }
-    // Visual px per CSS px inside `el`: CSS zoom plus the station glass-scale host
-    // (.vf-browser-shell, or a direct .home-station-content) via --hs-z.
+    // Visual px per CSS px inside `el`: CSS zoom plus the bezel glass host
+    // (.vf-glass / .vf-browser-shell / menus / fight) via --_z / --hs-z / --vf-glass-z
+    // (host uses transform:scale, not CSS zoom).
     function effectiveZoom(el) {
         let z = cssZoom(el);
         for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
             if (!n.classList) continue;
-            if (n.classList.contains('vf-browser-shell')
-                || n.classList.contains('home-station-content')) {
-                const v = parseFloat(getComputedStyle(n).getPropertyValue('--hs-z'));
+            if (n.classList.contains('vf-glass')
+                || n.classList.contains('vf-browser-shell')
+                || n.classList.contains('home-station-content')
+                || n.classList.contains('game-container')
+                || n.classList.contains('start-screen')
+                || n.classList.contains('start-screen-overlay')
+                || n.classList.contains('player-selection-overlay')
+                || (n.classList.contains('profile-selection-overlay')
+                    && !n.classList.contains('home-station-overlay'))) {
+                const cs = getComputedStyle(n);
+                const v = parseFloat(cs.getPropertyValue('--_z'))
+                    || parseFloat(cs.getPropertyValue('--hs-z'))
+                    || parseFloat(cs.getPropertyValue('--vf-glass-z'));
                 if (Number.isFinite(v) && v > 0) {
                     z *= v;
-                    break; // one host only — content inherits --hs-z from the shell
+                    break; // one glass host only
                 }
             }
         }

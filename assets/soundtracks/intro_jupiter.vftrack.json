@@ -1,0 +1,96 @@
+{
+  "format": "vftrack",
+  "version": 1,
+  "meta": {
+    "title": "Giant Gate Launch",
+    "author": "VF Tracker",
+    "planet": "jupiter",
+    "notes": "mission intro fanfare"
+  },
+  "bpm": 104,
+  "rowsPerBeat": 1,
+  "rowsPerPattern": 16,
+  "channels": 4,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "bass",
+      "wave": "sawtooth",
+      "volume": 0.72,
+      "attack": 0.008,
+      "decay": 0.1,
+      "sustain": 0.5,
+      "release": 0.14,
+      "filter": 1000
+    },
+    {
+      "id": 2,
+      "name": "lead",
+      "wave": "square",
+      "volume": 0.5,
+      "attack": 0.004,
+      "decay": 0.08,
+      "sustain": 0.45,
+      "release": 0.14,
+      "filter": null
+    },
+    {
+      "id": 3,
+      "name": "arp",
+      "wave": "triangle",
+      "volume": 0.34,
+      "attack": 0.002,
+      "decay": 0.05,
+      "sustain": 0.28,
+      "release": 0.06,
+      "filter": null
+    },
+    {
+      "id": 4,
+      "name": "hat",
+      "wave": "noise",
+      "volume": 0.26,
+      "attack": 0.001,
+      "decay": 0.03,
+      "sustain": 0.02,
+      "release": 0.035,
+      "filter": null
+    },
+    {
+      "id": 5,
+      "name": "kick",
+      "wave": "sine",
+      "volume": 0.88,
+      "attack": 0.001,
+      "decay": 0.11,
+      "sustain": 0.07,
+      "release": 0.06,
+      "filter": null
+    }
+  ],
+  "patterns": [
+    {
+      "id": 0,
+      "channels": [
+        "E-1:1:68 . . G-1:1:50 . B-1:1:60 . . E-2:1:54 . D-2:1:46 . B-1:1:40 . . .",
+        "E-3:2:48 . G-3:2:40 . B-3:2:52 . D-4:2:44 E-4:2:56 . B-3:2:42 . G-3:2:36 . E-3:2:32 . .",
+        "E-4:3:24 B-3:3:14 . B-3:3:14 E-4:3:24 . G-4:3:28 . B-3:3:14 E-4:3:20 . D-4:3:16 . B-3:3:12 . .",
+        "E-1:5:72 . A-4:4:22 . E-1:5:54 . A-4:4:18 E-1:5:68 . A-4:4:24 . E-1:5:48 A-4:4:16 A-4:4:12 . ."
+      ]
+    },
+    {
+      "id": 1,
+      "channels": [
+        "C-2:1:62 . . E-2:1:48 . G-2:1:56 . . B-1:1:50 . A-1:1:44 . G-1:1:38 E-1:1:52 . OFF",
+        "C-4:2:46 . E-4:2:38 . G-4:2:50 . B-4:2:42 E-5:2:54 . D-5:2:40 . B-4:2:36 . OFF . .",
+        "C-5:3:22 G-4:3:12 . G-4:3:12 C-5:3:22 . E-5:3:26 . G-4:3:12 C-5:3:18 . B-4:3:14 . G-4:3:10 . .",
+        "E-1:5:78 A-4:4:28 . A-4:4:16 E-1:5:58 . A-4:4:22 . E-1:5:74 A-4:4:26 A-4:4:14 . OFF . . ."
+      ]
+    }
+  ],
+  "order": [
+    0,
+    1
+  ],
+  "loop": false
+}

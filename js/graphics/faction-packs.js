@@ -46,7 +46,10 @@ const factionPacks = (() => {
         const out = {}, ids = (typeof factionShipStyles !== 'undefined' && factionShipStyles.factions) || ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
         await Promise.all(ids.map(async (f) => { const m = await getJson(BASE + f + '/manifest.json'); if (Array.isArray(m)) out[f] = m; }));
         if (Object.keys(out).length) return out;
-        return (await getJson('/__factions')) || out;
+        // /__factions is local-dev only — hosted builds (itch.io) stay on static manifests.
+        const host = (typeof location !== 'undefined' && location.hostname) || '';
+        const localDev = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+        return localDev ? ((await getJson('/__factions')) || out) : out;
     }
     function applyStyle(f, style) {
         if (typeof factionShipStyles === 'undefined' || !style || !factionShipStyles.styles[f]) return;

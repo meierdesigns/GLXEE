@@ -333,32 +333,85 @@ html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="
    !important: the palette code writes body.style.background inline. */
 html:has(#vf-bezel) body,
 html.vf-game-shown:has(#vf-bezel) body {
-    background: linear-gradient(var(--color-background) 0 0) var(--fr-open-side) var(--fr-open-top) / var(--fr-open-w) var(--fr-open-h) no-repeat !important;
+    /* Black under the whole open+inset glass box (freiraum included). */
+    background: #000 !important;
 }
-/* Full-stage screens (station, profiles, galaxy map, pause, …) and tint / glow layers fill the whole stage
-   rectangle with their own dark background, which showed as black squares outside the frame's notches and
-   rounded corners. Cut them to the frame outline: the stepped one in pixel mode, the faction silhouette otherwise. */
-/* Outside-screen dressing stays clipped hard to the glass opening. Screen UI sizes itself
-   to --fr-open-*; the bezel (z above) covers the band. One fill knob: --fr-bg-crop on .vf-bezel-back. */
+/* Faction silhouette on <html> so stage children can clip to the same outline. */
+html[data-faction="terran"] { --fr-shape: var(--fr-shape-terran); }
+html[data-faction="kronax"] { --fr-shape: var(--fr-shape-kronax); }
+html[data-faction="voidborn"] { --fr-shape: var(--fr-shape-voidborn); }
+html[data-faction="pirate"] { --fr-shape: var(--fr-shape-pirate); }
+html[data-faction="machine"] { --fr-shape: var(--fr-shape-machine); }
+
+/* Stage is a rectangle; bezel silhouette has chamfers/notches. Without this,
+   the black body corner peeks past the rounded rim as a square “screen” leak.
+   Clip the whole stage (screen + overlays + parallax) to the same outline. */
+html:has(#vf-bezel) body {
+    clip-path: var(--fr-shape, none);
+}
+/* Seal subpixel / vine-gap leaks on the outer rim (showed as a 1–2px purple
+   sliver past the side vine into the letterbox). */
+html:has(#vf-bezel) #vf-bezel {
+    box-shadow: 0 0 0 2px var(--fr-band-fill, #000);
+}
+html[data-faction="voidborn"]:has(#vf-bezel) .vf-bezel-back {
+    background: #14041c !important;
+}
+/* Cables SVG is fixed to the window and draws plugs past the rim — reads as
+   screen wings on the sides. Keep them off while the bezel is up. */
+html:has(#vf-bezel) :is(#vf-cables, #vf-cables-old) {
+    display: none !important;
+}
+
+/* Glass opening shape (freiraum stays black via .vf-bezel-back). */
 html:has(#vf-bezel) {
     --vf-stage-shape: inset(
-        var(--fr-open-top)
-        var(--fr-open-side)
-        var(--fr-open-bottom)
-        var(--fr-open-side)
+        calc(var(--fr-open-top) + var(--vf-glass-inset, 0px))
+        calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
+        calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
+        calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         round calc(24 * var(--bz-u))
     );
 }
 html[data-vf-frame-px="on"][data-vf-frame-sil] {
     --vf-stage-shape: inset(
-        var(--fr-open-top)
-        var(--fr-open-side)
-        var(--fr-open-bottom)
-        var(--fr-open-side)
+        calc(var(--fr-open-top) + var(--vf-glass-inset, 0px))
+        calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
+        calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
+        calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         round calc(24 * var(--bz-u))
     );
 }
-html:has(#vf-bezel) :is(#colorOverlay, .vf-bg-parallax-glow) { clip-path: var(--vf-stage-shape, none) !important; }
+/* Tint/glow that fill the stage box may clip to the silhouette.
+   Parallax base/glow are OVERSIZED (-6%/112%) — never clip them with
+   --fr-shape (% is relative to their own box and would misalign). They
+   are contained by the host overlay / body overflow instead. */
+html:has(#vf-bezel) #colorOverlay {
+    clip-path: var(--fr-shape, var(--vf-stage-shape, none)) !important;
+}
+/* Full-stage overlays host overscan parallax. Clip to the GLASS opening
+   (--vf-stage-shape), not the outer silhouette — otherwise sky/glow paints
+   into the freiraum under the vine and reads as screen-in-bezel bleed.
+   Never apply this to .profile-selection-overlay.is-inline: that dialog is a
+   small flex child inside the start-screen terminal, and inset(--fr-open-*)
+   re-cuts fr-open-top/bottom off ITS own box — wiping CANCEL/NEXT and the
+   bottom of the faction cards (and the tops of the faction swatches). */
+html:has(#vf-bezel) :is(
+    .home-station-overlay,
+    .profile-selection-overlay:not(.is-inline),
+    .player-selection-overlay
+) {
+    clip-path: var(--vf-stage-shape, none) !important;
+    overflow: hidden !important;
+}
+html:has(#vf-bezel) .profile-selection-overlay.is-inline {
+    clip-path: none !important;
+    overflow: visible !important;
+}
+/* Glass hosts: keep overscan parallax inside the glass box itself. */
+html:has(#vf-bezel) .vf-glass.vf-bg-parallax-host {
+    overflow: hidden !important;
+}
 
 /* Empty sub-nav (PROFILES): same bar and frame as the other tabs, nothing inside. */
 .home-station-content .hs-subnav.hs-subnav-empty { pointer-events: none; }
@@ -1031,33 +1084,51 @@ html body .pause-overlay .pause-button {
     letter-spacing: 3px;
 }
 
-/* Pause screen only fills the glass opening of the bezel (same geometry as the fight screen). */
-html body .pause-overlay {
-    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    left: calc(var(--fr-open-side) / var(--_z)) !important;
-    top: calc(var(--fr-open-top) / var(--_z)) !important;
-    width: calc(var(--fr-open-w) / var(--_z)) !important;
-    height: calc(var(--fr-open-h) / var(--_z)) !important;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-/* Victory / game-over: only inside the bezel's screen opening (same geometry as the other menu surfaces). */
-html body .victory-screen,
-html body .game-over {
-    --_z: 1;
-    zoom: var(--_z);
-    inset: auto !important;
-    left: calc(var(--fr-open-side) / var(--_z)) !important;
-    top: calc(var(--fr-open-top) / var(--_z)) !important;
-    right: auto !important;
-    bottom: auto !important;
-    width: calc(var(--fr-open-w) / var(--_z)) !important;
-    height: calc(var(--fr-open-h) / var(--_z)) !important;
+/* Pause / settings live INSIDE .game-container (already the glass host with
+   transform:scale). Re-applying the glass left/top/size/scale here made
+   position:fixed resolve against the transformed parent and left a small
+   centred dim box — fill the fight glass 1:1 instead. */
+html body .game-container > .pause-overlay,
+html body .game-container > .settings-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
     max-width: none !important;
     max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    zoom: 1 !important;
     box-sizing: border-box;
+    overflow: auto;
+    contain: paint;
+}
+
+/* Victory / defeat sit on <body> — same .vf-glass inset recipe as the fight host. */
+html body .victory-screen,
+html body .game-over {
+    --_z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    --_gi: var(--vf-glass-inset, 0px);
+    zoom: 1 !important;
+    inset: auto !important;
+    left: calc(var(--stage-x, 0px) + var(--fr-open-side) + var(--_gi)) !important;
+    top: calc(var(--stage-y, 0px) + var(--fr-open-top) + var(--_gi)) !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: calc((var(--fr-open-w) - 2 * var(--_gi)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) - 2 * var(--_gi)) / var(--_z)) !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    box-sizing: border-box;
+    transform: scale(var(--_z));
+    transform-origin: 0 0;
     overflow: hidden;
+    contain: paint;
 }
 html body .victory-screen .victory-content {
     width: min(80%, 720px);

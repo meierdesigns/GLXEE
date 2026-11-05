@@ -134,7 +134,7 @@
         url('../../assets/ui/hs-bg-travel.png');
 }
 .vf-browser-shell {
-    /* Under .home-station-overlay, part-15 turns this into the glass-scale host.
+    /* Under .home-station-overlay, .vf-glass (part-19) is the scale host.
        Base styles keep a simple flex stage for any non-station use. */
     position: relative;
     flex: 0 0 auto;
@@ -147,7 +147,8 @@
     display: flex;
     align-items: stretch;
     justify-content: flex-start;
-    overflow: hidden;
+    /* Station host uses overflow:visible via .vf-glass — do not force hidden here. */
+    overflow: visible;
 }
 .home-station-content {
     position: relative;
@@ -938,19 +939,24 @@ button.hs-logout-btn.nav-focused {
 /* Storage bays: slot size is baked in HTML (--cs / track px) so ship + station
    always match. Container queries must not rescale one bay differently. */
 .hs-storage-grid {
+    /* Containing block for absolute drop-previews AND the offsetParent for every
+       .hs-storage-cell: without this the cells' offsetLeft/Top climb to the panel,
+       so Inspect / layout numbers sit on the panel while the tiles paint inside the grid. */
+    position: relative;
     display: grid;
-    gap: 4px;
+    /* Equal slot lines = opaque gap colour between cells. Frame stroke uses the same
+       --hs-gap (JS snaps cell+gap so lines stay even under glass transform:scale). */
+    --hs-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, #05060a);
+    gap: var(--hs-gap, 2px);
     min-width: 0;
     flex: 0 0 auto;
     align-self: start;
     justify-self: start;
     box-sizing: content-box;
-    padding: 6px;
-    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 62%, transparent);
-    background: color-mix(in srgb, #05060a 90%, var(--faction-accent, var(--color-primary)));
-    box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent),
-        0 0 0 1px color-mix(in srgb, #000 55%, transparent);
+    padding: 0;
+    border: var(--hs-gap, 2px) solid var(--hs-line);
+    background-color: var(--hs-line);
+    box-shadow: none;
 }
 .hs-storage-cell {
     position: relative;
@@ -963,13 +969,56 @@ button.hs-logout-btn.nav-focused {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--pk-c, var(--color-primary));
+    border: 0;
     background: #05060a;
+    box-shadow: none;
     cursor: pointer;
 }
 .hs-storage-cell:hover:not(.hs-storage-cell-empty),
 .hs-storage-cell:focus-visible:not(.hs-storage-cell-empty) {
-    box-shadow: inset 0 0 10px color-mix(in srgb, var(--pk-c, var(--color-primary)) 35%, transparent);
+    box-shadow: inset 0 0 0 var(--ui-border-width, 2px) var(--pk-c, var(--color-primary));
+}
+.hs-storage-cell[draggable="true"] { cursor: grab; }
+.hs-storage-cell.is-dragging { opacity: 0.4; }
+/* Equipped (sitting in a ship slot, not just stored): a slow colored pulse behind the icon,
+   in the part's own --pk-c color — tells it apart from merely-stored copies at a glance. */
+@keyframes hs-storage-cell-equipped-glow {
+    0%, 100% { background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, #05060a); box-shadow: inset 0 0 0 var(--ui-border-width, 2px) color-mix(in srgb, var(--pk-c, var(--color-primary)) 55%, transparent); }
+    50% { background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 38%, #05060a); box-shadow: inset 0 0 0 var(--ui-border-width, 2px) color-mix(in srgb, var(--pk-c, var(--color-primary)) 85%, transparent); }
+}
+.hs-storage-cell.is-equipped {
+    animation: hs-storage-cell-equipped-glow 1.8s ease-in-out infinite;
+}
+/* Drop preview: the dragged item's own casing sitting in the hovered tile, not a highlighted
+   box — no frame, no fill, just dimmed so it still reads as "not placed yet". */
+.hs-storage-drop-preview {
+    border: 0;
+    background: none;
+    box-shadow: none;
+    opacity: 0.55;
+}
+.hs-storage-drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 10050;
+    opacity: 0.85;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--color-primary) 60%, transparent));
+}
+.hs-storage-drag-ghost-inner {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Picked-up item reads a touch smaller than its resting tile while held — purely a hold
+       cue, gone the moment it's dropped and the ghost is removed. Lives on this inner
+       wrapper, not .hs-storage-drag-ghost itself: that outer box's own rect is what the drag
+       start's zoom-calibration measures, and scaling it directly throws that measurement off,
+       making the held item drift away from the cursor. */
+    transform: scale(0.88);
+    transform-origin: center;
+}
+.hs-storage-grid.is-drag-over {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 .hs-storage-cell-icon {
     width: 66%;
@@ -990,16 +1039,13 @@ button.hs-logout-btn.nav-focused {
 }
 .hs-storage-cell-empty {
     cursor: default;
-    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
-    border: 2px dashed color-mix(in srgb, var(--color-primary) 48%, transparent);
+    background: #05060a;
+    border: 0;
+    box-shadow: none;
 }
 /* Real item casing (physical-item.js): fills the filled cell; no icon badge on top of it. */
-.hs-storage-cell .hs-item-body { position: absolute; inset: 2px; }
-/* Blueprint tiles: a recipe, not the owned part — dashed border, right half of the icon
-   rendered as an unfinished schematic (desaturated + grid lines) instead of a "BP" tag. */
-.hs-storage-cell.is-blueprint {
-    border-style: dashed;
-}
+.hs-storage-cell .hs-item-body { position: absolute; inset: 3px; }
+/* Blueprint tiles: recipe, not the owned part — right half as unfinished wireframe schematic. */
 .hs-storage-cell.is-blueprint .hs-item-body::before {
     content: '';
     position: absolute;
@@ -1031,25 +1077,31 @@ button.hs-logout-btn.nav-focused {
 }
 .hs-panel-chambers .hs-row {
     flex: 1 1 auto;
+    flex-wrap: nowrap;
+    flex-direction: column;
     min-height: 0;
     display: flex;
+    align-items: stretch;
+    margin-bottom: 0;
 }
 .hs-res-chambers {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    grid-template-rows: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
     gap: 10px;
     padding: 6px 0;
     flex: 1 1 auto;
     width: 100%;
+    height: 100%;
     min-height: 0;
+    align-content: stretch;
 }
 .hs-res-subcard {
     position: relative;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: flex-end;
+    justify-items: center;
     gap: 6px;
     padding: 14px 6px 10px;
     min-height: 0;
@@ -1130,13 +1182,15 @@ button.hs-logout-btn.nav-focused {
 .hs-res-chamber-tube {
     position: relative;
     z-index: 1;
-    width: var(--tube-w, 60%);
-    /* Keep the generative silo (48×140) from stretching into a broken-looking column. */
+    /* Height owns the fill: width follows 48/140. Only clamp to the subcard
+       itself — a tighter --tube-w max-width was shrinking height via aspect-ratio
+       and leaving the stores panel half-empty with a tiny silo graphic. */
+    height: 100%;
+    width: auto;
     aspect-ratio: 48 / 140;
-    flex: 1 1 auto;
-    align-self: center;
-    min-height: 40px;
-    max-height: 100%;
+    max-width: 100%;
+    min-width: min(var(--tube-w, 55%), 100%);
+    min-height: 0;
     border-radius: 10px 10px 6px 6px;
     background: #05060a;
     overflow: hidden;
@@ -1181,13 +1235,6 @@ button.hs-logout-btn.nav-focused {
     color: var(--color-text);
 }
 .hs-res-chamber-cap { opacity: .6; }
-/* A category with nothing owned in this view: its physical-item casing silhouette, darkened as a background hint. */
-.hs-storage-cell.is-empty {
-    cursor: default;
-}
-.hs-storage-cell.is-empty .hs-item-body {
-    filter: grayscale(1) contrast(1.4) brightness(.2);
-}
 .hs-chip-move {
     flex: 0 0 auto;
     width: 20px;

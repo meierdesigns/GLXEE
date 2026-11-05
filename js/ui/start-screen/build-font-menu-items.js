@@ -149,6 +149,7 @@ extendClass(StartScreenManager, {
         if (itemId === 'WEAPONS') return profileManager.hasDiscovered('weapons');
         if (itemId === 'ABILITIES') return profileManager.hasDiscovered('abilities');
         if (itemId === 'DEFENSE SYSTEMS') return profileManager.hasDiscovered('defenses');
+        if (itemId === 'ENERGY SYSTEMS') return profileManager.hasDiscovered('energy');
         if (itemId === 'COMPONENTS') {
             return profileManager.hasDiscovered('weapons')
                 || profileManager.hasDiscovered('abilities')

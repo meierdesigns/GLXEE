@@ -83,8 +83,9 @@ class ParticleSystem {
     }
 
     update() {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const particle = this.particles[i];
+        const list = this.particles;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const particle = list[i];
 
             particle.x += particle.vx;
             particle.y += particle.vy;
@@ -99,7 +100,9 @@ class ParticleSystem {
             particle.life--;
 
             if (particle.life <= 0) {
-                this.particles.splice(i, 1);
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                list.pop();
             }
         }
     }

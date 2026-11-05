@@ -967,16 +967,17 @@ button.hs-faction-card.nav-focused {
 }
 /* Each owned ship is its own card (own tbody): ship info left, Ship Storage grid right.
    Stacks to a single column when the host panel is narrow (see part-21 @container).
-   No card border — the parent station panel already frames the column. */
+   Bordered card: wraps ship info + storage into one visual container. */
 .hs-ship-card {
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: stretch;
     gap: 0 16px;
-    border: 0;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 4%, transparent);
     margin-bottom: 10px;
     overflow: visible;
-    padding: 4px 0;
+    padding: 8px 12px;
     box-sizing: border-box;
 }
 .hs-ship-card tr { border-bottom: none !important; }
@@ -992,7 +993,7 @@ button.hs-faction-card.nav-focused {
     align-self: start;
     margin: 6px 0;
     padding: 4px 4px 4px 16px;
-    border-left: 0;
+    border-left: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
     box-sizing: border-box;
 }
 .hs-ship-storage-row td {

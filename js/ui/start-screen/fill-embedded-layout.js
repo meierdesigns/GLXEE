@@ -119,10 +119,19 @@ extendClass(StartScreenManager, {
             `<header class="hs-layout-area-head"><span class="hs-layout-area-name">MENU</span></header>` +
             `<ul class="hs-layout-tabs">${menuRows}</ul></section>`;
 
+        // Sidebar: a second view of the MENU row (the "not shown in a card"
+        // pages), kept next to the cards so they can be dragged straight in.
+        const sidebarHtml = `<aside class="hs-layout-area hs-layout-area-menu hs-layout-sidebar" data-area="${MENU}">` +
+            `<header class="hs-layout-area-head"><span class="hs-layout-area-name">SIDEBAR</span></header>` +
+            `<ul class="hs-layout-tabs">${menuRows}</ul></aside>`;
+
         panel.innerHTML =
             '<h2 class="hs-menu-panel-section-title">MENU LAYOUT</h2>' +
-            '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
+            '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas. The SIDEBAR lists the same not-shown pages — drag straight from it into a card.</p>' +
+            `<div class="hs-layout-layout-wrap">` +
             `<div class="hs-layout-areas">${areasHtml}${profilesHtml}${menuHtml}</div>` +
+            sidebarHtml +
+            `</div>` +
             '<div class="hs-menu-panel-actions">' + (this.devMode ? '<button type="button" class="action-button hs-menu-panel-action" data-act="enemy-card" data-nav-item>ENEMY CARD LAYOUT</button>' : '') + '<button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
 
         // ---- Drag & drop: tabs between / inside areas, areas left-right.

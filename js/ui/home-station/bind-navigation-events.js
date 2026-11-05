@@ -411,6 +411,10 @@ extendClass(HomeStationUI, {
      * reorder them. Main row only: drag a divider out of the row to remove it.
      */
     bindTabOrderEditing() {
+        // Disabled: top-bar reordering is no longer available, even in dev
+        // mode. Use the MENU LAYOUT settings screen instead.
+        return;
+        // eslint-disable-next-line no-unreachable
         if (typeof MENU_ORDER === 'undefined' || typeof startScreenManager === 'undefined' ||
             !startScreenManager.devMode) return;
         const row = this.overlay.querySelector('.hs-tabs');

@@ -21,21 +21,19 @@ extendClass(GameControlSystem, {
 
         // Create / refresh victory overlay layout
         let victoryOverlay = document.getElementById('victoryOverlay');
-        // Template always has next + leave; ambush hides leave after paint.
+        // Template: next + shop + leave; ambush/boss hide leave after paint.
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuItems = ['nextLevel', 'levelSelection'];
+            uiManager.victoryMenuItems = ['nextLevel', 'shop', 'levelSelection'];
         }
         const existingBtns = victoryOverlay
             ? victoryOverlay.querySelectorAll('.victory-button').length
             : 0;
-        // Rebuild when missing, or when stale HTML still has PLAY AGAIN / a
-        // third button while the menu only has next + leave (index mismatch
-        // made "BOSS ROOM" fire planet select).
+        // Rebuild when missing, or when stale HTML lacks the shop button.
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
-            || existingBtns < 2
-            || existingBtns > 2
-            || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]');
+            || existingBtns !== 3
+            || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
+            || !victoryOverlay.querySelector('.victory-button[data-action="shop"]');
         if (!victoryOverlay) {
             victoryOverlay = document.createElement('div');
             victoryOverlay.id = 'victoryOverlay';
@@ -76,7 +74,11 @@ extendClass(GameControlSystem, {
                                 <span class="button-icon" data-icon="menuStart"></span>
                                 <span class="button-text">NEXT STAGE</span>
                             </button>
-                            <button type="button" class="victory-button" data-index="1" data-action="levelSelection" tabindex="-1">
+                            <button type="button" class="victory-button" data-index="1" data-action="shop" id="victoryShopButton" tabindex="-1">
+                                <span class="button-icon" data-icon="hsShop"></span>
+                                <span class="button-text">SHOP</span>
+                            </button>
+                            <button type="button" class="victory-button" data-index="2" data-action="levelSelection" tabindex="-1">
                                 <span class="button-icon" data-icon="menuPlanets"></span>
                                 <span class="button-text">Leave Planet</span>
                             </button>
@@ -135,6 +137,19 @@ extendClass(GameControlSystem, {
     },
 
     victoryResourceIconKey(id) {
+        if (String(id || '').indexOf('blueprint:') === 0) return 'hsBlueprint';
+        if (String(id || '').indexOf('part:') === 0) {
+            const rest = String(id).slice(5);
+            const sep = rest.indexOf(':');
+            if (sep !== -1 && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleIcon) {
+                const key = shipLoadoutManager.resolveModuleIcon({
+                    kind: rest.slice(0, sep),
+                    id: rest.slice(sep + 1)
+                });
+                if (key) return key;
+            }
+            return 'hsCraft';
+        }
         if (typeof economyConfig !== 'undefined' && economyConfig.getResourceIconKey) {
             return economyConfig.getResourceIconKey(id);
         }
@@ -147,6 +162,38 @@ extendClass(GameControlSystem, {
         return map[id] || 'resScrap';
     },
 
+    victoryLootLabel(id) {
+        const raw = String(id || '');
+        if (raw.indexOf('blueprint:') === 0 && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return 'BP ' + profileManager.getBlueprintName(raw.slice(10));
+        }
+        if (raw.indexOf('part:') === 0 && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return profileManager.getBlueprintName(raw.slice(5));
+        }
+        if (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel) {
+            return economyConfig.getResourceLabel(id);
+        }
+        return raw.toUpperCase();
+    },
+
+    victoryLootTint(id) {
+        const raw = String(id || '');
+        if (raw.indexOf('blueprint:') === 0) return '#ffd24a';
+        if (raw.indexOf('part:') === 0) {
+            const rest = raw.slice(5);
+            const sep = rest.indexOf(':');
+            const kind = sep !== -1 ? rest.slice(0, sep) : 'weapon';
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) {
+                return iconRenderer.getModuleKindColor(kind) || '#c08cff';
+            }
+            return '#c08cff';
+        }
+        if (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor) {
+            return economyConfig.getResourceColor(id);
+        }
+        return undefined;
+    },
+
     renderVictoryLootHtml(loot) {
         const entries = loot
             ? Object.keys(loot).filter((id) => (loot[id] || 0) > 0)
@@ -156,18 +203,15 @@ extendClass(GameControlSystem, {
         }
         return entries.map((id) => {
             const amount = loot[id] || 0;
-            const label = (typeof economyConfig !== 'undefined')
-                ? economyConfig.getResourceLabel(id)
-                : String(id).toUpperCase();
+            const label = this.victoryLootLabel(id);
             const iconKey = this.victoryResourceIconKey(id);
-            const tint = (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor)
-                ? economyConfig.getResourceColor(id)
-                : undefined;
+            const tint = this.victoryLootTint(id);
             const iconHtml = (typeof iconRenderer !== 'undefined')
                 ? iconRenderer.imgHtml(iconKey, 28, 'victory-loot-pixel', tint)
                 : '';
             const color = tint || '#ccc';
-            return `<div class="victory-loot-row victory-loot-${id}" style="--victory-res-color:${color}" title="${label}">` +
+            const safeClass = String(id).replace(/[^a-z0-9_-]+/gi, '-');
+            return `<div class="victory-loot-row victory-loot-${safeClass}" style="--victory-res-color:${color}" title="${label}">` +
                 `<span class="victory-loot-icon">${iconHtml}</span>` +
                 `<span class="victory-loot-label">${label}</span>` +
                 `<span class="victory-loot-amount">${amount}</span>` +
@@ -179,7 +223,8 @@ extendClass(GameControlSystem, {
         if (!victoryOverlay) return;
         const defaults = {
             '0': 'menuStart',
-            '1': 'menuPlanets'
+            '1': 'hsShop',
+            '2': 'menuPlanets'
         };
         if (typeof iconRenderer !== 'undefined') {
             victoryOverlay.querySelectorAll('.victory-stats .stat-icon[data-icon]').forEach((iconEl) => {
@@ -225,7 +270,8 @@ extendClass(GameControlSystem, {
             : null;
         const cleared = !!(currentLevel && currentLevel.isBoss) || !meta || meta.kind === 'planet';
         if (!cleared) return;
-        const label = overlay.querySelector('.victory-button[data-index="1"] .button-text');
+        const leaveBtn = overlay.querySelector('.victory-button[data-action="levelSelection"]');
+        const label = leaveBtn && leaveBtn.querySelector('.button-text');
         let left = 4;
         const tick = () => {
             if (label) label.textContent = `Leave Planet (${left})`;
@@ -238,8 +284,12 @@ extendClass(GameControlSystem, {
             left -= 1;
             this._victoryAutoReturn = setTimeout(tick, 1000);
         };
-        if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuIndex = 1;
+        if (typeof uiManager !== 'undefined' && leaveBtn) {
+            const buttons = typeof uiManager.getVictoryButtons === 'function'
+                ? uiManager.getVictoryButtons()
+                : [];
+            const leaveIdx = buttons.indexOf(leaveBtn);
+            uiManager.victoryMenuIndex = leaveIdx >= 0 ? leaveIdx : Math.max(0, buttons.length - 1);
             uiManager.updateVictoryMenuDisplay();
         }
         tick();
@@ -250,7 +300,7 @@ extendClass(GameControlSystem, {
             clearTimeout(this._victoryAutoReturn);
             this._victoryAutoReturn = null;
         }
-        const label = document.querySelector('#victoryOverlay .victory-button[data-index="1"] .button-text');
+        const label = document.querySelector('#victoryOverlay .victory-button[data-action="levelSelection"] .button-text');
         if (label) label.textContent = 'Leave Planet';
     },
 
@@ -310,9 +360,12 @@ extendClass(GameControlSystem, {
         }
         if (typeof uiManager !== 'undefined') {
             uiManager.victoryMenuItems = hideLeaveBtn
-                ? ['nextLevel']
-                : ['nextLevel', 'levelSelection'];
-            if (hideLeaveBtn && uiManager.victoryMenuIndex > 0) {
+                ? ['nextLevel', 'shop']
+                : ['nextLevel', 'shop', 'levelSelection'];
+            const visible = typeof uiManager.getVictoryButtons === 'function'
+                ? uiManager.getVictoryButtons().length
+                : uiManager.victoryMenuItems.length;
+            if (uiManager.victoryMenuIndex >= visible) {
                 uiManager.victoryMenuIndex = 0;
             }
         }

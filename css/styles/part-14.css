@@ -1321,11 +1321,27 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 }
 
 /* Menu → LAYOUT editor (fill-embedded-layout.js). */
+.hs-layout-editor .hs-layout-layout-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 10px 0 14px;
+}
 .hs-layout-editor .hs-layout-areas {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
     gap: 12px;
-    margin: 10px 0 14px;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+}
+.hs-layout-sidebar {
+    flex: 0 0 220px;
+    width: 220px;
+    position: sticky;
+    top: 8px;
+    max-height: 70vh;
+    overflow-y: auto;
 }
 .hs-layout-area {
     border: var(--ui-border-width) solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);

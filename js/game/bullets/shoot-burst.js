@@ -197,6 +197,7 @@ extendClass(BulletManager, {
         const W = (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 240;
         const H = (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300;
         if (enemy.entering
+            || (typeof objectiveManager !== 'undefined' && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace())
             || (typeof objectiveManager !== 'undefined' && objectiveManager.isArrivalGrace && objectiveManager.isArrivalGrace())
             || enemy.x + (enemy.width || 0) < 0 || enemy.x > W
             || enemy.y + (enemy.height || 0) < 0 || enemy.y > H) {
@@ -444,11 +445,19 @@ extendClass(BulletManager, {
     },
 
     removeBullet(index) {
-        this.bullets.splice(index, 1);
+        const list = this.bullets;
+        if (index < 0 || index >= list.length) return;
+        const last = list.length - 1;
+        if (index !== last) list[index] = list[last];
+        list.pop();
     },
 
     removeEnemyBullet(index) {
-        this.enemyBullets.splice(index, 1);
+        const list = this.enemyBullets;
+        if (index < 0 || index >= list.length) return;
+        const last = list.length - 1;
+        if (index !== last) list[index] = list[last];
+        list.pop();
     },
 
     switchShotType() {

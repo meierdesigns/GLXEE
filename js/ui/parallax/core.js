@@ -178,26 +178,70 @@ class ParallaxManager {
         // Fill base background with theme color
         const backgroundColor = this.envVar('--env-background');
         ctx.fillStyle = backgroundColor || '#0a0a0a';
-        const cw = (ctx.canvas && ctx.canvas.width) || 240;
-        const ch = (ctx.canvas && ctx.canvas.height) || 300;
-        // Flying stars are spawned/culled against this, not the 400x600 the
-        // tiled layer patterns assume — the actual canvas is usually smaller
-        // (backing-store scale), so sampling across 400x600 scattered most
-        // stars outside the visible area.
-        this._starFieldW = cw;
-        this._starFieldH = ch;
+        // Logical playfield (transform already supersamples). Using backing width
+        // here filled k² more user-space pixels that the clip immediately discarded.
+        const cw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const ch = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
+        // Stars keep the prior spawn box (backing px as user units) so density on
+        // screen matches the pre-bake look.
+        const starW = (ctx.canvas && ctx.canvas.width) || cw;
+        const starH = (ctx.canvas && ctx.canvas.height) || ch;
+        this._starFieldW = starW;
+        this._starFieldH = starH;
         ctx.fillRect(0, 0, cw, ch);
 
-        // Render parallax background layers (respect visibility + opacity)
-        this.layers.forEach((layer, index) => {
-            if (layer.visible === false) return;
-            const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
-            if (opacity <= 0) return;
-            ctx.save();
-            ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-            this.drawLayerPattern(ctx, layer, index);
-            ctx.restore();
-        });
+        // When the stage is frozen (boss / non-scroll), reuse a baked layer plate.
+        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
+            || obstacleManager.isScrollStage();
+        let layerKey = backgroundColor + '|' + (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
+        for (let i = 0; i < this.layers.length; i++) {
+            const L = this.layers[i];
+            layerKey += '|' + (L.pattern || '') + ':' + (L.y || 0) + ':' + (L.color || '') + ':' + (L.visible === false ? 0 : 1);
+        }
+        layerKey += '|h' + (this.horizontalOffset || 0);
+
+        const drawLayers = (target) => {
+            for (let index = 0; index < this.layers.length; index++) {
+                const layer = this.layers[index];
+                if (layer.visible === false) continue;
+                const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
+                if (opacity <= 0) continue;
+                target.save();
+                target.globalAlpha = Math.max(0, Math.min(1, opacity));
+                this.drawLayerPattern(target, layer, index);
+                target.restore();
+            }
+        };
+
+        if (!scrolling && this._frozenLayerKey === layerKey && this._frozenLayerCanvas) {
+            ctx.drawImage(this._frozenLayerCanvas, 0, 0);
+        } else {
+            if (!scrolling) {
+                if (!this._frozenLayerCanvas
+                    || this._frozenLayerCanvas.width !== cw
+                    || this._frozenLayerCanvas.height !== ch) {
+                    this._frozenLayerCanvas = document.createElement('canvas');
+                    this._frozenLayerCanvas.width = cw;
+                    this._frozenLayerCanvas.height = ch;
+                }
+                const fx = this._frozenLayerCanvas.getContext('2d');
+                if (fx) {
+                    fx.setTransform(1, 0, 0, 1, 0, 0);
+                    fx.imageSmoothingEnabled = false;
+                    fx.clearRect(0, 0, cw, ch);
+                    fx.fillStyle = backgroundColor || '#0a0a0a';
+                    fx.fillRect(0, 0, cw, ch);
+                    drawLayers(fx);
+                    this._frozenLayerKey = layerKey;
+                    ctx.drawImage(this._frozenLayerCanvas, 0, 0);
+                } else {
+                    drawLayers(ctx);
+                }
+            } else {
+                this._frozenLayerKey = '';
+                drawLayers(ctx);
+            }
+        }
 
         // Draw flying stars
         if (this.starsEnabled !== false) {
@@ -222,11 +266,21 @@ class ParallaxManager {
         const baseAlpha = 0.08 + phase * 0.06;
         const alpha = baseAlpha + pulse * 0.04;
         ctx.save();
-        const grad = ctx.createRadialGradient(cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2, cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(1, col);
+        // Same radial falloff every frame for a given size/phase — rebuild only on change.
+        if (!this._bossGrad || this._bossGradW !== cw || this._bossGradH !== ch || this._bossGradPhase !== phase) {
+            const grad = ctx.createRadialGradient(
+                cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2,
+                cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75
+            );
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(1, col);
+            this._bossGrad = grad;
+            this._bossGradW = cw;
+            this._bossGradH = ch;
+            this._bossGradPhase = phase;
+        }
         ctx.globalAlpha = Math.max(0, Math.min(0.55, alpha));
-        ctx.fillStyle = grad;
+        ctx.fillStyle = this._bossGrad;
         ctx.fillRect(0, 0, cw, ch);
         ctx.restore();
     }

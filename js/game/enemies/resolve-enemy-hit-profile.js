@@ -331,9 +331,6 @@ extendClass(EnemyManager, {
             delete this.pendingCombatAnnounces[pid];
             if (!ev) continue;
             if (ev.once && this.firedCombatEventIds[ev.id]) continue;
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] combat event firing', ev.id, 'action=', ev.action, 'role=', ev.role);
-            }
             if (ev.action === 'summon') {
                 this.spawnEventSide(ev, state);
             }
@@ -366,9 +363,6 @@ extendClass(EnemyManager, {
             if (!fire) continue;
 
             const warnMs = this.announceCombatEvent(ev);
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] combat event announced', ev.id, 'warnMs=', warnMs);
-            }
             this.pendingCombatAnnounces[ev.id] = {
                 ev: ev,
                 fireAt: now + (warnMs != null ? warnMs : 1800)

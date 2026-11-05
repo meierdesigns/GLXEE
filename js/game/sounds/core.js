@@ -8,9 +8,10 @@ class SoundManager {
         this.soundEnabled = true;
         this.musicEnabled = true;
         this.activeTimeouts = [];
-        this.masterVolume = 0.1;
-        this.soundVolume = 0.05;
-        this.musicVolume = 0.2;
+        this.masterVolume = 0.75;
+        this.soundVolume = 0.5;
+        this.musicVolume = 0.65;
+        this._audioUnlocked = false;
 
         this.ambientNodes = null;
         this.ambientPlanetId = null;
@@ -35,14 +36,18 @@ class SoundManager {
         this.enabled = !!(window.AudioContext || window.webkitAudioContext);
     }
 
+    markAudioUnlocked() {
+        this._audioUnlocked = true;
+    }
+
     ensureContext() {
         if (!this.enabled) return null;
         if (!this.audioContext) {
             // Avoid the autoplay console warning: do not construct until
             // the document has seen a real user activation.
-            if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
-                return null;
-            }
+            const unlocked = this._audioUnlocked
+                || (navigator.userActivation && navigator.userActivation.hasBeenActive);
+            if (!unlocked) return null;
             try {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             } catch (e) {
@@ -58,12 +63,24 @@ class SoundManager {
 
     sfxVolume(scale) {
         const s = scale == null ? 1 : scale;
-        return Math.max(0.0001, 0.12 * this.masterVolume * this.soundVolume * s);
+        // Linear master×sound — slider 100%/100% ≈ full SFX.
+        return Math.max(0.0001, Math.min(1, this.masterVolume * this.soundVolume * s));
     }
 
     musicVol(scale) {
         const s = scale == null ? 1 : scale;
-        return Math.max(0.0001, 0.08 * this.masterVolume * this.musicVolume * s);
+        return Math.max(0.0001, Math.min(1, this.masterVolume * this.musicVolume * (s == null ? 1 : s) * 0.35));
+    }
+
+    /**
+     * Linear music bus: MASTER% × MUSIC% (0..1). No hidden ×8 boost —
+     * that made the sliders feel broken. Tracker instruments are already loud.
+     */
+    musicBusVolume() {
+        const m = Number(this.masterVolume);
+        const u = Number(this.musicVolume);
+        if (!Number.isFinite(m) || !Number.isFinite(u)) return 0.4;
+        return Math.max(0, Math.min(1, m * u));
     }
 
     canPlaySfx() {
@@ -72,6 +89,44 @@ class SoundManager {
 
     canPlayMusic() {
         return !!(this.enabled && this.ensureContext() && this.musicEnabled);
+    }
+
+    /** Remember what should play once AudioContext unlocks. */
+    notePendingMusic(kind, id) {
+        this._pendingMusic = { kind: kind || null, id: id || null };
+    }
+
+    clearPendingMusic() {
+        this._pendingMusic = null;
+    }
+
+    resumePendingMusic() {
+        if (!this.musicEnabled) return;
+        if (!this.ensureContext()) return;
+        const pending = this._pendingMusic;
+        this._pendingMusic = null;
+        if (pending && (pending.kind === 'victory' || pending.kind === 'lose')) {
+            if (this.startEndMusic) this.startEndMusic(pending.kind);
+            return;
+        }
+        if (this._musicContextActive && this._reevaluateMusic) {
+            this._activeOverrideKey = null;
+            this._reevaluateMusic();
+            return;
+        }
+        if (this.ambientPlanetId) {
+            this.startPlanetAmbient(this.ambientPlanetId);
+            return;
+        }
+        if (pending && pending.kind === 'planet' && pending.id) {
+            this.startPlanetAmbient(pending.id);
+            return;
+        }
+        if (pending && pending.kind === 'menu') {
+            this.startMenuMusic();
+            return;
+        }
+        if (this.startMenuMusic) this.startMenuMusic();
     }
 
     // --- Synth primitives ---
@@ -201,6 +256,7 @@ class SoundManager {
                 this.playVictory();
                 break;
             default:
+                if (this.playEnv) this.playEnv(id, o);
                 break;
         }
     }

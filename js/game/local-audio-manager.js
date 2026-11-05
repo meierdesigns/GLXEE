@@ -9,6 +9,7 @@ class LocalAudioManager {
         this.el = null;
         this.currentKey = null;
         this.volume = 0.2;
+        this.playbackRate = 1;
     }
 
     ensureEl() {
@@ -29,8 +30,14 @@ class LocalAudioManager {
         this.currentKey = key;
         el.src = dataUrl;
         el.volume = Math.max(0, Math.min(1, this.volume));
+        el.playbackRate = Math.max(0.5, Math.min(4, Number(this.playbackRate) || 1));
         el.play().catch(() => { /* needs a user gesture first — fine, next interaction retries */ });
         return true;
+    }
+
+    setPlaybackRate(rate) {
+        this.playbackRate = Math.max(0.5, Math.min(4, Number(rate) || 1));
+        if (this.el) this.el.playbackRate = this.playbackRate;
     }
 
     stop() {

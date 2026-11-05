@@ -13,7 +13,7 @@ class UIManager {
         this.gameOverMenuIndex = 0;
         this.gameOverMenuItems = ['restart', 'mainMenu'];
         this.victoryMenuIndex = 0;
-        this.victoryMenuItems = ['nextLevel', 'levelSelection'];
+        this.victoryMenuItems = ['nextLevel', 'shop', 'levelSelection'];
         this._enemyBarKeys = '';
         this._playerShipIconKey = '';
         this._playerStatIconKey = '';
@@ -65,7 +65,7 @@ class UIManager {
         const canvas = document.getElementById('playerShipIcon');
         if (!canvas || typeof playerManager === 'undefined') return;
         const model = playerManager.getCurrentShipModel ? playerManager.getCurrentShipModel() : null;
-        const key = (model ? (model.id || model.type || model.name || 'player') : '') + '|48nn';
+        const key = (model ? (model.id || model.type || model.name || 'player') : '') + '|48fill';
         if (key === this._playerShipIconKey) return;
         this._playerShipIconKey = key;
         this.renderHealthShipIcon(canvas, model);
@@ -78,16 +78,16 @@ class UIManager {
             : null;
         const energyTint = res('voltex') || '#c86ef0';
         const shieldTint = res('crystal') || '#6ec8e8';
-        const key = energyTint + '|' + shieldTint + '|16raw';
+        // Same 48×48 backing as the ship icon so CSS size and optical weight match.
+        const key = energyTint + '|' + shieldTint + '|48nn-e2';
         if (key === this._playerStatIconKey) return;
         this._playerStatIconKey = key;
         const energy = document.getElementById('playerEnergyIcon');
         const shield = document.getElementById('playerShieldIcon');
-        // Native 16px sprite + CSS 3× pixelated — skip Scale2x/@4x (looks muddy).
         const paint = (el, iconKey, tint) => {
             if (!el) return;
-            if (el.width !== 16) el.width = 16;
-            if (el.height !== 16) el.height = 16;
+            if (el.width !== 48) el.width = 48;
+            if (el.height !== 48) el.height = 48;
             iconRenderer.drawToCanvas(el, iconKey, tint, false, false, false);
         };
         paint(energy, 'statEnergy', energyTint);
@@ -202,7 +202,7 @@ class UIManager {
         const keys = enemies.map((e) =>
             e.key + ':' + (e.factionId || '') + ':' + (e.type || '') + ':' +
             (e.enemyClass || '') + ':' + (e.tier != null ? e.tier : '') + ':' +
-            (e.width || '') + 'x' + (e.height || '') + ':' + (e.shieldMax > 0 ? 's' : '')
+            (e.width || '') + 'x' + (e.height || '') + ':' + (e.shieldMax > 0 ? 's' : '') + ':ring2'
         ).join('|');
         const layout = this.enemyHudLayout(Math.max(enemies.length, 1));
 
@@ -226,10 +226,17 @@ class UIManager {
             if (!enemy || !fill) continue;
             this.updateEnemyFace(card, enemy);
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
-            const hpLabel = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            const hpCur = Math.max(0, Math.ceil(enemy.health));
+            const hpMax = Math.ceil(enemy.maxHealth || 0);
+            const hpLabel = hpCur + '/' + hpMax;
             if (fill._vfHpPct !== pct) {
                 fill._vfHpPct = pct;
                 fill.style.setProperty('--health-width', pct + '%');
+            }
+            const hullTag = card.querySelector('.enemy-vital-tag.is-hull');
+            if (hullTag && hullTag._vfHpLabel !== hpLabel) {
+                hullTag._vfHpLabel = hpLabel;
+                hullTag.textContent = 'HULL ' + hpLabel;
             }
             const hpText = fill.querySelector('.enemy-hp-text');
             if (hpText && hpText._vfHpLabel !== hpLabel) {
@@ -237,30 +244,46 @@ class UIManager {
                 hpText.textContent = hpLabel;
                 fill.title = 'HULL ' + hpLabel;
             }
-            // Shield: level + a pulsing charge state while it refills.
-            const sh = card.querySelector('.enemy-shield-fill');
-            if (sh && !(enemy.shieldMax > 0)) {
-                if (!sh.classList.contains('is-none')) sh.classList.add('is-none');
-                if (sh._vfShPct !== 0) {
-                    sh._vfShPct = 0;
-                    sh.style.setProperty('--shield-width', '0%');
+            // Shield wraps the portrait as its frame (SVG stroke = remaining %).
+            const portrait = card.querySelector('.enemy-portrait');
+            if (portrait) {
+                const shFill = portrait.querySelector('.enemy-shield-fill');
+                const shTag = portrait.querySelector('.enemy-vital-tag.is-shield');
+                if (!(enemy.shieldMax > 0)) {
+                    portrait.classList.add('is-no-shield');
+                    portrait.classList.remove('is-shield-down', 'is-shield-charging');
+                    if (portrait._vfShPct !== -1) {
+                        portrait._vfShPct = -1;
+                        portrait.style.setProperty('--shield-pct', '0%');
+                        if (shFill) shFill.setAttribute('stroke-dasharray', '0 100');
+                    }
+                    if (portrait._vfShLabel !== 'NO SHIELD') {
+                        portrait._vfShLabel = 'NO SHIELD';
+                        if (shTag) shTag.textContent = 'NO SHIELD';
+                    }
+                } else {
+                    portrait.classList.remove('is-no-shield');
+                    const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
+                    const prev = Number(portrait.dataset.prevShield || sp);
+                    if (portrait._vfShPct !== sp) {
+                        portrait._vfShPct = sp;
+                        portrait.style.setProperty('--shield-pct', sp + '%');
+                        if (shFill) shFill.setAttribute('stroke-dasharray', sp.toFixed(1) + ' 100');
+                    }
+                    portrait.classList.toggle('is-shield-charging', sp < 100 && sp > prev);
+                    portrait.classList.toggle('is-shield-down', sp <= 0);
+                    portrait.dataset.prevShield = String(sp);
+                    const shCur = Math.ceil(enemy.shield);
+                    const shMax = Math.ceil(enemy.shieldMax);
+                    const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SHIELD ' + shCur + '/' + shMax;
+                    if (portrait._vfShLabel !== shLabel) {
+                        portrait._vfShLabel = shLabel;
+                        if (shTag) shTag.textContent = shLabel;
+                        const tip = portrait.getAttribute('data-ui-tip') || '';
+                        const base = tip.split(' · SH')[0].split(' · SHIELD')[0];
+                        portrait.setAttribute('data-ui-tip', base + ' · ' + shLabel);
+                    }
                 }
-                const t = sh.querySelector('.enemy-shield-text');
-                if (t && t._vfShLabel !== 'NO SHIELD') { t._vfShLabel = 'NO SHIELD'; t.textContent = 'NO SHIELD'; }
-            } else if (sh) {
-                const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
-                const prev = Number(sh.dataset.prev || sp);
-                if (sh._vfShPct !== sp) {
-                    sh._vfShPct = sp;
-                    sh.style.setProperty('--shield-width', sp + '%');
-                }
-                sh.classList.toggle('is-charging', sp < 100 && sp > prev);
-                sh.classList.toggle('is-down', sp <= 0);
-                sh.dataset.prev = String(sp);
-                const t = sh.querySelector('.enemy-shield-text');
-                const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
-                    (enemy.shieldRegen > 0 ? '  +' + (Math.round(enemy.shieldRegen * 10) / 10) + '/S' : '');
-                if (t && t._vfShLabel !== shLabel) { t._vfShLabel = shLabel; t.textContent = shLabel; sh.title = shLabel; }
             }
         }
     }
@@ -289,7 +312,7 @@ class UIManager {
 
     /** Portrait expression: dead once defeated, pain on a hit (anger once the hull is low), calm otherwise. */
     updateEnemyFace(card, enemy) {
-        const canvas = card.querySelector('canvas.vx-portrait');
+        const canvas = card.querySelector('.enemy-portrait-face canvas.vx-portrait, canvas.vx-portrait');
         if (!canvas || typeof voxelPortrait === 'undefined' || !voxelPortrait.setState) return;
         const now = performance.now();
         const total = (enemy.health || 0) + (enemy.shield || 0);
@@ -332,7 +355,7 @@ class UIManager {
 
     /**
      * Sidebar card for a big enemy: portrait on top with the faction crest in its lower-right corner,
-     * the name, then vertical hull + shield bars like the player's own vitals.
+     * the name, one vertical hull bar, and the shield as the portrait frame.
      */
     /** Hero = boss or elite / capital craft; everything else on a card is a plain line ship. */
     isHeroEnemy(enemy) {
@@ -374,6 +397,8 @@ class UIManager {
         const portrait = document.createElement('div');
         portrait.className = 'enemy-portrait';
         portrait.setAttribute('data-ui-tip', name);
+        const faceWrap = document.createElement('div');
+        faceWrap.className = 'enemy-portrait-face';
         let face = '';
         try {
             // Line ships have no pilot portrait: their card shows the hull, so they never pass for a hero.
@@ -382,16 +407,39 @@ class UIManager {
             }
         } catch (err) { face = ''; }
         if (face) {
-            portrait.innerHTML = face;
+            faceWrap.innerHTML = face;
         } else {
             // No portrait renderer: fall back to the ship icon.
             const icon = document.createElement('canvas');
             icon.className = 'health-ship-icon';
             icon.width = 88;
             icon.height = 88;
-            portrait.appendChild(icon);
+            faceWrap.appendChild(icon);
             this.renderEnemyHealthIcon(icon, enemy);
         }
+        portrait.appendChild(faceWrap);
+        const shieldRing = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        shieldRing.setAttribute('class', 'enemy-shield-ring');
+        shieldRing.setAttribute('viewBox', '0 0 100 100');
+        shieldRing.setAttribute('preserveAspectRatio', 'none');
+        shieldRing.setAttribute('aria-hidden', 'true');
+        const mkRect = (cls) => {
+            const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            r.setAttribute('class', cls);
+            r.setAttribute('x', '5');
+            r.setAttribute('y', '5');
+            r.setAttribute('width', '90');
+            r.setAttribute('height', '90');
+            r.setAttribute('pathLength', '100');
+            return r;
+        };
+        shieldRing.appendChild(mkRect('enemy-shield-track'));
+        shieldRing.appendChild(mkRect('enemy-shield-fill'));
+        portrait.appendChild(shieldRing);
+        const shieldTag = document.createElement('span');
+        shieldTag.className = 'enemy-vital-tag is-shield';
+        shieldTag.textContent = 'SHIELD';
+        portrait.appendChild(shieldTag);
         const crestHtml = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
             ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
         if (crestHtml) {
@@ -420,23 +468,24 @@ class UIManager {
         bars.className = 'enemy-vbars';
         const hull = document.createElement('div');
         hull.className = 'enemy-vbar is-hull';
+        const hullTag = document.createElement('span');
+        hullTag.className = 'enemy-vital-tag is-hull';
+        hullTag.textContent = 'HULL';
         const fill = document.createElement('div');
         fill.className = 'health-fill';
         fill.dataset.enemyKey = enemy.key;
         const hpText = document.createElement('span');
         hpText.className = 'enemy-hp-text';
         fill.appendChild(hpText);
+        hull.appendChild(hullTag);
         hull.appendChild(fill);
-        const shield = document.createElement('div');
-        shield.className = 'enemy-vbar is-shield';
-        const sh = document.createElement('div');
-        sh.className = 'enemy-shield-fill';
-        const shText = document.createElement('span');
-        shText.className = 'enemy-shield-text';
-        sh.appendChild(shText);
-        shield.appendChild(sh);
         bars.appendChild(hull);
-        bars.appendChild(shield);
+        if (!(enemy.shieldMax > 0)) portrait.classList.add('is-no-shield');
+        else {
+            portrait.style.setProperty('--shield-pct', '100%');
+            const fillEl = shieldRing.querySelector('.enemy-shield-fill');
+            if (fillEl) fillEl.setAttribute('stroke-dasharray', '100 100');
+        }
 
         card.appendChild(portrait);
         card.appendChild(nameEl);
@@ -520,14 +569,26 @@ class UIManager {
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader)
             || (typeof shipAssetLoader !== 'undefined' ? shipAssetLoader : null);
         if (loader && loader.renderShip) {
-            const shipW = shipModel.width || 16;
-            const shipH = shipModel.height || 12;
-            const fit = Math.max(1, Math.floor(Math.min(canvas.width / shipW, canvas.height / shipH)));
-            const rw = shipW * fit;
-            const rh = shipH * fit;
+            const shipW = Math.max(1, shipModel.width || 16);
+            const shipH = Math.max(1, shipModel.height || 12);
+            // Integer base render, then nearest-neighbor stretch to fill the icon box
+            // (wide hulls used to sit tiny at fit=1 next to full-bleed 48px stat icons).
+            const baseFit = Math.max(1, Math.floor(Math.min(24 / shipW, 24 / shipH)) || 1);
+            const bw = Math.max(1, Math.round(shipW * baseFit));
+            const bh = Math.max(1, Math.round(shipH * baseFit));
+            const base = document.createElement('canvas');
+            base.width = bw;
+            base.height = bh;
+            const bctx = base.getContext('2d');
+            if (!bctx) return;
+            bctx.imageSmoothingEnabled = false;
+            loader.renderShip(bctx, shipModel, 0, 0, baseFit, null, 0);
+            const scale = Math.min(canvas.width / bw, canvas.height / bh);
+            const rw = Math.max(1, Math.round(bw * scale));
+            const rh = Math.max(1, Math.round(bh * scale));
             const ox = Math.floor((canvas.width - rw) / 2);
             const oy = Math.floor((canvas.height - rh) / 2);
-            loader.renderShip(ctx, shipModel, ox, oy, fit, null, 0);
+            ctx.drawImage(base, 0, 0, bw, bh, ox, oy, rw, rh);
             return;
         }
 

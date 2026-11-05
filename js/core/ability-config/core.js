@@ -158,34 +158,34 @@ class AbilityConfigManager {
             shield_generator: this.makeAbility({
                 id: 'shield_generator',
                 name: 'Shield Generator',
-                description: 'Energy barrier generation system',
+                description: 'Energy barrier generation system. Self-recharges while undamaged.',
                 icon: 'ability_shield_generator',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 2,
-                uiDescription: 'Provides energy shield capacity',
+                uiDescription: 'Shield capacity + self-recharge',
                 faction: 'terran'
             }),
             energy_shield: this.makeAbility({
                 id: 'energy_shield',
                 name: 'Energy Shield',
-                description: 'High-capacity energy deflection field',
+                description: 'High-capacity energy deflection field with built-in self-recharge.',
                 icon: 'ability_energy_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 2,
-                uiDescription: 'Strong energy shield',
+                uiDescription: 'Strong shield + REGEN',
                 faction: 'terran'
             }),
             capacitor_shield_regen: this.makeAbility({
                 id: 'capacitor_shield_regen',
                 name: 'Capacitor Shield',
-                description: 'Bulkier shield capacitor bank. Higher capacity and steady regen, needs a larger core mount.',
+                description: 'Bulkier shield capacitor bank. Higher capacity and faster self-recharge, needs a larger core mount.',
                 icon: 'ability_energy_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 3,
-                uiDescription: 'Large-capacity shield with built-in regen',
+                uiDescription: 'Large shield + strong REGEN',
                 faction: null,
                 visual: 'plating_capacitor',
                 slotMode: 'insert',
@@ -195,23 +195,23 @@ class AbilityConfigManager {
             adaptive_shield: this.makeAbility({
                 id: 'adaptive_shield',
                 name: 'Adaptive Shield',
-                description: 'Shield that adapts to incoming damage types',
+                description: 'Shield that adapts to incoming damage types and slowly self-recharges.',
                 icon: 'ability_adaptive_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 2,
-                uiDescription: 'Adaptive damage mitigation',
+                uiDescription: 'Adaptive shield + REGEN',
                 faction: 'terran'
             }),
             shield_regen: this.makeAbility({
                 id: 'shield_regen',
                 name: 'Shield Regen',
-                description: 'Automatic shield recharge over time',
+                description: 'Boosts automatic shield recharge rate over time',
                 icon: 'ability_shield_regen',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 1,
-                uiDescription: 'Passive shield regeneration',
+                uiDescription: 'Extra shield REGEN /s',
                 faction: 'terran'
             })
         };

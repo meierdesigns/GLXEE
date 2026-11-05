@@ -58,8 +58,8 @@ extendClass(HomeStationUI, {
             storageKey: 'hsHangarPanelWidths',
             leftVar: '--hs-hangar-left-w',
             rightVar: '--hs-hangar-right-w',
-            defaults: { left: 210, right: 220 },
-            mins: { left: 110, right: 160, center: 140 },
+            defaults: { left: 320, right: 220 },
+            mins: { left: 240, right: 160, center: 140 },
             isRightHidden: () => !!this._hangarRightCollapsed,
             hiddenRightW: 44
         });

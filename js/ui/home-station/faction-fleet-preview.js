@@ -43,7 +43,7 @@ extendClass(HomeStationUI, {
             if (!canvas.isConnected) { this._fleetPreviewAnim = null; return; }
             this._fleetPreviewAnim = requestAnimationFrame(loop);
             if (typeof document !== 'undefined' && document.hidden) return;
-            if (this.tab && this.tab !== 'factions') return;
+            if (this.tab && this.tab !== 'ffleet') return;
             if (!last) last = ts;
             const elapsed = ts - last;
             if (elapsed < frameInterval) return;

@@ -1,0 +1,98 @@
+{
+  "format": "vftrack",
+  "version": 1,
+  "meta": {
+    "title": "Victory — Pirate",
+    "author": "VF Tracker",
+    "planet": "",
+    "notes": "victory screen"
+  },
+  "bpm": 115,
+  "rowsPerBeat": 1,
+  "rowsPerPattern": 16,
+  "channels": 4,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "bass",
+      "wave": "square",
+      "volume": 0.7,
+      "attack": 0.006,
+      "decay": 0.09,
+      "sustain": 0.4,
+      "release": 0.12,
+      "filter": 900
+    },
+    {
+      "id": 2,
+      "name": "lead",
+      "wave": "square",
+      "volume": 0.46,
+      "attack": 0.003,
+      "decay": 0.05,
+      "sustain": 0.35,
+      "release": 0.1,
+      "filter": null
+    },
+    {
+      "id": 3,
+      "name": "arp",
+      "wave": "sawtooth",
+      "volume": 0.3,
+      "attack": 0.002,
+      "decay": 0.04,
+      "sustain": 0.2,
+      "release": 0.06,
+      "filter": 1600
+    },
+    {
+      "id": 4,
+      "name": "hat",
+      "wave": "noise",
+      "volume": 0.36,
+      "attack": 0.001,
+      "decay": 0.03,
+      "sustain": 0.02,
+      "release": 0.03,
+      "filter": null
+    },
+    {
+      "id": 5,
+      "name": "kick",
+      "wave": "triangle",
+      "volume": 0.8,
+      "attack": 0.001,
+      "decay": 0.11,
+      "sustain": 0.06,
+      "release": 0.06,
+      "filter": null
+    }
+  ],
+  "patterns": [
+    {
+      "id": 0,
+      "channels": [
+        "D-1:1:64 . F-1:1:48 . A-1:1:56 . . . D-2:1:52 . C-2:1:44 . A-1:1:40 . . .",
+        "D-4:2:46 . F-4:2:38 . A-4:2:50 . F-4:2:34 D-4:2:42 . C-4:2:36 . A-3:2:40 . . . .",
+        "D-5:3:24 A-4:3:16 F-4:3:16 A-4:3:16 D-5:3:24 A-4:3:16 F-4:3:16 A-4:3:16 C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 C-5:3:22 A-4:3:14 F-4:3:12 D-4:3:12",
+        "D-1:5:74 A-4:4:30 . A-4:4:20 D-1:5:58 . A-4:4:26 . D-1:5:74 A-4:4:30 . A-4:4:20 D-1:5:52 A-4:4:22 A-4:4:16 ."
+      ]
+    },
+    {
+      "id": 1,
+      "channels": [
+        "A-1:1:56 . C-2:1:44 . E-2:1:52 . . F-2:1:48 . D-2:1:40 . A-1:1:36 . . . .",
+        "A-3:2:42 . C-4:2:36 . E-4:2:46 . F-4:2:40 A-4:2:48 . E-4:2:36 . C-4:2:32 . . . .",
+        "A-4:3:20 E-4:3:12 . E-4:3:12 A-4:3:20 . C-5:3:24 . E-4:3:12 A-4:3:16 . G-4:3:12 . E-4:3:10 . .",
+        "D-1:5:64 A-4:4:24 . A-4:4:14 D-1:5:48 . A-4:4:18 . D-1:5:58 A-4:4:20 A-4:4:12 . . . . ."
+      ]
+    }
+  ],
+  "order": [
+    0,
+    0,
+    1,
+    0
+  ],
+  "loop": true
+}

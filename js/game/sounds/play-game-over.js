@@ -3,6 +3,8 @@
 // SoundManager methods, split from sounds.js.
 extendClass(SoundManager, {
     playGameOver() {
+        this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
+        this._endMusicFaction = this._currentHostileFaction || null;
         this.clearActiveTimeouts();
         this.stopPlanetAmbientNodesOnly();
         this.ambientPlanetId = null;
@@ -10,9 +12,12 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(250, 0.3, 'sine', 0.85), 300);
         this.schedule(() => this.createBeep(200, 0.5, 'sine', 0.9), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
+        this.schedule(() => this.startEndMusic('lose'), 950);
     },
 
     playVictory() {
+        this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
+        this._endMusicFaction = this._currentHostileFaction || null;
         this.clearActiveTimeouts();
         this.stopPlanetAmbientNodesOnly();
         this.ambientPlanetId = null;
@@ -21,6 +26,28 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
+        this.schedule(() => this.startEndMusic('victory'), 900);
+    },
+
+    /** Looping victory / lose vftrack, biased by hostile faction (+ optional planet). */
+    startEndMusic(kind) {
+        if (!this.musicEnabled) return;
+        const mode = kind === 'victory' ? 'victory' : 'lose';
+        this.notePendingMusic(mode, mode);
+        if (!this.ensureContext()) return;
+        const faction = String(this._endMusicFaction || this._currentHostileFaction || '').toLowerCase();
+        const planet = String(this._endMusicPlanet || this._currentPlanetId || '').toLowerCase().split('-')[0];
+        const keys = [];
+        if (planet && faction) keys.push(mode + ':' + faction + ':' + planet);
+        if (faction) keys.push(mode + ':' + faction);
+        if (planet) keys.push(mode + ':' + planet);
+        keys.push(mode);
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof vfTrackerManager === 'undefined') return;
+        vfTrackerManager.setVolume(this.musicBusVolume());
+        vfTrackerManager.setEnabled(true);
+        if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
     },
 
     playPowerUp() {
@@ -33,19 +60,40 @@ extendClass(SoundManager, {
     // --- Planet ambient (music bus) ---
 
     startPlanetAmbient(planetId) {
-        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
         this.ambientPlanetId = id;
+        this.notePendingMusic('planet', id);
+        this.markAudioUnlocked && this.markAudioUnlocked();
+
+        // Mission boot: coded intro fanfare, then this method again for combat.
+        if (this._pendingMissionIntro && this.musicEnabled && !this._introPlaying) {
+            if (this._startMissionIntroThenCombat && this._startMissionIntroThenCombat(id)) {
+                return;
+            }
+        }
+        // Intro already owning the bus — don't clobber it with combat yet.
+        if (this._introPlaying) return;
+
         this.stopPlanetAmbientNodesOnly();
 
+        // Leaving hub: kill menu sources so they can't mask planet music.
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
+            localAudioManager.stop();
+        }
+
         if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasPlanetTrack(id)) {
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (!this.musicEnabled) {
                 youtubeSoundtrackManager.setEnabled(false);
                 if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
                 return;
             }
             youtubeSoundtrackManager.setEnabled(true);
-            youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+            youtubeSoundtrackManager.setVolume(this.musicBusVolume());
             youtubeSoundtrackManager.playPlanet(id);
+            this.clearPendingMusic();
             if (typeof beatSyncManager !== 'undefined') {
                 beatSyncManager.start(id);
             }
@@ -54,13 +102,38 @@ extendClass(SoundManager, {
         if (typeof youtubeSoundtrackManager !== 'undefined') {
             youtubeSoundtrackManager.stop();
         }
-        if (!this.canPlayMusic()) {
-            if (typeof beatSyncManager !== 'undefined') {
-                beatSyncManager.start(id);
-            }
+        if (!this.musicEnabled) {
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
+            return;
+        }
+        if (!this.ensureContext()) {
+            // Wait for first user gesture (resumePendingMusic).
+            if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
             return;
         }
 
+        // Prefer coded vftrack: planet×faction (and boss) over the old drone.
+        if (typeof vfTrackerManager !== 'undefined') {
+            if (!this._currentHostileFaction) {
+                this._currentHostileFaction = this._resolveHostileFaction
+                    ? this._resolveHostileFaction(id) : '';
+            }
+            const keys = this.combatTrackKeys
+                ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+                : [id];
+            // Always include bare planet as last-ditch playable key.
+            if (keys.indexOf(id) === -1) keys.push(id);
+            vfTrackerManager.setEnabled(true);
+            vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+            const played = vfTrackerManager.playFirst(keys);
+            if (played) {
+                this.clearPendingMusic();
+                return;
+            }
+        }
+
+        // Last-resort soft drone if tracker failed to start.
         const profile = this.planetAmbient[id] || this.planetAmbient.mars;
         const ctx = this.audioContext;
         const now = ctx.currentTime;
@@ -109,6 +182,7 @@ extendClass(SoundManager, {
     },
 
     stopPlanetAmbientNodesOnly() {
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
         if (!this.ambientNodes) return;
         const nodes = this.ambientNodes;
         const ctx = this.audioContext;
@@ -146,9 +220,11 @@ extendClass(SoundManager, {
     },
 
     startMenuMusic() {
+        this.notePendingMusic('menu', 'menu');
         if (!this.musicEnabled) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
             if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             return;
         }
         this.stopPlanetAmbientNodesOnly();
@@ -158,9 +234,21 @@ extendClass(SoundManager, {
             ? soundtrackConfigManager.getMenuTrack() : null;
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (typeof localAudioManager !== 'undefined') {
-                localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+                localAudioManager.setVolume(this.musicBusVolume());
                 localAudioManager.play('menu', menuTrack.localAudioData);
+                this.clearPendingMusic();
+            }
+            return;
+        }
+        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.trackerData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (!this.ensureContext()) return;
+            if (typeof vfTrackerManager !== 'undefined') {
+                vfTrackerManager.setVolume(this.musicBusVolume());
+                if (vfTrackerManager.play('menu', menuTrack.trackerData)) this.clearPendingMusic();
             }
             return;
         }
@@ -168,18 +256,29 @@ extendClass(SoundManager, {
             localAudioManager.stop();
         }
 
-        if (typeof youtubeSoundtrackManager === 'undefined') return;
-        youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
-        youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
-        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
-            youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
-            return;
-        }
-        if (!youtubeSoundtrackManager.hasMenuTrack()) {
+        if (typeof youtubeSoundtrackManager !== 'undefined') {
+            youtubeSoundtrackManager.setVolume(this.musicBusVolume());
+            youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
+            if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
+                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
+                this.clearPendingMusic();
+                return;
+            }
+            if (youtubeSoundtrackManager.hasMenuTrack()) {
+                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                youtubeSoundtrackManager.playMenu();
+                this.clearPendingMusic();
+                return;
+            }
             youtubeSoundtrackManager.stop();
-            return;
         }
-        youtubeSoundtrackManager.playMenu();
+
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager !== 'undefined') {
+            vfTrackerManager.setVolume(this.musicBusVolume());
+            if (vfTrackerManager.playMenu()) this.clearPendingMusic();
+        }
     },
 
     stopMenuMusic() {
@@ -190,14 +289,21 @@ extendClass(SoundManager, {
         if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
             localAudioManager.stop();
         }
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey === 'menu') {
+            vfTrackerManager.stop();
+        }
     },
 
     updateAmbientVolume() {
+        const bus = this.musicBusVolume();
         if (typeof youtubeSoundtrackManager !== 'undefined') {
-            youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+            youtubeSoundtrackManager.setVolume(bus);
         }
         if (typeof localAudioManager !== 'undefined') {
-            localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+            localAudioManager.setVolume(bus);
+        }
+        if (typeof vfTrackerManager !== 'undefined') {
+            vfTrackerManager.setVolume(bus);
         }
         if (!this.ambientGain || !this.audioContext) return;
         const now = this.audioContext.currentTime;
@@ -255,12 +361,15 @@ extendClass(SoundManager, {
             if (typeof localAudioManager !== 'undefined') {
                 localAudioManager.stop();
             }
+            if (typeof vfTrackerManager !== 'undefined') {
+                vfTrackerManager.stop();
+            }
         } else if (this._musicContextActive) {
             this._activeOverrideKey = null;
             this._reevaluateMusic();
         } else if (this.ambientPlanetId) {
             this.startPlanetAmbient(this.ambientPlanetId);
-        } else if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasMenuTrack()) {
+        } else {
             this.startMenuMusic();
         }
     },

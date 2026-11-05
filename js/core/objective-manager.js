@@ -16,7 +16,6 @@ class ObjectiveManager {
         this.label = '';
         this.goal = null;
         this.enter = null;
-        this.hasShop = false;
     }
 
     reset() {
@@ -35,9 +34,9 @@ class ObjectiveManager {
         this.exitGate = false;
     }
 
-    /** End of the level reached (goal in view, objective met or won): nothing new may spawn. */
+    /** End of the level reached (exit gate / sluice phase, goal in view, objective met or won): nothing new may spawn. */
     isLevelEnding() {
-        return !!(this.goal || this.completed || this.won || this.awaitingFieldClear);
+        return !!(this.exitGate || this.goal || this.completed || this.won || this.awaitingFieldClear);
     }
 
     needsFieldClear() {
@@ -115,6 +114,16 @@ class ObjectiveManager {
         const kRise = Math.min(1, a.t / a.riseMs);
         a.y = -(a.h + a.dome.depth) + (a.restY + a.h + a.dome.depth) * out(kRise);
         a.dome.split = Math.max(0, Math.min(1, (a.t - a.riseMs) / a.openMs));
+        if (typeof soundManager !== 'undefined') {
+            if (kRise > 0.05 && !a._sfxRise && soundManager.playArrivalRise) {
+                a._sfxRise = true;
+                soundManager.playArrivalRise();
+            }
+            if (a.dome.split > 0.05 && !a._sfxOpen && soundManager.playArrivalOpen) {
+                a._sfxOpen = true;
+                soundManager.playArrivalOpen();
+            }
+        }
     }
 
     /** Arrival: tube rises in, dome opens, ship flies out, then the hatch scrolls away below. */
@@ -154,6 +163,16 @@ class ObjectiveManager {
     /** Enemies hold fire while the ship comes out of the arrival hatch and until the hatch has scrolled away. */
     isArrivalGrace() {
         return !!(this.arrival && !this.arrival.done);
+    }
+
+    /** Ship is locked into the sluice / warp fly-in — no combat damage, no steering. */
+    isGateEnter() {
+        return !!this.enter;
+    }
+
+    /** Arrival hatch fly-out or sluice enter: enemies hold fire, collisions skip the ship. */
+    isCombatGrace() {
+        return this.isArrivalGrace() || this.isGateEnter();
     }
 
     /** No spawns until the hatch has scrolled away plus a short quiet spell after it. */
@@ -314,26 +333,6 @@ class ObjectiveManager {
         }
     }
 
-    /** Shop station beside the sluice gate, on stages seeded with `hasShop`. Rides along with the gate's scroll. */
-    getShopStation() {
-        if (!this.hasShop || !this.goal || this.goal.kind !== 'sluice') return null;
-        if (this.completed || this.won || this.enter) return null;
-        const g = this.goal;
-        return { cx: g.cx + 70, y: g.y, h: g.h, range: 34 };
-    }
-
-    /** True while the player ship sits close enough to the shop station to interact. */
-    isNearShopStation() {
-        const s = this.getShopStation();
-        if (!s) return false;
-        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
-        const p = pm && pm.player;
-        if (!p) return false;
-        const px = p.x + p.width / 2;
-        const py = p.y + p.height / 2;
-        return Math.abs(px - s.cx) <= s.range && Math.abs(py - (s.y + s.h / 2)) <= s.range;
-    }
-
     /** Transit stage: the goal scrolls in once the timer ends; fly into the opening. */
     updateGoal(deltaTime) {
         const o = this.objective;
@@ -342,7 +341,10 @@ class ObjectiveManager {
             || (typeof renderManager !== 'undefined' && renderManager.width) || 240;
         if (!this.goal) {
             if (!this.exitGate && this.elapsedMs < o.seconds * 1000) return;
-            const open = o.goal === 'warp' ? 44 : 64;
+            const shipW = (typeof playerManager !== 'undefined' && playerManager.player)
+                ? (playerManager.player.width || 18) : 18;
+            // Warp used to be only 44px — a scaled ship plus canyon lips scraped it to death on enter.
+            const open = Math.max(o.goal === 'warp' ? 52 : 64, Math.ceil(shipW + 20));
             this.goal = {
                 kind: o.goal === 'warp' ? 'warp' : 'sluice',
                 y: -30,
@@ -353,6 +355,10 @@ class ObjectiveManager {
                 // Sluice: a Metroid-style hatch dome seals the opening until it is shot open. A hero breaks through, not out.
                 dome: o.goal === 'warp' ? null : { hp: 300, max: 300, depth: 22, flashMs: 0, burstMs: 0 }
             };
+            if (typeof soundManager !== 'undefined') {
+                if (o.goal === 'warp' && soundManager.playWarpAppear) soundManager.playWarpAppear();
+                else if (soundManager.playSluiceAppear) soundManager.playSluiceAppear();
+            }
             return;
         }
         const g = this.goal;
@@ -362,12 +368,19 @@ class ObjectiveManager {
             // Shot open: the halves fold back like the arrival hatch instead of bursting.
             if (g.dome.hp <= 0 && g.dome.closing) {
                 // Auto-opened hatch closing again: the halves fold back in, then it is sealed.
+                if (!g.dome._closeSfx) {
+                    g.dome._closeSfx = true;
+                    if (typeof soundManager !== 'undefined' && soundManager.playGateDomeClose) {
+                        soundManager.playGateDomeClose();
+                    }
+                }
                 g.dome.burstMs = Math.max(0, g.dome.burstMs - deltaTime);
                 g.dome.split = g.dome.burstMs / 500;
                 if (g.dome.burstMs <= 0) {
                     g.dome.hp = g.dome.max;
                     g.dome.closing = false;
                     g.dome.split = 0;
+                    g.dome._closeSfx = false;
                 }
             } else if (g.dome.hp <= 0) {
                 g.dome.burstMs = Math.min(500, g.dome.burstMs + deltaTime);
@@ -413,6 +426,16 @@ class ObjectiveManager {
         }
         if (py <= g.y + g.h && inOpening) {
             this.enter = { t: 0, dur: 1500, fromX: p.x, fromY: p.y };
+            // Cover the full fly-in: leftover shots / wall scrapes used to kill the ship mid-enter.
+            if (pm && typeof pm.invuln === 'number') {
+                pm.invuln = Math.max(pm.invuln || 0, this.enter.dur + 400);
+            }
+            if (typeof bulletManager !== 'undefined' && bulletManager.enemyBullets) {
+                bulletManager.enemyBullets.length = 0;
+            }
+            if (typeof soundManager !== 'undefined' && soundManager.playGateEnter) {
+                soundManager.playGateEnter(g.kind || 'sluice');
+            }
             // Leftover drops stream after the ship while it flies in, so no loot scoop is needed afterwards.
             if (typeof pickupManager !== 'undefined' && pickupManager.beginLootPhase) pickupManager.beginLootPhase(4000);
             return;
@@ -449,6 +472,9 @@ class ObjectiveManager {
         d.closing = false;
         d.burstMs = 0;
         d.split = 0;
+        if (typeof soundManager !== 'undefined' && soundManager.playGateDomeOpen) {
+            soundManager.playGateDomeOpen();
+        }
     }
 
     /** A player shot hits the hatch dome; returns true once it bursts. */
@@ -458,10 +484,18 @@ class ObjectiveManager {
         d.hp = Math.max(0, d.hp - Math.max(1, Number(amount) || 10));
         d.flashMs = 90;
         d.auto = false;
-        if (d.hp > 0) return false;
+        if (d.hp > 0) {
+            if (typeof soundManager !== 'undefined' && soundManager.playGateDomeHit) {
+                soundManager.playGateDomeHit();
+            }
+            return false;
+        }
         d.burstMs = 0;
         d.split = 0;
-        if (typeof soundManager !== 'undefined' && soundManager.playExplosion) soundManager.playExplosion();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.playGateDomeOpen) soundManager.playGateDomeOpen();
+            else if (soundManager.playExplosion) soundManager.playExplosion();
+        }
         if (typeof game !== 'undefined' && game) game.score += 250;
         return true;
     }
@@ -509,7 +543,6 @@ class ObjectiveManager {
             this.renderGateFrame(oc, g, W, pulse);
             if (g.dome) this.renderGateDome(oc, g);
         });
-        this.renderShopStation(ctx, pulse);
         ctx.save();
         const l = g.cx - g.open / 2;
         // Entry animation: the opening lights up as the ship flies in, then a flash washes over the field.
@@ -643,33 +676,6 @@ class ObjectiveManager {
                 ctx.fillRect(x + 1, y + 1, 2, 2);
             }
         });
-    }
-
-    /** Small kiosk floating beside the sluice on stages that got a shop; shows a "press E" hint up close. */
-    renderShopStation(ctx, pulse) {
-        const s = this.getShopStation();
-        if (!s) return;
-        const w = 26, h = 20;
-        const x = Math.round(s.cx - w / 2), y = Math.round(s.y + s.h / 2 - h / 2);
-        ctx.save();
-        ctx.fillStyle = '#05060a';
-        ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
-        ctx.fillStyle = '#2a3a4e';
-        ctx.fillRect(x, y, w, h);
-        ctx.fillStyle = 'rgba(255,200,90,' + (0.5 + pulse * 0.4) + ')';
-        ctx.fillRect(x + 3, y + 3, w - 6, 4);
-        ctx.fillStyle = '#ffc85a';
-        ctx.fillRect(x + w / 2 - 1, y + 9, 2, 2);
-        ctx.fillRect(x + w / 2 - 5, y + 13, 10, 2);
-        if (this.isNearShopStation()) {
-            ctx.fillStyle = '#05060a';
-            ctx.fillRect(x + w / 2 - 7, y - 14, 14, 10);
-            ctx.fillStyle = '#ffe9a8';
-            ctx.font = '8px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('[E]', x + w / 2, y - 6);
-        }
-        ctx.restore();
     }
 
     /**

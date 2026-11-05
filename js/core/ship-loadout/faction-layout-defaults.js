@@ -62,7 +62,6 @@ extendClass(ShipLoadoutManager, {
     exportHangarLayout(shipId) {
         const json = JSON.stringify(this.snapshotHangarLayout(shipId));
         try { navigator.clipboard.writeText(json); } catch (e) { /* ignore */ }
-        console.log(json);
         return json;
     },
 

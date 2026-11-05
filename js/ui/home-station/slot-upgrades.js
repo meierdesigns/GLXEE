@@ -103,8 +103,10 @@ extendClass(HomeStationUI, {
                 if (v && v.charAt(0) === '#') color = v;
             } catch (e) { /* ignore */ }
         }
+        // Native 16×16 hard-pixel art (1 CSS px per cell). Glass host nearest-neighbors
+        // the transform:scale; requesting 32 only stretched soft greys into mush.
         return `<div class="hs-hangar-stat${extraClass || ''}" title="${String(title || '').replace(/"/g, '&quot;')}">` +
-            `<span class="hs-stat-icon">${this.iconHtml(icon, 32, 'hs-pixel', label, color)}</span>` +
+            `<span class="hs-stat-icon">${this.iconHtml(icon, 16, 'hs-pixel', label, color)}</span>` +
             `<span class="hs-stat-body">` +
                 `<em>${label}</em>` +
                 `<strong class="hs-stat-value">${valueHtml}</strong>` +

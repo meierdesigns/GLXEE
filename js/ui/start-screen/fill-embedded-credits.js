@@ -151,7 +151,10 @@ extendClass(StartScreenManager, {
     /** Guarantee the five enemy-class size rows exist (survives stale caches). */
     sizePxDefaults(kind, id) {
         if (kind === 'player') return { min: 6, max: 60, fallback: 18 };
-        if (kind === 'shot') return { min: 1, max: 40, fallback: 4 };
+        if (kind === 'shot') {
+            const shotFallback = { player: 10, enemy: 7, boss: 7 };
+            return { min: 1, max: 40, fallback: shotFallback[id] || 7 };
+        }
         return { min: 12, max: 200, fallback: ({ scout: 36, assault: 48, heavy: 58, elite: 70, capital: 84 })[id] || 48 };
     },
 

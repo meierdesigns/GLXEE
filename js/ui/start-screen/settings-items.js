@@ -136,7 +136,7 @@ extendClass(StartScreenManager, {
             {
                 name: 'Player Shots',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
-                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'player'))) : '4',
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'player'))) : '10',
                 min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'player'
@@ -144,7 +144,7 @@ extendClass(StartScreenManager, {
             {
                 name: 'Enemy Shots',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
-                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'enemy'))) : '4',
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'enemy'))) : '7',
                 min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'enemy'
@@ -152,7 +152,7 @@ extendClass(StartScreenManager, {
             {
                 name: 'Boss Shots',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
-                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'boss'))) : '4',
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'boss'))) : '7',
                 min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'boss'

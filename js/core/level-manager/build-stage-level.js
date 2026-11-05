@@ -53,16 +53,6 @@ extendClass(CoreLevelManager, {
             };
         }
 
-        // A random subset of sluice transit stages also get a shop station
-        // beside the gate (seeded on planet+stage so it's stable per replay).
-        let hasShop = false;
-        if (isTransit && resolved.objective && resolved.objective.goal === 'sluice') {
-            const key = `${parsed.planetId}:${parsed.stageIndex}:shop`;
-            let h = 2166136261;
-            for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
-            hasShop = ((h >>> 0) % 100) < 35;
-        }
-
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
         const enemyType = parsed.isBoss
             ? (base.bossEnemyType || 'enemyBoss')
@@ -90,7 +80,6 @@ extendClass(CoreLevelManager, {
             enemyCount: (resolved.enemies && resolved.enemies.length) || base.enemyCount || 3,
             enemies: resolved.enemies || [],
             objective: resolved.objective || null,
-            hasShop,
             dailies: base.dailies || null,
             obstacles: base.obstacles || [],
             obstacleSpawnRate: Math.max(250, Math.round((base.obstacleSpawnRate || 2000) * spawnMult * tierMods.spawn)),
@@ -161,7 +150,11 @@ extendClass(CoreLevelManager, {
     },
 
     applyLevelSettings(level) {
-        const planetId = (level && (level.planetId || level.background || level.id || '')).toString().toLowerCase().split('-')[0];
+        // Keep full planet slugs (explored / ambush). Only strip stage suffixes.
+        const rawPid = (level && (level.planetId || level.background || level.id || '')).toString().toLowerCase();
+        const planetId = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(rawPid)
+            : rawPid.replace(/-(?:\d+|boss|b)$/, '') || 'mars';
 
         this.gameState.setObstacleSpawnInterval(level.obstacleSpawnRate);
 
@@ -193,7 +186,6 @@ extendClass(CoreLevelManager, {
 
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.start(objective, enemies);
-            objectiveManager.hasShop = !!level.hasShop;
         }
 
         const champion = enemies.find(e => e.champion) || enemies[0];

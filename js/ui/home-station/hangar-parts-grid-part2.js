@@ -258,9 +258,15 @@ extendClass(HomeStationUI, {
                     // Physical inventory item: lift the bare object, held where it was grabbed.
                     const r = cell.getBoundingClientRect();
                     const s = r.width / Math.max(1, cell.offsetWidth);
+                    // The 0.88 factor is the "picked up" shrink — a held item reads a touch
+                    // smaller than its resting tile, gone the instant it's dropped. It lives
+                    // here (composed into this wrap's own zoom-compensation scale, centered)
+                    // rather than as a transform on `ghost` itself: `ghost`'s own un-scaled box
+                    // is what the zoom calibration above measured, and scaling that directly
+                    // would throw the measurement off and drift the item away from the cursor.
                     const wrap = document.createElement('div');
                     wrap.className = 'hs-slot-picker hs-bay-inv';
-                    wrap.style.cssText = `position:absolute;left:0;top:0;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px;transform-origin:0 0;transform:scale(${s / k});margin:0;padding:0;border:0;outline:0;background:none;box-shadow:none;clip-path:none;filter:none;`;
+                    wrap.style.cssText = `position:absolute;left:0;top:0;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px;transform-origin:center;transform:scale(${s / k * 0.88});margin:0;padding:0;border:0;outline:0;background:none;box-shadow:none;clip-path:none;filter:none;`;
                     const clone = cell.cloneNode(true);
                     clone.classList.remove('is-dragging');
                     clone.style.width = '100%';

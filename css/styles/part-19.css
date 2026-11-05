@@ -2,8 +2,19 @@
 .hs-hangar-stats.is-row .hs-area-switch input:not(:checked) + .hs-area-switch-track::before { left: 3px; }
 
 /* Hangar stat icons (slots, size, areas, speed, energy): larger, crisp. */
-.hs-hangar-stats.is-row .hs-stat-icon { width: 32px; height: 32px; }
-.hs-hangar-stats.is-row .hs-stat-icon img { width: 32px; height: 32px; image-rendering: pixelated; }
+.hs-hangar-stats.is-row .hs-stat-icon { width: 16px; height: 16px; }
+/* 1:1 with the 16×16 sprite grid — glass host does nearest-neighbor scale. */
+.hs-hangar-stats.is-row .hs-stat-icon img,
+.hs-hangar-stats.is-row .hs-stat-icon img.hs-pixel,
+.hs-hangar-stats.is-row .hs-stat-icon svg {
+    width: 16px !important;
+    height: 16px !important;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    -ms-interpolation-mode: nearest-neighbor;
+    shape-rendering: crispEdges;
+}
 
 /* --------------------------------------------------------------------------
    Contour consistency (home station + galaxy map): every chrome stroke uses
@@ -95,18 +106,10 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     border-left-width: var(--gm-stroke) !important;
 }
 
-/* Station bezel + glass host: stage offsets (part-15 already adds these to
-   the scale host top/left). ::after frames the full stage, not the glass. */
+/* Station overlay: stage offset tokens (glass host uses these via :root). */
 .home-station-overlay {
     --stage-x: 0px;
     --stage-y: 0px;
-}
-.home-station-overlay::after {
-    inset: auto !important;
-    left: calc(var(--stage-x) + var(--hs-frame-gap)) !important;
-    top: calc(var(--stage-y) + var(--hs-frame-gap)) !important;
-    width: calc(var(--vw, calc(100 * var(--sv-w))) - 2 * var(--hs-frame-gap)) !important;
-    height: calc(var(--vh, calc(100 * var(--sv-h))) - 2 * var(--hs-frame-gap)) !important;
 }
 
 /* vw/vh replacements: 1% of the 4:3 stage. Not zoomed contexts: real stage px.
@@ -127,13 +130,60 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     --stage-y: 0px;
     --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bz: max(34px, calc(44 * var(--bz-u)));
-    /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before). */
+    /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before).
+       Side/bottom 56u (was 44): metal + tooth art ate the outer glass px when
+       the hole was flush with the rim. Top keeps the thicker strip via --bz-extra. */
     --bz-extra: 50;
-    --fr-open-side: calc(44 * var(--bz-u));
-    --fr-open-bottom: calc(44 * var(--bz-u));
+    --fr-open-side: calc(56 * var(--bz-u));
+    --fr-open-bottom: calc(56 * var(--bz-u));
     --fr-open-top: calc((44 + var(--bz-extra, 50)) * var(--bz-u));
     --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
     --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
+    /* Single glass-host zoom token (station / menus / fight). */
+    --vf-glass-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    /* Pull glass inside the hole past faction rim art. Terran/machine/kronax/
+       pirate use --_art-th = --fr-ol + 14u; voidborn vine bites --_vine-ov (16u).
+       Inset = tooth (14) + thin gutter (2). Bezel SVGs 96×96 (viewBox 48);
+       border-image-slice must stay 32 (screen-frame.css). */
+    --vf-glass-inset: calc(16 * var(--bz-u));
+}
+
+/* One bezel-opening glass host. Body keeps stage-scale; this host is the only
+   GUI scale. Recipe: undivided top/left (+ inset), size = (open - 2*inset) / z,
+   transform:scale(z). Never CSS zoom on this host.
+   Selectors cover markup with .vf-glass and the known hosts before class lands. */
+.vf-glass,
+.home-station-overlay > .vf-browser-shell,
+.home-station-overlay > .home-station-content,
+.start-screen,
+.start-screen-overlay,
+.profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
+.player-selection-overlay,
+html body .game-container {
+    --_z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    --_gi: var(--vf-glass-inset, 0px);
+    zoom: 1 !important;
+    position: fixed;
+    top: calc(var(--stage-y, 0px) + var(--fr-open-top) + var(--_gi));
+    left: calc(var(--stage-x, 0px) + var(--fr-open-side) + var(--_gi));
+    right: auto;
+    bottom: auto;
+    width: calc((var(--fr-open-w) - 2 * var(--_gi)) / var(--_z));
+    height: calc((var(--fr-open-h) - 2 * var(--_gi)) / var(--_z));
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    box-sizing: border-box;
+    transform: scale(var(--_z));
+    transform-origin: 0 0;
+    overflow: hidden;
+    /* Contain paint to the glass box — no chrome/crest past the rim. */
+    contain: paint;
+    /* Nearest-neighbor when the compositor scales this layer — without it,
+       pixel icons (and Silkscreen) go mushy under fractional --_z. */
+    image-rendering: -moz-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
 }
 .vf-bezel {
     position: absolute;
@@ -141,8 +191,12 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     top: 0;
     width: 100%;
     height: 100%;
-    /* Above screen content (game 9992); below pause/settings/remotes. */
+    /* Above every glass host (station/fight/menus). translateZ keeps this layer
+       above transform:scale glass in the compositor so rim art always covers
+       screen edges — screen must never paint over the bezel band. */
     z-index: 9993;
+    transform: translateZ(0);
+    isolation: isolate;
     pointer-events: none;
     --u: var(--bz-u);
     --bezel: calc(38 * var(--u));
@@ -531,38 +585,60 @@ html body .game-container .game-left-cluster > .player-vitals-side {
     max-height: none;
 }
 
-/* Fight screen: measured against the same --fr-open-* box every other bezel consumer
-   (vine frame, full-stage overlays) uses, so the screen edge tracks the frame edge in
-   every faction. --fight-gap is ONLY the breathing room between the canvas and the
-   side/rail panels inside the screen — it must never leak into the outer positioning.
-   The outer edge itself is tunable from the HUD remote's existing STAGE INSET slider
-   (same --fr-stage-inset the overlays use, part-20.css): 100% (default) = flush with
-   the opening, lower % pushes the edge out past the opening toward the frame, same
-   direction as "screen can peek past the vine" for overlays. --fight-peek is that
-   push distance, 0 at the default 100%. Zoom divides geometry (CSS zoom quirk). */
-/* Voidborn rim vine bites --fr-vine-ov into the glass; keep fight HUD clear of that strip. */
+/* Fight screen: same .vf-glass recipe as station/menus, plus hud inset
+   (undivided top/left — never divide by zoom). --fight-gap is only the gap
+   between canvas and side rails inside the glass. No peek past the rim —
+   screen stays inside the opaque band. --fr-hud-inset clears Voidborn vine. */
 :root { --fr-hud-inset: 0px; --fr-vine-ov: 0; }
 html[data-faction="voidborn"] {
     --fr-vine-ov: 16;
-    --fr-hud-inset: calc(var(--fr-vine-ov) * var(--bz-u));
+    /* Glass clears the vine inner edge; +12u covers tendrils that hang past
+       the border-image inner stroke into the opening (side bleed into rim). */
+    --vf-glass-inset: calc((var(--fr-vine-ov) + 12) * var(--bz-u));
+    /* Vine clearance already in glass-inset; don't stack a second fight inset. */
+    --fr-hud-inset: 0px;
+}
+/* Voidborn: clip glass to the chamfered hole so corners cannot spill past the bezel. */
+html[data-faction="voidborn"] :is(
+    .vf-glass,
+    .home-station-overlay > .vf-browser-shell,
+    .home-station-overlay > .home-station-content,
+    .start-screen,
+    .start-screen-overlay,
+    .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
+    .player-selection-overlay
+),
+html[data-faction="voidborn"] body .game-container {
+    border-radius: calc(24 * var(--bz-u));
+    /* Same chamfer as --fr-shape-voidborn, in glass-local coords. */
+    clip-path: polygon(
+        calc(24 * var(--bz-u)) 0,
+        calc(100% - 24 * var(--bz-u)) 0,
+        100% calc(24 * var(--bz-u)),
+        100% calc(100% - 24 * var(--bz-u)),
+        calc(100% - 24 * var(--bz-u)) 100%,
+        calc(24 * var(--bz-u)) 100%,
+        0 calc(100% - 24 * var(--bz-u)),
+        0 calc(24 * var(--bz-u))
+    );
 }
 html body .game-container {
-    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    --_z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    --_gi: var(--vf-glass-inset, 0px);
     --fight-gap: 16px;
-    --fight-peek: calc(16px * (1 - var(--fr-stage-inset, 1)));
     --_hi: var(--fr-hud-inset, 0px);
-    position: fixed !important;
     z-index: 9992 !important;
-    left: calc((var(--fr-open-side) + var(--_hi) - var(--fight-peek)) / var(--_z)) !important;
-    top: calc((var(--fr-open-top) - var(--fight-peek)) / var(--_z)) !important;
-    width: calc((var(--fr-open-w) - 2 * var(--_hi) + 2 * var(--fight-peek)) / var(--_z)) !important;
-    height: calc((var(--fr-open-h) - var(--_hi) + 2 * var(--fight-peek)) / var(--_z)) !important;
+    left: calc(var(--stage-x, 0px) + var(--fr-open-side) + var(--_gi) + var(--_hi)) !important;
+    top: calc(var(--stage-y, 0px) + var(--fr-open-top) + var(--_gi)) !important;
+    width: calc((var(--fr-open-w) - 2 * var(--_gi) - 2 * var(--_hi)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) - 2 * var(--_gi) - var(--_hi)) / var(--_z)) !important;
     min-height: 0 !important;
     max-height: none !important;
-    box-sizing: border-box !important;
     padding: 0 !important;
     gap: var(--fight-gap) !important;
+    /* Canvas/HUD must not spill under the bezel band. */
     overflow: hidden !important;
+    contain: paint;
     background-color: #05060a !important;
 }
 /* Side / rail panels: single inset rim, no outer ring glow. */
@@ -896,22 +972,36 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
 }
 .hs-tree-branch .hs-tree-items { border-top: 0; }
 
-/* Layer 3 band fill: one container under the hull plates.
-   --fr-bg-crop 0 = transparent band (BG shows through), 1 = opaque to the glass.
-   Spotlight box + clip to --fr-shape so notches never sprout square shadow corners. */
-.vf-bezel { --glass-r: 0; }
+/* Layer 3 band fill: under the rim, punched for the glass host.
+   Default #000 so sky/parallax never peeks between art and screen.
+   Voidborn uses vine hull so tendril gaps don't read as a dead black strip. */
+.vf-bezel { --glass-r: 0; --fr-band-fill: #000; }
+.vf-bezel[data-faction="voidborn"] { --fr-band-fill: #14041c; }
 .vf-bezel-back {
+    --_gi: var(--vf-glass-inset, 0px);
+    --_hl: calc(var(--fr-ol, var(--fr-open-side, calc(44 * var(--u)))) + var(--_gi));
+    --_hr: calc(var(--fr-or, var(--fr-open-side, calc(44 * var(--u)))) + var(--_gi));
+    --_ht: calc(var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)))) + var(--_gi));
+    --_hb: calc(var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u)))) + var(--_gi));
     position: absolute;
-    left: calc(var(--fr-ol, var(--fr-open-side, calc(44 * var(--u)))) * var(--fr-bg-crop, 0.5));
-    right: calc(var(--fr-or, var(--fr-open-side, calc(44 * var(--u)))) * var(--fr-bg-crop, 0.5));
-    top: calc(var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)))) * var(--fr-bg-crop, 0.5));
-    bottom: calc(var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u)))) * var(--fr-bg-crop, 0.5));
+    inset: 0;
     z-index: 0;
     pointer-events: none;
-    background: transparent;
-    border-radius: var(--fr-hole-r, var(--glass-r, 0));
-    box-shadow: 0 0 0 200vmax var(--hull-dark, #030307);
+    background: var(--fr-band-fill, #000);
     clip-path: var(--fr-shape);
+    /* Punch the glass opening; composite keeps the band fill. */
+    -webkit-mask:
+        linear-gradient(#000 0 0),
+        linear-gradient(#000 0 0);
+    -webkit-mask-clip: border-box, content-box;
+    -webkit-mask-composite: destination-out;
+    mask:
+        linear-gradient(#000 0 0),
+        linear-gradient(#000 0 0);
+    mask-clip: border-box, content-box;
+    mask-composite: exclude;
+    padding: var(--_ht) var(--_hr) var(--_hb) var(--_hl);
+    box-sizing: border-box;
 }
 
 /* Hangar bay zoom buttons, top right of the stage. */
@@ -1046,7 +1136,7 @@ html body .home-station-overlay .hs-component-tree-header { gap: 2px; padding: 4
 .hs-area-nav.is-step { width: 18px; height: 32px; font-size: var(--font-h2) !important; }
 
 /* Live preview: collapsed sidebar strip with a vertical label (default) */
-.hs-hangar-split.hs-hangar-right-collapsed { grid-template-columns: var(--hs-hangar-left-w, 210px) 8px minmax(0, 1fr) 0 44px; }
+.hs-hangar-split.hs-hangar-right-collapsed { grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 44px; }
 .hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > :not(h3) { display: none !important; }
 .hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > h3 > :not(.hs-sidebar-toggle) { display: none; }

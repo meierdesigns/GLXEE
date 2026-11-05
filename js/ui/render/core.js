@@ -61,9 +61,12 @@ class RenderManager {
      * voxelised finer than one logical pixel.
      */
     getRenderScale() {
-        // Sticky within ~one frame so fillCombatRect / voxel helpers do not recompute.
-        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-        if (this._scaleFrameValue != null && this._scaleStickyAt && (now - this._scaleStickyAt) < 12) {
+        // Sticky for the whole combat frame — avoid getBoundingClientRect / voxel probes
+        // on every fillCombatRect / particle call.
+        const frame = (typeof game !== 'undefined' && game && game.gameState)
+            ? game.gameState.frameCount
+            : ((typeof performance !== 'undefined') ? (performance.now() | 0) : Date.now());
+        if (this._scaleStickyFrame === frame && this._scaleFrameValue != null) {
             return this._scaleFrameValue;
         }
         // Global Pixel Size: one buffer pixel == P screen px, so every art pixel is equal.
@@ -81,8 +84,17 @@ class RenderManager {
             // so measure the on-screen width to make one art pixel == gp real screen px.
             let shown = cv && cv.clientWidth ? cv.clientWidth : lw;
             if (cv && cv.clientWidth) {
-                const bw = cv.getBoundingClientRect().width;
-                if (bw > 1) shown = bw;
+                // Reuse last measured width within ~250ms — layout thrash from bezel/FX
+                // must not force a rect read on every new frameCount tick.
+                const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                if (this._shownWSticky != null && this._shownWAt && (now - this._shownWAt) < 250) {
+                    shown = this._shownWSticky;
+                } else {
+                    const bw = cv.getBoundingClientRect().width;
+                    if (bw > 1) shown = bw;
+                    this._shownWSticky = shown;
+                    this._shownWAt = now;
+                }
             }
             // Keep fractional — rounding would make combat pixels ≠ Pixel Size.
             scale = Math.max(0.05, shown / (gp * lw));
@@ -111,7 +123,7 @@ class RenderManager {
                 scale = Math.sqrt(maxPx / Math.max(1, lw * lh));
             }
         }
-        this._scaleStickyAt = now;
+        this._scaleStickyFrame = frame;
         this._scaleFrameValue = scale;
         return scale;
     }
@@ -131,10 +143,11 @@ class RenderManager {
      * Returns null in FLAT mode so per-object sizing stays as before.
      */
     getCombatVoxelCell() {
-        // Sticky within ~one frame, same pattern as getRenderScale() — this is called
-        // many times per frame (once per bullet/particle/debris cell fill).
-        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-        if (this._voxelCellStickyAt && (now - this._voxelCellStickyAt) < 12) {
+        // Sticky for the whole frame — called once per bullet/particle/debris cell fill.
+        const frame = (typeof game !== 'undefined' && game && game.gameState)
+            ? game.gameState.frameCount
+            : ((typeof performance !== 'undefined') ? (performance.now() | 0) : Date.now());
+        if (this._voxelCellStickyFrame === frame && this._voxelCellFrameValue !== undefined) {
             return this._voxelCellFrameValue;
         }
         let result;
@@ -158,7 +171,7 @@ class RenderManager {
                 result = Number.isFinite(c) && c > 0 ? c : 1;
             }
         }
-        this._voxelCellStickyAt = now;
+        this._voxelCellStickyFrame = frame;
         this._voxelCellFrameValue = result;
         return result;
     }
@@ -475,15 +488,17 @@ class RenderManager {
         }
 
         // Enemy bullets (occluded); player bullets always visible
-        bulletManager.getEnemyBullets().forEach(bullet => {
-            if (this.isOccludedByFog(player, bullet, fogList)) return;
-            const lighting = this.calculateBulletLighting(bullet);
-            this.drawBullet(ctx, bullet, lighting);
-        });
-        bulletManager.getBullets().forEach(bullet => {
-            const lighting = this.calculateBulletLighting(bullet);
-            this.drawBullet(ctx, bullet, lighting);
-        });
+        const enemyShots = bulletManager.getEnemyBullets();
+        for (let bi = 0; bi < enemyShots.length; bi++) {
+            const bullet = enemyShots[bi];
+            if (this.isOccludedByFog(player, bullet, fogList)) continue;
+            this.drawBullet(ctx, bullet, this.calculateBulletLighting(bullet));
+        }
+        const playerShots = bulletManager.getBullets();
+        for (let bi = 0; bi < playerShots.length; bi++) {
+            const bullet = playerShots[bi];
+            this.drawBullet(ctx, bullet, this.calculateBulletLighting(bullet));
+        }
 
         // Player + HUD on top (always visible)
         if (player) {

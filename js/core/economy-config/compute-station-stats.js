@@ -236,6 +236,15 @@ extendClass(EconomyConfig, {
         return this.blueprintDropChance.default;
     },
 
+    getPartDropChance(info) {
+        const table = this.partDropChance || {};
+        if (!info) return table.default != null ? table.default : 0.012;
+        if (info.champion) return table.champion != null ? table.champion : 0.08;
+        const cls = String(info.enemyClass || '').toLowerCase();
+        if (table[cls] != null) return table[cls];
+        return table.default != null ? table.default : 0.012;
+    },
+
     rollAmount(min, max) {
         const a = Math.max(0, Math.round(Number(min) || 0));
         const b = Math.max(a, Math.round(Number(max) || a));

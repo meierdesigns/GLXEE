@@ -54,6 +54,9 @@ extendClass(EnemyManager, {
 
         for (let i = this.sideEnemies.length - 1; i >= 0; i--) {
             const e = this.sideEnemies[i];
+            if (e && e.hitFlashMs > 0) {
+                e.hitFlashMs = Math.max(0, e.hitFlashMs - deltaTime);
+            }
             // Mission start: still gliding in on the intro path, so neither moved nor culled off screen.
             if (e.introEntry) continue;
             const eCluster = e.cluster || 'alpha';
@@ -351,10 +354,13 @@ extendClass(EnemyManager, {
         if (this.enemy || this.exploding) return false;
         if (this.sideEnemies && this.sideEnemies.length > 0) return false;
         // Entries parked at 999999 never spawn, and once the objective is done
-        // updateSchedule holds back all normals — neither may block the win.
-        const objectiveDone = typeof objectiveManager !== 'undefined' && (objectiveManager.completed || objectiveManager.exitGate);
-        if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999
-            && (e.champion || !objectiveDone))) return false;
+        // (or the goal gate is already on screen, freezing updateSchedule)
+        // any remaining normals/champions can no longer spawn — none may
+        // block the win.
+        const scheduleFrozen = typeof objectiveManager !== 'undefined'
+            && (objectiveManager.completed || objectiveManager.exitGate
+                || (objectiveManager.isLevelEnding && objectiveManager.isLevelEnding()));
+        if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999 && !scheduleFrozen)) return false;
         return true;
     },
 
@@ -389,12 +395,6 @@ extendClass(EnemyManager, {
                 if (levelInfoManager.updateElement) {
                     levelInfoManager.updateElement('currentScore', game.score);
                 }
-            }
-        }
-        if (typeof profileManager !== 'undefined' && profileManager.tryBlueprintDrop) {
-            const dropped = profileManager.tryBlueprintDrop(info);
-            if (dropped && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                levelInfoManager.showLootNotice('BLUEPRINT: ' + profileManager.getBlueprintName(dropped));
             }
         }
         if (!(info && info.pickupsSpawned) && typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {

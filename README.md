@@ -382,8 +382,9 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
   tooltip (description first, key/value facts below).
 - Equipping and unequipping play a short pop / sweep animation; installed items
   pulse and bob while hovered (disabled under `prefers-reduced-motion`).
-- The station content scales with `transform: scale` instead of CSS `zoom`, so
-  DevTools and `getBoundingClientRect` match what is drawn.
+- Station, menus, and fight share one `.vf-glass` host in the bezel opening
+  (`transform: scale` GUI zoom, undivided `--fr-open-*` insets; header may peek
+  under the metal band).
 
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
@@ -497,7 +498,9 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - Ambush encounters can roll a raider boss, a pirate pack, or a light swarm.
 - Weapons, abilities, shields, charge, drive, pickups, and explosion FX form the
   moment-to-moment combat layer. Hit bursts stay compact so silhouette reads.
-- Victory loot pays resources, credits, blueprint progress, and active mission
+- Enemy wrecks can shed **blueprint** and rarer **part** pickups that must be
+  scooped into cargo (lost on death, teleported home on victory).
+- Victory loot pays resources, credits, blueprint/part salvage, and active mission
   rewards; the scoop phase ends as soon as the field is clear (idle vacuum for
   stranded drops; bosses keep a longer safety net).
 - **Launch hatch:** every planet arrival starts in a pixel tube that rises out of
@@ -619,6 +622,8 @@ Short index — the full systems live in the sections above.
 - Bezel remote **PERF** / **DEBUG**: live FPS, loop state, backing store, heap, entities.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
 - Gamepad/controller support: combat and menu navigation, fire-to-start, victory/game-over confirm.
+- VF Tracker soundtracks: planet×faction combat, victory/lose per faction, import/export + `assets/soundtracks/`.
+- Coded environment SFX: sluice/hatch/warp, obstacle breaks, pickups, wall scrape.
 
 ### Current build focus
 
@@ -660,10 +665,12 @@ css/                       fonts, screen-frame, pilot-hud, variables, asset-gen
 
 js/core/                   state, configs, stage-boot, boot-loader, viewport-fit, loop
 js/game/                   player, enemies, bullets, collisions, obstacles, audio
+js/game/tracker/           vftrack JSON chiptune parse / player / defaults / manager
 js/graphics/               sprites, palettes, silhouettes, effects, renderers
 js/ui/                     station, hangar, editors, viewers, maps, menus
 js/abilities/              ability definitions and player abilities
 assets/                    fonts, sprites, ship models, modules, levels, metadata
+assets/soundtracks/        vftrack template + LLM prompt for Gemini-style editors
 
 docs/                      architecture, technical notes, updates, devlogs
 rules/                     game rules and tactical design notes
@@ -888,6 +895,23 @@ be reviewed or reverted independently.
 | 69E | Equipment bay upgrades | Per-item upgrade detail in Home Station EQUIPMENT with station/ship storage select mode |
 | 69F | Gamepad HUD cursor | Animated focus cursor for controller menu navigation (`gamepad/cursor.js`) |
 | 69G | Epic README pass | Sharper VOLTEX identity copy, lore stakes, and wave ledger cleanup for GitHub |
+| 70A | Combat FX smoothness | Screen-sized FX layers (same look), cheaper bullet/shield proximity, swap-remove particles/debris, once-per-frame drag/voxel sticky |
+| 70B | Combat hot-path bake | Parallax tile/grid bake+blit, cached explosion rings + boss vignette, frame-sticky render scale, skip FX snapWorld |
+| 70C | Parallax planet plates | Bake dense planet BG patterns, freeze layer plate on boss stages, logical clear, swap-pop bullets/stars |
+| 70D | Bezel glass screen | Shared `.vf-glass` host for station/menus/fight: one transform recipe, undivided opening insets, header peek under bezel |
+| 70E | Victory shop button | Stage trader opens from the victory screen; sluice-wall kiosk removed; buys queue for the next stage |
+| 70F | VF Tracker soundtracks | JSON chiptune player replaces drone BGM; planet defaults; Soundtrack Editor import/export + LLM prompt (`assets/soundtracks/`) |
+| 70G | Tracker music live | Audible music bus, gesture resume, station/menu restore, planet+boss vftrack files under `assets/soundtracks/` |
+| 70H | Faction + end themes | Combat vftracks compose planet×hostile faction; distinct victory/lose loops per faction |
+| 70I | Environment SFX | Coded Web Audio for sluice/hatch/warp, rocks/shields/crystals, pickups, wall scrape (`sounds/env-sfx.js`) |
+| 70J | Music volume fix | Linear MASTER×MUSIC bus, migrate tiny defaults, force planet vftrack on stage boot |
+| 70K | Tracker arrangement variety | Multi-section planet/menu/boss loops (A/B/C/fill), per-pattern faction drums, victory/lose bridges |
+| 70L | Salvage pickups | Enemy blueprint/part drops spawn as world pickups into cargo; death forfeits them; victory teleports to station |
+| 70M | Mission intro fanfare | One-shot planet×faction vftrack before combat loop on stage boot (`intro:` keys) |
+| 70N | Per-planet soundtrack | Explored planets remix handcrafted motifs (blend/key/order); no random-note BGM |
+| 70O | VF GB soundtrack | Tracks oriented on Volley Fire GB (1990): pulse/wave/noise palette, Main-BGM/Boss/Select roles |
+| 70P | Motivic BGM | Planet themes state→sequence→climax; intro/boss reuse motif; remix keeps one donor intact |
+| 70Q | In-stage shop grids | Smaller cells (40px), tighter panel gaps; shop ship/station bags force 1×1 tiles + 6-col station |
 
 The wave commit convention is:
 

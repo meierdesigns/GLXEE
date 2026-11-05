@@ -144,7 +144,13 @@ extendClass(HomeStationUI, {
         });
 
         this.overlay.querySelectorAll('[data-move-to-ship]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+            if (btn.closest('.hs-bay-inv')) return; // hangar bay inventory: physical-item.js owns its clicks/drag
+            btn.addEventListener('click', (e) => {
+                // A right-click on a <button> still fires a trailing 'click' (button 2) as the
+                // browser's own activation behavior, after contextmenu resolves — not just the
+                // pointerdown/contextmenu pair bindStorageEquipContextMenu reacts to, so this
+                // button-2 click must be rejected here too, or it runs this move instead.
+                if (e.button !== 0) return;
                 const raw = btn.getAttribute('data-move-to-ship') || '';
                 const sep = raw.indexOf(':');
                 const bucket = sep === -1 ? '' : raw.slice(0, sep);
@@ -155,27 +161,117 @@ extendClass(HomeStationUI, {
                     return;
                 }
                 const profile = this.getProfile();
-                const res = profileManager.moveToShipStorage(profile, shipId, bucket, id, 1);
+                const res = this._transferStorageItemPreservingLayout(profile, 'station', null, 'ship', shipId, bucket, id);
                 this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO SHIP STORAGE' : (res.reason || 'FAILED'));
                 if (res.ok) this.createUI();
             });
         });
 
         this.overlay.querySelectorAll('[data-move-to-station]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+            if (btn.closest('.hs-bay-inv')) return; // hangar bay inventory: physical-item.js owns its clicks/drag
+            btn.addEventListener('click', (e) => {
+                if (e.button !== 0) return; // see the data-move-to-ship handler above
                 const raw = btn.getAttribute('data-move-to-station') || '';
                 const sep = raw.indexOf(':');
                 const bucket = sep === -1 ? '' : raw.slice(0, sep);
                 const id = sep === -1 ? raw : raw.slice(sep + 1);
                 const shipId = btn.getAttribute('data-ship');
                 const profile = this.getProfile();
-                const res = profileManager.moveToStationStorage(profile, shipId, bucket, id, 1);
+                const res = this._transferStorageItemPreservingLayout(profile, 'ship', shipId, 'station', null, bucket, id);
                 this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO STATION STORAGE' : (res.reason || 'FAILED'));
                 if (res.ok) this.createUI();
             });
         });
 
         this.bindStorageDragAndDrop();
+        this.bindStorageEquipContextMenu();
+    },
+
+    /** Right-click a part cell in a ship's OWN storage grid (station tab, not the hangar page):
+     *  equips it into a free, fitting slot, or unequips it if it's already installed. Never
+     *  swaps into an occupied slot and never moves the part between storages. The hangar's own
+     *  bay-inventory grid has a similar gesture in physical-item.js, but goes through DOM hangar
+     *  slot elements that only exist while the hangar page is open; this grid has none, so it
+     *  drives shipLoadoutManager directly from the cell's own data-ship/data-part-kind/-id.
+     *  Bound on 'pointerdown' (button 2), not 'contextmenu'/'click': a <button>'s right-click can
+     *  fire a trailing synthetic 'click' as its platform default action, which would run the
+     *  data-move-to-ship/-station handler bound on this same cell and move it between storages
+     *  instead — acting immediately on pointerdown and stopping it there never gives that a chance to fire. */
+    bindStorageEquipContextMenu() {
+        // Scoped to [data-storage-target="ship"], not just [data-ship]: STATION storage cells
+        // carry a data-ship attribute too (the ship a data-move-to-ship click would file it to),
+        // which is a different ship than "the ship this part is stored/equipped on" — matching
+        // on data-ship alone equipped station items onto the active ship by mistake, making them
+        // vanish from the station grid (now equipped elsewhere) with no visible slot to land on.
+        this.overlay.querySelectorAll('.hs-storage-grid[data-storage-target="ship"] .hs-storage-cell[data-part-id][data-ship]').forEach((cell) => {
+            if (cell.closest('.hs-bay-inv')) return; // physical-item.js already binds these
+            cell.addEventListener('contextmenu', (e) => e.preventDefault());
+            cell.addEventListener('pointerdown', (e) => {
+                if (e.button !== 2) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this._equipFromStorageCell(cell);
+            });
+        });
+    },
+
+    _equipFromStorageCell(cell) {
+        if (typeof shipLoadoutManager === 'undefined') return;
+        const kind = cell.getAttribute('data-part-kind');
+        const id = cell.getAttribute('data-part-id');
+        const shipId = cell.getAttribute('data-ship');
+        if (!kind || kind === 'blueprint' || !id || !shipId) return;
+        const slm = shipLoadoutManager;
+        const key = slm.kindToLoadoutKey(kind);
+        const caps = slm.getSlotCaps(shipId, slm.resolveModelClass(shipId));
+        const cap = key === 'weapons' ? slm.weaponMountSlots(caps.weapons) : Math.max(0, Number(caps[key]) || 0);
+        const L = slm.getLoadout(shipId);
+        const list = key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || []);
+        const at = list.indexOf(id);
+        if (at !== -1) { this._applyStorageSlotChoice(shipId, kind, at, '', cell, id); return; } // installed: right-click unequips
+        const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(shipId, kind, id, i).ok;
+        let target = -1;
+        for (let i = 0; i < cap; i++) { if (!(list[i] || null) && fits(i)) { target = i; break; } }
+        if (target === -1) { this.playButtonResult(cell, false, 'NO FREE ' + kind.toUpperCase() + ' SLOT'); return; }
+        this._applyStorageSlotChoice(shipId, kind, target, id, cell);
+    },
+
+    _applyStorageSlotChoice(shipId, kind, slotIndex, moduleId, sourceEl, clearedId) {
+        const L = shipLoadoutManager.getLoadout(shipId);
+        const key = shipLoadoutManager.kindToLoadoutKey(kind);
+        const list = key === 'weapons' ? ((L && (L.weaponSlots || L.weapons)) || []) : ((L && L[key]) || []);
+        const prevId = list[slotIndex] || null;
+        const replacedId = (moduleId && prevId && prevId !== moduleId) ? prevId : null;
+        const res = shipLoadoutManager.setSlotModule(shipId, kind, slotIndex, moduleId);
+        if (!res.ok) {
+            let msg = 'SLOT UPDATE FAILED';
+            if (res.reason === 'NEED_WEAPON') msg = 'NEED AT LEAST ONE WEAPON';
+            if (res.reason === 'NEED_ENERGY') msg = 'NEED AN ENERGY CORE';
+            if (res.reason === 'NEED_CHARGE_SHOT') msg = 'NEED CHARGE SHOT FIRST';
+            if (res.reason === 'NEED_CHARGE_DRIVE') msg = 'NEED CHARGE DRIVE FIRST';
+            if (res.reason === 'NO_SLOT') msg = 'NO SLOT';
+            if (res.reason === 'TOO_BIG') msg = this.hangarModuleLabel(moduleId) + ' DOESN\'T FIT · UPGRADE THE SLOT';
+            if (res.reason === 'AREA_OFF') msg = 'THAT AREA IS OFF';
+            this.playButtonResult(sourceEl, false, msg);
+            return;
+        }
+        const profile = this.getProfile ? this.getProfile() : null;
+        if (typeof shipConfigManager !== 'undefined' && profile && profile.activeShipId === shipId) {
+            shipConfigManager.applyToRuntime(shipId);
+        }
+        if (profile && typeof profileManager !== 'undefined') {
+            const bucket = shipLoadoutManager.kindToLoadoutKey(kind);
+            const backId = (!moduleId && clearedId) ? clearedId : replacedId;
+            if (backId && profileManager.fileUnequippedPart) {
+                profileManager.fileUnequippedPart(profile, shipId, bucket, backId);
+            }
+            if (moduleId && profileManager.consumeFiledPart) {
+                profileManager.consumeFiledPart(profile, shipId, bucket, moduleId);
+            }
+        }
+        const label = moduleId ? (this.hangarModuleLabel(moduleId) + ' EQUIPPED') : 'SLOT CLEARED';
+        this.playButtonResult(sourceEl, true, label);
+        this.createUI();
     },
 
     /** Drag-and-drop for the station/ship storage grids: drag an item cell onto the other
@@ -183,7 +279,13 @@ extendClass(HomeStationUI, {
      *  Pointer-based, not native HTML5 DnD (same reasoning as the hangar PARTS list: native drag
      *  doesn't reliably fire dragover/drop in this app shell — only the icon follows the cursor). */
     bindStorageDragAndDrop() {
+        // The hangar bay-inventory grid (physical-item.js bayInventoryHtml) renders this exact
+        // same renderShipStorage() markup for its own item set/positions, but its cells need
+        // the hangar's own drag engine (startHangarPartDrag — equips onto a ship slot when
+        // dropped on one, falls back to physicalItem.dropInGrid otherwise), not this one.
+        // Binding both here would double-attach a pointerdown handler to the same cell.
         this.overlay.querySelectorAll('.hs-storage-cell[data-drag-key]').forEach((cell) => {
+            if (cell.closest('.hs-bay-inv')) return;
             cell.setAttribute('draggable', 'false');
             cell.addEventListener('dragstart', (e) => e.preventDefault());
             cell.addEventListener('pointerdown', (ev) => this._storageDragStart(ev, cell));
@@ -243,10 +345,11 @@ extendClass(HomeStationUI, {
             const parentGrid = target.closest('.hs-storage-grid');
             if (parentGrid && parentGrid !== previewGrid) {
                 previewGrid = parentGrid;
-                if (!previewGrid.style.position) previewGrid.style.position = 'relative';
                 previewGrid.appendChild(previewBox);
             }
             if (previewGrid) {
+                // offsetLeft/Top are relative to .hs-storage-grid (position:relative) — same
+                // coordinate space as this absolute preview, including the grid's own padding.
                 previewBox.style.left = target.offsetLeft + 'px';
                 previewBox.style.top = target.offsetTop + 'px';
                 previewBox.style.display = 'block';
@@ -262,8 +365,16 @@ extendClass(HomeStationUI, {
             // — the other slot never "sees" the drag.
             document.body.classList.add('hs-part-grabbing');
             if (typeof uiTooltip !== 'undefined' && uiTooltip && uiTooltip.hide) uiTooltip.hide();
-            ghost = cell.cloneNode(true);
-            ghost.classList.add('hs-storage-drag-ghost');
+            // The ghost itself is a plain positioning frame, unscaled: its own box is what
+            // the zoom-calibration measurement right below reads, so anything that visually
+            // shrinks the held item (the .hs-storage-drag-ghost-inner scale()) has to live on
+            // a child instead — scaling the measured element corrupts that calibration and the
+            // item drifts away from the cursor while dragging.
+            ghost = document.createElement('div');
+            ghost.className = 'hs-storage-drag-ghost';
+            const ghostInner = cell.cloneNode(true);
+            ghostInner.classList.add('hs-storage-drag-ghost-inner');
+            ghost.appendChild(ghostInner);
             // Inline, not left to CSS: the dev server hot-rebuilds the JS bundle but not
             // the stylesheet, so a stale/missing .hs-storage-drag-ghost rule must not be
             // able to leave this sitting in normal flow (wrong spot) or eating hit-tests
@@ -284,15 +395,20 @@ extendClass(HomeStationUI, {
             };
             ghost.style.width = cell.offsetWidth + 'px';
             ghost.style.height = cell.offsetHeight + 'px';
-            // Drop-position preview box, sized to the dragged item's full footprint (spanW x
-            // spanH cells). Appended into whichever grid is hovered, in markDropCell.
-            const cs = this.STORAGE_CELL_PX;
+            // Drop-position preview: the item itself shown sitting in the hovered tile — no
+            // frame or fill, just its own casing — sized to its full footprint (spanW x spanH
+            // cells), rather than a plain highlighted box. Appended into whichever grid is
+            // hovered, in markDropCell.
+            const gcs = getComputedStyle(cell.closest('.hs-storage-grid') || cell);
+            const cs = parseFloat(gcs.getPropertyValue('--cs')) || this.STORAGE_CELL_PX;
+            const gap = parseFloat(gcs.getPropertyValue('--hs-gap')) || this.STORAGE_GAP_PX;
             previewBox = document.createElement('div');
-            previewBox.style.cssText = 'position:absolute;margin:0;pointer-events:none;' +
-                'z-index:5;box-sizing:border-box;border:2px solid var(--color-primary, #8cf);' +
-                'background:rgba(140,200,255,0.18);border-radius:4px;display:none;';
-            previewBox.style.width = (spanW * cs + (spanW - 1) * 4) + 'px';
-            previewBox.style.height = (spanH * cs + (spanH - 1) * 4) + 'px';
+            previewBox.className = 'hs-storage-cell hs-storage-drop-preview';
+            previewBox.style.cssText = 'position:absolute;margin:0;pointer-events:none;z-index:5;box-sizing:border-box;display:none;';
+            previewBox.style.width = (spanW * cs + (spanW - 1) * gap) + 'px';
+            previewBox.style.height = (spanH * cs + (spanH - 1) * gap) + 'px';
+            const previewBody = cell.querySelector('.hs-item-body');
+            if (previewBody) previewBox.appendChild(previewBody.cloneNode(true));
         };
         // Coalesce pointer moves to one update per frame, same as the hangar part drag
         // (hangar-parts-grid-part2.js) — the grid hit-test and ghost placement both read layout.
@@ -336,14 +452,14 @@ extendClass(HomeStationUI, {
         };
         const onUp = (ev) => {
             const wasDragging = dragging;
-            // Read the drop cell before cleanup() clears the mark/ghost, so we know
-            // which cell the item should land before (not just which grid).
             const dropEl = document.elementFromPoint(ev.clientX, ev.clientY);
-            // Any storage cell counts as a drop target now, including the dashed empty
-            // placeholders (they carry no data-drag-key, so they resolve to "append to end").
             const dropCell = dropEl && dropEl.closest ? dropEl.closest('.hs-storage-cell') : null;
             const droppedOnSelf = dropCell === cell;
-            const dropBeforeKey = (dropCell && !droppedOnSelf) ? dropCell.getAttribute('data-drag-key') : null;
+            const grid = gridAt(ev.clientX, ev.clientY);
+            // Resolve the drop to an absolute (col, row) tile under the cursor — not just
+            // "before this other cell" — so the item lands exactly where it was dropped and
+            // stays there, the same way the hangar bay-inventory grid pins items.
+            const dropTarget = (grid && !droppedOnSelf) ? this._storageGridTarget(grid, cell, ev.clientX, ev.clientY) : null;
             cleanup();
             if (!wasDragging) return;
             // A real drag still ends with a native 'click' on this button (mouseup landed on
@@ -352,8 +468,7 @@ extendClass(HomeStationUI, {
             const suppressClick = (e) => { e.preventDefault(); e.stopPropagation(); };
             cell.addEventListener('click', suppressClick, { capture: true, once: true });
             setTimeout(() => cell.removeEventListener('click', suppressClick, true), 0);
-            const grid = gridAt(ev.clientX, ev.clientY);
-            if (grid) this._storageDragDrop(key, source, shipId, grid, dropBeforeKey, droppedOnSelf);
+            if (grid && dropTarget) this._storageDragDrop(key, source, shipId, grid, dropTarget);
         };
         const onCancel = () => cleanup();
         const onEsc = (e) => {
@@ -371,42 +486,239 @@ extendClass(HomeStationUI, {
         document.addEventListener('keydown', onEsc, true);
     },
 
-    _storageDragDrop(key, source, shipId, grid, beforeKey, droppedOnSelf) {
+    /** Pixel origin (top-left of grid tile col=1,row=1) and step (one tile + gap) for `grid`,
+     *  derived from the grid's own box (left/top + its border + padding) rather than assumed
+     *  from the first DOM cell's rect: once any item has a pinned position, the first cell in
+     *  DOM order is no longer guaranteed to actually render at (col 1, row 1) — dense
+     *  auto-flow only puts unpinned cells there — so calibrating off "the first cell" drifted
+     *  the whole grid's coordinate math as soon as one item was pinned anywhere else,
+     *  corrupting every other position computed afterwards. The scale factor k (for a station
+     *  rendered inside a scaled stage, body carries transform: scale(--stage-scale)) still
+     *  comes from comparing a cell's rendered vs. layout width — that part doesn't depend on
+     *  which cell or where it sits. Null when the grid has no cells to measure from yet. */
+    _storageGridMetrics(grid) {
+        const anyCell = grid.querySelector('.hs-storage-cell');
+        if (!anyCell) return null;
+        const k = anyCell.getBoundingClientRect().width / Math.max(1, anyCell.offsetWidth);
+        const gr = grid.getBoundingClientRect();
+        const cs = getComputedStyle(grid);
+        const originX = gr.left + ((parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0)) * k;
+        const originY = gr.top + ((parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0)) * k;
+        const cellPx = parseFloat(cs.getPropertyValue('--cs')) || this.STORAGE_CELL_PX;
+        const gapPx = parseFloat(cs.getPropertyValue('--hs-gap')) || this.STORAGE_GAP_PX;
+        return { originX, originY, step: (cellPx + gapPx) * k };
+    },
+
+    /** Resolve a drop point to an absolute (col, row) tile in `grid`, sized to the dragged
+     *  cell's own footprint (read off its inline "grid-column: span W" style). `x`/`y` are the
+     *  raw cursor position (the pointer's own point, not a dragged box's top-left corner — unlike
+     *  the hangar bay-inventory grid's gridTarget, which snaps a box's corner and so rounds to
+     *  the nearest grid line), so the containing cell is found with floor, not round: round
+     *  measures distance to the nearest cell CENTER and snaps a cursor sitting anywhere in a
+     *  cell's first half into the previous column/row — i.e. the item lands next to, not under,
+     *  the cursor. Returns null when the point isn't over the grid, or the grid has no cells to
+     *  calibrate against. Clamped so multi-cell items never hang off the grid's far edge. */
+    _storageGridTarget(grid, draggedCell, x, y) {
+        const gr = grid.getBoundingClientRect();
+        if (x < gr.left || x > gr.right || y < gr.top || y > gr.bottom) return null;
+        const m = this._storageGridMetrics(grid);
+        if (!m) return null;
+        const spanMatch = (css) => {
+            const match = (css || '').match(/span\s+(\d+)/);
+            return match ? Math.max(1, parseInt(match[1], 10)) : 1;
+        };
+        const w = spanMatch(draggedCell.style.gridColumn);
+        const h = spanMatch(draggedCell.style.gridRow);
+        const cols = Number(grid.getAttribute('data-inv-cols')) || 8;
+        const rows = Number(grid.getAttribute('data-inv-rows')) || 99;
+        const col = Math.max(1, Math.min(cols - w + 1, Math.floor((x - m.originX) / m.step) + 1));
+        const row = Math.max(1, Math.min(rows - h + 1, Math.floor((y - m.originY) / m.step) + 1));
+        return { col, row, w, h };
+    },
+
+    /** Every item currently shown in `grid`, as {key: {col, row, w, h}} read off its actual
+     *  on-screen tile. Called right before committing a drop, before any position changes, so
+     *  the rest of the grid can be pinned exactly where it already was. */
+    _readStorageLayout(grid) {
+        const m = this._storageGridMetrics(grid);
+        const layout = {};
+        if (!m) return layout;
+        const spanMatch = (css) => {
+            const match = (css || '').match(/span\s+(\d+)/);
+            return match ? Math.max(1, parseInt(match[1], 10)) : 1;
+        };
+        grid.querySelectorAll('.hs-storage-cell[data-drag-key]').forEach((c) => {
+            const r = c.getBoundingClientRect();
+            layout[c.getAttribute('data-drag-key')] = {
+                col: Math.round((r.left - m.originX) / m.step) + 1,
+                row: Math.round((r.top - m.originY) / m.step) + 1,
+                w: spanMatch(c.style.gridColumn),
+                h: spanMatch(c.style.gridRow)
+            };
+        });
+        return layout;
+    },
+
+    _storageDragDrop(key, source, shipId, grid, dropTarget) {
         const sep = key.indexOf(':');
         const bucket = sep === -1 ? '' : key.slice(0, sep);
         const id = sep === -1 ? key : key.slice(sep + 1);
         const target = grid.getAttribute('data-storage-target');
         const targetShip = grid.getAttribute('data-ship') || '';
         const profile = this.getProfile();
+        const scope = target === 'ship' ? 'ship' : 'station';
+        const scopeShip = target === 'ship' ? targetShip : null;
         if (target === source && targetShip === shipId) {
-            // Dropped back onto its own grid: reorder in place (manual arrangement only,
-            // never an automatic resort) instead of transferring. beforeKey is null both for
-            // "dropped on empty space" (append to the end) and "dropped on itself" — only the
-            // latter is a true no-op, so that case alone is skipped.
-            if (!droppedOnSelf) {
-                profileManager.reorderStorage(profile, target, target === 'ship' ? targetShip : null, key, beforeKey);
-                this.createUI();
+            // Dropped back onto its own grid: pin it at the exact tile it landed on (manual
+            // arrangement only, never an automatic resort). Every other item keeps its tile too
+            // — except whichever item(s) the dragged one now overlaps, which swap into the
+            // dragged item's OLD tile, so a drop onto an occupied cell trades places instead of
+            // just failing to land (which used to look like the grid silently re-sorting).
+            const layout = this._readStorageLayout(grid);
+            const dragged = layout[key];
+            const posByKey = {};
+            Object.keys(layout).forEach((k) => {
+                if (k === key) return;
+                const o = layout[k];
+                posByKey[k] = [o.col, o.row];
+            });
+            if (dragged) {
+                const overlaps = Object.keys(layout).filter((k) => {
+                    if (k === key) return false;
+                    const o = layout[k];
+                    return dropTarget.col < o.col + o.w && o.col < dropTarget.col + dropTarget.w
+                        && dropTarget.row < o.row + o.h && o.row < dropTarget.row + dropTarget.h;
+                });
+                overlaps.forEach((k) => { posByKey[k] = [dragged.col, dragged.row]; });
             }
+            posByKey[key] = [dropTarget.col, dropTarget.row];
+            profileManager.freezeStoragePositions(profile, scope, scopeShip, posByKey);
+            this.createUI();
             return;
         }
-        let res;
-        if (target === 'ship' && source === 'ship') {
-            // Ship-to-ship: hop through station storage (no direct ship-to-ship transfer API).
-            res = profileManager.moveToStationStorage(profile, shipId, bucket, id, 1);
-            if (res.ok) res = profileManager.moveToShipStorage(profile, targetShip, bucket, id, 1);
-        } else if (target === 'ship') {
-            if (!targetShip) return;
-            res = profileManager.moveToShipStorage(profile, targetShip, bucket, id, 1);
-        } else {
-            const srcShip = source === 'ship' ? shipId : targetShip;
-            res = profileManager.moveToStationStorage(profile, srcShip, bucket, id, 1);
-        }
+        if (target === 'ship' && !targetShip) return;
+        // Whatever already sits on the dropped-on tile in the OTHER grid swaps back into this
+        // item's old tile — same trade-places behaviour as dropping within one grid, just
+        // across the station/ship boundary. Read both sides' *full* layouts before anything
+        // moves, and pin every item that's staying put (not just the two that trade places):
+        // an item the player never dragged has no pinned position of its own, so adding or
+        // removing a sibling from its grid would otherwise let dense auto-flow repack it
+        // into whatever gap just opened up — a drop quietly resorting the entire grid around it.
+        const sourceGrid = this._storageGridEl(source, shipId);
+        const sourceLayout = sourceGrid ? this._readStorageLayout(sourceGrid) : {};
+        const oldPos = sourceLayout[key] || null;
+        const destLayout = this._readStorageLayout(grid);
+        const overlapKeys = Object.keys(destLayout).filter((k) => {
+            const o = destLayout[k];
+            return dropTarget.col < o.col + o.w && o.col < dropTarget.col + dropTarget.w
+                && dropTarget.row < o.row + o.h && o.row < dropTarget.row + dropTarget.h;
+        });
+
+        const res = this._transferStorageItem(profile, source, shipId, target, targetShip, bucket, id);
         this.setStatus(res.ok ? (target === 'ship' ? 'MOVED TO SHIP STORAGE' : 'MOVED TO STATION STORAGE') : (res.reason || 'FAILED'));
         if (typeof soundManager !== 'undefined') {
             if (res.ok) { if (soundManager.playUIConfirm) soundManager.playUIConfirm(); }
             else if (soundManager.playUIDeny) soundManager.playUIDeny();
         }
-        if (res.ok) this.createUI();
+        if (!res.ok) return;
+        const pinnedKey = res.instanceKey || key;
+        // Everything left behind in the source grid keeps its tile.
+        Object.keys(sourceLayout).forEach((k) => {
+            if (k === key) return;
+            profileManager.setStoragePos(profile, source === 'ship' ? 'ship' : 'station', source === 'ship' ? shipId : null, k, sourceLayout[k].col, sourceLayout[k].row);
+        });
+        // Everything already in the destination grid keeps its tile too, except what's being
+        // swapped out.
+        Object.keys(destLayout).forEach((k) => {
+            if (overlapKeys.indexOf(k) !== -1) return;
+            profileManager.setStoragePos(profile, scope, scopeShip, k, destLayout[k].col, destLayout[k].row);
+        });
+        profileManager.setStoragePos(profile, scope, scopeShip, pinnedKey, dropTarget.col, dropTarget.row);
+        if (oldPos && overlapKeys.length) {
+            overlapKeys.forEach((ok) => {
+                const osep = ok.indexOf(':');
+                const obucket = osep === -1 ? '' : ok.slice(0, osep);
+                const oid = osep === -1 ? ok : ok.slice(osep + 1);
+                const swapRes = this._transferStorageItem(profile, target, targetShip, source, shipId, obucket, oid);
+                if (swapRes.ok) {
+                    const swapKey = swapRes.instanceKey || ok;
+                    profileManager.setStoragePos(profile, source === 'ship' ? 'ship' : 'station', source === 'ship' ? shipId : null, swapKey, oldPos.col, oldPos.row);
+                }
+            });
+        }
+        profileManager.save();
+        this.createUI();
+    },
+
+    /** The live .hs-storage-grid element for one storage scope, or null if not currently
+     *  rendered (e.g. a ship panel that's scrolled out / collapsed). */
+    _storageGridEl(scope, shipId) {
+        if (!this.overlay) return null;
+        return scope === 'ship'
+            ? this.overlay.querySelector(`.hs-storage-grid[data-storage-target="ship"][data-ship="${shipId}"]`)
+            : this.overlay.querySelector('.hs-storage-grid[data-storage-target="station"]');
+    },
+
+    /** Move one unit of bucket/id from one storage scope to another ('station' or 'ship'
+     *  + shipId), reusing ProfileManager's move-to-ship/move-to-station API. A same-ship
+     *  no-op is skipped; ship-to-ship hops through station storage (no direct API for that).
+     *  Instance ids (`defId#unit`) strip to defId for the ledger, then remap upgrade bags
+     *  so that specific copy keeps its EQUIPMENT levels. */
+    _transferStorageItem(profile, fromScope, fromShip, toScope, toShip, bucket, id) {
+        if (fromScope === toScope && (fromScope !== 'ship' || fromShip === toShip)) return { ok: true };
+        const parsed = (profileManager.parsePartInstanceId)
+            ? profileManager.parsePartInstanceId(id)
+            : { defId: id, unit: null };
+        const defId = parsed.defId || id;
+        const movedUnit = parsed.unit;
+        let res;
+        if (fromScope === 'ship' && toScope === 'ship') {
+            const r = profileManager.moveToStationStorage(profile, fromShip, bucket, defId, 1);
+            res = r.ok ? profileManager.moveToShipStorage(profile, toShip, bucket, defId, 1) : r;
+        } else if (toScope === 'ship') {
+            res = profileManager.moveToShipStorage(profile, toShip, bucket, defId, 1);
+        } else {
+            res = profileManager.moveToStationStorage(profile, fromShip, bucket, defId, 1);
+        }
+        if (res && res.ok && movedUnit != null && bucket !== 'blueprints'
+            && profileManager.remapPartInstanceUpgrades && profileManager.getPartInstanceLayout) {
+            const layout = profileManager.getPartInstanceLayout(profile, bucket, defId);
+            let toIndex = movedUnit;
+            if (toScope === 'ship') {
+                const units = (layout.ships && layout.ships[toShip]) || [];
+                if (units.length) toIndex = units[units.length - 1];
+            } else if (layout.station && layout.station.length) {
+                toIndex = layout.station[layout.station.length - 1];
+            }
+            profileManager.remapPartInstanceUpgrades(profile, bucket, defId, movedUnit, toIndex);
+            res.instanceKey = bucket + ':' + defId + '#' + toIndex;
+        } else if (res && res.ok) {
+            res.instanceKey = bucket + ':' + defId + (movedUnit != null ? '#' + movedUnit : '');
+        }
+        return res;
+    },
+
+    /** Same transfer as _transferStorageItem, but pins every item that's staying in either
+     *  grid at its current tile first — so the MOVE TO SHIP/STATION STORAGE buttons (which
+     *  have no drop target of their own to swap into) don't let the rest of the grid quietly
+     *  reflow around the one item that just arrived or left, same as a drag. */
+    _transferStorageItemPreservingLayout(profile, fromScope, fromShip, toScope, toShip, bucket, id) {
+        const fromGrid = this._storageGridEl(fromScope, fromShip);
+        const toGrid = this._storageGridEl(toScope, toShip);
+        const fromLayout = fromGrid ? this._readStorageLayout(fromGrid) : {};
+        const toLayout = toGrid ? this._readStorageLayout(toGrid) : {};
+        const oldKey = bucket + ':' + id;
+        const res = this._transferStorageItem(profile, fromScope, fromShip, toScope, toShip, bucket, id);
+        if (!res.ok) return res;
+        Object.keys(fromLayout).forEach((k) => {
+            if (k === oldKey) return;
+            profileManager.setStoragePos(profile, fromScope === 'ship' ? 'ship' : 'station', fromScope === 'ship' ? fromShip : null, k, fromLayout[k].col, fromLayout[k].row);
+        });
+        Object.keys(toLayout).forEach((k) => {
+            profileManager.setStoragePos(profile, toScope === 'ship' ? 'ship' : 'station', toScope === 'ship' ? toShip : null, k, toLayout[k].col, toLayout[k].row);
+        });
+        profileManager.save();
+        return res;
     },
 
     /** Hangar ship list, anatomy reset, module toggles, fire modes and test area. */

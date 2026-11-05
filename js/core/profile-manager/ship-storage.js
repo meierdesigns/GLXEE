@@ -71,18 +71,76 @@ extendClass(ProfileManager, {
 
     /** How many of a bucket/id are filed into the given ship's storage, plus any equipped on that ship. */
     getShipStorageQty(profile, shipId, bucket, id) {
+        this._repairShipFiledCount(profile, shipId, bucket, id);
         const entry = (profile.shipStorage || {})[shipId];
         const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
-        return filed + this._equippedStorageCount(profile, shipId, bucket, id);
+        const eq = this._equippedStorageCount(profile, shipId, bucket, id);
+        const owned = this._ownedStorageCount(profile, bucket, id);
+        // Starter loadout parts often have owned=0: after unequip they live only as
+        // filed. Never add filed+eq for those (legacy overlap looked like ×2), and
+        // never let repair wipe them — that made right-click unequip delete the part.
+        if (owned <= 0) return Math.max(filed, eq);
+        return filed + eq;
+    },
+
+    /**
+     * filed + equipped on this ship cannot exceed owned minus claims on other ships.
+     * Older equip/unequip cycles forgot to consume filed on equip, so ×2/×3 badges
+     * appeared for a single instance — clamp the ledger when read.
+     * Skip owned<=0: those are starter-loadout parts kept visible via fileUnequippedPart.
+     */
+    _repairShipFiledCount(profile, shipId, bucket, id) {
+        if (!profile || !shipId || !bucket || bucket === 'blueprints' || !id) return;
+        const entry = (profile.shipStorage || {})[shipId];
+        if (!entry || !entry[bucket]) return;
+        let filed = entry[bucket][id] || 0;
+        if (filed <= 0) return;
+        const owned = this._ownedStorageCount(profile, bucket, id);
+        if (owned <= 0) return;
+        const eq = this._equippedStorageCount(profile, shipId, bucket, id);
+        const otherFiled = this._allocatedStorageCount(profile, bucket, id) - filed;
+        const otherEq = this._equippedStorageCountAll(profile, bucket, id) - eq;
+        const maxFiled = Math.max(0, owned - otherFiled - otherEq - eq);
+        if (filed <= maxFiled) return;
+        if (maxFiled <= 0) delete entry[bucket][id];
+        else entry[bucket][id] = maxFiled;
+        try { this.save(); } catch (e) { /* ignore */ }
+    },
+
+    /** Unequipping a part must never make it vanish: the "filed on this ship" count is normally
+     *  what keeps it visible (getShipStorageQty = filed + equipped), but a part equipped straight
+     *  from a purchase/craft flow — or from station storage, never routed through
+     *  moveToShipStorage — can reach a slot with filed=0. Clearing that slot alone then drops
+     *  filed+equipped to 0 and the part disappears from every storage grid. Call this right
+     *  after clearing a slot (moduleId '') to file the part the unequip just freed up, so it
+     *  stays visible on this ship — deactivated, not gone. */
+    fileUnequippedPart(profile, shipId, bucket, id) {
+        if (!bucket || bucket === 'blueprints' || !id) return;
+        const entry = this.getShipStorageEntry(profile, shipId);
+        entry[bucket][id] = (entry[bucket][id] || 0) + 1;
+        this.save();
+    },
+
+    /** Equipping a filed cargo instance into a slot: leave cargo (filed−1). No-op if filed is 0
+     *  (part came from station / craft / purchase straight into the slot). */
+    consumeFiledPart(profile, shipId, bucket, id) {
+        if (!bucket || bucket === 'blueprints' || !id) return;
+        const entry = this.getShipStorageEntry(profile, shipId);
+        const n = entry[bucket][id] || 0;
+        if (n <= 0) return;
+        entry[bucket][id] = n - 1;
+        if (entry[bucket][id] <= 0) delete entry[bucket][id];
+        this.save();
     },
 
     moveToShipStorage(profile, shipId, bucket, id, qty) {
         qty = Math.max(1, Math.floor(qty) || 1);
-        const atStation = this.getStationStorageQty(profile, bucket, id);
+        const defId = this.partDefId ? this.partDefId(id) : String(id || '');
+        const atStation = this.getStationStorageQty(profile, bucket, defId);
         const move = Math.min(qty, atStation);
         if (move <= 0) return { ok: false, reason: 'NONE AT STATION' };
         const entry = this.getShipStorageEntry(profile, shipId);
-        entry[bucket][id] = (entry[bucket][id] || 0) + move;
+        entry[bucket][defId] = (entry[bucket][defId] || 0) + move;
         this.save();
         return { ok: true, moved: move };
     },
@@ -108,9 +166,13 @@ extendClass(ProfileManager, {
         return removed;
     },
 
-    /** Key into profile.storageOrder for a storage grid: 'station' or 'ship:<shipId>'. */
+    /** Key into profile.storageOrder / profile.storagePos for a storage grid: 'station' or
+     *  'ship:<shipId>'. The hangar bay-inventory grid (physical-item.js) is scope 'ship' too —
+     *  it renders through HomeStationUI.renderShipStorage, the same SHIP STORAGE grid shown on
+     *  the station tab, so it shares this exact position map rather than keeping its own. */
     _storageOrderKey(scope, shipId) {
-        return scope === 'ship' ? ('ship:' + shipId) : 'station';
+        if (scope === 'ship') return 'ship:' + shipId;
+        return 'station';
     },
 
     /** The manually-arranged order for a storage grid's current item keys ("bucket:id").
@@ -127,28 +189,43 @@ extendClass(ProfileManager, {
         return order;
     },
 
-    /** Move `key` to just before `beforeKey` within one storage grid's manual order
-     *  (beforeKey falsy = move to the end). Pure reordering, no quantity change. */
-    reorderStorage(profile, scope, shipId, key, beforeKey) {
+    /** The player's pinned (col, row) per item key ("bucket:id") for one storage grid.
+     *  Unlike storageOrder (a replay list), this is an absolute CSS grid position: items the
+     *  player hasn't dragged have no entry and simply auto-pack into the first free cell. */
+    getStoragePosMap(profile, scope, shipId) {
+        if (!profile.storagePos || typeof profile.storagePos !== 'object') profile.storagePos = {};
         const ok = this._storageOrderKey(scope, shipId);
-        if (!profile.storageOrder || typeof profile.storageOrder !== 'object') profile.storageOrder = {};
-        const order = Array.isArray(profile.storageOrder[ok]) ? profile.storageOrder[ok].slice() : [];
-        const idx = order.indexOf(key);
-        if (idx !== -1) order.splice(idx, 1);
-        let insertAt = beforeKey ? order.indexOf(beforeKey) : -1;
-        if (insertAt === -1) insertAt = order.length;
-        order.splice(insertAt, 0, key);
-        profile.storageOrder[ok] = order;
+        const map = profile.storagePos[ok];
+        return (map && typeof map === 'object') ? map : {};
+    },
+
+    /** Pin `key` at (col, row) in one storage grid — the exact tile it was dropped on, not just
+     *  a position in the replay order. */
+    setStoragePos(profile, scope, shipId, key, col, row) {
+        if (!profile.storagePos || typeof profile.storagePos !== 'object') profile.storagePos = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        if (!profile.storagePos[ok] || typeof profile.storagePos[ok] !== 'object') profile.storagePos[ok] = {};
+        profile.storagePos[ok][key] = [col, row];
+    },
+
+    /** Replace a storage grid's whole pinned-position map at once (every item currently shown
+     *  pins to its current tile) — used right after a drop so the other items don't silently
+     *  reflow around the one that just moved. */
+    freezeStoragePositions(profile, scope, shipId, posByKey) {
+        if (!profile.storagePos || typeof profile.storagePos !== 'object') profile.storagePos = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        profile.storagePos[ok] = Object.assign({}, posByKey);
         this.save();
     },
 
     moveToStationStorage(profile, shipId, bucket, id, qty) {
         qty = Math.max(1, Math.floor(qty) || 1);
+        const defId = this.partDefId ? this.partDefId(id) : String(id || '');
         const entry = this.getShipStorageEntry(profile, shipId);
-        const onShip = entry[bucket][id] || 0;
+        const onShip = entry[bucket][defId] || 0;
         // The ship storage grid also shows currently-equipped items (so you can drag gear
         // straight off the ship); those aren't "filed" yet, so fall back to unequipping them.
-        const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, id) : 0;
+        const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, defId) : 0;
         const move = Math.min(qty, onShip + equipped);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
         // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
@@ -165,21 +242,24 @@ extendClass(ProfileManager, {
             return 1;
         };
         this.SHIP_STORAGE_BUCKETS.forEach((b) => {
-            // Count every distinct item currently sitting at the station.
+            // Count every station-filed copy (parts no longer stack into one cell).
             const owned = b === 'blueprints'
                 ? Object.keys(profile.blueprints || {})
                 : Object.keys((profile.parts && profile.parts[b]) || {});
             owned.forEach((itemId) => {
-                if (this.getStationStorageQty(profile, b, itemId) > 0) used += spanOf(b, itemId);
+                const q = this.getStationStorageQty(profile, b, itemId);
+                if (q <= 0) return;
+                const span = spanOf(b, itemId);
+                used += b === 'blueprints' ? span : span * q;
             });
         });
-        const add = spanOf(bucket, id) * move;
+        const add = spanOf(bucket, defId) * move;
         if (used + add > cap) return { ok: false, reason: 'BAY FULL' };
         const fromFiled = Math.min(move, onShip);
         const fromEquipped = move - fromFiled;
-        if (fromEquipped > 0) this._unequipFromLoadout(shipId, bucket, id, fromEquipped);
-        entry[bucket][id] = onShip - fromFiled;
-        if (entry[bucket][id] <= 0) delete entry[bucket][id];
+        if (fromEquipped > 0) this._unequipFromLoadout(shipId, bucket, defId, fromEquipped);
+        entry[bucket][defId] = onShip - fromFiled;
+        if (entry[bucket][defId] <= 0) delete entry[bucket][defId];
         this.save();
         return { ok: true, moved: move };
     }

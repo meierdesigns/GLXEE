@@ -11,6 +11,8 @@ extendClass(GameControlSystem, {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
             if (soundManager.clearMusicContext) soundManager.clearMusicContext();
+            // Back to station / map — restore hub soundtrack.
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
         }
 
         if (typeof planetEditorUI !== 'undefined' && planetEditorUI.visible) {
@@ -74,6 +76,10 @@ extendClass(GameControlSystem, {
 
     // Level selection (planet map) — default exit after a run
     showLevelSelection() {
+        if (typeof inStageShop !== 'undefined') {
+            if (inStageShop.close) inStageShop.close();
+            if (inStageShop.refundPending) inStageShop.refundPending();
+        }
         // The planet just fought on: the map opens with it already selected.
         let foughtPlanet = null;
         try {

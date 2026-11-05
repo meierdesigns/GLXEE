@@ -12,7 +12,7 @@ extendClass(PlayerSelectionManager, {
 
         // Create overlay
         this.overlay = document.createElement('div');
-        this.overlay.className = 'player-selection-overlay';
+        this.overlay.className = 'player-selection-overlay vf-glass';
         this.overlay.innerHTML = `
             <div class="player-selection-content">
                 <h2 class="player-selection-title">SELECT YOUR SHIP</h2>

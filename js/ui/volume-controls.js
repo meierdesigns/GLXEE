@@ -1,67 +1,42 @@
 "use strict";
 
-// Volume Controls Manager
+// Volume Controls Manager — linear MASTER × (SOUND|MUSIC) routing into soundManager.
 class VolumeControlsManager {
     constructor() {
-        this.masterVolume = 0.1; // Default 10%
-        this.soundVolume = 0.05; // Default 5%
-        this.musicVolume = 0.2;  // Default 20%
-        
+        this.masterVolume = 0.75;
+        this.soundVolume = 0.5;
+        this.musicVolume = 0.65;
+        /** Music tempo multiplier (1 = authored BPM). */
+        this.musicSpeed = 3.5;
         this.init();
     }
-    
+
     init() {
-        // Load saved volumes from localStorage
         this.loadVolumes();
-        
-        // Setup event listeners
         this.setupEventListeners();
-        
-        // Update UI
         this.updateUI();
-        
-        // Apply volumes to sound system
         this.applyVolumes();
     }
-    
+
     setupEventListeners() {
-        // Master volume slider
-        const masterSlider = document.getElementById('masterVolume');
-        if (masterSlider) {
-            masterSlider.addEventListener('input', (e) => {
-                this.masterVolume = parseInt(e.target.value) / 100;
+        const bind = (id, prop) => {
+            const slider = document.getElementById(id);
+            if (!slider) return;
+            slider.addEventListener('input', (e) => {
+                this[prop] = Math.max(0, Math.min(1, parseInt(e.target.value, 10) / 100));
                 this.updateUI();
                 this.applyVolumes();
                 this.saveVolumes();
             });
-        }
-        
-        // Sound volume slider
-        const soundSlider = document.getElementById('soundVolume');
-        if (soundSlider) {
-            soundSlider.addEventListener('input', (e) => {
-                this.soundVolume = parseInt(e.target.value) / 100;
-                this.updateUI();
-                this.applyVolumes();
-                this.saveVolumes();
-            });
-        }
-        
-        // Music volume slider
-        const musicSlider = document.getElementById('musicVolume');
-        if (musicSlider) {
-            musicSlider.addEventListener('input', (e) => {
-                this.musicVolume = parseInt(e.target.value) / 100;
-                this.updateUI();
-                this.applyVolumes();
-                this.saveVolumes();
-            });
-        }
+        };
+        bind('masterVolume', 'masterVolume');
+        bind('soundVolume', 'soundVolume');
+        bind('musicVolume', 'musicVolume');
     }
-    
+
     updateUI() {
         const sync = (id, valueId, vol) => {
-            const pct = Math.round(vol * 100);
+            const pct = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
             const valueEl = document.getElementById(valueId);
             if (valueEl) valueEl.textContent = pct + '%';
             const slider = document.getElementById(id);
@@ -75,7 +50,6 @@ class VolumeControlsManager {
         sync('soundVolume', 'soundVolumeValue', this.soundVolume);
         sync('musicVolume', 'musicVolumeValue', this.musicVolume);
 
-        // Embedded settings panels use data-volume attributes (no fixed ids)
         document.querySelectorAll('.volume-slider[data-volume]').forEach((slider) => {
             const key = slider.dataset.volume;
             let vol = null;
@@ -83,113 +57,156 @@ class VolumeControlsManager {
             else if (key === 'sound') vol = this.soundVolume;
             else if (key === 'music') vol = this.musicVolume;
             if (vol == null) return;
-            const pct = Math.round(vol * 100);
+            const pct = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
             slider.value = pct;
             slider.style.setProperty('--vol-fill', pct + '%');
             const value = slider.parentElement && slider.parentElement.querySelector(`[data-volume-value="${key}"]`);
             if (value) value.textContent = pct + '%';
         });
     }
-    
+
     applyVolumes() {
-        // Apply to sound manager if available
         if (typeof soundManager !== 'undefined') {
-            soundManager.setMasterVolume(this.masterVolume);
-            soundManager.setSoundVolume(this.soundVolume);
-            soundManager.setMusicVolume(this.musicVolume);
+            if (soundManager.setMasterVolume) soundManager.setMasterVolume(this.masterVolume);
+            if (soundManager.setSoundVolume) soundManager.setSoundVolume(this.soundVolume);
+            if (soundManager.setMusicVolume) soundManager.setMusicVolume(this.musicVolume);
         }
 
-        if (typeof youtubeSoundtrackManager !== 'undefined') {
-            youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+        const bus = (typeof soundManager !== 'undefined' && soundManager.musicBusVolume)
+            ? soundManager.musicBusVolume()
+            : Math.max(0, Math.min(1, this.masterVolume * this.musicVolume));
+
+        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.setVolume) {
+            youtubeSoundtrackManager.setVolume(bus);
         }
-        
-        // Apply to color manager if available (for overlay effects)
-        if (typeof colorManager !== 'undefined') {
-            // Could be used for visual feedback
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setVolume) {
+            localAudioManager.setVolume(bus);
         }
-        
-        // Update sound config
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+            vfTrackerManager.setVolume(bus);
+        }
+        this.applyMusicSpeed();
+
         if (typeof soundConfig !== 'undefined') {
             soundConfig.masterVolume = this.masterVolume;
             soundConfig.soundVolume = this.soundVolume;
             soundConfig.musicVolume = this.musicVolume;
         }
     }
-    
+
+    applyMusicSpeed() {
+        const speed = Math.max(0.5, Math.min(4, Number(this.musicSpeed) || 1));
+        this.musicSpeed = speed;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setTempoScale) {
+            vfTrackerManager.setTempoScale(speed);
+        } else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.player) {
+            vfTrackerManager.player.tempoScale = speed;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
+            localAudioManager.setPlaybackRate(speed);
+        }
+    }
+
     saveVolumes() {
         try {
-            localStorage.setItem('vf_masterVolume', this.masterVolume.toString());
-            localStorage.setItem('vf_soundVolume', this.soundVolume.toString());
-            localStorage.setItem('vf_musicVolume', this.musicVolume.toString());
+            localStorage.setItem('vf_masterVolume', String(this.masterVolume));
+            localStorage.setItem('vf_soundVolume', String(this.soundVolume));
+            localStorage.setItem('vf_musicVolume', String(this.musicVolume));
+            localStorage.setItem('vf_musicSpeed', String(this.musicSpeed));
+            localStorage.setItem('vf_volumeSchema', '2');
         } catch (e) {
             console.warn('Could not save volume settings:', e);
         }
     }
-    
+
     loadVolumes() {
         try {
+            const schema = localStorage.getItem('vf_volumeSchema');
             const savedMaster = localStorage.getItem('vf_masterVolume');
             const savedSound = localStorage.getItem('vf_soundVolume');
             const savedMusic = localStorage.getItem('vf_musicVolume');
-            
-            if (savedMaster !== null) {
-                this.masterVolume = parseFloat(savedMaster);
+            const savedSpeed = localStorage.getItem('vf_musicSpeed');
+            const speedDefaultMark = localStorage.getItem('vf_musicSpeedDefault');
+
+            if (savedMaster !== null) this.masterVolume = parseFloat(savedMaster);
+            if (savedSound !== null) this.soundVolume = parseFloat(savedSound);
+            if (savedMusic !== null) this.musicVolume = parseFloat(savedMusic);
+
+            // One-shot migrate: lock in 3.5× as the stored music speed.
+            if (speedDefaultMark !== '3.5') {
+                this.musicSpeed = 3.5;
+                localStorage.setItem('vf_musicSpeedDefault', '3.5');
+                localStorage.setItem('vf_musicSpeed', '3.5');
+            } else if (savedSpeed !== null) {
+                this.musicSpeed = parseFloat(savedSpeed);
             }
-            if (savedSound !== null) {
-                this.soundVolume = parseFloat(savedSound);
-            }
-            if (savedMusic !== null) {
-                this.musicVolume = parseFloat(savedMusic);
+
+            if (!Number.isFinite(this.masterVolume)) this.masterVolume = 0.75;
+            if (!Number.isFinite(this.soundVolume)) this.soundVolume = 0.5;
+            if (!Number.isFinite(this.musicVolume)) this.musicVolume = 0.65;
+            if (!Number.isFinite(this.musicSpeed)) this.musicSpeed = 3.5;
+
+            this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
+            this.soundVolume = Math.max(0, Math.min(1, this.soundVolume));
+            this.musicVolume = Math.max(0, Math.min(1, this.musicVolume));
+            this.musicSpeed = Math.max(0.5, Math.min(4, this.musicSpeed));
+
+            // Old schema used ~10%/5%/20% plus a hidden ×8 music bus — migrate up once.
+            if (schema !== '2'
+                && this.masterVolume <= 0.15
+                && this.soundVolume <= 0.12
+                && this.musicVolume <= 0.3) {
+                this.masterVolume = 0.75;
+                this.soundVolume = 0.5;
+                this.musicVolume = 0.65;
+                this.saveVolumes();
             }
         } catch (e) {
             console.warn('Could not load volume settings:', e);
         }
     }
-    
-    // Public methods for external access
-    getMasterVolume() {
-        return this.masterVolume;
-    }
-    
-    getSoundVolume() {
-        return this.soundVolume;
-    }
-    
-    getMusicVolume() {
-        return this.musicVolume;
-    }
-    
+
+    getMasterVolume() { return this.masterVolume; }
+    getSoundVolume() { return this.soundVolume; }
+    getMusicVolume() { return this.musicVolume; }
+    getMusicSpeed() { return this.musicSpeed; }
+
     setMasterVolume(volume) {
-        this.masterVolume = Math.max(0, Math.min(1, volume));
+        this.masterVolume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
-    
+
     setSoundVolume(volume) {
-        this.soundVolume = Math.max(0, Math.min(1, volume));
+        this.soundVolume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
-    
+
     setMusicVolume(volume) {
-        this.musicVolume = Math.max(0, Math.min(1, volume));
+        this.musicVolume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
-    
-    // Reset to defaults
+
+    setMusicSpeed(speed) {
+        this.musicSpeed = Math.max(0.5, Math.min(4, Number(speed) || 1));
+        this.applyMusicSpeed();
+        this.saveVolumes();
+    }
+
     resetToDefaults() {
-        this.masterVolume = 0.1;
-        this.soundVolume = 0.05;
-        this.musicVolume = 0.2;
+        this.masterVolume = 0.75;
+        this.soundVolume = 0.5;
+        this.musicVolume = 0.65;
+        this.musicSpeed = 3.5;
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
 }
 
-// Global volume controls manager instance
 const volumeControlsManager = new VolumeControlsManager();

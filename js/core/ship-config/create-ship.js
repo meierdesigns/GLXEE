@@ -206,6 +206,14 @@ extendClass(ShipConfigManager, {
             const bonuses = (typeof profileManager !== 'undefined' && profileManager.getModuleUpgradeBonuses)
                 ? profileManager.getModuleUpgradeBonuses()
                 : null;
+            const weaponOcc = {};
+            const resolveInstance = (bucket, defId) => {
+                if (typeof profileManager === 'undefined' || !profileManager.getEquippedInstanceId) return defId;
+                const occ = weaponOcc[bucket + ':' + defId] || 0;
+                weaponOcc[bucket + ':' + defId] = occ + 1;
+                const profile = profileManager.getActiveProfile && profileManager.getActiveProfile();
+                return profileManager.getEquippedInstanceId(profile, typeId, bucket, defId, occ) || defId;
+            };
             (L.weapons || merged.availableWeapons).forEach((w) => {
                 const fromRegistry = (typeof weaponConfigManager !== 'undefined')
                     ? weaponConfigManager.getDefaultsForShip(w)
@@ -222,16 +230,17 @@ extendClass(ShipConfigManager, {
                         height: fromRegistry.height != null ? fromRegistry.height : 8
                     }
                 );
+                const instanceId = resolveInstance('weapons', w);
                 const itemBonus = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeBonuses)
-                    ? profileManager.getItemUpgradeBonuses('weapons', w)
+                    ? profileManager.getItemUpgradeBonuses('weapons', instanceId)
                     : null;
                 // Fire mode (SINGLE/BURST/AUTO, free to switch once unlocked) and the
                 // fine-tune slider (0..1, biases damage against cooldown) both layer on
                 // top of the track-level bonuses above, same multiplier pipeline.
                 const modeDef = (typeof profileManager !== 'undefined' && typeof economyConfig !== 'undefined' && economyConfig.itemFireModes)
-                    ? economyConfig.itemFireModes[profileManager.getItemMode('weapons', w)]
+                    ? economyConfig.itemFireModes[profileManager.getItemMode('weapons', instanceId)]
                     : null;
-                const tune = (typeof profileManager !== 'undefined') ? profileManager.getItemTune('weapons', w) : 0.5;
+                const tune = (typeof profileManager !== 'undefined') ? profileManager.getItemTune('weapons', instanceId) : 0.5;
                 const tuneDmgMul = 0.85 + tune * 0.3;
                 const tuneCdMul = 1.15 - tune * 0.3;
                 if (bonuses) {
@@ -269,19 +278,22 @@ extendClass(ShipConfigManager, {
                 // above, so their bonuses are combined onto the aggregate ship-wide
                 // multipliers instead (each equipped item contributes independently).
                 (L.defenses || []).forEach((id) => {
-                    const b = profileManager.getItemUpgradeBonuses('defenses', id);
+                    if (!id) return;
+                    const b = profileManager.getItemUpgradeBonuses('defenses', resolveInstance('defenses', id));
                     bonuses.defenseCapacityMul *= b.capacityMul;
                     bonuses.defenseHarden = Math.min(0.6, bonuses.defenseHarden + b.harden);
                     bonuses.defenseRegenMul *= b.regenMul;
                 });
                 (L.abilities || []).forEach((id) => {
-                    const b = profileManager.getItemUpgradeBonuses('abilities', id);
+                    if (!id) return;
+                    const b = profileManager.getItemUpgradeBonuses('abilities', resolveInstance('abilities', id));
                     bonuses.abilityCooldownMul = Math.max(0.3, bonuses.abilityCooldownMul * b.cooldownMul);
                     bonuses.abilityPotencyMul *= b.potencyMul;
                     bonuses.abilityDurationMul *= b.durationMul;
                 });
                 (L.energy || []).forEach((id) => {
-                    const b = profileManager.getItemUpgradeBonuses('energy', id);
+                    if (!id) return;
+                    const b = profileManager.getItemUpgradeBonuses('energy', resolveInstance('energy', id));
                     bonuses.abilityCooldownMul = Math.max(0.3, bonuses.abilityCooldownMul * b.cooldownMul);
                 });
             }

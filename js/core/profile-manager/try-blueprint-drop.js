@@ -2,6 +2,10 @@
 
 // ProfileManager methods, split from profile-manager.js.
 extendClass(ProfileManager, {
+    /**
+     * Roll a blueprint schematic for a kill. Does not grant cargo — the world
+     * pickup must be collected first (see pickupManager.spawnFromKill).
+     */
     tryBlueprintDrop(killInfo) {
         const profile = this.getActiveProfile();
         if (!profile || typeof economyConfig === 'undefined') return null;
@@ -11,9 +15,68 @@ extendClass(ProfileManager, {
         if (Math.random() > chance) return null;
         const pool = this.getBlueprintPool();
         if (!pool.length) return null;
-        const key = pool[Math.floor(Math.random() * pool.length)];
-        this.addCargoBlueprint(key, 1);
-        return key;
+        return pool[Math.floor(Math.random() * pool.length)];
+    },
+
+    /** Parts an enemy wreck can shed: its own weapons/abilities, else the global pool. */
+    getEnemySalvagePool(killInfo) {
+        const pool = [];
+        const seen = {};
+        const push = (kind, id) => {
+            const k = String(kind || '');
+            const pid = String(id || '');
+            if (!pid || (k !== 'weapon' && k !== 'defense' && k !== 'ability' && k !== 'energy')) return;
+            if (!this.getPartItem || !this.getPartItem(k, pid)) return;
+            const key = k + ':' + pid;
+            if (seen[key]) return;
+            seen[key] = true;
+            pool.push({ kind: k, id: pid, key: key });
+        };
+        const type = killInfo && killInfo.type;
+        if (type && typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getConfig) {
+            const cfg = enemyConfigManager.getConfig(type);
+            if (cfg) {
+                if (cfg.defaultWeapon) push('weapon', cfg.defaultWeapon);
+                (cfg.availableWeapons || []).forEach((w) => push('weapon', w));
+                const list = cfg.abilities || cfg.defenseMechanisms || [];
+                list.forEach((a) => {
+                    if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.isEnergyId
+                        && shipLoadoutManager.isEnergyId(a)) {
+                        push('energy', a);
+                    } else if (this.isDefenseAbilityId && this.isDefenseAbilityId(a)) {
+                        push('defense', a);
+                    } else {
+                        push('ability', a);
+                    }
+                });
+            }
+        }
+        if (!pool.length && this.getBlueprintPool) {
+            this.getBlueprintPool().forEach((key) => {
+                const bp = this.parseBlueprintKey(key);
+                if (bp) push(bp.kind, bp.id);
+            });
+        }
+        return pool;
+    },
+
+    /**
+     * Roll a finished part drop. Rarer than blueprints. Returns {kind,id,key} or null.
+     * Does not grant cargo — pickup collection does.
+     */
+    tryPartDrop(killInfo) {
+        const profile = this.getActiveProfile();
+        if (!profile || typeof economyConfig === 'undefined') return null;
+        this.ensureEconomyDefaults(profile);
+        const stats = this.getStationStats(profile);
+        const base = economyConfig.getPartDropChance
+            ? economyConfig.getPartDropChance(killInfo)
+            : 0.012;
+        const chance = Math.min(0.35, base + (stats.dropBonus || 0) * 0.5);
+        if (Math.random() > chance) return null;
+        const pool = this.getEnemySalvagePool(killInfo);
+        if (!pool.length) return null;
+        return pool[Math.floor(Math.random() * pool.length)];
     },
 
     hasCargo() {
@@ -22,7 +85,8 @@ extendClass(ProfileManager, {
         this.ensureEconomyDefaults(profile);
         const hasRes = Object.keys(profile.cargo.resources).some((k) => profile.cargo.resources[k] > 0);
         const hasBp = Object.keys(profile.cargo.blueprints).some((k) => profile.cargo.blueprints[k] > 0);
-        return hasRes || hasBp;
+        const hasParts = Object.keys(profile.cargo.parts || {}).some((k) => profile.cargo.parts[k] > 0);
+        return hasRes || hasBp || hasParts;
     },
 
     teleportCargoToStation() {
@@ -53,7 +117,29 @@ extendClass(ProfileManager, {
                 moved = true;
             }
         });
-        if (!Object.keys(profile.cargo.resources).length && !Object.keys(profile.cargo.blueprints).length) {
+        Object.keys(profile.cargo.parts || {}).forEach((key) => {
+            const n = profile.cargo.parts[key] || 0;
+            if (n <= 0) {
+                delete profile.cargo.parts[key];
+                return;
+            }
+            const bp = this.parseBlueprintKey(key);
+            if (!bp) {
+                delete profile.cargo.parts[key];
+                return;
+            }
+            const bag = bp.kind === 'weapon' ? profile.parts.weapons
+                : (bp.kind === 'defense' ? profile.parts.defenses
+                    : (bp.kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+            bag[bp.id] = (bag[bp.id] || 0) + n;
+            const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+            if (discoverCat && this.discover) this.discover(discoverCat, bp.id);
+            delete profile.cargo.parts[key];
+            moved = true;
+        });
+        if (!Object.keys(profile.cargo.resources).length
+            && !Object.keys(profile.cargo.blueprints).length
+            && !Object.keys(profile.cargo.parts || {}).length) {
             profile.cargo = this.emptyCargo();
         }
         profile.homeStation.lastTeleportAt = Date.now();

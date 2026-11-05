@@ -306,6 +306,10 @@ extendClass(HomeStationUI, {
 
     applyHangarSlotChoice(kind, slotIndex, moduleId, sourceEl) {
         if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.setSlotModule) return;
+        // Captured before setSlotModule mutates the loadout.
+        const prevId = this.hangarSlotModuleId(kind, slotIndex);
+        const clearedId = !moduleId ? prevId : null;
+        const replacedId = (moduleId && prevId && prevId !== moduleId) ? prevId : null;
         const res = shipLoadoutManager.setSlotModule(this.hangarShipId, kind, slotIndex, moduleId);
         if (!res.ok) {
             let msg = 'SLOT UPDATE FAILED';
@@ -338,6 +342,21 @@ extendClass(HomeStationUI, {
                 : this.hangarShipId;
             if (active === this.hangarShipId) {
                 shipConfigManager.applyToRuntime(this.hangarShipId);
+            }
+        }
+        if (typeof profileManager !== 'undefined') {
+            const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+            const bucket = shipLoadoutManager.kindToLoadoutKey(kind);
+            if (profile) {
+                // Unequip / replace: old part returns to ship cargo.
+                const backId = clearedId || replacedId;
+                if (backId && profileManager.fileUnequippedPart) {
+                    profileManager.fileUnequippedPart(profile, this.hangarShipId, bucket, backId);
+                }
+                // Equip: leave cargo so filed+equipped stays 1 for a single instance.
+                if (moduleId && profileManager.consumeFiledPart) {
+                    profileManager.consumeFiledPart(profile, this.hangarShipId, bucket, moduleId);
+                }
             }
         }
         this._hangarOpenSlot = null;

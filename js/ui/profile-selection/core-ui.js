@@ -94,7 +94,7 @@ extendClass(ProfileSelectionManager, {
         if (!reuse) {
             if (this.overlay) this.overlay.remove();
             this.overlay = document.createElement('div');
-            this.overlay.className = 'profile-selection-overlay' + (this.host ? ' is-inline' : '');
+            this.overlay.className = 'profile-selection-overlay' + (this.host ? ' is-inline' : ' vf-glass');
         } else if (this._keyHandler) {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;

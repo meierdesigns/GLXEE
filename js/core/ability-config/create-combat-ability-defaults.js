@@ -8,12 +8,11 @@ extendClass(AbilityConfigManager, {
             balanced_combat: this.makeAbility({
                 id: 'balanced_combat',
                 name: 'Balanced Combat',
-                description: 'Versatile combat system with balanced offense and defense',
+                description: 'Lightweight thruster tuning for balanced maneuvering',
                 icon: 'ability_balanced_combat',
                 cluster: 'combat',
                 type: 'passive',
-                tier: 1,
-                uiDescription: 'Balanced performance across combat metrics'
+                tier: 1
             }),
             boss_ai: this.makeAbility({
                 id: 'boss_ai',

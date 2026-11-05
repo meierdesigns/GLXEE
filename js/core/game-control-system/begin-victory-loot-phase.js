@@ -159,9 +159,11 @@ extendClass(GameControlSystem, {
                         this.lastVictoryLoot = granted && Object.keys(granted).length ? granted : null;
                         if (granted && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
                             const parts = Object.keys(granted).map((id) => {
-                                const label = (typeof economyConfig !== 'undefined')
-                                    ? economyConfig.getResourceLabel(id)
-                                    : id.toUpperCase();
+                                const label = (this.victoryLootLabel)
+                                    ? this.victoryLootLabel(id)
+                                    : ((typeof economyConfig !== 'undefined')
+                                        ? economyConfig.getResourceLabel(id)
+                                        : id.toUpperCase());
                                 return granted[id] + ' ' + label;
                             });
                             if (parts.length) {

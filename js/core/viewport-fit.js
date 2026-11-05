@@ -141,8 +141,9 @@
     // Global bezel around the stage with the resolution slider.
     function ensureBezel() {
         // The frame is static in index.html (painted with the first frame); create only as a fallback.
-        if (!document.getElementById('vf-bezel')) {
-            const frame = document.createElement('div');
+        let frame = document.getElementById('vf-bezel');
+        if (!frame) {
+            frame = document.createElement('div');
             frame.id = 'vf-bezel';
             frame.className = 'vf-bezel';
             const back = document.createElement('div');
@@ -150,6 +151,11 @@
             back.setAttribute('aria-hidden', 'true');
             frame.appendChild(back);
             frame.insertAdjacentHTML('beforeend', FRAME_PLATES_HTML);
+            document.body.appendChild(frame);
+        }
+        // Keep the rim above glass hosts: overlays append later and transform:scale
+        // glass can promote above an early absolute sibling in the compositor.
+        if (frame.parentElement === document.body && document.body.lastElementChild !== frame) {
             document.body.appendChild(frame);
         }
         let el = document.getElementById('vf-res');

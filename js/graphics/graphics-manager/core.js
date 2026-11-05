@@ -270,6 +270,27 @@ class GraphicsManager {
         } else if (this.shipModels) {
             this.shipModels.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
         }
+        // Brief impact flash so hits read even when particles are sparse.
+        const flash = enemy.hitFlashMs || 0;
+        if (flash > 0) {
+            const a = Math.min(0.8, flash / 110);
+            const shieldHit = enemy.hitSpark === 'shield';
+            ctx.save();
+            ctx.globalAlpha = a * (shieldHit ? 0.45 : 0.55);
+            ctx.fillStyle = shieldHit ? '#9fdcff' : '#ffffff';
+            ctx.fillRect(Math.floor(enemy.x), Math.floor(enemy.y), Math.ceil(enemy.width), Math.ceil(enemy.height));
+            ctx.globalAlpha = a;
+            ctx.fillStyle = shieldHit ? '#c8f0ff' : '#ffe566';
+            const ix = Math.floor(enemy.x) + 1;
+            const iy = Math.floor(enemy.y) + 1;
+            const iw = Math.max(1, Math.ceil(enemy.width) - 2);
+            const ih = Math.max(1, Math.ceil(enemy.height) - 2);
+            ctx.fillRect(ix, iy, iw, 2);
+            ctx.fillRect(ix, iy + ih - 2, iw, 2);
+            ctx.fillRect(ix, iy, 2, ih);
+            ctx.fillRect(ix + iw - 2, iy, 2, ih);
+            ctx.restore();
+        }
         this.drawEnemyGun(ctx, enemy);
         if (enemy.renegade && this.drawRenegadeBeacon) this.drawRenegadeBeacon(ctx, enemy);
     }

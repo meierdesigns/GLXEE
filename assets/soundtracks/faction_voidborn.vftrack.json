@@ -1,0 +1,111 @@
+{
+  "format": "vftrack",
+  "version": 1,
+  "meta": {
+    "title": "Voidborn Doctrine",
+    "author": "VF Tracker",
+    "planet": "",
+    "notes": "faction combat theme"
+  },
+  "bpm": 90,
+  "rowsPerBeat": 1,
+  "rowsPerPattern": 16,
+  "channels": 4,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "bass",
+      "wave": "sine",
+      "volume": 0.55,
+      "attack": 0.04,
+      "decay": 0.2,
+      "sustain": 0.45,
+      "release": 0.35,
+      "filter": 600
+    },
+    {
+      "id": 2,
+      "name": "lead",
+      "wave": "sine",
+      "volume": 0.4,
+      "attack": 0.02,
+      "decay": 0.15,
+      "sustain": 0.4,
+      "release": 0.3,
+      "filter": null
+    },
+    {
+      "id": 3,
+      "name": "arp",
+      "wave": "triangle",
+      "volume": 0.28,
+      "attack": 0.01,
+      "decay": 0.12,
+      "sustain": 0.28,
+      "release": 0.2,
+      "filter": null
+    },
+    {
+      "id": 4,
+      "name": "hat",
+      "wave": "noise",
+      "volume": 0.12,
+      "attack": 0.002,
+      "decay": 0.08,
+      "sustain": 0.01,
+      "release": 0.08,
+      "filter": null
+    },
+    {
+      "id": 5,
+      "name": "kick",
+      "wave": "sine",
+      "volume": 0.55,
+      "attack": 0.01,
+      "decay": 0.2,
+      "sustain": 0.1,
+      "release": 0.15,
+      "filter": null
+    }
+  ],
+  "patterns": [
+    {
+      "id": 0,
+      "channels": [
+        "B-1:1:64 . . . B-1:1:48 . . . B-1:1:56 . . . B-1:1:40 . . .",
+        "B-3:2:44 . . B-3:2:36 . . B-3:2:40 . . B-3:2:32 . . . . . .",
+        "F#4:3:26 . F#4:3:18 . F#4:3:22 . F#4:3:16 . F#4:3:26 . F#4:3:18 . F#4:3:20 . . .",
+        ". A-4:4:14 . . . A-4:4:10 . . . A-4:4:14 . . . A-4:4:8 . ."
+      ]
+    },
+    {
+      "id": 1,
+      "channels": [
+        "B-1:1:56 . B-1:1:36 . B-1:1:48 . . . B-1:1:40 . B-1:1:32 . . . . .",
+        "B-3:2:40 . . B-3:2:32 . . B-3:2:36 . . B-3:2:28 OFF . . . . .",
+        "F#4:3:20 . . F#4:3:14 . F#4:3:18 . . F#4:3:12 . . F#4:3:16 . . . .",
+        ". . A-4:4:12 . . . A-4:4:8 . . A-4:4:12 . . . . A-4:4:6 ."
+      ]
+    },
+    {
+      "id": 2,
+      "channels": [
+        "B-1:1:70 B-1:1:40 . B-1:1:52 B-1:1:60 . . B-1:1:48 . B-1:1:36 . B-1:1:44 . . . .",
+        "B-3:2:52 . B-3:2:40 . B-3:2:48 . B-3:2:36 B-3:2:44 . B-3:2:32 . OFF . . . .",
+        "F#4:3:28 F#4:3:16 . F#4:3:22 . F#4:3:18 F#4:3:26 . F#4:3:14 . F#4:3:20 . . . . .",
+        "B-1:5:40 . A-4:4:16 . . A-4:4:10 . B-1:5:32 . A-4:4:14 . . A-4:4:8 . . ."
+      ]
+    }
+  ],
+  "order": [
+    0,
+    0,
+    1,
+    0,
+    2,
+    1,
+    0,
+    1
+  ],
+  "loop": true
+}

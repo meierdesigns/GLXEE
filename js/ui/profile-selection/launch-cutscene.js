@@ -116,7 +116,7 @@ class LaunchCutsceneManager {
         skipBtn.textContent = 'SKIP ▶';
         skipBtn.addEventListener('click', () => this.skip());
         overlay.appendChild(skipBtn);
-        document.body.appendChild(overlay);
+        document.documentElement.appendChild(overlay);
         this.overlay = overlay;
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');

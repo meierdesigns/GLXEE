@@ -31,11 +31,11 @@
     --fr-bevel: calc(5 * var(--u));
     --fr-hole-r: 0;
     --fr-shape: none;
-    /* screen opening (glass edge): left/right/bottom 44u, top 44u + strip.
-       Keep in sync with :root --fr-open-* (display content sizes to these). */
-    --fr-ol: var(--fr-open-side, calc(44 * var(--u)));
-    --fr-or: var(--fr-open-side, calc(44 * var(--u)));
-    --fr-ob: var(--fr-open-bottom, calc(44 * var(--u)));
+    /* screen opening (glass edge): left/right/bottom via --fr-open-side/bottom
+       (56u), top 44u + --bz-extra strip. Keep in sync with :root --fr-open-*. */
+    --fr-ol: var(--fr-open-side, calc(56 * var(--u)));
+    --fr-or: var(--fr-open-side, calc(56 * var(--u)));
+    --fr-ob: var(--fr-open-bottom, calc(56 * var(--u)));
     --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)));
     --glass-r: var(--fr-hole-r);
 }
@@ -148,7 +148,7 @@
     box-sizing: border-box;
     clip-path: var(--fr-shape);
     border: var(--_vine-th) solid #14041c;
-    border-image: url('../assets/ui/voidborn-bezel-vine.svg') 16 round;
+    border-image: url('../assets/ui/voidborn-bezel-vine.svg') 32 round;
     image-rendering: pixelated;
     /* Single static rim — life via brightness pulse, never image swaps. */
     animation: vf-bezel-live var(--vf-vine-dur, 48s) steps(1, end) infinite;
@@ -245,7 +245,7 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #020706;
-    border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 16 round;
+    border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 32 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
     will-change: auto;
@@ -281,7 +281,7 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
    frame" bug class voidborn had. */
 html[data-faction="machine"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 16 round;
+    border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 32 round;
     image-rendering: pixelated;
     padding: 0;
 }
@@ -336,7 +336,7 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #05080e;
-    border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 16 round;
+    border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 32 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
     will-change: auto;
@@ -361,7 +361,7 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
 }
 html[data-faction="terran"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 16 round;
+    border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 32 round;
     image-rendering: pixelated;
     padding: 0;
 }
@@ -416,7 +416,7 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #060202;
-    border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 16 round;
+    border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 32 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
     will-change: auto;
@@ -445,7 +445,7 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
 }
 html[data-faction="kronax"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 16 round;
+    border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 32 round;
     image-rendering: pixelated;
     padding: 0;
 }
@@ -500,7 +500,7 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #040503;
-    border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 16 round;
+    border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 32 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
     will-change: auto;
@@ -527,9 +527,24 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
 }
 html[data-faction="pirate"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 16 round;
+    border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 32 round;
     image-rendering: pixelated;
     padding: 0;
+}
+
+/* border-image on 96×96 (viewBox 48) bezel SVGs can paint past the CSS border
+   box into the screen opening. Clip ::after to the metal band so sides/bottom
+   never cover the glass. Voidborn keeps its intentional vine bite (--_vine-ov). */
+.vf-bezel[data-faction="machine"] .vf-fr::after,
+.vf-bezel[data-faction="terran"] .vf-fr::after,
+.vf-bezel[data-faction="kronax"] .vf-fr::after,
+.vf-bezel[data-faction="pirate"] .vf-fr::after {
+    --_open-hole: linear-gradient(#000 0 0) var(--fr-ol) var(--fr-ot) /
+        calc(100% - var(--fr-ol) - var(--fr-or))
+        calc(100% - var(--fr-ot) - var(--fr-ob)) no-repeat;
+    -webkit-mask: var(--_open-hole), linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: var(--_open-hole) exclude, linear-gradient(#000 0 0);
 }
 
 /* Rim life without image swaps: occasional stepped brightness on the single
@@ -749,7 +764,7 @@ html[data-faction="voidborn"] body .game-container .game-canvas-container > .gam
    wraps it (.game-stage), using the thin panel vine at the fight-frame's own 12px width. */
 html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/voidborn-vine-frame.svg') 16 round;
+    border-image: url('../assets/ui/voidborn-vine-frame.svg') 32 round;
     image-rendering: pixelated;
     padding: 0;
 }

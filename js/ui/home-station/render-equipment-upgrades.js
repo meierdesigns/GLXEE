@@ -37,7 +37,11 @@ extendClass(HomeStationUI, {
         if (!bucket || !id || bucket === 'blueprints') {
             return wrap(this.emptyHtml('hsHangar', 'SELECT A PART'));
         }
-        const meta = this._storageItemMeta(bucket, id);
+        const parsed = (typeof profileManager !== 'undefined' && profileManager.parsePartInstanceId)
+            ? profileManager.parsePartInstanceId(id)
+            : { defId: id, unit: null };
+        const defId = parsed.defId || id;
+        const meta = this._storageItemMeta(bucket, defId);
         const level = (typeof profileManager !== 'undefined') ? profileManager.getItemUpgradeLevel(bucket, id, profile) : 0;
         const trackDefs = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs)
             ? economyConfig.itemUpgradeTrackDefs[bucket]
@@ -45,21 +49,39 @@ extendClass(HomeStationUI, {
         const maxLevel = trackDefs
             ? Object.keys(trackDefs).reduce((sum, t) => sum + (trackDefs[t].maxLevel || 5), 0)
             : ((typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeMaxLevel) || 5);
-        const equipped = this._itemIsEquippedOnShip(shipId, bucket, id);
         const kind = this._itemBucketKind(bucket);
-        const stationQty = profileManager.getStationStorageQty(profile, bucket, id);
-        const shipQty = profileManager.getShipStorageQty(profile, shipId, bucket, id);
+        let onStation = false;
+        let onShip = false;
+        let equipped = false;
+        if (parsed.unit != null && profileManager.getPartInstanceLayout) {
+            const layout = profileManager.getPartInstanceLayout(profile, bucket, defId);
+            onStation = (layout.station || []).indexOf(parsed.unit) !== -1;
+            const shipUnits = (layout.ships && layout.ships[shipId]) || [];
+            const shipIdx = shipUnits.indexOf(parsed.unit);
+            onShip = shipIdx !== -1;
+            if (onShip) {
+                const eq = profileManager._equippedStorageCount
+                    ? profileManager._equippedStorageCount(profile, shipId, bucket, defId)
+                    : 0;
+                equipped = shipIdx >= 0 && shipIdx < eq;
+            }
+        } else {
+            equipped = this._itemIsEquippedOnShip(shipId, bucket, defId);
+            onStation = profileManager.getStationStorageQty(profile, bucket, defId) > 0;
+            onShip = profileManager.getShipStorageQty(profile, shipId, bucket, defId) > 0;
+        }
         let actionHtml = '';
         if (equipped) {
-            actionHtml += `<button class="action-button hs-line-action hs-equip-unequip" data-item-unequip="${shipId}|${kind}|${id}" title="Unequip">UNEQUIP</button>`;
+            actionHtml += `<button class="action-button hs-line-action hs-equip-unequip" data-item-unequip="${shipId}|${kind}|${defId}" title="Unequip">UNEQUIP</button>`;
         }
-        if (stationQty > 0 && shipId) {
+        // Keep instance id on move attrs so upgrade bags follow this specific copy.
+        if (onStation && shipId) {
             actionHtml += `<button class="action-button hs-line-action" data-move-to-ship="${bucket}:${id}" data-ship="${shipId}">TO SHIP</button>`;
         }
-        if (shipQty > 0) {
+        if (onShip) {
             actionHtml += `<button class="action-button hs-line-action" data-move-to-station="${bucket}:${id}" data-ship="${shipId}">TO STATION</button>`;
         }
-        const where = equipped ? 'EQUIPPED' : (stationQty > 0 && shipQty <= 0 ? 'STATION' : 'SHIP');
+        const where = equipped ? 'EQUIPPED' : (onStation ? 'STATION' : 'SHIP');
         return wrap(
             `<div class="hs-line hs-shop-line hs-equip-line is-expanded">` +
             `<span class="hs-line-name">` +

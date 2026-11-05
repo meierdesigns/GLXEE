@@ -231,16 +231,39 @@ extendClass(ProfileManager, {
         return applied.granted;
     },
 
-    addCargoBlueprint(key, amount) {
+    addCargoBlueprint(key, amount, options) {
         const profile = this.getActiveProfile();
-        if (!profile) return false;
+        if (!profile) return 0;
         this.ensureEconomyDefaults(profile);
         const bp = this.parseBlueprintKey(key);
         const n = Math.round(Number(amount) || 1);
-        if (!bp || n <= 0) return false;
+        if (!bp || n <= 0) return 0;
         profile.cargo.blueprints[bp.key] = (profile.cargo.blueprints[bp.key] || 0) + n;
-        this.save();
-        return true;
+        if (!(options && options.skipSave)) {
+            this.save();
+        }
+        return n;
+    },
+
+    /** Mission salvage part into cargo (`kind:partId`), pending station teleport. */
+    addCargoPart(kind, partId, amount, options) {
+        const profile = this.getActiveProfile();
+        if (!profile) return 0;
+        this.ensureEconomyDefaults(profile);
+        const k = String(kind || '');
+        const id = String(partId || '');
+        if (!id || (k !== 'weapon' && k !== 'defense' && k !== 'ability' && k !== 'energy')) return 0;
+        if (!this.getPartItem(k, id)) return 0;
+        const n = Math.round(Number(amount) || 1);
+        if (n <= 0) return 0;
+        const key = k + ':' + id;
+        profile.cargo.parts[key] = (profile.cargo.parts[key] || 0) + n;
+        const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[k];
+        if (discoverCat && this.discover) this.discover(discoverCat, id);
+        if (!(options && options.skipSave)) {
+            this.save();
+        }
+        return n;
     },
 
     grantPlanetResources(planetId) {

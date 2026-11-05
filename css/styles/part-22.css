@@ -149,10 +149,24 @@ button.profile-stepper-btn { cursor: pointer; }
 button.profile-stepper-btn:hover { color: var(--faction-accent, #fff); opacity: 1; }
 .profile-stepper-icon { display: block; width: 40px; height: 40px; filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a); }
 
-/* Wizard bottom bar: sits on the overlay (not in the dialog) so it fills the screen width, like the stepper on top. */
-html body .profile-selection-overlay:has(> .profile-selection-bar) { padding-bottom: 140px; box-sizing: border-box; }
+/* Wizard bottom bar: in-flow flex footer (not absolute). Absolute + negative --ps-bleed-b
+   pushed CANCEL/NEXT under the glass overflow/clip-path, leaving only a ~6px sliver. */
+html body .profile-selection-overlay:has(> .profile-selection-bar) {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 0;
+    box-sizing: border-box;
+    min-height: 0;
+}
+html body .profile-selection-overlay > .profile-selection-content {
+    flex: 1 1 auto;
+    min-height: 0;
+}
 html body .profile-selection-overlay > .profile-selection-bar {
-    position: absolute; left: calc(-1 * var(--ps-bleed-l, 0px)); right: calc(-1 * var(--ps-bleed-r, 0px)); bottom: 0; z-index: 2; box-sizing: border-box; width: auto; margin: 0 !important; padding: 14px 32px;
+    position: relative; left: auto; right: auto; bottom: auto; top: auto;
+    z-index: 2; flex: 0 0 auto; align-self: stretch; box-sizing: border-box; width: auto;
+    margin: 0 calc(-1 * var(--ps-bleed-l, 0px)) 0 calc(-1 * var(--ps-bleed-r, 0px)) !important;
+    padding: 12px calc(32px + var(--ps-bleed-r, 0px)) 12px calc(32px + var(--ps-bleed-l, 0px));
     display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 24px;
     background: #05060a; border-top: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, #05060a);
 }
@@ -161,7 +175,9 @@ html body .profile-selection-overlay > .profile-selection-bar .profile-selection
 html body .profile-selection-overlay > .profile-selection-bar .action-button.secondary { grid-column: 1; grid-row: 1; }
 html body .profile-selection-overlay > .profile-selection-bar .action-button:not(.secondary) { grid-column: 3; grid-row: 1; }
 html body .profile-selection-overlay > .profile-selection-bar .profile-selection-instructions { grid-column: 2; grid-row: 1; text-align: center; }
-html body .profile-selection-overlay > .profile-selection-bar .profile-selection-actions .action-button { font-size: calc(var(--font-h2) * 1.6) !important; padding: 20px 56px !important; min-width: 280px; }
+html body .profile-selection-overlay > .profile-selection-bar .profile-selection-actions .action-button {
+    font-size: calc(var(--font-h2) * 1.25) !important; padding: 12px 36px !important; min-width: 200px;
+}
 html body .profile-selection-overlay > .profile-selection-bar .profile-selection-instructions p { margin: 0 !important; color: #d8dbe2; text-shadow: 1px 1px 0 #05060a; font-size: var(--font-text) !important; }
 
 /* Galaxy step: prev/next sit under the card instead of flanking it. */
@@ -224,9 +240,11 @@ html body .profile-selection-overlay > .profile-stepper {
     height: calc(100px + var(--ps-bleed-t, 0px));
     padding-top: calc(18px + var(--ps-bleed-t, 0px)) !important;
 }
+/* Bottom bar stays in-flow — never re-apply absolute/negative bleed here. */
 html body .profile-selection-overlay > .profile-selection-bar {
-    bottom: calc(-1 * var(--ps-bleed-b, 0px));
-    padding-bottom: calc(14px + var(--ps-bleed-b, 0px));
+    position: relative !important;
+    bottom: auto !important;
+    padding-bottom: 12px !important;
 }
 
 /* Start step: use the full width; wider profile column, bigger profile names. */
@@ -684,7 +702,10 @@ html body .profile-start-main .pk-slot:not(.is-filled) .hs-slot-glyph { backgrou
 
 /* Hangar sidebar → SLOTS view */
 .hs-slotview { display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; min-height: 0; }
-.hs-slotview-row { min-height: var(--sv, 44px); display: grid; --lw: 96px; grid-template-columns: var(--lw) 1fr; align-items: start; gap: 10px; }
+/* Label above its slots, not beside them: a fixed 96px label column left almost no room for the
+   slots in this narrow sidebar, so same-row cells (e.g. a wing pair) wrapped onto separate lines
+   instead of sitting side by side — the slots now get the row's full width to lay out in. */
+.hs-slotview-row { min-height: var(--sv, 44px); display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .hs-slotview-name { display: inline-flex; align-items: flex-start; gap: 8px; padding-top: 2px; font-size: var(--font-h3, 12px); letter-spacing: 2px; opacity: .85; }
 .hs-slotview-name .hs-slotview-ico { width: 24px; height: 24px; }
 .hs-slotview-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; color: var(--color-primary); font-size: 10px; letter-spacing: 1px; cursor: pointer; }
@@ -695,7 +716,7 @@ html body .profile-start-main .pk-slot:not(.is-filled) .hs-slot-glyph { backgrou
 .hs-slotview-switch.is-on::after { background: #09090d; transform: translateX(12px); }
 .hs-tree-area-toggle { display: inline-flex; align-items: center; gap: 3px; margin-left: auto; color: var(--color-primary); font-size: 8px; letter-spacing: 1px; cursor: pointer; }
 .hs-tree-area-toggle input { accent-color: var(--color-primary); width: 12px; height: 12px; margin: 0; }
-.hs-slotview-slots { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; justify-content: flex-end; }
+.hs-slotview-slots { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; justify-content: flex-start; }
 .hs-slotview-slots em { font-style: normal; opacity: .5; font-size: var(--font-h3, 12px); letter-spacing: 2px; }
 .hs-slotview-cell { display: inline-grid; place-items: center; width: var(--svw, 44px); height: var(--svh, 44px); box-sizing: border-box; background: #05060a; border: 0; outline: 2px dashed color-mix(in srgb, var(--pk-c) 55%, transparent); outline-offset: -2px; }
 .hs-slotview-cell.is-filled { outline-style: solid; outline-color: var(--pk-c); }
@@ -706,7 +727,7 @@ html body .hs-slot-picker .hs-pick-dialog { width: min(760px, 92vw); max-height:
 html body .hs-slot-picker .hs-pick-sort { display: flex; flex-wrap: wrap; gap: 8px; }
 html body .hs-slot-picker .hs-pick-sortbtn.is-active { background: var(--color-primary); color: #05060a; }
 html body .hs-slot-picker .hs-pick-grid { display: grid; grid-template-columns: repeat(8, 64px); grid-auto-rows: 64px; box-sizing: content-box; width: calc(8 * 64px + 7 * 4px); overflow-x: hidden; scrollbar-gutter: stable; grid-auto-flow: dense; gap: 4px; justify-content: start; align-content: start; overflow-y: auto; padding: 4px; min-height: calc(3 * 64px + 2 * 4px + 8px); max-height: max(208px, calc(100vh - 380px)); background-color: #03030a; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='68'%3E%3Crect x='.5' y='.5' width='63' height='63' fill='%2312101c' stroke='%23c88bff' stroke-opacity='.4'/%3E%3C/svg%3E"); background-size: 68px 68px; background-position: 4px 4px; background-attachment: local; }
-html body .hs-slot-picker .hs-pick-cell { position: relative; display: grid; place-items: center; padding: 0; min-width: 0; min-height: 0; background: #05060a; border: 2px solid var(--pk-c, var(--color-primary)); color: inherit; font: inherit; cursor: pointer; }
+html body .hs-slot-picker .hs-pick-cell { position: relative; display: grid; place-items: center; padding: 0; min-width: 0; min-height: 0; background: transparent; border: 2px solid transparent; color: inherit; font: inherit; cursor: pointer; }
 html body .hs-slot-picker .hs-pick-cell:hover:not(:disabled), html body .hs-slot-picker .hs-pick-cell:focus-visible { border-color: var(--pk-c, var(--color-primary)); box-shadow: inset 0 0 10px color-mix(in srgb, var(--pk-c, var(--color-primary)) 35%, transparent); }
 html body .hs-slot-picker .hs-pick-cell.is-current { border-color: var(--pk-c, var(--color-primary)); background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, #05060a); }
 html body .hs-slot-picker .hs-pick-cell.is-used { opacity: 1; }
@@ -887,7 +908,7 @@ html body .hs-slot-picker .hs-pick-cell.is-blocked .hs-item-body { filter: grays
 /* The object IS the item; the old glyph is only a small engraved emblem on it. */
 html body .hs-slot-picker .hs-pick-ico { position: absolute; left: 4px; bottom: 4px; width: 20px; height: 20px; z-index: 1; opacity: .9; }
 html body .hs-slot-picker .hs-pick-ico img { width: 20px; height: 20px; }
-html body .hs-slot-picker .hs-pick-cell { background: radial-gradient(circle at 50% 40%, #1b1830, #05060a 80%); }
+html body .hs-slot-picker .hs-pick-cell { background: transparent; }
 .hs-slotview-part:has(.hs-item-body) img { width: 18px; height: 18px; position: absolute; left: 3px; bottom: 3px; }
 /* Emblem sits top-left and only shows on hover; items are never dimmed. */
 html body .hs-slot-picker .hs-pick-ico { left: 4px; top: 4px; bottom: auto; opacity: 0; transition: opacity .12s; filter: drop-shadow(0 1px 0 #05060a); }
@@ -904,37 +925,70 @@ html body .hs-slot-picker .hs-pick-ico { left: 5px; top: 5px; }
 /* Part icon lives only in the tooltip. */
 html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img { display: none !important; }
 /* Hangar bay: inventory panel next to the ship (ship and slots stay usable for drag & drop). */
-.hs-bay-invtoggle { position: absolute; top: 10px; left: 10px; z-index: 6; appearance: none; background: #05060a; color: var(--color-text, #fff); border: 2px solid color-mix(in srgb, var(--color-primary) 70%, transparent); padding: 6px 12px; font: inherit; letter-spacing: 2px; cursor: pointer; }
+.hs-bay-invtoggle {
+    position: absolute; top: 10px; left: 10px; z-index: 6;
+    appearance: none; box-sizing: border-box;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 34px; padding: 8px 14px;
+    background: #05060a; color: var(--color-text, #fff);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 70%, #05060a);
+    font: inherit; font-size: var(--font-text, 12px); line-height: 1.25;
+    letter-spacing: 2px; white-space: nowrap; cursor: pointer;
+}
 .hs-bay-invtoggle:hover { background: var(--color-primary); color: #05060a; }
-.hs-bay-inv { position: absolute; top: 0; right: 0; bottom: 0; z-index: 4; width: 444px; box-sizing: border-box; padding: 8px; overflow-y: auto; background: #0a0912; border-left: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); --cs: 88px; }
+/* Panel sized to the shared storage grid (not a forced 8×48 sidebar). */
+.hs-bay-inv {
+    position: absolute; top: 0; left: 0; right: auto; bottom: auto; z-index: 4;
+    display: flex; flex-direction: column; align-items: stretch;
+    width: max-content; max-width: calc(100% - 12px);
+    box-sizing: border-box; padding: 8px; overflow: auto;
+    background: #0a0912;
+    border-right: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    --cs: 56px;
+}
 .hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
 .hs-bay-inv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
 .hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }
 .hs-bay-inv-zoom input { flex: 1; }
-html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { max-height: none; min-height: 0; overflow: visible; background: #03030a; }
-.hs-bay-inv[data-filter="weapon"] .hs-pick-cell:not([data-part-kind="weapon"]), .hs-bay-inv[data-filter="defense"] .hs-pick-cell:not([data-part-kind="defense"]), .hs-bay-inv[data-filter="ability"] .hs-pick-cell:not([data-part-kind="ability"]), .hs-bay-inv[data-filter="energy"] .hs-pick-cell:not([data-part-kind="energy"]) { opacity: .22; filter: grayscale(.7); }
+.hs-bay-inv[data-filter="weapon"] [data-part-kind]:not([data-part-kind="weapon"]), .hs-bay-inv[data-filter="defense"] [data-part-kind]:not([data-part-kind="defense"]), .hs-bay-inv[data-filter="ability"] [data-part-kind]:not([data-part-kind="ability"]), .hs-bay-inv[data-filter="energy"] [data-part-kind]:not([data-part-kind="energy"]) { opacity: .22; filter: grayscale(.7); }
 html body .hs-bay-inv .hs-pick-cell { cursor: grab; }
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-cell:not(:disabled) { cursor: grab; }
 html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: 0 0 0 2px #05060a, 0 0 0 4px var(--pk-c); }
 /* Bay zoom sits at the left, under the INVENTORY button. */
 html body .hs-hangar-bay-stage .hs-bay-zoom { top: 52px; right: auto; left: 10px; }
 html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: 10px; left: 10px; right: auto; }
-/* Inventory filter: small icon buttons, thin border; inactive dimmed, active a touch brighter with a soft glow. */
 /* Inventory filter: icon buttons; active = filled with the kind colour, dark icon. */
 html body .hs-bay-inv .hs-bay-inv-filter { appearance: none; display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; background: #05060a; border: 1px solid color-mix(in srgb, var(--fc) 45%, #05060a); opacity: .5; filter: brightness(.7) saturate(.8); transition: opacity .12s, filter .12s; }
-.hs-bay-inv-filter img { width: 18px; height: 18px; display: block; image-rendering: pixelated; }
+.hs-bay-inv-filter img {
+    width: 16px !important;
+    height: 16px !important;
+    display: block;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
 .hs-bay-inv-filter .is-on { display: none; }
 .hs-bay-inv-filter.is-active .is-off { display: block; }
 .hs-bay-inv-filter.is-active .is-on { display: none; }
 .hs-bay-inv-filter:hover:not(.is-active) { opacity: .8; filter: none; }
 html body .hs-bay-inv .hs-bay-inv-filter.is-active { opacity: 1; filter: brightness(1.15); border-color: color-mix(in srgb, var(--fc) 80%, #05060a); box-shadow: 0 0 6px color-mix(in srgb, var(--fc) 45%, transparent); }
-/* Inventory panel: visible empty-cell grid that fills the whole panel (tile = cell + 4px gap). */
-.hs-bay-inv { display: flex; flex-direction: column; }
-html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { flex: 1 1 auto; align-content: start; background-color: #151223; background-image: linear-gradient(90deg, transparent calc(100% - 4px), #03030a 0), linear-gradient(180deg, transparent calc(100% - 4px), #03030a 0); background-size: calc(var(--cs) + 4px) calc(var(--cs) + 4px); background-position: 0 0; }
-
-/* Fixed inventory scale: 8 columns of 48px, items sit exactly on the grid tiles. */
-html body .hs-bay-inv { --cs: 48px; width: calc(8 * 48px + 7 * 4px + 16px); }
-html body .hs-bay-inv.hs-slot-picker .hs-pick-grid { grid-template-columns: repeat(8, 48px); grid-auto-rows: 48px; padding: 0; width: calc(8 * 48px + 7 * 4px); scrollbar-gutter: auto; }
+/* Same renderer as station/ship storage: kill the slot-picker pick-grid tile bg /
+   4px gap / padding; keep .hs-storage-grid accent gap-lines (same weight as the frame). */
+html body .hs-bay-inv.hs-slot-picker .hs-storage-grid.hs-pick-grid {
+    flex: 0 0 auto;
+    align-self: start;
+    align-content: start;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    scrollbar-gutter: auto;
+    gap: var(--hs-gap, 2px);
+    padding: 0;
+    background-image: none;
+    background-color: var(--hs-line);
+    box-shadow: none;
+}
 html body .hs-bay-inv .hs-pick-size { font-size: 9px; top: 1px; right: 3px; }
 html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a; }
 
@@ -948,7 +1002,7 @@ html body .hs-bay-inv .hs-pick-cell.is-anim-unequip { animation: hs-item-unequip
 html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 40%; background: linear-gradient(transparent, color-mix(in srgb, var(--pk-c) 70%, #fff), transparent); opacity: .7; pointer-events: none; animation: hs-item-sweep .5s ease-out; }
 @media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-anim-equip, html body .hs-bay-inv .hs-pick-cell.is-anim-unequip, html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { animation: none; } }
 /* Inventory on the left: covers the bay's left-hand GUI (zoom etc.); only the INVENTORY toggle stays on top to close it. */
-html body .hs-hangar-bay-stage .hs-bay-inv { left: 0; right: auto; top: 50px; z-index: 8; border-left: 0; border-right: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent); }
+html body .hs-hangar-bay-stage .hs-bay-inv { left: 0; right: auto; top: 50px; z-index: 8; }
 html body .hs-hangar-bay-stage .hs-bay-invtoggle { z-index: 9; }
 /* Installed items animate while hovered: pulsing frame, gentle bob, slow light sweep. */
 @keyframes hs-item-hover-ring { 0%, 100% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 10px 2px var(--pk-c); } }
@@ -958,15 +1012,57 @@ html body .hs-bay-inv .hs-pick-cell.is-equipped:hover:not(.is-anim-equip):not(.i
 html body .hs-bay-inv .hs-pick-cell.is-equipped:hover:not(.is-anim-equip):not(.is-anim-unequip)::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 30%; background: linear-gradient(transparent, color-mix(in srgb, var(--pk-c) 60%, #fff), transparent); opacity: .45; pointer-events: none; animation: hs-item-hover-sweep 1.4s linear infinite; }
 @media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-equipped:hover, html body .hs-bay-inv .hs-pick-cell.is-equipped:hover::after { animation: none; } }
 
-/* Compact tooltip (inventory items): roomier, larger type, description first, key/value facts below. */
-html body .ui-tooltip.ui-tooltip-rich.ui-tooltip-compact { min-width: 280px; max-width: 380px; gap: 8px; padding: 16px 20px; font-size: calc(var(--font-text) + 2px); line-height: 1.4; overflow: visible; }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-item { display: block; flex-shrink: 0; overflow: visible; image-rendering: pixelated; }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head { display: flex; align-items: center; gap: 14px; font-size: calc(var(--font-text) + 5px); padding-bottom: 8px; margin-bottom: 4px; overflow: visible; }
+/* Compact tooltip (inventory): readable type, airy padding, soft glass. */
+html body .ui-tooltip.ui-tooltip-rich.ui-tooltip-compact {
+    box-sizing: border-box;
+    display: grid;
+    grid-template-columns: minmax(0, max-content);
+    justify-items: start;
+    min-width: 0 !important;
+    width: max-content;
+    max-width: min(280px, calc(100vw - 24px));
+    gap: 5px;
+    padding: 10px 12px;
+    font-size: var(--font-text);
+    line-height: 1.35;
+    letter-spacing: 0.06em;
+    overflow: hidden;
+    background: color-mix(in srgb, #05060a 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(3px);
+}
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-item {
+    display: block; flex-shrink: 0; overflow: hidden; image-rendering: pixelated;
+    width: 28px !important; height: 28px !important; max-width: 28px; max-height: 28px;
+}
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; max-width: 100%;
+    font-size: calc(var(--font-text) + 1px);
+    padding-bottom: 5px; margin-bottom: 1px;
+    border-bottom: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    overflow: hidden; min-width: 0;
+}
 html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-head.has-item { align-items: center; }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-title { min-width: 0; flex: 1 1 auto; line-height: 1.2; }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note { font-size: .95em; opacity: .85; margin-top: 0; }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-row { padding-top: 6px; border-top: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent); }
-html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note:last-child { opacity: .55; font-size: .8em; letter-spacing: 1px; padding-top: 4px; }
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-title {
+    min-width: 0; flex: 0 1 auto; line-height: 1.15;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note {
+    font-size: .95em; opacity: .9; margin: 0; padding: 0; letter-spacing: 0.04em;
+    white-space: normal; overflow-wrap: break-word; word-break: normal; max-width: 100%;
+}
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-stats {
+    gap: 8px !important; padding: 2px 0 0; max-width: 100%; flex-wrap: nowrap;
+}
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-row {
+    padding-top: 4px; gap: 6px; min-width: 0; max-width: 100%;
+    border-top: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent);
+}
+html body .ui-tooltip.ui-tooltip-compact .ui-tooltip-note:last-child {
+    opacity: .65; font-size: .85em; letter-spacing: 0.06em; padding-top: 2px;
+}
 
 /* Bay zoom: bottom right. Extra clearance (--hs-frame-gap, scales with the
    device-frame bezel size) keeps the "?" info button clear of the frame's
@@ -1440,6 +1536,44 @@ html body .hs-slot-picker .hs-pick-dialog { width: max-content; max-width: 92vw;
 /* Sort chips no longer carry .action-button: own base so they still look like buttons. */
 html body .hs-slot-picker .hs-pick-sortbtn { appearance: none; font: inherit; font-size: 12px; letter-spacing: 1px; cursor: pointer; }
 html body .hs-slot-picker .hs-pick-sortbtn:hover:not(.is-active) { border-color: var(--color-primary) !important; color: #fff !important; }
+
+/* Slot-picker modal inventory: same storage grid as bay/station, but in-flow (not the
+   absolute bay sidebar). Reuses .hs-bay-inv filter/dim CSS; resets position for the dialog. */
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-inv.hs-bay-inv {
+    position: static;
+    inset: auto;
+    z-index: auto;
+    width: max-content;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    border-right: 0;
+    padding: 0;
+    background: transparent;
+}
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-inv .hs-bay-inv-bar {
+    position: static;
+    top: auto;
+    margin: 0 0 8px;
+    padding: 0 0 8px;
+    background: transparent;
+}
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-inv .hs-storage-cell.is-current {
+    box-shadow: inset 0 0 0 2px var(--pk-c, var(--color-primary)), inset 0 0 0 3px #05060a;
+}
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-inv .hs-storage-cell.is-blocked {
+    opacity: .45;
+    filter: grayscale(.75) brightness(.75);
+    cursor: not-allowed;
+}
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-inv .hs-storage-cell[data-part-id]:not(:disabled) {
+    cursor: grab;
+}
+html body .hs-res-buy-modal.hs-slot-picker .hs-pick-body > .hs-pick-inv {
+    flex: 0 0 auto;
+    max-width: 100%;
+}
 
 /* Start step: the ship / hull container fills its row exactly; a top margin pushed its bottom border under the clipped content edge. */
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { margin-top: 0 !important; margin-bottom: 0 !important; }

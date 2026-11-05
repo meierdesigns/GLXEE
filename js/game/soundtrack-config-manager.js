@@ -2,9 +2,9 @@
 
 /**
  * Per-stage / per-enemy-type soundtrack overrides, layered on top of the
- * per-planet YouTube soundtrack (planetConfigManager) and the procedural
- * ambient drone fallback. Resolution priority (see soundtrack-override.js):
- * active enemy type > current stage > planet > procedural drone.
+ * per-planet YouTube / vftrack soundtrack. Resolution priority
+ * (see soundtrack-override.js): active enemy type > current stage >
+ * planet YouTube > planet vftrack > procedural drone.
  */
 class SoundtrackConfigManager {
     constructor() {
@@ -42,8 +42,27 @@ class SoundtrackConfigManager {
         }
     }
 
+    _packTrack(data) {
+        let trackerData = null;
+        if (data && data.trackerData) {
+            try {
+                trackerData = typeof VFTrackerParse !== 'undefined'
+                    ? VFTrackerParse.toCompact(data.trackerData)
+                    : data.trackerData;
+            } catch (e) {
+                trackerData = null;
+            }
+        }
+        return {
+            youtubeUrl: (data && data.youtubeUrl) || '',
+            localAudioData: (data && data.localAudioData) || '',
+            localAudioName: (data && data.localAudioName) || '',
+            trackerData
+        };
+    }
+
     hasTrack(entry) {
-        return !!(entry && (entry.youtubeUrl || entry.localAudioData));
+        return !!(entry && (entry.youtubeUrl || entry.localAudioData || entry.trackerData));
     }
 
     getStageTrack(stageId) {
@@ -55,11 +74,7 @@ class SoundtrackConfigManager {
         if (!this.hasTrack(data)) {
             delete this.stageTracks[stageId];
         } else {
-            this.stageTracks[stageId] = {
-                youtubeUrl: data.youtubeUrl || '',
-                localAudioData: data.localAudioData || '',
-                localAudioName: data.localAudioName || ''
-            };
+            this.stageTracks[stageId] = this._packTrack(data);
         }
         this.save();
     }
@@ -72,11 +87,7 @@ class SoundtrackConfigManager {
         if (!this.hasTrack(data)) {
             this.menuTrack = null;
         } else {
-            this.menuTrack = {
-                youtubeUrl: data.youtubeUrl || '',
-                localAudioData: data.localAudioData || '',
-                localAudioName: data.localAudioName || ''
-            };
+            this.menuTrack = this._packTrack(data);
         }
         this.save();
     }
@@ -90,11 +101,7 @@ class SoundtrackConfigManager {
         if (!this.hasTrack(data)) {
             delete this.enemyTracks[enemyTypeId];
         } else {
-            this.enemyTracks[enemyTypeId] = {
-                youtubeUrl: data.youtubeUrl || '',
-                localAudioData: data.localAudioData || '',
-                localAudioName: data.localAudioName || ''
-            };
+            this.enemyTracks[enemyTypeId] = this._packTrack(data);
         }
         this.save();
     }

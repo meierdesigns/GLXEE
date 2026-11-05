@@ -2,6 +2,33 @@
 
 // DefenseViewerUI methods, split from defense-viewer.js.
 extendClass(DefenseViewerUI, {
+    /** Concrete SHIELD / REGEN / harden numbers for the selected defense module. */
+    defenseStatRowsHtml(item) {
+        if (!item || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.computeDefenseStats) {
+            return '';
+        }
+        const d = shipLoadoutManager.computeDefenseStats([item.id]);
+        const rows = [];
+        if (d.shieldMax) {
+            rows.push(`<div class="stat-row"><span class="stat-label">Shield</span>` +
+                `<span class="stat-value">+${d.shieldMax}</span></div>`);
+        }
+        if (d.shieldMax || d.shieldRegen) {
+            const r = Math.round((Number(d.shieldRegen) || 0) * 10) / 10;
+            rows.push(`<div class="stat-row"><span class="stat-label">Regen</span>` +
+                `<span class="stat-value">+${r}/s</span></div>`);
+        }
+        if (d.damageReduction) {
+            rows.push(`<div class="stat-row"><span class="stat-label">Dmg reduction</span>` +
+                `<span class="stat-value">+${d.damageReduction}</span></div>`);
+        }
+        if (d.reflectChance) {
+            rows.push(`<div class="stat-row"><span class="stat-label">Reflect</span>` +
+                `<span class="stat-value">${d.reflectChance}%</span></div>`);
+        }
+        return rows.join('');
+    },
+
     renderDetail() {
         const root = this.overlay && this.overlay.querySelector('#dvDetail');
         const a = this.items[this.selectedIndex];
@@ -20,6 +47,8 @@ extendClass(DefenseViewerUI, {
                 <div class="stat-row"><span class="stat-label">Tier</span><span class="stat-value">${a.tier}</span></div>
                 <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${a.id}</span></div>
                 <div class="stat-row"><span class="stat-label">Summary</span><span class="stat-value">${a.uiDescription || '—'}</span></div>
+                ${this.defenseStatRowsHtml(a)}
+                ${contentViewerUpgradeRangeRowsHtml('defenses')}
             </div>
         `;
         if (this._devToggles) this._devToggles.refresh();

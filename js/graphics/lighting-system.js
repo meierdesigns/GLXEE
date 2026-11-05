@@ -10,12 +10,13 @@ class LightingSystem {
 
     // Lighting system for bullets
     renderLighting(ctx, bullets, obstacles, player, enemy) {
-        // Create lighting effects for each bullet
-        bullets.forEach(bullet => {
-            if (bullet.lightRadius && bullet.lightIntensity) {
+        if (!bullets || !bullets.length) return;
+        for (let i = 0; i < bullets.length; i++) {
+            const bullet = bullets[i];
+            if (bullet && bullet.lightRadius && bullet.lightIntensity) {
                 this.renderBulletLight(ctx, bullet, obstacles, player, enemy);
             }
-        });
+        }
     }
 
     renderBulletLight(ctx, bullet, obstacles, player, enemy) {
@@ -24,6 +25,7 @@ class LightingSystem {
         
         // Soft point light — keep radius small so shots don't look like slabs
         const radius = Math.min(24, bullet.lightRadius || 14);
+        const radius2 = radius * radius;
         const gradient = ctx.createRadialGradient(
             bulletCenterX, bulletCenterY, 0,
             bulletCenterX, bulletCenterY, radius
@@ -46,35 +48,35 @@ class LightingSystem {
             radius * 2
         );
         ctx.restore();
+
+        const near = (ox, oy) => {
+            const dx = bulletCenterX - ox;
+            const dy = bulletCenterY - oy;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= radius2) return -1;
+            return Math.sqrt(d2);
+        };
         
-        // Illuminate nearby obstacles
-        obstacles.forEach(obstacle => {
-            const distance = this.getDistance(bulletCenterX, bulletCenterY, 
-                obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
-            
-            if (distance < radius) {
-                this.illuminateObject(ctx, obstacle, bullet, distance, radius);
-            }
-        });
-        
-        // Illuminate player if nearby
-        if (player) {
-            const distance = this.getDistance(bulletCenterX, bulletCenterY,
-                player.x + player.width / 2, player.y + player.height / 2);
-            
-            if (distance < radius) {
-                this.illuminateObject(ctx, player, bullet, distance, radius);
+        if (obstacles && obstacles.length) {
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacle = obstacles[i];
+                if (!obstacle) continue;
+                const distance = near(
+                    obstacle.x + obstacle.width / 2,
+                    obstacle.y + obstacle.height / 2
+                );
+                if (distance >= 0) this.illuminateObject(ctx, obstacle, bullet, distance, radius);
             }
         }
         
-        // Illuminate enemy if nearby
+        if (player) {
+            const distance = near(player.x + player.width / 2, player.y + player.height / 2);
+            if (distance >= 0) this.illuminateObject(ctx, player, bullet, distance, radius);
+        }
+        
         if (enemy) {
-            const distance = this.getDistance(bulletCenterX, bulletCenterY,
-                enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
-            
-            if (distance < radius) {
-                this.illuminateObject(ctx, enemy, bullet, distance, radius);
-            }
+            const distance = near(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+            if (distance >= 0) this.illuminateObject(ctx, enemy, bullet, distance, radius);
         }
     }
 

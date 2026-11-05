@@ -737,35 +737,37 @@
     line-height: 1.25;
 }
 
-/* Planet / Enemy / Ship editors — fill the bezel glass (not the full stage).
-   CSS zoom + ÷zoom on geometry matches home-station / fight HUD. */
+/* Planet / Enemy / Ship editors — same .vf-glass inset recipe (inside the rim). */
 .planet-editor-overlay {
-    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    --_z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    --_gi: var(--vf-glass-inset, 0px);
     --sv-w: calc(var(--vw, 1000px) / var(--_z) / 100);
     --sv-h: calc(var(--vh, 750px) / var(--_z) / 100);
     position: fixed !important;
     inset: auto !important;
-    left: calc(var(--fr-open-side) / var(--_z)) !important;
-    top: calc(var(--fr-open-top) / var(--_z)) !important;
+    left: calc(var(--stage-x, 0px) + var(--fr-open-side) + var(--_gi)) !important;
+    top: calc(var(--stage-y, 0px) + var(--fr-open-top) + var(--_gi)) !important;
     right: auto !important;
     bottom: auto !important;
-    width: calc(var(--fr-open-w) / var(--_z)) !important;
-    height: calc(var(--fr-open-h) / var(--_z)) !important;
+    width: calc((var(--fr-open-w) - 2 * var(--_gi)) / var(--_z)) !important;
+    height: calc((var(--fr-open-h) - 2 * var(--_gi)) / var(--_z)) !important;
     max-width: none !important;
     max-height: none !important;
     margin: 0 !important;
-    transform: none !important;
+    transform: scale(var(--_z)) !important;
+    transform-origin: 0 0 !important;
     z-index: 3000;
     display: flex;
     align-items: stretch;
     justify-content: stretch;
-    zoom: var(--_z);
+    zoom: 1 !important;
     background: rgba(0, 0, 0, 0.94);
     font-family: var(--ui-font-family);
     -webkit-font-smoothing: none;
     image-rendering: pixelated;
     box-sizing: border-box;
     overflow: hidden;
+    contain: paint;
     padding: 0;
 }
 .planet-editor-overlay.hidden { display: none; }

@@ -4,7 +4,7 @@
 // that shed destructible chunks as they're worn down.
 const BOULDER_CHANCE = 0.35;
 const BOULDER_MIN = 26;       // px: rocks this big shed chunks when hit
-const CHUNK_SIZE = 10;
+const CHUNK_SIZE = 12;
 
 extendClass(ObstacleManager, {
     /** Rock damage from a bullet: stronger weapons chew through faster. */
@@ -34,8 +34,14 @@ extendClass(ObstacleManager, {
         const before = o.health;
         o.health -= Math.max(1, amount);
         if (o.health <= 0) {
+            if (typeof soundManager !== 'undefined' && soundManager.playObstacleBreak) {
+                soundManager.playObstacleBreak(o);
+            }
             this.removeObstacle(index);
             return true;
+        }
+        if (typeof soundManager !== 'undefined' && soundManager.playObstacleHit) {
+            soundManager.playObstacleHit(o);
         }
         if (o.isBoulder && o.maxHealth > 0) {
             const step = o.maxHealth / (o.shedSteps || 4);
@@ -69,6 +75,44 @@ extendClass(ObstacleManager, {
             const j = this.obstacles.indexOf(o);
             if (j < 0) continue;
             this.damageObstacle(j, Math.max(1, Math.round(amount * falloff)), x, y);
+        }
+        this.blastSteerObstacles(x, y, radius * 1.35, Math.max(0.9, (amount || 4) * 0.12), skip);
+    },
+
+    /**
+     * Explosions shove / steer lighter rocks outward. Big boulders barely move;
+     * pebbles get a lasting course change plus a short push impulse.
+     */
+    blastSteerObstacles(x, y, radius, force, skip) {
+        if (!(radius > 0) || !(force > 0) || !this.obstacles || !this.obstacles.length) return;
+        const r = Number(radius) || 0;
+        const f = Number(force) || 0;
+        for (let i = 0; i < this.obstacles.length; i++) {
+            const o = this.obstacles[i];
+            if (!o || o === skip || o.isFog || o.wallAnchor != null) continue;
+            const span = Math.min(o.width || 1, o.height || 1);
+            // Only smaller rocks are redirected; heavies stay put.
+            if (span > 16) continue;
+            const ox = o.x + (o.width || 0) / 2;
+            const oy = o.y + (o.height || 0) / 2;
+            const dx = ox - x;
+            const dy = oy - y;
+            const d = Math.hypot(dx, dy);
+            if (d > r || d < 0.01) continue;
+            const nx = dx / d;
+            const ny = dy / d;
+            const falloff = 1 - d / r;
+            const massMul = Math.pow(12 / Math.max(4, span), 1.25);
+            const kick = f * falloff * massMul;
+            if (!(kick > 0.02)) continue;
+            o.pushVx = (o.pushVx || 0) + nx * kick * 1.6;
+            o.pushVy = (o.pushVy || 0) + ny * kick * 1.6;
+            // Lasting steer: blast changes their travel heading.
+            o.horizontalSpeed = (o.horizontalSpeed || 0) + nx * kick * 0.55;
+            o.verticalSpeed = (o.verticalSpeed || 0) + ny * kick * 0.55;
+            if (o.rotationSpeed != null) {
+                o.rotationSpeed += (Math.random() - 0.5) * kick * 0.08;
+            }
         }
     },
 
@@ -115,9 +159,13 @@ extendClass(ObstacleManager, {
             fragmentOnDestroy: false,
             fragmentCount: 0,
             fragmentGeneration: (o.fragmentGeneration || 0) + 1,
-            collisionDamage: Math.max(1, Math.round((o.collisionDamage || 15) * 0.4)),
+            collisionDamage: this.scaleCollisionDamage
+                ? this.scaleCollisionDamage(Math.max(1, Math.round((o.collisionDamage || 15) * 0.4)), cw, ch)
+                : Math.max(1, Math.round((o.collisionDamage || 15) * 0.4)),
             opticalMode: 'none',
             explosionId: o.explosionId || 'asteroid_burst',
+            pushVx: Math.cos(a) * sp * 0.8,
+            pushVy: Math.sin(a) * sp * 0.8,
             sprite: 'obstacleSmall',
             opacity: 1,
             wallDepth: o.wallDepth || (Math.random() < 0.55 ? 'under' : 'over'),

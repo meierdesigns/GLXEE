@@ -381,6 +381,12 @@ extendClass(ObstacleManager, {
                 broken += cur - target;
             }
         }
+        if (broken > 0 && typeof soundManager !== 'undefined' && soundManager.playWallChip) {
+            soundManager.playWallChip();
+        } else if (broken === 0 && typeof soundManager !== 'undefined' && soundManager.playRockHit) {
+            // Crack-only chip (no cell removed).
+            soundManager.playRockHit(0.6);
+        }
         // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
         if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {

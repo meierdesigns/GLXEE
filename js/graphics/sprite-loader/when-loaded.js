@@ -46,8 +46,6 @@ extendClass(SpriteLoader, {
         ctx.globalAlpha = 1.0;
         ctx.imageSmoothingEnabled = false;
 
-        // Debug: Log sprite rendering
-
         // Apply color overlay only to non-transparent areas
         if (colorOverlay && overlayIntensity > 0 && /^#[0-9a-fA-F]{6}$/.test(colorOverlay)) {
             // Create a temporary canvas to apply color overlay with alpha masking

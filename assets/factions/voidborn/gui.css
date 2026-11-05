@@ -249,31 +249,23 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
 }
 
 html[data-vf-faction="voidborn"] {
+    /* Desk/room art only — no side-rings (circle at ±4%/106%); those sat flush
+       against the bezel and read as screen bleed past the rim. */
     background-color: #12061f;
     background-image:
-        radial-gradient(circle at -4% 50%, #d49cff 0 22%, #6b32b8 23% 36%, color-mix(in srgb, #6b32b8 55%, #12061f) 37% 48%, transparent 49%),
-        radial-gradient(circle at -4% 50%, color-mix(in srgb, #d49cff 50%, transparent) 0 56%, transparent 70%),
-        radial-gradient(circle at 106% 50%, color-mix(in srgb, #6b32b8 70%, transparent) 0 16%, color-mix(in srgb, #6b32b8 28%, transparent) 17% 34%, transparent 46%),
-        linear-gradient(color-mix(in srgb, #12061f 28%, transparent), color-mix(in srgb, #12061f 28%, transparent)),
+        radial-gradient(ellipse at 50% 50%, transparent 42%, color-mix(in srgb, #05010a 80%, transparent) 100%),
+        linear-gradient(color-mix(in srgb, #12061f 55%, transparent), color-mix(in srgb, #12061f 55%, transparent)),
         url('../../../assets/ui/hs-bg-ingame.png');
     background-repeat: no-repeat;
+    background-size: auto, auto, cover;
+    background-position: center, center, center center;
 }
 
 .vf-bezel-fx .vf-fx-fac[data-faction="voidborn"] { clip-path: polygon(0px 8px, 0px 4px, 3px 4px, 3px 0px, 8px 0px, calc(100% - 8px) 0px, calc(100% - 3px) 0px, calc(100% - 3px) 4px, 100% 4px, 100% 8px, 100% calc(100% - 8px), 100% calc(100% - 4px), calc(100% - 3px) calc(100% - 4px), calc(100% - 3px) 100%, calc(100% - 8px) 100%, 8px 100%, 3px 100%, 3px calc(100% - 4px), 0px calc(100% - 4px), 0px calc(100% - 8px)); }
 
 .vf-bezel-fx .vf-fx-fac[data-faction="voidborn"]::before { background: radial-gradient(circle at 50% 38%, color-mix(in srgb, var(--faction-color) 45%, transparent) 0%, transparent 62%); }
 
-html[data-vf-faction="voidborn"] {
-    background-image:
-        radial-gradient(circle at 4% 50%, transparent 0 20%, color-mix(in srgb, #d49cff 70%, transparent) 21% 22.4%, color-mix(in srgb, #6b32b8 35%, transparent) 22.5% 30%, transparent 46%),
-        radial-gradient(circle at 4% 50%, transparent 0 28%, color-mix(in srgb, #d49cff 30%, transparent) 29% 29.6%, transparent 31%),
-        radial-gradient(circle at 98% 56%, color-mix(in srgb, #6b32b8 38%, transparent) 0 12%, transparent 38%),
-        radial-gradient(ellipse at 50% 50%, transparent 40%, color-mix(in srgb, #05010a 85%, transparent) 100%),
-        linear-gradient(color-mix(in srgb, #12061f 66%, transparent), color-mix(in srgb, #12061f 66%, transparent)),
-        url('../../../assets/ui/hs-bg-ingame.png');
-    background-size: auto, auto, auto, auto, auto, cover;
-    background-position: center, center, center, center, center, center center;
-}
+/* Second mood block retired — side-ring layers duplicated the bleed above. */
 
 html[data-vf-faction][data-vf-faction] body .home-station-overlay .hs-fd[data-faction="voidborn"] :is(.hs-tab, .hs-subnav-tab, .action-button, .hs-panel) {
     clip-path: inset(0 round 18px 6px 18px 6px) !important;

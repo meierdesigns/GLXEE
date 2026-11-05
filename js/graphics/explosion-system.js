@@ -113,6 +113,16 @@ class ExplosionSystem {
             else if (soundManager.playExplosion) soundManager.playExplosion(0.85);
         }
 
+        // Small obstacles get steered / flung by the blast wave.
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.blastSteerObstacles) {
+            const bw = opts.width != null ? Number(opts.width) : 14;
+            const bh = opts.height != null ? Number(opts.height) : 14;
+            const size = Math.max(bw, bh, 10);
+            const radius = Math.max(26, size * 1.85 * Math.max(0.55, scale));
+            const force = Math.max(0.7, 1.15 * Math.max(0.55, scale) * (size >= 20 ? 1.25 : 1));
+            obstacleManager.blastSteerObstacles(x, y, radius, force, opts.sourceObstacle || null);
+        }
+
         // screenShake reserved — no shake system yet
         return preset;
     }
@@ -260,30 +270,38 @@ class ExplosionSystem {
 
     update(deltaTime) {
         const dt = deltaTime || 16;
-        for (let i = this.active.length - 1; i >= 0; i--) {
-            this.active[i].timer += dt;
-            if (this.active[i].timer >= this.active[i].duration) {
-                this.active.splice(i, 1);
+        const rings = this.active;
+        for (let i = rings.length - 1; i >= 0; i--) {
+            rings[i].timer += dt;
+            if (rings[i].timer >= rings[i].duration) {
+                const last = rings.length - 1;
+                if (i !== last) rings[i] = rings[last];
+                rings.pop();
             }
         }
 
         const f = Math.min(3, dt / 16.67);
+        // One drag factor per frame (same as Math.pow per particle; identical motion).
+        const dragV = f === 1 ? 0.95 : Math.pow(0.95, f);
+        const dragS = f === 1 ? 0.98 : Math.pow(0.98, f);
         const list = this.voxels;
         for (let i = list.length - 1; i >= 0; i--) {
             const p = list[i];
             p.life += dt;
             if (p.life < (p.delay || 0)) continue;
             if (p.life >= p.ttl) {
-                list.splice(i, 1);
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                list.pop();
                 continue;
             }
             p.vy += (p.g || 0) * f;
             p.x += p.vx * f;
             p.y += p.vy * f;
-            p.vx *= Math.pow(0.95, f);
-            p.vy *= Math.pow(0.95, f);
+            p.vx *= dragV;
+            p.vy *= dragV;
             p.rot += (p.spin || 0) * f;
-            p.spin *= Math.pow(0.98, f);
+            p.spin *= dragS;
         }
     }
 
@@ -352,6 +370,23 @@ class ExplosionSystem {
         return fallback;
     }
 
+    /** Relative ring pixel offsets for a given radius/step — same points every burst. */
+    ringOffsets(ringRadius, angleStep, pixelSize) {
+        if (!this._ringOff) this._ringOff = Object.create(null);
+        const key = ringRadius + ':' + angleStep + ':' + pixelSize;
+        let pts = this._ringOff[key];
+        if (pts) return pts;
+        pts = [];
+        for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+            pts.push(
+                Math.cos(angle) * ringRadius * pixelSize,
+                Math.sin(angle) * ringRadius * pixelSize
+            );
+        }
+        this._ringOff[key] = pts;
+        return pts;
+    }
+
     drawBurst(ctx, burst) {
         const progress = Math.min(1, burst.timer / Math.max(1, burst.duration));
         // Capped so big ships don't fill half the playfield; the ring grows
@@ -374,33 +409,43 @@ class ExplosionSystem {
         const explosionRadius = Math.floor(explosionSize / pixelSize);
         const angleStep = fine ? 0.12 : 0.2;
 
-        const fallbacks = [
-            this.themeColor(['--color-highlight', '--color-text'], '#ffffff'),
-            this.themeColor(['--color-explosion', '--color-particle'], '#ff8844'),
-            this.themeColor(['--color-secondary', '--color-accent'], '#ffaa66')
-        ];
+        // Theme colours once per burst frame, not per ring pixel.
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        if (!this._burstColorAt || (now - this._burstColorAt) > 32) {
+            this._burstFallbacks = [
+                this.themeColor(['--color-highlight', '--color-text'], '#ffffff'),
+                this.themeColor(['--color-explosion', '--color-particle'], '#ff8844'),
+                this.themeColor(['--color-secondary', '--color-accent'], '#ffaa66')
+            ];
+            this._burstColorAt = now;
+        }
+        const fallbacks = this._burstFallbacks;
         const colors = (burst.colors || []).map((c, i) => this.resolveColor(c, fallbacks[i % fallbacks.length]));
         while (colors.length < 3) colors.push(fallbacks[colors.length]);
 
         ctx.save();
         const ringCount = Math.max(1, burst.rings || 1);
+        const doSnap = !!(cell || fine);
         for (let ring = 0; ring < ringCount; ring++) {
             const ringRadius = Math.floor(explosionRadius * (0.3 + ring * 0.3));
             const alpha = fade * (1 - ring * 0.25);
             if (alpha <= 0.02) continue;
-            ctx.globalAlpha = Math.min(1, alpha);
-            ctx.fillStyle = colors[ring % colors.length];
-            for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
-                let pixelX = centerX + Math.cos(angle) * ringRadius * pixelSize;
-                let pixelY = centerY + Math.sin(angle) * ringRadius * pixelSize;
-                if (cell || fine) {
+            const a = Math.min(1, alpha);
+            const col = colors[ring % colors.length];
+            ctx.globalAlpha = a;
+            ctx.fillStyle = col;
+            const pts = this.ringOffsets(ringRadius, angleStep, pixelSize);
+            for (let i = 0; i < pts.length; i += 2) {
+                let pixelX = centerX + pts[i];
+                let pixelY = centerY + pts[i + 1];
+                if (doSnap) {
                     pixelX = Math.round(pixelX / snap) * snap;
                     pixelY = Math.round(pixelY / snap) * snap;
                 } else {
                     pixelX = Math.floor(pixelX);
                     pixelY = Math.floor(pixelY);
                 }
-                if (cv && cv.fill) cv.fill(ctx, pixelX, pixelY, pixelSize, pixelSize, colors[ring % colors.length], Math.min(1, alpha));
+                if (cv && cv.fill) cv.fill(ctx, pixelX, pixelY, pixelSize, pixelSize, col, a);
                 else ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
             }
         }

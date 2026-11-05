@@ -149,6 +149,18 @@ class ObstacleManager {
         return (ov.width == null && this.maybeBoulder) ? this.maybeBoulder(o) : o;
     }
 
+    /**
+     * Ram damage tracks footprint: pebbles sting lightly, big rocks keep full weight.
+     * Reference span ≈ 12px (medium rock) = 1× base.
+     */
+    scaleCollisionDamage(base, width, height) {
+        const b = Math.max(0, Number(base) || 0);
+        if (b <= 0) return 0;
+        const span = Math.max(1, Math.min(Number(width) || 1, Number(height) || 1));
+        const mul = Math.max(0.25, Math.min(1.15, Math.pow(span / 12, 1.4)));
+        return Math.max(1, Math.round(b * mul));
+    }
+
     buildObstacleFromDef(def, overrides) {
         const d = def || {};
         const ov = overrides || {};
@@ -164,7 +176,8 @@ class ObstacleManager {
         const isFog = d.kind === 'fog';
         const kind = d.kind || 'asteroid';
         const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' || kind === 'prism' ? 'prism' : 'none'));
-        const collisionDamage = isFog ? 0 : Math.max(1, d.collisionDamage != null ? d.collisionDamage : 15);
+        const rawDmg = isFog ? 0 : Math.max(1, d.collisionDamage != null ? d.collisionDamage : 15);
+        const collisionDamage = isFog ? 0 : this.scaleCollisionDamage(rawDmg, width, height);
         return {
             x: ov.x != null ? ov.x : 0,
             y: ov.y != null ? ov.y : 0,
@@ -240,14 +253,16 @@ class ObstacleManager {
         // Update lighting bullets from bullet manager
         this.updateLightingBullets();
 
-        if (frozen) {
+        if (frozen || levelEnding) {
+            // Field clear / sluice: no new obstacles; existing ones only drain off-screen.
             gameState.obstacleSpawnTimer = 0;
+            if (this.isScrollStage()) {
+                this.updateScrollLayers(deltaTime, gameState);
+            }
         } else if (this.isScrollStage()) {
             // Regular stages scroll towards the ship: obstacles arrive from
             // the top in airy layers spaced by scrolled distance.
             this.updateScrollLayers(deltaTime, gameState);
-        } else if (levelEnding) {
-            gameState.obstacleSpawnTimer = 0;
         } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
                 // Mostly shaped pattern waves; the authored cluster waves stay

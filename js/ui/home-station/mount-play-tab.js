@@ -308,6 +308,20 @@ extendClass(HomeStationUI, {
             }
         }
         this._navLevel = 'tabs';
+        const prefer = this._navPreferRow;
+        const preferKey = this._navPreferAreaKey;
+        if (prefer === 'area' && this.focusNavRow && this.focusNavRow('area', preferKey)) {
+            this._navPreferRow = null;
+            this._navPreferAreaKey = null;
+            return;
+        }
+        if (prefer === 'subnav' && this.focusNavRow && this.focusNavRow('subnav')) {
+            this._navPreferRow = null;
+            this._navPreferAreaKey = null;
+            return;
+        }
+        this._navPreferRow = null;
+        this._navPreferAreaKey = null;
         this.focusActiveTab();
     },
 

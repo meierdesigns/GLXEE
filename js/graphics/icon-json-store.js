@@ -13,7 +13,7 @@ class IconJsonStore {
         this.data = {};
         this.ready = false;
         this.path = "assets/meta/icons-data.json";
-        this.lsKey = "vf_icon_json_v1";
+        this.lsKey = "vf_icon_json_v2";
         this.letters = "abcdefghijklmno";
         this.defaultLevels = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
         this._loadPromise = null;

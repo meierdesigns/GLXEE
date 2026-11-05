@@ -8,6 +8,17 @@ class AssetGenClient {
         this.baseUrl = "http://127.0.0.1:8787";
     }
 
+    /** Dev bridge only — never write against hosted origins (itch.io CDN is read-only). */
+    _bridgeAllowed() {
+        try {
+            const u = new URL(this.baseUrl, location.href);
+            const h = u.hostname || "";
+            return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
+        } catch (e) {
+            return false;
+        }
+    }
+
     setBaseUrl(url) {
         if (!url) return;
         const next = String(url).replace(/\/$/, "");
@@ -51,6 +62,7 @@ class AssetGenClient {
     }
 
     async startComfy() {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -64,6 +76,7 @@ class AssetGenClient {
     }
 
     async stopComfy() {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/stop", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -77,6 +90,7 @@ class AssetGenClient {
     }
 
     async setComfyConfig(cfg) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/config", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -116,6 +130,7 @@ class AssetGenClient {
         if (opts.bgColor) body.bgColor = String(opts.bgColor);
         const seedVal = opts.seed != null ? opts.seed : seed;
         if (seedVal != null && seedVal !== "") body.seed = Number(seedVal);
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/generate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -129,6 +144,7 @@ class AssetGenClient {
     }
 
     async accept(stagingId, targetPath) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/accept", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -147,6 +163,7 @@ class AssetGenClient {
      * @param {object} data
      */
     async writeJson(targetPath, data) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/write-json", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -165,6 +182,7 @@ class AssetGenClient {
      * @param {string} dataUrl data:image/png;base64,...
      */
     async writePng(targetPath, dataUrl) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/write-png", {
             method: "POST",
             headers: { "Content-Type": "application/json" },

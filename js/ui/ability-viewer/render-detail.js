@@ -20,6 +20,10 @@ extendClass(AbilityViewerUI, {
                 <div class="stat-row"><span class="stat-label">Tier</span><span class="stat-value">${a.tier}</span></div>
                 <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${a.id}</span></div>
                 <div class="stat-row"><span class="stat-label">Summary</span><span class="stat-value">${a.uiDescription || '—'}</span></div>
+                ${contentViewerUpgradeRangeRowsHtml(
+                    (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.isEnergyId(a.id)) ? 'energy'
+                        : (a.cluster === 'defense' ? 'defenses' : 'abilities')
+                )}
             </div>
         `;
         this.updateDeleteButton();

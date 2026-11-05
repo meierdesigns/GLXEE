@@ -6,8 +6,6 @@ extendClass(ComponentEditorUI, {
         const entry = this.currentEntry();
         if (!entry) return;
 
-        console.log(`Component property changed: ${property} = ${value}`, entry);
-
         // Update the entry with the new value
         if (property === "weapon") {
             entry.weaponId = value;
@@ -20,8 +18,6 @@ extendClass(ComponentEditorUI, {
             entry.modId = value;
             entry.id = value;  // Also update id
         }
-
-        console.log("After update:", entry);
 
         // Persist the changes
         if (typeof assetGenRegistry !== "undefined" && assetGenRegistry.update) {

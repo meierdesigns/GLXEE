@@ -224,45 +224,41 @@ extendClass(RenderManager, {
     // Calculate bullet lighting based on proximity to elements
     calculateBulletLighting(bullet) {
         let maxIntensity = 0;
-        let lightingColor = 'var(--current-text)';
+        // Same overlay colour for every bullet this frame — resolve once.
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        if (this._lightColorSticky == null || (now - (this._lightColorAt || 0)) > 32) {
+            this._lightColorSticky = this.getCurrentColorProfile();
+            this._lightColorAt = now;
+        }
+        const lightingColor = this._lightColorSticky || 'var(--current-text)';
+        const bx = bullet.x + bullet.width * 0.5;
+        const by = bullet.y + bullet.height * 0.5;
 
-        // Check proximity to enemy
+        const consider = (obj, radius, strength) => {
+            if (!obj || maxIntensity >= strength) return;
+            const dx = bx - (obj.x + obj.width * 0.5);
+            const dy = by - (obj.y + obj.height * 0.5);
+            const r2 = radius * radius;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= r2) return;
+            const distance = Math.sqrt(d2);
+            const intensity = ((radius - distance) / radius) * strength;
+            if (intensity > maxIntensity) maxIntensity = intensity;
+        };
+
         const enemy = enemyManager.getEnemy();
-        if (enemy) {
-            const distance = this.calculateDistance(bullet, enemy);
-            if (distance < 40) { // Within 40 pixels
-                const intensity = Math.max(0, (40 - distance) / 40) * 0.8;
-                if (intensity > maxIntensity) {
-                    maxIntensity = intensity;
-                    lightingColor = this.getCurrentColorProfile();
-                }
+        if (enemy) consider(enemy, 40, 0.8);
+
+        const obstacles = obstacleManager.getObstacles ? obstacleManager.getObstacles() : null;
+        if (obstacles && obstacles.length) {
+            for (let i = 0; i < obstacles.length; i++) {
+                consider(obstacles[i], 30, 0.6);
+                if (maxIntensity >= 0.8) break;
             }
         }
 
-        // Check proximity to obstacles
-        obstacleManager.getObstacles().forEach(obstacle => {
-            const distance = this.calculateDistance(bullet, obstacle);
-            if (distance < 30) { // Within 30 pixels
-                const intensity = Math.max(0, (30 - distance) / 30) * 0.6;
-                if (intensity > maxIntensity) {
-                    maxIntensity = intensity;
-                    lightingColor = this.getCurrentColorProfile();
-                }
-            }
-        });
-
-        // Check proximity to player
         const player = playerManager.getPosition();
-        if (player) {
-            const distance = this.calculateDistance(bullet, player);
-            if (distance < 35) { // Within 35 pixels
-                const intensity = Math.max(0, (35 - distance) / 35) * 0.7;
-                if (intensity > maxIntensity) {
-                    maxIntensity = intensity;
-                    lightingColor = this.getCurrentColorProfile();
-                }
-            }
-        }
+        if (player) consider(player, 35, 0.7);
 
         return {
             intensity: maxIntensity,
@@ -288,45 +284,51 @@ extendClass(RenderManager, {
         const radius = opts.radius != null ? opts.radius : 72;
         const mode = opts.mode || 'player';
         let best = 0;
+        const r2 = radius * radius;
+        const ex = entity.x + entity.width * 0.5;
+        const ey = entity.y + entity.height * 0.5;
         const consider = (obj) => {
-            if (!obj) return;
-            const d = this.calculateDistance(entity, obj);
-            if (d >= radius) return;
+            if (!obj || best >= 0.999) return;
+            const dx = ex - (obj.x + obj.width * 0.5);
+            const dy = ey - (obj.y + obj.height * 0.5);
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= r2) return;
+            const d = Math.sqrt(d2);
             const t = 1 - (d / radius);
             // Smoothstep ease-in for a soft fade
             const fade = t * t * (3 - 2 * t);
             if (fade > best) best = fade;
         };
+        const scanList = (list, reflectedOnly) => {
+            if (!list) return;
+            for (let i = 0; i < list.length; i++) {
+                const b = list[i];
+                if (reflectedOnly && !(b && b.reflected)) continue;
+                consider(b);
+                if (best >= 0.999) return;
+            }
+        };
 
         if (typeof bulletManager !== 'undefined') {
             if (mode === 'player') {
-                if (bulletManager.getEnemyBullets) {
-                    bulletManager.getEnemyBullets().forEach(consider);
-                }
-                if (bulletManager.getBullets) {
-                    bulletManager.getBullets().forEach((b) => {
-                        if (b && b.reflected) consider(b);
-                    });
-                }
+                if (bulletManager.getEnemyBullets) scanList(bulletManager.getEnemyBullets(), false);
+                if (bulletManager.getBullets) scanList(bulletManager.getBullets(), true);
             } else if (mode === 'enemy') {
-                if (bulletManager.getBullets) {
-                    bulletManager.getBullets().forEach(consider);
-                }
-                if (bulletManager.getEnemyBullets) {
-                    bulletManager.getEnemyBullets().forEach((b) => {
-                        if (b && b.reflected) consider(b);
-                    });
-                }
+                if (bulletManager.getBullets) scanList(bulletManager.getBullets(), false);
+                if (bulletManager.getEnemyBullets) scanList(bulletManager.getEnemyBullets(), true);
             }
         }
 
         if (opts.obstacles !== false
             && typeof obstacleManager !== 'undefined'
             && obstacleManager.getObstacles) {
-            obstacleManager.getObstacles().forEach((o) => {
-                if (o && o.isFog) return;
+            const obstacles = obstacleManager.getObstacles();
+            for (let i = 0; i < obstacles.length; i++) {
+                const o = obstacles[i];
+                if (o && o.isFog) continue;
                 consider(o);
-            });
+                if (best >= 0.999) break;
+            }
         }
         return best;
     },

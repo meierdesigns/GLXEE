@@ -103,6 +103,10 @@ extendClass(CollisionManager, {
     },
 
     checkObstaclePlayerCollisions(gameState) {
+        if (typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            return;
+        }
         const obstacles = obstacleManager.getObstacles();
         const player = playerManager.getPosition();
 

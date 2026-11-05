@@ -429,6 +429,39 @@ html .home-station-overlay .hs-topbar.is-res-grid .hs-topbar-res .hs-credit-icon
         #05060a;
 }
 .ui-tooltip-head.has-bp { display: flex; align-items: center; }
+/* Item-preview tooltips (hover over a storage/inventory cell): icon left, title to its right —
+   without this the icon span and title span, both plain block-flow children, stack vertically. */
+.ui-tooltip-head.has-item { display: flex; align-items: center; gap: 8px; }
+
+/* Slot/part size schematic (SIZE_FIT tooltip row, see ui-tooltip.js): the slot's own footprint
+   as an outlined box, the part's footprint nested inside it as a filled box — shows how much of
+   the slot the part actually uses at a glance, instead of two "SLOT SIZE: S" text rows. */
+.ui-tooltip-sizefit { display: flex; align-items: center; gap: 10px; }
+.ui-tooltip-sizefit-schema { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ui-tooltip-sizefit-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    border: var(--ui-border-width, 2px) solid var(--faction-accent, var(--color-primary));
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, transparent);
+}
+.ui-tooltip-sizefit-part { background: var(--faction-accent, var(--color-primary)); }
+/* With an actual part icon (has-icon), the box just frames it — no flat fill color underneath. */
+.ui-tooltip-sizefit-part.has-icon {
+    background-color: transparent;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+}
+.ui-tooltip-sizefit-schema.is-slot-S .ui-tooltip-sizefit-slot { width: 24px; height: 24px; }
+.ui-tooltip-sizefit-schema.is-slot-M .ui-tooltip-sizefit-slot { width: 32px; height: 32px; }
+.ui-tooltip-sizefit-schema.is-slot-L .ui-tooltip-sizefit-slot { width: 40px; height: 40px; }
+.ui-tooltip-sizefit-schema.is-part-S .ui-tooltip-sizefit-part { width: 14px; height: 14px; }
+.ui-tooltip-sizefit-schema.is-part-M .ui-tooltip-sizefit-part { width: 22px; height: 22px; }
+.ui-tooltip-sizefit-schema.is-part-L .ui-tooltip-sizefit-part { width: 32px; height: 32px; }
+.ui-tooltip-sizefit-label { font-size: 0.85em; opacity: 0.85; letter-spacing: 0.04em; }
 .ui-tooltip-row { display: flex; justify-content: space-between; gap: 12px; }
 .ui-tooltip-key { opacity: 0.6; }
 .ui-tooltip-val { text-align: right; }
@@ -489,7 +522,10 @@ body.hs-part-grabbing .hs-hangar-part-icon.is-drag-handle { cursor: grabbing; }
 
 /* Parts sections: collapsible header with a slot strip (filled = assigned). */
 .hs-hangar-parts-title[data-part-section-toggle] { cursor: pointer; user-select: none; }
-.hs-hangar-parts-label { flex: 0 0 auto; }
+/* flex:1 1 auto + min-width:0 so the label truncates instead of overflowing/overlapping the
+   fixed-size icon, slot strip and caret that share this row — a long section label used to run
+   under the slot-strip icons since nothing here could shrink first. */
+.hs-hangar-parts-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hs-hangar-parts-caret { font-size: var(--font-small); color: var(--color-text-secondary);}
 .hs-hangar-parts-section.is-collapsed > .hs-hangar-parts-grid { display: none; }
 .hs-section-slots {
@@ -511,9 +547,10 @@ body.hs-part-grabbing .hs-hangar-part-icon.is-drag-handle { cursor: grabbing; }
     border-style: solid;
     border-color: var(--kind-color, var(--color-primary));
     background: color-mix(in srgb, var(--kind-color, var(--color-primary)) 18%, #05060a);
-    cursor: pointer;
+    cursor: grab;
 }
 .hs-section-slot.is-filled:hover { background: color-mix(in srgb, var(--color-danger, #ff4d4d) 30%, #05060a); }
+.hs-section-slot.is-filled.is-pulling { opacity: .35; }
 .hs-section-slot img { display: block; }
 .hs-section-slot-count { margin-left: 4px; font-size: var(--font-text); color: var(--kind-color, var(--color-text-secondary)); }
 .hs-section-slot-count.is-full { color: var(--color-text-secondary); }
@@ -559,9 +596,11 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 /* Parts section headers: bigger label, type glyph and slot boxes. */
 .hs-hangar-parts-title { font-size: var(--font-h2); padding-bottom: 5px; }
 .hs-hangar-parts-title .hs-slot-glyph { width: 22px; height: 22px; }
-.hs-section-slot { width: 36px; height: 36px; overflow: hidden; }
+/* Same footprint as the section's own kind icon (.hs-hangar-parts-icon, forced to 24px in
+   part-21.css) — it was 36px here, visibly bigger than everything else on this row. */
+.hs-section-slot { width: 24px; height: 24px; overflow: hidden; flex: 0 0 auto; }
 .hs-section-slot img,
-.hs-section-slot .hs-pixel { width: 24px; height: 24px; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
+.hs-section-slot .hs-pixel { width: 16px; height: 16px; max-width: 100%; max-height: 100%; image-rendering: pixelated; }
 .hs-section-slot-count { font-size: var(--font-text); }
 .hs-hangar-parts-caret { font-size: var(--font-h2); line-height: 1; margin-left: 8px; color: var(--kind-color, var(--color-primary)); }
 
@@ -912,8 +951,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px);
 }
 .start-screen-content.start-screen-retro::before,
-.home-station-overlay::after,
-.vf-bezel::after {
+.home-station-overlay::after {
     content: 'GLX-OS \25AA  NAV TERMINAL \25AA  MK-II';
     position: absolute;
     inset: calc(var(--bezel) * -1);
@@ -1058,8 +1096,11 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 .profile-selection-overlay.is-inline .profile-selection-content {
     width: 100% !important;
     max-width: none !important;
-    height: 100% !important;
+    /* flex:1 + min-height:0, NOT height:100% — 100% fights the sibling
+       .profile-selection-bar and pushes CANCEL/NEXT out of the flex box. */
+    height: auto !important;
     max-height: none !important;
+    flex: 1 1 auto !important;
     margin: 0 !important;
     border: 0 !important;
     box-shadow: none !important;
@@ -1165,28 +1206,15 @@ html .start-screen-retro .start-menu-row .menu-item-primary.selected .menu-item-
     z-index: 50;
     font-size: var(--font-small);
 }
-/* One GUI-scale host for the station glass. Prefer .vf-browser-shell; fall
-   back to a direct .home-station-content (no-profile empty state). Overlay
-   itself stays full-stage (BG / parallax / ::after) with transform:none. */
+/* Station glass: shared .vf-glass recipe (part-19). Prefer .vf-browser-shell;
+   fall back to a direct .home-station-content (no-profile empty state). Overlay
+   itself stays full-stage (BG / parallax / ::after) with transform:none.
+   --hs-z aliases --vf-glass-z for zoom-rect-fix / older readers. */
 .home-station-overlay > .vf-browser-shell,
 .home-station-overlay > .home-station-content {
-    zoom: 1;
-    --hs-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    position: fixed !important;
-    top: calc(var(--stage-y, 0px) + var(--fr-open-top)) !important;
-    left: calc(var(--stage-x, 0px) + var(--fr-open-side)) !important;
-    right: auto !important;
-    bottom: auto !important;
-    width: calc(var(--fr-open-w) / var(--hs-z)) !important;
-    max-width: none !important;
-    height: calc(var(--fr-open-h) / var(--hs-z)) !important;
-    max-height: none !important;
-    margin: 0 !important;
-    transform: scale(var(--hs-z)) !important;
-    transform-origin: 0 0 !important;
+    --hs-z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
+    --_z: var(--hs-z);
     transition: none !important;
-    overflow: hidden;
-    box-sizing: border-box;
 }
 .home-station-overlay > .vf-browser-shell > .home-station-content {
     /* Fill the scaled shell — no second transform, no fixed re-anchor. */

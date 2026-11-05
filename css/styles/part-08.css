@@ -645,9 +645,18 @@
     text-shadow: 0 0 8px #000, 1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), -1px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 0 -1px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 78%, transparent), 4px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), -4px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 4px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 0 -4px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, transparent), 8px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), -8px 0 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent), 0 -8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 18%, transparent);
     letter-spacing: 2px;
 }
-/* Keep the caption clear of the lower-left silhouette cuts. */
+/* Keep the caption clear of the lower silhouette / clip-path stairs. */
 .home-station-overlay[data-hs-faction="terran"] .hs-station-cover-caption {
     bottom: 38px;
+}
+.home-station-overlay[data-hs-faction="voidborn"] .hs-station-cover-caption {
+    bottom: 38px;
+}
+.home-station-overlay[data-hs-faction="kronax"] .hs-station-cover-caption {
+    bottom: 34px;
+}
+.home-station-overlay[data-hs-faction="machine"] .hs-station-cover-caption {
+    bottom: 28px;
 }
 .home-station-overlay[data-hs-faction="pirate"] .hs-station-cover-caption {
     bottom: 56px;
@@ -1018,7 +1027,7 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-split {
     display: grid;
-    grid-template-columns: var(--hs-hangar-left-w, 210px) 8px minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+    grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
     gap: 4px;
     flex: 1 1 auto;
     min-height: 0;
@@ -1048,7 +1057,7 @@ button.hs-shop-cat.active.nav-focused {
     grid-template-columns: 0 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
 }
 .hs-hangar-split.hs-hangar-right-collapsed {
-    grid-template-columns: var(--hs-hangar-left-w, 210px) 8px minmax(0, 1fr) 0 0;
+    grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 0;
 }
 .hs-hangar-split.hs-hangar-left-collapsed.hs-hangar-right-collapsed {
     grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
@@ -1218,7 +1227,7 @@ button.hs-shop-cat.active.nav-focused {
 }
 /* Expand sidebar when component is selected */
 .hs-hangar-split.hs-component-selected {
-    --hs-hangar-left-w: 300px;
+    --hs-hangar-left-w: 340px;
 }
 .hs-component-details[style*="display: block"] {
     animation: slideDown 0.2s ease-out;

@@ -201,25 +201,64 @@ extendClass(UIAppearanceManager, {
     applyFxArea() {
         const ov = document.getElementById('vfFxOverlay');
         if (!ov) return;
-        // Clip each layer, not the container: a clip-path on the container becomes a
+        // Clip / size each layer, not the container: a clip-path on the container becomes a
         // backdrop root and the layers' backdrop-filters (chroma/bloom/HDR/CRT) would see nothing.
         const layers = ov.children;
-        const setClip = (v) => {
-            for (let i = 0; i < layers.length; i++) layers[i].style.clipPath = v;
+        const resetLayerBox = (el) => {
+            el.style.clipPath = '';
+            el.style.top = '';
+            el.style.left = '';
+            el.style.right = '';
+            el.style.bottom = '';
+            el.style.width = '';
+            el.style.height = '';
+            el.style.borderRadius = '';
+            el.style.overflow = '';
+        };
+        const forFxLayers = (fn) => {
+            for (let i = 0; i < layers.length; i++) {
+                const el = layers[i];
+                // Inline <svg> elements keep a lowercase tagName (unlike HTML elements), so this
+                // must compare case-insensitively or the filter-def SVGs get sized to the screen
+                // opening too — invisible but still pointer-events:auto, swallowing clicks on the UI above.
+                if (!el || el.tagName.toUpperCase() === 'SVG') continue;
+                fn(el);
+            }
         };
         ov.style.clipPath = '';
         const r = this.measureScreenOpening();
         const rad = r ? r.radius : 0;
         if (this.fxArea === 'ALL' || !r || !r.width) {
-            setClip('');
+            forFxLayers(resetLayerBox);
             return;
         }
         const W = window.innerWidth, H = window.innerHeight;
         const x1 = Math.round(r.left), y1 = Math.round(r.top);
         const x2 = Math.round(r.right), y2 = Math.round(r.bottom);
-        setClip(this.fxArea === 'SCREEN'
-            ? `inset(${y1}px ${W - x2}px ${H - y2}px ${x1}px round ${rad}px)`
-            : `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`);
+        if (this.fxArea === 'SCREEN') {
+            // Size layers to the opening. Backdrop-filter cost tracks element size;
+            // clip-path alone still filters the full fixed inset:0 box in some engines.
+            // Scanlines keep +12px for the seamless drift loop (see vf-fx-scan-drift).
+            const scanPad = Math.ceil(12 * (Number(this.fxScale) || 100) / 100
+                * (Number(this.scanSize) || 100) / 100);
+            forFxLayers((el) => {
+                const pad = el.classList.contains('vf-fx-scanlines') ? scanPad : 0;
+                el.style.clipPath = '';
+                el.style.top = y1 + 'px';
+                el.style.left = x1 + 'px';
+                el.style.right = 'auto';
+                el.style.bottom = 'auto';
+                el.style.width = (x2 - x1) + 'px';
+                el.style.height = (y2 - y1 + pad) + 'px';
+                el.style.borderRadius = rad > 0 ? rad + 'px' : '';
+                el.style.overflow = 'hidden';
+            });
+            return;
+        }
+        forFxLayers((el) => {
+            resetLayerBox(el);
+            el.style.clipPath = `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`;
+        });
     },
     setFx(fxKey, value) {
         const key = String(fxKey || '');

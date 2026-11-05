@@ -110,14 +110,8 @@ window.combatVoxels = {
             const drops = pickupManager.pickups;
             for (let i = 0; i < drops.length; i++) snap(drops[i]);
         }
-        if (typeof particleSystem !== 'undefined' && particleSystem.particles) {
-            const ps = particleSystem.particles;
-            for (let i = 0; i < ps.length; i++) snap(ps[i]);
-        }
-        if (typeof explosionSystem !== 'undefined' && explosionSystem.voxels) {
-            const vx = explosionSystem.voxels;
-            for (let i = 0; i < vx.length; i++) snap(vx[i]);
-        }
+        // Particles / explosion voxels already lattice-snap in their render paths —
+        // snapping them here doubles O(n) work with no on-screen difference.
     },
     fill(ctx, x, y, w, h, color, alpha) {
         if (typeof renderManager !== 'undefined' && renderManager.fillCombatRect) {

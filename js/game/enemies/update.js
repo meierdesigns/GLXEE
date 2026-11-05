@@ -26,6 +26,10 @@ extendClass(EnemyManager, {
             effectiveDeltaTime = deltaTime * 0.3; // Slow down to 30% speed
         }
 
+        if (this.enemy && this.enemy.hitFlashMs > 0) {
+            this.enemy.hitFlashMs = Math.max(0, this.enemy.hitFlashMs - effectiveDeltaTime);
+        }
+
         if (!this.exploding && this.shieldMax > 0 && this.shield < this.shieldMax && this.shieldRegen > 0
             && Date.now() - (this.shieldHitAt || 0) > 2500) {
             const hasRegen = !this.defenseMechanisms.length

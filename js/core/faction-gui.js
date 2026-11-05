@@ -98,7 +98,6 @@ const factionGui = (() => {
         const bz = bezel();
         const same = id === shown && (!bz || bz.getAttribute('data-faction') === id);
         if (same) { stamp(); return id; }                        // colour edits of the same faction: no animation
-        if (window.vfDebugFactionGui && window.console && console.info) console.info('[factionGui] ' + shown + ' -> ' + id + (ready ? ' (animated)' : ' (instant)'), new Error().stack.split('\n').slice(2, 6).join(' | '));
         log('go ' + shown + ' -> ' + id + ' | ready=' + ready + ' busy=' + busy + ' reduce=' + reduce());
         if (window.vfLog && window.vfLog.watch) window.vfLog.watch('go ' + id);
         if (busy) { log('busy: request queued, newest wins'); pendingStamp = stamp; return id; }           // a switch is playing: the newest request wins afterwards
@@ -157,7 +156,6 @@ const factionGui = (() => {
         if (!want) return;
         const docOk = ROOT.getAttribute('data-faction') === want && ROOT.getAttribute('data-vf-faction') === want;
         if (docOk && bz.getAttribute('data-faction') === want) return;
-        if (window.vfDebugFactionGui && window.console && console.info) console.info('[factionGui] reconcile -> ' + want + ' (instant)');
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) factionShipStyles.applyDocumentFactionTheme(want);
         else commit(want, () => {});
     }

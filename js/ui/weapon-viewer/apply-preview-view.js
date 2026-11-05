@@ -267,6 +267,13 @@ extendClass(WeaponViewerUI, {
                     <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${w.id}</span></div>
                     <div class="stat-row"><span class="stat-label">Type</span><span class="stat-value">${w.bulletType || '—'}</span></div>
                 </div>
+                <div class="cv-stat-cluster">
+                    <div class="cv-stat-cluster-title">Upgrades</div>
+                    <!-- Damage/Speed/Cooldown above are this weapon's base values — MODULES and
+                         the per-item EQUIPMENT tab both scale them further, so they're a range,
+                         not a fixed number. -->
+                    ${contentViewerUpgradeRangeRowsHtml('weapons')}
+                </div>
             </div>
         `;
         if (this._devToggles) this._devToggles.refresh();

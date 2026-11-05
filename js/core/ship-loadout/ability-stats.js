@@ -20,7 +20,7 @@ const ABILITY_STAT_EFFECTS = {
     heavy_armor:        { armor: 2, speedMul: 0.95 },
     massive_armor:      { armor: 4, speedMul: 0.90 },
     weapon_systems:     { damageMul: 1.04 },
-    balanced_combat:    { damageMul: 1.04, armor: 1 }
+    balanced_combat:    { speedMul: 1.08 }
 };
 
 extendClass(ShipLoadoutManager, {

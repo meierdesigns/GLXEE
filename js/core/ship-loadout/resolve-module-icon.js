@@ -147,7 +147,10 @@ extendClass(ShipLoadoutManager, {
             String(w).replace(/\b\w/g, (c) => c.toUpperCase())
         );
 
-        const defStats = this.computeDefenseStats(model.abilities);
+        // Shield/armor mechanisms aren't only equipped as abilities or defenses — a shield
+        // generator can sit in the energy slot too, so computeDefenseStats needs that list as
+        // well or an energy-slot shield generator contributes no shieldMax at all.
+        const defStats = this.computeDefenseStats(model.abilities.concat(layout.loadout.energy || []));
         model.shieldMax = defStats.shieldMax;
         model.shieldRegen = defStats.shieldRegen;
         model.damageReduction = defStats.damageReduction;
@@ -191,7 +194,11 @@ extendClass(ShipLoadoutManager, {
             if (s.indexOf('shield') !== -1) {
                 shieldMax += s.indexOf('adaptive') !== -1 ? 18
                     : (s.indexOf('generator') !== -1 ? 22 : 12);
-                if (s.indexOf('regen') !== -1) shieldRegen += 4;
+                // Every shield self-recharges; dedicated regen / capacitor banks charge faster.
+                // shieldRegen is points per second against shieldMax (playerManager update loop).
+                shieldRegen += 1.5;
+                if (s.indexOf('regen') !== -1) shieldRegen += 3.5;
+                if (s.indexOf('capacitor') !== -1) shieldRegen += 1;
             }
             if (s.indexOf('massive_armor') !== -1) {
                 damageReduction = Math.max(damageReduction, 15);

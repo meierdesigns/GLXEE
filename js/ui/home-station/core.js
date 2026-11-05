@@ -49,6 +49,13 @@ class HomeStationUI {
         try {
             { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships' || v === 'slots') this._hangarLeftView = v; }
         } catch (e) { /* ignore */ }
+        // Last sub-tab per top-bar area (HANGAR→SHIPYARD/UPGRADE/…), across area switches + reloads.
+        this._areaLastTab = {};
+        try {
+            const raw = localStorage.getItem('vf_hs_area_last_tab');
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (parsed && typeof parsed === 'object') this._areaLastTab = parsed;
+        } catch (e) { /* ignore */ }
         try {
             const raw = localStorage.getItem('vf_hs_hangar_sidebar_prefs_v1');
             const prefs = raw ? JSON.parse(raw) : null;
@@ -66,6 +73,11 @@ class HomeStationUI {
         this._upgTipRaf = 0;
         this._resBuyModal = null;
         this._navLevel = 'tabs'; // tabs | sub | content
+        // When cycling the top area row (←/→), soft remount must not drop
+        // focus onto the sub-nav via focusActiveTab()'s subnav preference.
+        this._navPreferRow = null; // 'area' | 'subnav' | null
+        // Exact area button to refocus after soft remount (station/profiles/…).
+        this._navPreferAreaKey = null;
         this._upgradeSubMeta = {
             station: { label: 'STATION', icon: 'hsStation' },
             ships: { label: 'SHIPS', icon: 'hsShip' },
@@ -144,6 +156,7 @@ class HomeStationUI {
                     { id: 'WEAPONS', icon: 'menuWeapons', open: 'weapons' },
                     { id: 'ABILITIES', icon: 'menuAbilities', open: 'abilities' },
                     { id: 'DEFENSE SYSTEMS', icon: 'menuDefense', open: 'defenses' },
+                    { id: 'ENERGY SYSTEMS', icon: 'statEnergy', open: 'energy' },
                     { id: 'EXPLOSIONS', icon: 'menuAbilities', open: 'explosions' },
                     { id: 'COMPONENTS', icon: 'hsComponents', open: 'components' }
                 ]

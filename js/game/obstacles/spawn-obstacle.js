@@ -45,12 +45,15 @@ extendClass(ObstacleManager, {
             fragmentDamage: 8,
             fragmentHealth: 1,
             childFragmentChance: 0,
-            collisionDamage: 15,
+            collisionDamage: this.scaleCollisionDamage
+                ? this.scaleCollisionDamage(15, size.width, size.height) : 15,
             opticalMode: 'none',
             prismSplitCount: 3,
             prismAngleDeg: 25,
             explosionId: obstacleType.includes('shield') ? 'small_pop' : 'asteroid_burst',
             fragmentGeneration: 0,
+            pushVx: 0,
+            pushVy: 0,
             sprite: this.doesObstacleReflect(obstacleType) ? 'shield' : 'obstacle',
             opacity: 1,
             wallDepth: this.pickWallDepth

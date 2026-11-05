@@ -319,12 +319,17 @@
             const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
             const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
             const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
+            const musicSpeed = vol && vol.getMusicSpeed
+                ? Math.round(vol.getMusicSpeed() * 100) / 100
+                : 3.5;
             const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
             const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
             h += '<div class="vf-fx-title">VOLUME</div>' +
                 fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
                 fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
                 fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
+                '<div class="vf-fx-title">SPEED</div>' +
+                fxSlider('MUSIC SPEED', 'au:speed', 0.5, 4, 0.02, musicSpeed, '×') +
                 '<div class="vf-fx-title">TOGGLES</div>' +
                 '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
                 '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +

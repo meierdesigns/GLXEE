@@ -329,12 +329,42 @@ extendClass(HomeStationUI, {
         if (el.classList.contains('hs-area-btn')) return 'area';
         return null;
     },
-    /** Focus the active (or first) button of a nav row. */
-    focusNavRow(row) {
+    /** Resolve an area-row button after remount (DOM nodes may be replaced). */
+    resolveAreaNavButton(keyOrEl) {
+        if (!this.overlay) return null;
+        if (keyOrEl && keyOrEl.nodeType === 1 && this.overlay.contains(keyOrEl)
+            && keyOrEl.classList.contains('hs-area-btn')) {
+            return keyOrEl;
+        }
+        const key = typeof keyOrEl === 'string' ? keyOrEl : this.areaNavKeyFor(keyOrEl);
+        if (!key) return null;
+        if (key === 'profiles') {
+            return this.overlay.querySelector('.hs-area-btn[data-menu-open-tab="profiles"]');
+        }
+        if (key === 'menu') {
+            return this.overlay.querySelector('.hs-area-btn[data-open-menu]:not([data-menu-open-tab])');
+        }
+        return this.overlay.querySelector('.hs-area-btn[data-area="' + key + '"]');
+    },
+    /** Stable id for an area-row button (station / hangar / profiles / menu / …). */
+    areaNavKeyFor(el) {
+        if (!el || !el.getAttribute) return null;
+        if (el.hasAttribute('data-menu-open-tab')) return el.getAttribute('data-menu-open-tab') || 'profiles';
+        if (el.hasAttribute('data-open-menu')) return 'menu';
+        return el.getAttribute('data-area') || null;
+    },
+    /** Focus a specific area button (by key or element), else the active/first one. */
+    focusNavRow(row, preferEl) {
         if (!this.overlay) return false;
         const sel = row === 'subnav' ? '.hs-subnav-tab' : '.hs-area-btn';
         const els = Array.from(this.overlay.querySelectorAll(sel));
-        const target = els.find((el) => el.classList.contains('active')) || els[0];
+        let target = null;
+        if (row === 'area') {
+            const pinned = this._navPreferAreaKey;
+            target = this.resolveAreaNavButton(preferEl)
+                || (pinned ? this.resolveAreaNavButton(pinned) : null);
+        }
+        if (!target) target = els.find((el) => el.classList.contains('active')) || els[0];
         const list = this.getFocusables();
         const i = target ? list.indexOf(target) : -1;
         if (i < 0) return false;
@@ -427,17 +457,24 @@ extendClass(HomeStationUI, {
                 }
                 const next = btns[(cur + (key === 'ArrowLeft' ? -1 : 1) + btns.length) % btns.length];
                 if (!next) return true;
+                // Soft remount restores via focusActiveTab(), which prefers
+                // .hs-subnav-tab — pin the exact area button so ←/→ never
+                // drops into sub-nav or snaps back to STATION (PROFILES/MENU
+                // used to lose .active across soft chrome sync).
+                const nextKey = this.areaNavKeyFor(next);
+                this._navPreferRow = 'area';
+                this._navPreferAreaKey = nextKey;
                 if (next.hasAttribute('data-tab')) {
                     next.click();
-                    this.focusNavRow('area');
+                    this.focusNavRow('area', nextKey);
                 } else if (next.hasAttribute('data-open-menu')) {
-                    // MENU is an area like the others: switching to it opens
-                    // the menu, its tabs appear in the second row.
+                    // MENU/PROFILES: switching opens that menu page; focus stays
+                    // on the area button (not the menu sub-nav row).
                     if (!this.isMenuRowTab() || next.hasAttribute('data-menu-open-tab')) {
                         if (!this.isMenuRowTab()) this._lastGameTab = this.tab;
                         this.openMainMenuOverlay(this.menuButtonOpts(next));
                     }
-                    this.focusNavRow('area');
+                    this.focusNavRow('area', nextKey);
                 }
                 return true;
             }

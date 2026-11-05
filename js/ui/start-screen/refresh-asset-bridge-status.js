@@ -43,7 +43,7 @@ extendClass(StartScreenManager, {
                 sound: Math.round(volumeControlsManager.getSoundVolume() * 100),
                 music: Math.round(volumeControlsManager.getMusicVolume() * 100)
             }
-            : { master: 10, sound: 5, music: 20 };
+            : { master: 75, sound: 50, music: 65 };
 
         const rows = [
             { key: 'master', label: 'MASTER', setter: 'setMasterVolume' },

@@ -65,7 +65,7 @@ class ProfileManager {
     }
 
     emptyCargo() {
-        return { resources: {}, blueprints: {} };
+        return { resources: {}, blueprints: {}, parts: {} };
     }
 
     ensureEconomyDefaults(profile) {
@@ -124,8 +124,11 @@ class ProfileManager {
         if (!profile.cargo.blueprints || typeof profile.cargo.blueprints !== 'object') {
             profile.cargo.blueprints = {};
         }
+        if (!profile.cargo.parts || typeof profile.cargo.parts !== 'object') {
+            profile.cargo.parts = {};
+        }
         // Blueprints are for parts now (`kind:partId`); drop old ship-id blueprints.
-        [profile.blueprints, profile.cargo.blueprints].forEach((map) => {
+        [profile.blueprints, profile.cargo.blueprints, profile.cargo.parts].forEach((map) => {
             Object.keys(map).forEach((k) => {
                 if (k.indexOf(':') === -1) delete map[k];
             });

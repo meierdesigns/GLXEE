@@ -94,12 +94,14 @@
         var sheetV = mv ? mv[1] : '';
         BUILD = bootId && sheetV ? (bootId + ':' + sheetV) : (bootId || sheetV || '');
     } catch (e) { /* ignore */ }
-    // Safari / embedded browsers may ignore Clear-Site-Data: when the server boot id changes,
-    // hit /__cache-clear once so stamped immutable URLs from a previous process cannot linger.
+    // Local-dev only: Safari may ignore Clear-Site-Data, so hit /__cache-clear when the
+    // boot id changes. Hosted builds (itch.io) stay read-only on the server — localStorage only.
     try {
         var prevBoot = localStorage.getItem('vf-boot-id') || '';
         var curBoot = (document.querySelector('meta[name="vf-boot"]') || {}).content || '';
-        if (curBoot && prevBoot && prevBoot !== curBoot) {
+        var host = location.hostname || '';
+        var localDev = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+        if (localDev && curBoot && prevBoot && prevBoot !== curBoot) {
             fetch('/__cache-clear', { cache: 'no-store', credentials: 'same-origin' }).catch(function () {});
         }
         if (curBoot) localStorage.setItem('vf-boot-id', curBoot);

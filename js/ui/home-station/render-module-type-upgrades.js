@@ -178,7 +178,7 @@ extendClass(HomeStationUI, {
         const cats = {
             SHIPS: ['ships'], PLANETS: ['planets'], ENEMIES: ['enemies'], FACTIONS: ['factions'],
             EVENTS: ['events'], WEAPONS: ['weapons'], ABILITIES: ['abilities'],
-            'DEFENSE SYSTEMS': ['defenses'], COMPONENTS: ['weapons', 'abilities', 'defenses']
+            'DEFENSE SYSTEMS': ['defenses'], 'ENERGY SYSTEMS': ['energy'], COMPONENTS: ['weapons', 'abilities', 'defenses']
         }[itemId];
         return cats ? cats.reduce((sum, cat) => sum + count(cat), 0) : null;
     },
@@ -236,6 +236,7 @@ extendClass(HomeStationUI, {
             weapons: () => typeof weaponViewerUI !== 'undefined' && weaponViewerUI.show({ onClose: returnToExplorations }),
             abilities: () => typeof abilityViewerUI !== 'undefined' && abilityViewerUI.show({ onClose: returnToExplorations }),
             defenses: () => typeof defenseViewerUI !== 'undefined' && defenseViewerUI.show({ onClose: returnToExplorations }),
+            energy: () => typeof energyViewerUI !== 'undefined' && energyViewerUI.show({ onClose: returnToExplorations }),
             explosions: () => typeof explosionViewerUI !== 'undefined' && explosionViewerUI.show({ onClose: returnToExplorations })
         };
         const open = openers[kind];
@@ -257,6 +258,7 @@ extendClass(HomeStationUI, {
             weapons: () => typeof weaponViewerUI !== 'undefined' ? weaponViewerUI : null,
             abilities: () => typeof abilityViewerUI !== 'undefined' ? abilityViewerUI : null,
             defenses: () => typeof defenseViewerUI !== 'undefined' ? defenseViewerUI : null,
+            energy: () => typeof energyViewerUI !== 'undefined' ? energyViewerUI : null,
             explosions: () => typeof explosionViewerUI !== 'undefined' ? explosionViewerUI : null
         }[kind];
         return pick ? pick() : null;
@@ -447,19 +449,58 @@ extendClass(HomeStationUI, {
         const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : {};
         const cls = this.shipClassLabel(this.shipModelClass(id, cfg));
         const val = (v) => (v != null ? v : '—');
-        const stat = (icon, label, v, col) => {
+        // tip: a multi-line per-part breakdown (e.g. each weapon's own damage) shown as a proper
+        // hover tooltip instead of the plain native `title`, for stats that sum several equipped
+        // parts into one number — so hovering the total explains what it's made of.
+        const stat = (icon, label, v, col, tip) => {
             const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
             const img = ir && ir.imgHtml ? ir.imgHtml(icon, 14, 'hs-pixel hs-pixel-12', col, false) : this.iconHtml(icon, 14, 'hs-pixel hs-pixel-12', false);
-            return `<span class="hs-ship-stat" style="--stat:${col}" title="${label}"><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
+            const tipAttrs = tip
+                ? `data-ui-tip-instant data-ui-tip-head="${label}" data-ui-tip="${String(tip).replace(/"/g, '&quot;')}"`
+                : `title="${label}"`;
+            return `<span class="hs-ship-stat" style="--stat:${col}" ${tipAttrs}><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
         };
-        const tipText = [['TIER', cfg.tier], ['HP', cfg.maxHealth], ['ARMOR', cfg.armor], ['DAMAGE', cfg.damage], ['SPEED', cfg.speed]]
-            .map((x) => x[0] + ' ' + val(x[1])).join(' · ');
+        // HP/Armor/Speed/Damage: live, not the static hull config — getMergedModel() runs the
+        // same base-hull → frame-hull-bonus → equipped-ability-stat-mod → weapon-upgrade-bonus
+        // pipeline the ship actually flies with (shipLoadoutManager.applyLayoutToModel, called
+        // from here regardless of which ship is active), so these numbers move when a part is
+        // equipped/unequipped instead of only ever showing the hull's fixed base stats.
+        const merged = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+            ? shipConfigManager.getMergedModel(id) : cfg;
+        // Damage: every actually-equipped weapon's own damage added up, not just the first/
+        // default one — a ship with several weapon slots filled under-reported its firepower
+        // otherwise. An unarmed ship shows 0, not the hull's unrelated base cfg.damage (that
+        // number used to appear even with nothing equipped — an unarmed ship can't deal that
+        // damage, it only happens to match the laser's fallback shot fired in combat).
+        const equippedWeapons = (merged.loadout && merged.loadout.weapons) || [];
+        const liveDamage = merged.weaponConfig
+            ? equippedWeapons.reduce((sum, w) => {
+                const d = merged.weaponConfig[w] && merged.weaponConfig[w].damage;
+                return sum + (d != null ? Number(d) : 0);
+            }, 0)
+            : cfg.damage;
+        // Per-weapon breakdown: only worth a tooltip when there's more than one separate weapon
+        // contributing to the total — a single weapon's damage already IS the shown number.
+        const damageTip = (merged.weaponConfig && equippedWeapons.length > 1)
+            ? equippedWeapons.map((w) => {
+                const d = merged.weaponConfig[w] && merged.weaponConfig[w].damage;
+                return this.hangarModuleLabel(w) + ': ' + (d != null ? d : '—');
+            }).join('\n')
+            : null;
+        // Armor: the flat armor stat (hull + ability bonuses) plus the damage-reduction % from
+        // equipped defense modules (massive/heavy armor plating) — both are "how much less
+        // damage gets through", so a defense part now actually moves this number too.
+        const liveArmor = (Number(merged.armor) || 0) + (Number(merged.damageReduction) || 0);
+        const tipText = [['TIER', cfg.tier], ['HP', merged.maxHealth], ['ARMOR', liveArmor], ['DAMAGE', liveDamage], ['SPEED', merged.speed], ['ENERGY', merged.maxEnergy]]
+            .map((x) => x[0] + ' ' + val(x[1])).join(' · ')
+            + (merged.shieldMax ? ' · SHIELD ' + merged.shieldMax : '');
         const statsHtml = `<div class="hs-ship-stats">` +
             stat('navStar', 'Tier', cfg.tier, '#ffe14a') +
-            stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
-            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') +
-            stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
-            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
+            stat('statHealth', 'Health', merged.maxHealth, '#5cff7a') +
+            stat('statArmor', 'Armor', liveArmor, '#5ce1ff') +
+            stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip) +
+            stat('statSpeed', 'Speed', merged.speed, '#c58bff') +
+            stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a') +
             `</div>`;
         return `<tr>` +
             `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
@@ -471,7 +512,12 @@ extendClass(HomeStationUI, {
             `<td class="hs-ship-table-name" data-ui-tip="${tipText}">` +
             statsHtml +
             `<strong>${this.shipName(id)}</strong>` +
-            `<span>${cls}${note ? ' · ' + note : ''}</span></td>` +
+            // Skip the class line when it would just repeat the ship's own name in full
+            // (e.g. an "Assault" hull simply named "Assault") — nothing new to show twice.
+            (this.shipName(id).trim().toUpperCase() === cls.trim().toUpperCase() && !note
+                ? ''
+                : `<span>${cls}${note ? ' · ' + note : ''}</span>`) +
+            `</td>` +
             (actionHtml != null
                 ? `<td class="hs-ship-table-action">${actionHtml}</td>`
                 : '') +

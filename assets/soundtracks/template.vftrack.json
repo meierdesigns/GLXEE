@@ -1,0 +1,34 @@
+{
+  "format": "vftrack",
+  "version": 1,
+  "meta": {
+    "title": "Track Title",
+    "author": "your-name-or-llm",
+    "planet": "mars",
+    "notes": "mood / key / what to change next"
+  },
+  "bpm": 96,
+  "rowsPerBeat": 1,
+  "rowsPerPattern": 16,
+  "channels": 4,
+  "instruments": [
+    { "id": 1, "name": "bass", "wave": "sawtooth", "volume": 0.55, "attack": 0.01, "decay": 0.12, "sustain": 0.35, "release": 0.18, "filter": 900 },
+    { "id": 2, "name": "lead", "wave": "square", "volume": 0.32, "attack": 0.005, "decay": 0.08, "sustain": 0.4, "release": 0.14 },
+    { "id": 3, "name": "arp", "wave": "triangle", "volume": 0.28, "attack": 0.002, "decay": 0.06, "sustain": 0.25, "release": 0.08 },
+    { "id": 4, "name": "hat", "wave": "noise", "volume": 0.18, "attack": 0.001, "decay": 0.04, "sustain": 0.01, "release": 0.04 },
+    { "id": 5, "name": "kick", "wave": "sine", "volume": 0.7, "attack": 0.001, "decay": 0.14, "sustain": 0.05, "release": 0.08 }
+  ],
+  "patterns": [
+    {
+      "id": 0,
+      "channels": [
+        "C-2:1:64 . . . C-2:1:48 . . . Eb2:1:64 . . . G-1:1:48 . . .",
+        "C-4:2:48 . Eb4:2:40 . G-4:2:48 . Eb4:2:36 C-4:2:44 . Bb3:2:40 . D-4:2:42 .",
+        "C-5:3:24 G-4:3:18 Eb4:3:18 G-4:3:18 C-5:3:24 G-4:3:18 Eb4:3:18 G-4:3:18 Bb4:3:22 F-4:3:16 D-4:3:16 F-4:3:16 Bb4:3:22 G-4:3:16 Eb4:3:16 C-4:3:16",
+        "C-2:5:70 A-4:4:28 . A-4:4:20 C-2:5:55 . A-4:4:24 . C-2:5:70 A-4:4:28 . A-4:4:20 C-2:5:50 A-4:4:22 A-4:4:18 ."
+      ]
+    }
+  ],
+  "order": [0],
+  "loop": true
+}

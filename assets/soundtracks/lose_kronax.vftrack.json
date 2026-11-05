@@ -1,0 +1,98 @@
+{
+  "format": "vftrack",
+  "version": 1,
+  "meta": {
+    "title": "Defeat — Kronax",
+    "author": "VF Tracker",
+    "planet": "",
+    "notes": "lose screen"
+  },
+  "bpm": 88,
+  "rowsPerBeat": 1,
+  "rowsPerPattern": 16,
+  "channels": 4,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "bass",
+      "wave": "sawtooth",
+      "volume": 0.82,
+      "attack": 0.004,
+      "decay": 0.08,
+      "sustain": 0.6,
+      "release": 0.1,
+      "filter": 1400
+    },
+    {
+      "id": 2,
+      "name": "lead",
+      "wave": "sawtooth",
+      "volume": 0.5,
+      "attack": 0.002,
+      "decay": 0.06,
+      "sustain": 0.45,
+      "release": 0.1,
+      "filter": null
+    },
+    {
+      "id": 3,
+      "name": "arp",
+      "wave": "square",
+      "volume": 0.32,
+      "attack": 0.001,
+      "decay": 0.04,
+      "sustain": 0.22,
+      "release": 0.05,
+      "filter": null
+    },
+    {
+      "id": 4,
+      "name": "hat",
+      "wave": "noise",
+      "volume": 0.34,
+      "attack": 0.001,
+      "decay": 0.025,
+      "sustain": 0.01,
+      "release": 0.03,
+      "filter": null
+    },
+    {
+      "id": 5,
+      "name": "kick",
+      "wave": "sawtooth",
+      "volume": 0.75,
+      "attack": 0.001,
+      "decay": 0.1,
+      "sustain": 0.05,
+      "release": 0.06,
+      "filter": 400
+    }
+  ],
+  "patterns": [
+    {
+      "id": 0,
+      "channels": [
+        "E-1:1:58 . E-1:1:30 . . G-1:1:40 . . B-0:1:36 . . . E-1:1:28 . . .",
+        "E-3:2:36 . . G-3:2:28 . . B-2:2:30 . . . G-2:2:24 . . . . .",
+        "E-4:3:18 B-3:3:12 G-3:3:12 B-3:3:12 E-4:3:16 B-3:3:10 G-3:3:10 B-3:3:8 D-4:3:14 A-3:3:8 F#3:3:8 A-3:3:8 B-3:3:12 G-3:3:8 E-3:3:8 B-2:3:8",
+        "E-1:5:60 A-4:4:18 . . E-1:5:40 . A-4:4:14 . E-1:5:48 . . A-4:4:12 . . . ."
+      ]
+    },
+    {
+      "id": 1,
+      "channels": [
+        "D-1:1:44 . . E-1:1:32 . . G-0:1:28 . . . D-1:1:24 . . . . .",
+        "D-3:2:28 . . E-3:2:22 . . G-2:2:24 . . . E-2:2:18 . . . . .",
+        "D-4:3:14 A-3:3:8 . A-3:3:8 D-4:3:12 . F#3:3:8 . B-3:3:10 G-3:3:6 . G-3:3:6 B-3:3:8 . E-3:3:6 .",
+        "E-1:5:44 A-4:4:12 . . E-1:5:30 . A-4:4:8 . E-1:5:36 . . A-4:4:8 . . . ."
+      ]
+    }
+  ],
+  "order": [
+    0,
+    1,
+    0,
+    0
+  ],
+  "loop": true
+}

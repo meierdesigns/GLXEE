@@ -46,7 +46,7 @@ extendClass(PlanetConfigManager, {
             // (a champion only spawns once the previous one is down).
             const n = 3 + (rng() < 0.5 ? 1 : 0);
             for (let i = 0; i < n; i++) {
-                enemies.push({ id: id + '_pack' + i, type: this.pickSeeded(rng, pool) || 'enemyBasic', weight: 1, champion: true, faction: 'pirate', level: 1, spawnAt: i });
+                enemies.push({ id: id + '_pack' + i, type: this.pickSeeded(rng, pool) || 'enemyBasic', weight: 1, champion: true, faction: 'pirate', level: 1, spawnAt: i * 3 });
             }
             sides(1 + Math.floor(tier / 2), 's');
             enemyHealth = 35 + tier * 15;

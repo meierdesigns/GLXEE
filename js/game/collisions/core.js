@@ -44,7 +44,7 @@ class CollisionManager {
                     remove(i);
                     this.createDetailedHitEffect(cx, cy, 'impact');
                     if (byPlayer) objectiveManager.hitGateDome(b.damage != null ? b.damage : 10, cx, cy);
-                    if (typeof soundManager !== 'undefined') soundManager.playHit();
+                    // hitGateDome already plays coded gate SFX; skip generic hit.
                     continue;
                 }
                 const inOpening = Math.abs(cx - g.cx) <= g.open / 2;
@@ -71,8 +71,11 @@ class CollisionManager {
             || (gameState && gameState.width)
             || 240;
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
+        const gateEnter = typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
         const player = playerManager.getPosition();
-        if (player) {
+        // During sluice enter the ship is pulled into the tube — wall scrapes must not kill it.
+        if (player && !gateEnter) {
             const walls = obstacleManager.terrainWallsOver(player.y + 2, player.y + player.height - 2, W);
             if (walls) {
                 let hitX = null;
@@ -101,7 +104,10 @@ class CollisionManager {
                     if (thick > 0) {
                         const dmg = thick <= 1 ? 3 : 8;
                         this.createDetailedHitEffect(hitX, hy, 'impact');
-                        if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                        if (typeof soundManager !== 'undefined') {
+                            if (soundManager.playWallScrape) soundManager.playWallScrape();
+                            soundManager.playHurt();
+                        }
                         if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
                         // Scraping the wall also chips it so you can grind an escape.
                         if (obstacleManager.damageTerrain) {
@@ -173,6 +179,10 @@ class CollisionManager {
     checkBomberPlayerCollisions(gameState) {
         if (!enemyManager.getSideEnemies || !playerManager.getPosition) return;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) return;
+        if (typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            return;
+        }
         const player = playerManager.getPosition();
         if (!player) return;
         const sides = enemyManager.getSideEnemies();
@@ -217,20 +227,23 @@ class CollisionManager {
                 // Still sliding in through the hangar gap: not a fair target yet.
                 if (sides[j].entering) continue;
                 if (this.isColliding(bullets[i], sides[j])) {
+                    const bullet = bullets[i];
+                    const hitX = bullet.x + (bullet.width || 0) / 2;
+                    const hitY = bullet.y + (bullet.height || 0) / 2;
                     const sx = sides[j].x + sides[j].width / 2;
                     const sy = sides[j].y + sides[j].height / 2;
+                    let damage = 10;
+                    if (bullet && bullet.damage !== undefined) damage = bullet.damage;
                     bulletManager.removeBullet(i);
                     const killedByHit = enemyManager.damageSideEnemy
-                        ? enemyManager.damageSideEnemy(sides[j], 10)
-                        : ((sides[j].health -= 10), sides[j].health <= 0);
+                        ? enemyManager.damageSideEnemy(sides[j], damage)
+                        : ((sides[j].health -= damage), sides[j].health <= 0);
                     if (typeof soundManager !== 'undefined') {
                         if (killedByHit) soundManager.playKill();
                         else soundManager.playHit();
                     }
-                    if (typeof graphicsManager !== 'undefined') {
-                        graphicsManager.createHitEffect(sx, sy, 4);
-                    }
                     if (killedByHit) this.destroySideEnemy(sides, j);
+                    else this.spawnEnemyHitFx(hitX, hitY, sides[j]);
                     return;
                 }
             }
@@ -323,14 +336,16 @@ class CollisionManager {
 
         for (let i = bullets.length - 1; i >= 0; i--) {
             if (this.isColliding(bullets[i], enemy)) {
-                // Store enemy position before damage
+                const bullet = bullets[i];
+                const hitX = bullet.x + (bullet.width || 0) / 2;
+                const hitY = bullet.y + (bullet.height || 0) / 2;
                 const enemyX = enemy.x + enemy.width / 2;
                 const enemyY = enemy.y + enemy.height / 2;
 
                 // Damage enemy (use bullet damage or instant kill cheat)
                 let damage = 10; // Default damage
-                if (bullets[i] && bullets[i].damage !== undefined) {
-                    damage = bullets[i].damage;
+                if (bullet && bullet.damage !== undefined) {
+                    damage = bullet.damage;
                 }
                 if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.instantKill) {
                     damage = 999; // Instant kill
@@ -353,12 +368,10 @@ class CollisionManager {
                     const cfg = enemyConfigManager.getConfig(typeId);
                     if (cfg && cfg.explosionId) enemyExplosionId = cfg.explosionId;
                 }
-                this.createExplosion(enemyX, enemyY, enemyDefeated ? enemyExplosionId : 'small_pop',
-                    enemyDefeated ? null : { scale: 0.45 });
-
-                // Create hit particles
-                if (typeof graphicsManager !== 'undefined' && !enemyDefeated) {
-                    graphicsManager.createHitEffect(enemyX, enemyY, 5);
+                if (enemyDefeated) {
+                    this.createExplosion(enemyX, enemyY, enemyExplosionId);
+                } else {
+                    this.spawnEnemyHitFx(hitX, hitY, enemy);
                 }
 
                 // Enemy will start exploding, victory will be shown after explosion
@@ -368,7 +381,37 @@ class CollisionManager {
         }
     }
 
+    /** Impact sparks + ring at the shot contact on an enemy hull. */
+    spawnEnemyHitFx(x, y, enemy) {
+        const shieldHit = !!(enemy && enemy.hitSpark === 'shield');
+        const span = enemy ? Math.max(enemy.width || 12, enemy.height || 12) : 14;
+        this.createExplosion(x, y, 'small_pop', {
+            scale: Math.min(1.15, 0.75 + span / 60),
+            width: Math.max(12, span * 0.45),
+            height: Math.max(12, span * 0.45),
+            silent: true
+        });
+        if (typeof graphicsManager === 'undefined') return;
+        const hot = shieldHit ? '#9fdcff' : 'var(--color-explosion)';
+        const core = shieldHit ? '#e8f8ff' : '#ffffff';
+        graphicsManager.createHitEffect(x, y, 16, hot);
+        graphicsManager.createHitEffect(x, y, 10, core);
+        if (graphicsManager.particleSystem && graphicsManager.particleSystem.createHitParticles) {
+            graphicsManager.particleSystem.createHitParticles(x, y, 12, {
+                speed: 2.4,
+                life: 28,
+                size: 2.2,
+                colors: shieldHit ? ['#9fdcff', '#ffffff', '#6ec8e8'] : ['#ffe566', '#ff8844', '#ffffff'],
+                drag: 0.84
+            });
+        }
+    }
+
     checkEnemyBulletPlayerCollisions(gameState) {
+        if (typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            return;
+        }
         const enemyBullets = bulletManager.getEnemyBullets();
         const player = playerManager.getPosition();
 

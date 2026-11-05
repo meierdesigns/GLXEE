@@ -152,11 +152,16 @@ class UiTooltipManager {
             this.reveal(anchor, text);
             return;
         }
+        const delay = anchor.hasAttribute('data-ui-tip-instant')
+            ? 0
+            : (anchor.hasAttribute('data-ui-tip-compact')
+                ? UiTooltipManager.COMPACT_DELAY_MS
+                : UiTooltipManager.SHOW_DELAY_MS);
         this._delayTimer = setTimeout(() => {
             this._delayTimer = 0;
             if (this._active !== anchor || !anchor.isConnected) return;
             this.reveal(anchor, text);
-        }, anchor.hasAttribute('data-ui-tip-instant') ? 0 : UiTooltipManager.SHOW_DELAY_MS);
+        }, delay);
     }
 
     reveal(anchor, text) {
@@ -171,15 +176,24 @@ class UiTooltipManager {
             const h = document.createElement('div');
             h.className = 'ui-tooltip-head';
             // Inventory cells: physical item left, name to its right (full footprint, not cropped).
+            const compact = !!(anchor && anchor.hasAttribute && anchor.hasAttribute('data-ui-tip-compact'));
             const itemBody = anchor.querySelector && anchor.querySelector('.hs-item-body');
             const itemBg = itemBody && (itemBody.style.backgroundImage || (getComputedStyle(itemBody).backgroundImage || ''));
+            // Captured here so the SIZE_FIT schematic below (same anchor, same hover) can draw
+            // the actual part icon instead of a plain filled square.
+            this._lastTipIconCss = (itemBg && itemBg !== 'none') ? itemBg : null;
+            if (!this._lastTipIconCss) {
+                const icoEl = anchor.querySelector && anchor.querySelector('.hs-pick-ico img, .hs-slotview-part img');
+                if (icoEl && icoEl.src) this._lastTipIconCss = 'url("' + icoEl.src + '")';
+            }
             if (itemBg && itemBg !== 'none') {
                 const srcW = Math.max(1, itemBody.offsetWidth || itemBody.clientWidth || 48);
                 const srcH = Math.max(1, itemBody.offsetHeight || itemBody.clientHeight || 48);
-                const max = 88;
-                const scale = Math.min(max / srcW, max / srcH);
-                const pw = Math.max(48, Math.round(srcW * scale));
-                const ph = Math.max(48, Math.round(srcH * scale));
+                const max = compact ? 32 : 88;
+                const floor = compact ? 24 : 48;
+                const scale = Math.min(max / srcW, max / srcH, 1);
+                const pw = Math.max(floor, Math.round(srcW * scale));
+                const ph = Math.max(floor, Math.round(srcH * scale));
                 const preview = document.createElement('span');
                 preview.className = 'ui-tooltip-item';
                 preview.setAttribute('aria-hidden', 'true');
@@ -219,6 +233,36 @@ class UiTooltipManager {
                 tip.appendChild(wrap);
             } else
             String(text).split('\n').forEach((line) => {
+                // SIZE_FIT:<slot letter>:<part letter> — a little schematic of the slot's
+                // footprint with the part's footprint nested inside it (both S/M/L), instead of
+                // two "SLOT SIZE: S" / "PART SIZE: S" text rows: this is the actual visual used
+                // for slot/part size everywhere else (hs-hangar-slot pins, hs-pick-cell spans),
+                // so the tooltip shows the same shape instead of restating it as letters.
+                const fit = line.match(/^SIZE_FIT:([SML]):([SML])$/);
+                if (fit) {
+                    const [, slotL, partL] = fit;
+                    const row = document.createElement('div');
+                    row.className = 'ui-tooltip-row ui-tooltip-sizefit';
+                    const schema = document.createElement('span');
+                    schema.className = 'ui-tooltip-sizefit-schema is-slot-' + slotL + ' is-part-' + partL;
+                    schema.setAttribute('aria-hidden', 'true');
+                    const slotBox = document.createElement('span');
+                    slotBox.className = 'ui-tooltip-sizefit-slot';
+                    const partBox = document.createElement('span');
+                    partBox.className = 'ui-tooltip-sizefit-part';
+                    if (this._lastTipIconCss) {
+                        partBox.classList.add('has-icon');
+                        partBox.style.backgroundImage = this._lastTipIconCss;
+                    }
+                    slotBox.appendChild(partBox);
+                    schema.appendChild(slotBox);
+                    const label = document.createElement('span');
+                    label.className = 'ui-tooltip-sizefit-label';
+                    label.textContent = slotL === partL ? ('SLOT & PART ' + slotL) : ('SLOT ' + slotL + ' · PART ' + partL);
+                    row.append(schema, label);
+                    tip.appendChild(row);
+                    return;
+                }
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
                 const row = document.createElement('div');
                 row.className = m ? 'ui-tooltip-row' : 'ui-tooltip-note';
@@ -286,20 +330,31 @@ class UiTooltipManager {
                             return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a']];
                         }
                         // Ability/defense/energy "TYPE · TIER n" (tier optional) -> type + tier icons.
-                        const tm = line.match(/^([A-Z][A-Z /]*?)(?: · TIER (\d+))?$/);
+                        // Single keyword only — never match meta lines (EQUIPPED, MOVE TO …).
+                        const tm = line.match(/^(PASSIVE|ACTIVE|TOGGLE|CHANNEL|INSTANT|AURA|BUFF|SHIELD|DRIVE|SYSTEM)(?: · TIER (\d+))?$/);
                         if (tm) {
                             const out = [['statAbilities', tm[1], '#c08cff']];
                             if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a']);
                             return out;
                         }
+                        // Ability stat-mod line(s), e.g. "+0.3 SPEED" or "+1 DAMAGE · +2 ARMOR"
+                        // (render-shop-tab.js hangarModuleTip, concrete numbers computed from
+                        // this ship's own base stats) -> same icon as the matching ship stat
+                        // elsewhere instead of plain text.
+                        const statIcon = { SPEED: 'statSpeed', DAMAGE: 'statDamage', ARMOR: 'statArmor', 'FIRE RATE': 'shotRapid' };
+                        const statCol = { SPEED: '#4ad8ff', DAMAGE: '#ff6a4a', ARMOR: '#5ce1ff', 'FIRE RATE': '#ffa04a' };
+                        const statParts = line.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
+                        if (statParts.length && statParts.every(Boolean)) {
+                            return statParts.map((pm) => [statIcon[pm[2]], pm[1] + ' ' + pm[2], statCol[pm[2]]]);
+                        }
                         return null;
                     })();
                     if (chips && ir) {
                         row.className = 'ui-tooltip-stats';
-                        row.style.cssText = 'display:flex;gap:14px;align-items:center';
+                        row.style.cssText = 'display:flex;gap:' + (compact ? '8px' : '14px') + ';align-items:center;flex-wrap:nowrap';
                         chips.forEach(([key, val, col]) => {
                             const s = document.createElement('span');
-                            s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+                            s.style.cssText = 'display:inline-flex;gap:4px;align-items:center;white-space:nowrap';
                             s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
                             row.appendChild(s);
                         });
@@ -354,13 +409,12 @@ class UiTooltipManager {
             tip.style.top = Math.round(toCss(st, 'y')) + 'px';
             return;
         }
-        // Inventory items: open beside the inventory panel with a wide gap, never over the cells or the cursor.
-        // (Start setup inventory sits in a right sidebar: its tips open left, toward the middle.)
+        // Bay inventory: tuck beside the hovered cell (near the cursor), not the whole panel edge.
         const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
         if (invPanel) {
-            const b = invPanel.getBoundingClientRect();
-            let sl = b.right + 20;
-            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, b.left - tw - 20);
+            const gap = 8;
+            let sl = r.right + gap;
+            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, r.left - tw - gap);
             const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
             tip.classList.add('side-right');
             tip.style.left = Math.round(toCss(sl, 'x')) + 'px';
@@ -417,6 +471,7 @@ class UiTooltipManager {
 }
 
 UiTooltipManager.SHOW_DELAY_MS = 450;
+UiTooltipManager.COMPACT_DELAY_MS = 650;
 
 const uiTooltip = new UiTooltipManager();
 window.uiTooltip = uiTooltip;

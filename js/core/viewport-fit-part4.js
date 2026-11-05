@@ -163,10 +163,10 @@
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);
-        const openL = 44 * u;
-        const openR = 44 * u;
+        const openL = 56 * u;          // keep in sync with --fr-open-side (part-19)
+        const openR = 56 * u;
         const openT = (44 + 50) * u;   // keep in sync with --bz-extra (styles part-19)
-        const openB = 44 * u;
+        const openB = 56 * u;          // keep in sync with --fr-open-bottom (part-19)
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;
         const vh = (real.vh - openT - openB - 2 * inset) / zoom;

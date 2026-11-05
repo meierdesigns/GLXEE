@@ -31,6 +31,16 @@ extendClass(UIManager, {
         event.preventDefault();
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
 
+        // Shop overlay owns keys / gamepad while open (arrows, Enter, Escape).
+        if (typeof inStageShop !== 'undefined' && inStageShop.isOpen) {
+            if (typeof inStageShop.handleInput === 'function') {
+                inStageShop.handleInput(event);
+            } else if (event.key === 'Escape' || event.key === 'e' || event.key === 'E') {
+                if (!event.repeat) inStageShop.close();
+            }
+            return;
+        }
+
         // Buttons sit side by side: every arrow steps through the visible ones.
         const count = this.getVictoryButtons().length || this.victoryMenuItems.length || 1;
         switch (event.key) {
@@ -52,6 +62,9 @@ extendClass(UIManager, {
                 this.selectVictoryOption();
                 break;
             case 'Escape':
+                if (typeof inStageShop !== 'undefined' && inStageShop.refundPending) {
+                    inStageShop.refundPending();
+                }
                 if (typeof game !== 'undefined') {
                     game.showLevelSelection();
                 }
@@ -91,12 +104,20 @@ extendClass(UIManager, {
                     game.nextLevel();
                 }
                 break;
+            case 'shop':
+                if (typeof inStageShop !== 'undefined' && inStageShop.showFromVictory) {
+                    inStageShop.showFromVictory();
+                }
+                break;
             case 'restartGame':
                 if (typeof game !== 'undefined') {
                     game.restartGame();
                 }
                 break;
             case 'levelSelection':
+                if (typeof inStageShop !== 'undefined' && inStageShop.refundPending) {
+                    inStageShop.refundPending();
+                }
                 if (typeof game !== 'undefined') {
                     game.showLevelSelection();
                 }

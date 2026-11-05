@@ -308,11 +308,15 @@ html body .hs-ship-table .hs-ship-table-name {
 html body .hs-ship-table .hs-ship-stats {
     display: flex;
     flex-direction: row;
-    flex-wrap: nowrap;
+    /* Six stats (Tier/HP/Armor/Damage/Speed/Energy) no longer fit one nowrap row at every
+       width — they used to silently overflow past the cell and visually sit on top of the
+       thumbnail/name above instead of lining up underneath it. Wrapping keeps every stat
+       readable, tidily stacked in as many rows as the width needs. */
+    flex-wrap: wrap;
     align-items: center;
     justify-content: flex-start;
-    gap: 10px 14px;
-    width: max-content;
+    gap: 6px 14px;
+    width: 100%;
     max-width: 100%;
     order: -1;
 }
@@ -1534,7 +1538,9 @@ html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction
        above) — the old 14px let the hero-credit line at the bottom get cut by it. */
     background: #05060a; margin: 0 34px 34px; padding: 20px 26px; border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
     font-size: calc(var(--font-h2) * 1.15); line-height: 1.6; text-align: left; color: #fff;
+    box-sizing: border-box; min-height: 0;
 }
+html body .profile-selection-name-mode .profile-faction-tabcard { min-height: 0; }
 html body .profile-faction-tabcard :is(.profile-faction-lore-text, .profile-faction-lore-text *, .profile-faction-fact-body, .profile-faction-fact-body *) {
     letter-spacing: 0.03em; word-spacing: 0.1em; font-stretch: 100%;
 }
@@ -1681,3 +1687,80 @@ html body .profile-start-main .profile-area-row { grid-template-columns: 90px 44
 .gm-hover-route.locked .gm-pxline-glow, .gm-hover-route.locked .gm-pxline-halo { fill: #4a4e58; }
 .gm-hover-lock-bg { fill: #05060a; }
 .gm-hover-lock-fg { fill: #b8bcc6; }
+
+/* Faction step: compact swatches + non-shrinking lore tabs (bar itself is in-flow in part-22). */
+html body .profile-selection-overlay > .profile-selection-content.profile-selection-name-mode {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column;
+    box-sizing: border-box;
+    overflow: hidden !important;
+}
+html body .profile-selection-name-mode:not(.is-name-step):not(.is-pilot-step) .profile-faction-picker {
+    flex: 0 0 auto;
+    margin-bottom: 8px;
+}
+html body .profile-selection-name-mode:not(.is-name-step):not(.is-pilot-step) .profile-faction-swatch {
+    min-height: 108px !important;
+    padding: 12px 6px 10px !important;
+    gap: 6px !important;
+}
+html body .profile-selection-name-mode:not(.is-name-step):not(.is-pilot-step) .profile-faction-swatch-emblem {
+    width: 56px !important;
+    height: 56px !important;
+}
+html body .profile-selection-name-mode:not(.is-name-step):not(.is-pilot-step) .profile-faction-swatch-label {
+    font-size: 16px !important;
+    letter-spacing: 2px;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    align-items: stretch;
+}
+html body .profile-selection-name-mode .profile-faction-info-row > :is(.profile-faction-preview, .profile-faction-lore) {
+    min-height: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+html body .profile-selection-name-mode .profile-faction-info-row > .profile-faction-preview {
+    padding: 36px 28px !important;
+}
+html body .profile-selection-name-mode .profile-faction-tabcard {
+    display: flex !important;
+    flex-direction: column;
+    min-height: 0;
+    padding: 0 !important;
+}
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabs {
+    flex: 0 0 auto !important;
+    position: relative;
+    z-index: 3;
+    overflow: visible;
+    padding: 40px 36px 0 !important;
+    gap: 8px;
+}
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tab {
+    position: relative;
+    z-index: 3;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 46px;
+    box-sizing: border-box;
+    padding: 12px 6px !important;
+    letter-spacing: 0.06em !important;
+}
+html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction-tabpanel {
+    position: relative;
+    z-index: 3;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    margin: 0 36px 36px !important;
+    padding: 18px 22px !important;
+}

@@ -41,12 +41,16 @@
     };
 
     GamepadCursor.prototype.ensure = function () {
-        if (this.el && document.body.contains(this.el)) return this.el;
-        const el = document.createElement('div');
+        // Mount on <html>, not <body>: body carries transform: scale(--stage-scale),
+        // so position:fixed resolves in stage space while getBoundingClientRect is
+        // viewport px (same trap as js/ui/dev-hover-screen.js).
+        const root = document.documentElement;
+        if (this.el && root.contains(this.el) && this.el.parentElement === root) return this.el;
+        const el = this.el || document.createElement('div');
         el.className = 'vf-gp-cursor';
         el.setAttribute('aria-hidden', 'true');
-        el.innerHTML = '<i></i><i></i><i></i><i></i>';
-        document.body.appendChild(el);
+        if (!el.childElementCount) el.innerHTML = '<i></i><i></i><i></i><i></i>';
+        if (el.parentElement !== root) root.appendChild(el);
         this.el = el;
         return el;
     };

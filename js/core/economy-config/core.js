@@ -49,6 +49,16 @@ class EconomyConfig {
             champion: 0.15,
             default: 0.03
         };
+        /** Finished parts shed less often than schematics. */
+        this.partDropChance = {
+            scout: 0.008,
+            assault: 0.015,
+            heavy: 0.025,
+            elite: 0.04,
+            capital: 0.06,
+            champion: 0.08,
+            default: 0.012
+        };
         this.defaultPlanetResources = {
             mars: [
                 { id: 'scrap', weight: 4, min: 12, max: 28 },

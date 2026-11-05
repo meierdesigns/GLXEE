@@ -110,19 +110,16 @@ extendClass(EnemyManager, {
     spawnScheduledNormal(entry, gameState) {
         if (!entry || !gameState) return null;
         if (this.sideEnemies.length >= this.sideEnemyCap) {
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] spawnScheduledNormal blocked by cap', entry.id, this.sideEnemies.length, this.sideEnemyCap);
-            }
             return null;
         }
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);
-        let baseHp = 40;
+        let baseHp = 18;
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
-            // ~2s side TTK vs REF laser (balance-config); was 0.4.
-            if (cfg && cfg.maxHealth) baseHp = Math.max(15, Math.round(cfg.maxHealth * 0.55));
+            // Reduced TTK vs REF laser (balance-config); was 0.4.
+            if (cfg && cfg.maxHealth) baseHp = Math.max(8, Math.round(cfg.maxHealth * 0.28));
         }
         const role = entry.role || 'assault';
         if (role === 'repair' || role === 'shieldBattery') {
@@ -242,13 +239,7 @@ extendClass(EnemyManager, {
         });
         // Only enter through empty rim openings — never through solid rock.
         if (!this.placeSideEntryFromGap(side, canvasWidth, canvasHeight)) {
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] spawnScheduledNormal blocked: no rim gap', entry.id);
-            }
             return null; // no open edge this frame; try again later
-        }
-        if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-            console.log('[sideDebug] spawned side', entry.id, side.type, side.x, side.y);
         }
         if (isEscort && this.enemy && form) {
             // After the rim entry, settle toward the formation slot.
@@ -405,7 +396,7 @@ extendClass(EnemyManager, {
             const waveAt = clusterWaveAt[entry.cluster || 'alpha'];
             const dueAt = Math.min(entry.spawnAt, waveAt != null ? waveAt : entry.spawnAt);
             if (elapsedSec < dueAt) continue;
-            if (entry.champion && (this.enemy || this.exploding)) {
+            if (entry.champion && (this.enemy || this.exploding || this.championSpawning)) {
                 continue;
             }
             if (!entry.champion && holdNormals) {
@@ -415,9 +406,6 @@ extendClass(EnemyManager, {
             if (entry.champion) {
                 this.spawnChampionFromEntry(entry);
             } else {
-                if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                    console.log('[sideDebug] updateSchedule attempting', entry.id, 'at', elapsedSec.toFixed(1) + 's');
-                }
                 if (!this.spawnScheduledNormal(entry, gameState)) {
                     // Side slots full: keep it queued instead of dropping it.
                     entry.spawned = false;
@@ -427,6 +415,7 @@ extendClass(EnemyManager, {
     },
 
     async spawnChampionFromEntry(entry) {
+        this.championSpawning = true;
         this.pendingChampionEntry = entry;
         this.beginChampionCombatEvents(entry);
         await this.setShipType(entry.type);
@@ -434,6 +423,7 @@ extendClass(EnemyManager, {
             graphicsManager.setEnemyShipType(entry.type);
         }
         this.spawnEnemy(entry);
+        this.championSpawning = false;
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.onEnemySpawned(entry);
         }

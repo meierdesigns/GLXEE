@@ -284,6 +284,11 @@ extendClass(EnemyManager, {
         const remaining = this.applyDefenseToDamage(target, Number(damage) * playerDamageMul);
         this.shield = target.shield;
         this.shieldHitAt = target.shieldHitAt;
+        // Hull flash even when shields soak the hit — otherwise shots look like they do nothing.
+        if (this.enemy) {
+            this.enemy.hitFlashMs = Math.max(this.enemy.hitFlashMs || 0, remaining > 0 ? 170 : 110);
+            this.enemy.hitSpark = remaining > 0 ? 'hull' : 'shield';
+        }
         this.health -= remaining;
         if (this.health <= 0) {
             this.health = 0;
@@ -300,6 +305,8 @@ extendClass(EnemyManager, {
             ? difficultyConfigManager.getProfile().playerDamageMul : 1;
         const remaining = this.applyDefenseToDamage(side, Number(damage) * playerDamageMul);
         side.health -= remaining;
+        side.hitFlashMs = Math.max(side.hitFlashMs || 0, remaining > 0 ? 160 : 100);
+        side.hitSpark = remaining > 0 ? 'hull' : 'shield';
         return side.health <= 0;
     },
 

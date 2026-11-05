@@ -1,0 +1,96 @@
+{
+  "format": "vftrack",
+  "version": 1,
+  "meta": {
+    "title": "Dust Gate Launch / Pirate",
+    "author": "VF Tracker",
+    "planet": "mars",
+    "notes": "mission intro vs pirate"
+  },
+  "bpm": 121,
+  "rowsPerBeat": 1,
+  "rowsPerPattern": 16,
+  "channels": 4,
+  "instruments": [
+    {
+      "id": 1,
+      "name": "bass",
+      "wave": "square",
+      "volume": 0.7,
+      "attack": 0.006,
+      "decay": 0.09,
+      "sustain": 0.4,
+      "release": 0.12,
+      "filter": 900
+    },
+    {
+      "id": 2,
+      "name": "lead",
+      "wave": "square",
+      "volume": 0.46,
+      "attack": 0.003,
+      "decay": 0.05,
+      "sustain": 0.35,
+      "release": 0.1,
+      "filter": null
+    },
+    {
+      "id": 3,
+      "name": "arp",
+      "wave": "sawtooth",
+      "volume": 0.3,
+      "attack": 0.002,
+      "decay": 0.04,
+      "sustain": 0.2,
+      "release": 0.06,
+      "filter": 1600
+    },
+    {
+      "id": 4,
+      "name": "hat",
+      "wave": "noise",
+      "volume": 0.36,
+      "attack": 0.001,
+      "decay": 0.03,
+      "sustain": 0.02,
+      "release": 0.03,
+      "filter": null
+    },
+    {
+      "id": 5,
+      "name": "kick",
+      "wave": "triangle",
+      "volume": 0.8,
+      "attack": 0.001,
+      "decay": 0.11,
+      "sustain": 0.06,
+      "release": 0.06,
+      "filter": null
+    }
+  ],
+  "patterns": [
+    {
+      "id": 0,
+      "channels": [
+        "G#1:1:70 . B-1:1:52 . D#2:1:64 . . G#2:1:58 . F#2:1:50 . D#2:1:44 G#1:1:54 . . .",
+        "G#3:2:54 . B-3:2:44 . D#4:2:56 . F#4:2:48 G#4:2:60 . D#4:2:46 . B-3:2:40 . G#3:2:36 . .",
+        "G#4:3:28 D#4:3:16 . D#4:3:16 G#4:3:28 . B-4:3:32 . D#4:3:16 G#4:3:24 . F#4:3:18 . D#4:3:14 . .",
+        "C-2:5:74 A-4:4:28 . A-4:4:16 C-2:5:56 . A-4:4:22 A-4:4:12 C-2:5:72 A-4:4:26 . A-4:4:14 C-2:5:48 A-4:4:18 A-4:4:10 ."
+      ]
+    },
+    {
+      "id": 1,
+      "channels": [
+        "E-1:1:66 . G#1:1:50 . B-1:1:60 . . D#2:1:54 . C#2:1:48 . B-1:1:42 G#1:1:58 . OFF .",
+        "E-3:2:50 . G#3:2:42 . B-3:2:54 . D#4:2:46 G#4:2:58 . F#4:2:44 . D#4:2:40 . OFF . .",
+        "E-4:3:24 B-3:3:14 . B-3:3:14 E-4:3:24 . G#4:3:28 . B-3:3:14 E-4:3:20 . D#4:3:16 . B-3:3:12 . .",
+        "C-2:5:68 . A-4:4:22 . C-2:5:50 A-4:4:18 . A-4:4:12 C-2:5:66 . A-4:4:20 C-2:5:42 . A-4:4:14 A-4:4:8 ."
+      ]
+    }
+  ],
+  "order": [
+    0,
+    1
+  ],
+  "loop": false
+}

@@ -412,10 +412,10 @@ body {
     height: var(--vh, 100dvh);
     min-height: var(--vh, 100dvh);
     max-height: var(--vh, 100dvh);
-    /* clip (not hidden): no scrolling inside the stage, but bezel parts (pilot crest, tabs)
-       may paint past the stage edge instead of being cut off. */
+    /* clip: no scrolling; no letterbox bleed past the stage (parallax used to
+       paint purple wings outside the bezel). Crest lives on #vf-bezel inside the stage. */
     overflow: clip;
-    overflow-clip-margin: 200px;
+    overflow-clip-margin: 0;
     font-size: var(--font-text);
     line-height: 1.2;
     letter-spacing: 1px;
@@ -896,6 +896,9 @@ label,
     inset: 0;
     z-index: 10000;
     pointer-events: none;
+    /* Promote each FX plate once; avoids re-layering the full DOM tree every frame. */
+    transform: translateZ(0);
+    backface-visibility: hidden;
 }
 
 .vf-fx-scanlines {
@@ -1107,25 +1110,19 @@ html[data-vf-arcade="on"] .settings-row-value {
 }
 
 .game-container {
-    zoom: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
+    /* Geometry / GUI scale: shared .vf-glass (part-19). Flex layout only here. */
     display: flex;
     flex-direction: row;
     align-items: stretch;
     justify-content: space-between;
-    width: calc(var(--vw, calc(100 * var(--sv-w))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
-    height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
-    min-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
-    max-height: calc(var(--vh, calc(100 * var(--sv-h))) / var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
     box-sizing: border-box;
     /* No cockpit art: the faction bezel (screen-frame.css) is the only frame. */
     background-color: #000;
     color: var(--color-text);
     font-family: var(--ui-font-family);
-    position: relative;
     gap: var(--ui-gap);
     padding: var(--ui-pad);
     text-align: left;
-    overflow: hidden;
 }
 
 /* Left HUD cluster: info panel + compact vitals — glued to playfield, not viewport edge */

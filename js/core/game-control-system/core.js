@@ -51,8 +51,12 @@ class GameControlSystem {
             menuStateManager.setScreen('ingame', { levelId: levelId, endKind: null, endStats: null, endLoot: null });
         }
 
-        if (typeof soundManager !== 'undefined' && soundManager.stopMenuMusic) {
-            soundManager.stopMenuMusic();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.markAudioUnlocked) soundManager.markAudioUnlocked();
+            if (soundManager.ensureContext) soundManager.ensureContext();
+            if (soundManager.stopMenuMusic) soundManager.stopMenuMusic();
+            // Drop any leftover hub tracker so setStageContext can start planet music cleanly.
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
         }
 
         // Always clear pause/settings overlays before combat HUD shows
@@ -139,6 +143,9 @@ class GameControlSystem {
         }
         if (typeof inStageShop !== 'undefined' && inStageShop.close) {
             inStageShop.close();
+        }
+        if (typeof inStageShop !== 'undefined' && inStageShop.applyPending) {
+            inStageShop.applyPending();
         }
         if (typeof explosionSystem !== 'undefined' && explosionSystem.clear) {
             explosionSystem.clear();

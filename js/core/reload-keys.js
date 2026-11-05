@@ -31,7 +31,8 @@ window.addEventListener('keydown', (e) => {
             sessionStorage.removeItem('vf-booted');
         } catch (err) { /* storage blocked */ }
     }
-    // Ctrl/Cmd+Shift+R = hard cache wipe (works even when Clear-Site-Data is ignored).
+    // Ctrl/Cmd+Shift+R = hard cache wipe (local browser only). /__cache-clear is
+    // local-dev only — hosted builds (itch.io) never POST/GET against the CDN.
     if (hard) {
         try {
             localStorage.removeItem('vf-build');
@@ -43,8 +44,14 @@ window.addEventListener('keydown', (e) => {
             u.searchParams.set('_cb', String(Date.now()));
             location.replace(u.toString());
         };
-        fetch('/__cache-clear', { cache: 'no-store', credentials: 'same-origin' })
-            .then(() => go(), () => go());
+        const host = location.hostname || '';
+        const localDev = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+        if (localDev) {
+            fetch('/__cache-clear', { cache: 'no-store', credentials: 'same-origin' })
+                .then(() => go(), () => go());
+        } else {
+            go();
+        }
         return;
     }
     // Reload at once: waiting lets the running game write its state back.

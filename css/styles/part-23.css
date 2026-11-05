@@ -110,25 +110,25 @@ html[data-faction="machine"] .home-station-overlay :is(.hs-panel, .hs-section):n
    unrelated page content) and flush insets fixes both. */
 html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
     animation: none;
 }
 html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
     animation: none;
 }
 html[data-faction="pirate"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
     animation: none;
 }
 html[data-faction="machine"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
     animation: none;
 }
@@ -161,22 +161,22 @@ html[data-faction="machine"] .home-station-overlay :is(.hs-panel, .hs-section):n
    own --faction-ctl-clip silhouette is left in place. */
 html[data-faction="terran"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
 }
 html[data-faction="kronax"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
 }
 html[data-faction="pirate"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
 }
 html[data-faction="machine"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 16 round;
+    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 32 round;
     image-rendering: pixelated;
 }
 /* Buttons/tabs: static frame, no creep — many small instances are on screen
@@ -230,7 +230,7 @@ html[data-faction="voidborn"] body .home-station-overlay :is(.hs-panel, .hs-sect
     background: none;
     inset: -8px;
     border: 16px solid transparent;
-    border-image: url('../../assets/ui/voidborn-vine-frame.svg') 16 round;
+    border-image: url('../../assets/ui/voidborn-vine-frame.svg') 32 round;
     image-rendering: pixelated;
     animation: void-vine-creep var(--vf-vine-dur, 24s) steps(1, end) infinite;
 }
@@ -413,7 +413,7 @@ html body .victory-screen .victory-buttons {
     justify-content: center;
     gap: 14px !important;
 }
-html body .victory-screen .victory-button { flex: 0 1 320px; width: auto !important; margin: 0 !important; }
+html body .victory-screen .victory-button { flex: 0 1 220px; width: auto !important; margin: 0 !important; }
 /* Atmosphere: stepped haze rings in the planet's own haze tone (same as the sector card). */
 html body .outcome-planet-icon.has-atmo::before {
     content: '';
@@ -840,3 +840,662 @@ html[data-faction="voidborn"] body .home-station-overlay .hs-hangar-root :is(.hs
 
 /* Start step: the ship / hull container clip-path chamfer cut the border off at the corners and the bottom edge sat under the clipped row; draw the outline inset instead. */
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { clip-path: none !important; border-color: transparent !important; box-shadow: inset 0 0 0 var(--faction-border-width, 1px) var(--ui-border, var(--color-primary)) !important; }
+
+/* ==========================================================================
+   In-stage shop (victory → SHOP): inhabitant + hangar-style slot grids.
+   Colours come from the trader faction (root --faction-*), not the player HUD.
+   z-index above victory (9994) / settings (9995). Gamepad via handleInput.
+   ========================================================================== */
+#vf-in-stage-shop.vf-iss {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(12px, 2vw, 28px);
+    box-sizing: border-box;
+    background: rgba(5, 6, 10, 0.78);
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    color: #e8f0ff;
+    image-rendering: pixelated;
+}
+#vf-in-stage-shop .vf-iss-panel {
+    --iss-accent: var(--faction-accent, #7ec8ff);
+    --iss-hull: var(--faction-hull, #3A6EA5);
+    --iss-edge: var(--faction-edge, #1a2a3a);
+    width: min(1180px, 100%);
+    height: min(820px, 100%);
+    max-height: calc(100vh - 16px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px 16px;
+    box-sizing: border-box;
+    background: #0a1018;
+    border: 3px solid var(--iss-accent);
+    box-shadow:
+        0 0 0 2px #05060a,
+        0 0 36px color-mix(in srgb, var(--iss-accent) 40%, transparent),
+        inset 0 0 0 6px color-mix(in srgb, var(--iss-edge) 80%, #05060a);
+    overflow: auto;
+    clip-path: var(--faction-panel-clip, none);
+}
+/* Trader faction skins (data-faction on the panel). */
+#vf-in-stage-shop .vf-iss-panel[data-faction="terran"] {
+    clip-path: polygon(28px 0, calc(100% - 28px) 0, 100% 28px, 100% calc(100% - 28px), calc(100% - 28px) 100%, 28px 100%, 0 calc(100% - 28px), 0 28px);
+    background:
+        linear-gradient(color-mix(in srgb, var(--iss-accent) 12%, transparent) 1px, transparent 1px) 0 0 / 28px 28px,
+        linear-gradient(90deg, color-mix(in srgb, var(--iss-accent) 12%, transparent) 1px, transparent 1px) 0 0 / 28px 28px,
+        linear-gradient(180deg, #0a1424, #050a14);
+    box-shadow: inset 0 0 0 6px #050a14, inset 0 0 0 8px color-mix(in srgb, var(--iss-accent) 55%, transparent), 0 0 36px color-mix(in srgb, var(--iss-accent) 35%, transparent);
+}
+#vf-in-stage-shop .vf-iss-panel[data-faction="kronax"] {
+    clip-path: polygon(48px 0, 100% 0, 100% calc(100% - 48px), calc(100% - 48px) 100%, 0 100%, 0 48px);
+    background:
+        repeating-linear-gradient(-45deg, color-mix(in srgb, var(--iss-accent) 14%, transparent) 0 10px, transparent 10px 34px),
+        linear-gradient(160deg, #2a0a06, #0a0302 70%);
+}
+#vf-in-stage-shop .vf-iss-panel[data-faction="pirate"] {
+    clip-path: polygon(10px 0, 30% 0, calc(30% + 12px) 8px, 70% 4px, calc(100% - 22px) 0, 100% 16px, calc(100% - 4px) 40%, 100% calc(40% + 14px), calc(100% - 2px) calc(100% - 12px), calc(100% - 18px) 100%, 58% calc(100% - 3px), calc(58% - 14px) 100%, 18px calc(100% - 4px), 0 calc(100% - 20px), 4px 60%, 0 calc(60% - 12px), 2px 12px);
+    background:
+        radial-gradient(circle at 18px 18px, var(--iss-accent) 0 3px, transparent 4px),
+        radial-gradient(circle at calc(100% - 18px) 18px, var(--iss-accent) 0 3px, transparent 4px),
+        radial-gradient(circle at 18px calc(100% - 18px), var(--iss-accent) 0 3px, transparent 4px),
+        radial-gradient(circle at calc(100% - 18px) calc(100% - 18px), var(--iss-accent) 0 3px, transparent 4px),
+        linear-gradient(175deg, #2a1f0e, #0d0904 75%);
+}
+#vf-in-stage-shop .vf-iss-panel[data-faction="machine"] {
+    background:
+        repeating-linear-gradient(0deg, color-mix(in srgb, var(--iss-accent) 10%, transparent) 0 1px, transparent 1px 4px),
+        linear-gradient(180deg, #04140e, #020806);
+    box-shadow: inset 0 0 0 4px #020806, inset 0 0 0 6px color-mix(in srgb, var(--iss-accent) 55%, transparent), 0 0 36px color-mix(in srgb, var(--iss-accent) 30%, transparent);
+}
+#vf-in-stage-shop .vf-iss-panel[data-faction="voidborn"] {
+    clip-path: polygon(0px 40px, 4px 28px, 8px 20px, 16px 12px, 28px 4px, 40px 0px, calc(100% - 24px) 0px, calc(100% - 12px) 8px, calc(100% - 4px) 20px, 100% 36px, 100% calc(100% - 36px), calc(100% - 8px) calc(100% - 20px), calc(100% - 20px) calc(100% - 8px), calc(100% - 40px) 100%, 28px 100%, 12px calc(100% - 12px), 4px calc(100% - 24px), 0 calc(100% - 40px));
+    background:
+        radial-gradient(60% 40% at 18% 12%, color-mix(in srgb, var(--iss-accent) 28%, transparent) 0 45%, transparent 70%),
+        radial-gradient(50% 60% at 92% 88%, color-mix(in srgb, var(--iss-hull) 30%, transparent) 0 40%, transparent 70%),
+        #0c0516;
+}
+#vf-in-stage-shop .vf-iss-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+#vf-in-stage-shop .vf-iss-trader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-portrait {
+    width: 120px;
+    height: 134px;
+    flex: none;
+    overflow: hidden;
+    background: #05060a;
+    border: 2px solid var(--iss-accent, var(--faction-accent, #3a4a64));
+    box-shadow: inset 0 0 0 2px #05060a;
+}
+#vf-in-stage-shop .vf-iss-portrait canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    object-position: 50% 0;
+    image-rendering: pixelated;
+}
+#vf-in-stage-shop .vf-iss-trader-title {
+    font-weight: bold;
+    font-size: 22px;
+    letter-spacing: 0.06em;
+    color: #fff;
+}
+#vf-in-stage-shop .vf-iss-trader-sub {
+    font-size: 13px;
+    opacity: 0.8;
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+}
+#vf-in-stage-shop .vf-iss-trader-cash {
+    font-size: 14px;
+    margin-top: 8px;
+    color: var(--iss-accent, var(--faction-accent, #f2c14e));
+}
+#vf-in-stage-shop .vf-iss-close {
+    flex: none;
+    padding: 12px 18px;
+    font: inherit;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    color: #e8f0ff;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 55%, #3a4a64);
+    clip-path: var(--faction-ctl-clip, none);
+}
+#vf-in-stage-shop .vf-iss-close:is(:hover, :focus-visible, .nav-focused, .is-focused) {
+    border-color: var(--iss-accent, #f2c14e);
+    color: #fff;
+    outline: none;
+    box-shadow: 0 0 0 2px var(--iss-accent, #f2c14e);
+}
+#vf-in-stage-shop .vf-iss-wallet {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: stretch;
+}
+#vf-in-stage-shop .vf-iss-wallet-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: color-mix(in srgb, var(--iss-edge, #05060a) 70%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #2a3344) 35%, #2a3344);
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-wallet-item.is-empty { opacity: 0.45; }
+#vf-in-stage-shop .vf-iss-wallet-ico {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+}
+#vf-in-stage-shop .vf-iss-wallet-meta {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    opacity: 0.85;
+}
+#vf-in-stage-shop .vf-iss-wallet-meta b {
+    font-size: 15px;
+    color: var(--iss-accent, var(--faction-accent, #f2c14e));
+    opacity: 1;
+}
+#vf-in-stage-shop .vf-iss-note {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    opacity: 0.7;
+}
+#vf-in-stage-shop .vf-iss-body {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 12px 14px;
+    align-items: stretch;
+    justify-content: flex-start;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+#vf-in-stage-shop .vf-iss-main {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-bags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    align-items: flex-start;
+}
+#vf-in-stage-shop .vf-iss-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-col-title {
+    margin: 0;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--iss-accent, #e8f0ff);
+    opacity: 0.9;
+}
+#vf-in-stage-shop .vf-iss-detail {
+    flex: 1 1 260px;
+    min-width: 220px;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px;
+    box-sizing: border-box;
+    background: color-mix(in srgb, var(--iss-edge, #05060a) 72%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 45%, #3a4a64);
+    align-self: stretch;
+}
+#vf-in-stage-shop .vf-iss-detail-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+#vf-in-stage-shop .vf-iss-detail-empty {
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    opacity: 0.55;
+}
+#vf-in-stage-shop .vf-iss-detail-hint {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    opacity: 0.4;
+    line-height: 1.4;
+}
+#vf-in-stage-shop .vf-iss-detail-hero {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+#vf-in-stage-shop .vf-iss-detail-preview {
+    position: relative;
+    width: calc(var(--cs, 64px) + 6px);
+    height: calc(var(--cs, 64px) + 6px);
+    flex: none;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 55%, #3a4a64);
+}
+#vf-in-stage-shop .vf-iss-detail-preview .hs-item-body,
+#vf-in-stage-shop .vf-iss-detail-preview .hs-storage-cell-icon {
+    pointer-events: none;
+}
+#vf-in-stage-shop .vf-iss-detail-preview .hs-item-body {
+    position: absolute;
+    inset: 3px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+}
+#vf-in-stage-shop .vf-iss-detail-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-detail-name {
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    color: #fff;
+}
+#vf-in-stage-shop .vf-iss-detail-badge {
+    display: inline-block;
+    align-self: flex-start;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, #7ec8ff 55%, transparent);
+    color: #b8e0ff;
+}
+#vf-in-stage-shop .vf-iss-detail-badge.is-temp {
+    border-color: color-mix(in srgb, #ffe08a 55%, transparent);
+    color: #ffe08a;
+}
+#vf-in-stage-shop .vf-iss-detail-price {
+    font-size: 18px;
+    letter-spacing: 0.06em;
+    color: var(--iss-accent, #f2c14e);
+}
+#vf-in-stage-shop .vf-iss-detail-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 35%, transparent);
+    padding-top: 10px;
+}
+#vf-in-stage-shop .vf-iss-detail-line {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    line-height: 1.35;
+    opacity: 0.88;
+}
+#vf-in-stage-shop .vf-iss-detail-line.is-tag {
+    opacity: 0.55;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+}
+#vf-in-stage-shop .vf-iss-detail-line.is-cost {
+    color: var(--iss-accent, #f2c14e);
+    opacity: 1;
+}
+#vf-in-stage-shop .vf-iss-queued-title {
+    margin-top: 4px;
+    font-size: 12px;
+    opacity: 0.75;
+    width: 100%;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell {
+    overflow: hidden;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .hs-item-body {
+    position: absolute;
+    inset: 3px;
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .hs-storage-cell-icon {
+    position: relative;
+    z-index: 1;
+    width: 55%;
+    height: 55%;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-locked,
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(.nav-focused, .is-focused, :focus-visible) {
+    box-shadow: inset 0 0 0 2px var(--pk-c, var(--faction-accent, var(--color-primary)));
+    outline: none;
+    z-index: 1;
+}
+#vf-in-stage-shop .vf-iss-stock-cost {
+    position: absolute;
+    left: 1px;
+    bottom: 1px;
+    z-index: 2;
+    font-size: 8px;
+    line-height: 1;
+    color: var(--pk-c, var(--faction-accent, #f2c14e));
+    text-shadow: 1px 1px 0 #05060a;
+}
+#vf-in-stage-shop .vf-iss-stock-tag {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    z-index: 2;
+    font-size: 7px;
+    line-height: 1;
+    letter-spacing: 0.03em;
+    color: #d8ffe4;
+    text-shadow: 1px 1px 0 #05060a;
+    pointer-events: none;
+}
+#vf-in-stage-shop .vf-iss-stock-tag.is-temp {
+    color: #ffe08a;
+}
+#vf-in-stage-shop .vf-iss-cart-mark {
+    position: absolute;
+    left: 1px;
+    top: 1px;
+    z-index: 3;
+    font-size: 7px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: #b8ffe0;
+    text-shadow: 1px 1px 0 #05060a;
+    pointer-events: none;
+}
+#vf-in-stage-shop .hs-storage-cell.is-in-cart {
+    box-shadow: inset 0 0 0 2px #4fd8a8;
+}
+#vf-in-stage-shop .vf-iss-sub-title {
+    margin-top: 4px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    opacity: 0.78;
+}
+#vf-in-stage-shop .vf-iss-stock .vf-iss-sub-title:first-child {
+    margin-top: 0;
+}
+#vf-in-stage-shop .vf-iss-perk-grid .vf-iss-stock-cell.is-perk {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #ffe08a 35%, transparent);
+}
+#vf-in-stage-shop .vf-iss-parts-grid .vf-iss-stock-cell.is-part {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, #7ec8ff 35%, transparent);
+}
+/* All shop bags share one --cs — never zoom/scale a single side. */
+#vf-in-stage-shop .vf-iss-stock-grid,
+#vf-in-stage-shop .vf-iss-inv-grid,
+#vf-in-stage-shop .vf-iss-station-grid,
+#vf-in-stage-shop .vf-iss-queued-grid,
+#vf-in-stage-shop .vf-iss-ship-inv .hs-storage-grid,
+#vf-in-stage-shop .vf-iss-station-inv .hs-storage-grid {
+    flex: 0 0 auto;
+    zoom: 1 !important;
+    transform: none !important;
+}
+#vf-in-stage-shop .vf-iss-ship-inv,
+#vf-in-stage-shop .vf-iss-station-inv {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    overflow: auto;
+    max-width: 100%;
+    max-height: calc(40px * 4 + 2px * 3 + 6px);
+}
+#vf-in-stage-shop .hs-storage-cell.is-queued {
+    box-shadow: inset 0 0 0 2px #4fd8e8;
+}
+#vf-in-stage-shop .hs-storage-cell.is-for-sale {
+    box-shadow: inset 0 0 0 2px #e85a4f;
+    outline: 1px solid color-mix(in srgb, #e85a4f 70%, transparent);
+}
+#vf-in-stage-shop .hs-storage-cell.is-for-sale::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, #e85a4f 22%, transparent);
+    pointer-events: none;
+    z-index: 2;
+}
+#vf-in-stage-shop .vf-iss-sell-mark {
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+    z-index: 3;
+    font-size: 8px;
+    line-height: 1.1;
+    letter-spacing: 0.03em;
+    text-align: center;
+    color: #ffe8e4;
+    text-shadow: 1px 1px 0 #05060a;
+    pointer-events: none;
+}
+#vf-in-stage-shop .vf-iss-hint {
+    opacity: 0.55;
+    font-size: 10px;
+}
+#vf-in-stage-shop .vf-iss-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+}
+#vf-in-stage-shop .vf-iss-complete {
+    padding: 10px 18px;
+    font: inherit;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    color: #c8d0dc;
+    background: color-mix(in srgb, var(--iss-edge, #05060a) 75%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 45%, #3a4a64);
+}
+#vf-in-stage-shop .vf-iss-complete:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+#vf-in-stage-shop .vf-iss-complete.is-ready,
+#vf-in-stage-shop .vf-iss-complete:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled) {
+    color: #fff;
+    border-color: #e85a4f;
+    box-shadow: 0 0 0 2px #e85a4f;
+    outline: none;
+}
+#vf-in-stage-shop .hs-storage-grid {
+    border-color: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 55%, #05060a);
+    background-color: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 42%, #05060a);
+    --hs-line: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 42%, #05060a);
+    /* Diablo stash: deeper empty wells. */
+    box-shadow: inset 0 0 0 1px #05060a;
+}
+#vf-in-stage-shop .hs-storage-cell-empty {
+    background:
+        linear-gradient(145deg, color-mix(in srgb, var(--iss-accent) 8%, #0a0c12) 0%, #05060a 55%) !important;
+}
+#vf-in-stage-shop .vf-iss-empty-bag {
+    position: relative;
+}
+@media (max-width: 900px) {
+    #vf-in-stage-shop .vf-iss-panel { height: auto; max-height: calc(100vh - 24px); }
+    #vf-in-stage-shop .vf-iss-body {
+        flex-wrap: wrap;
+    }
+    #vf-in-stage-shop .vf-iss-detail {
+        flex: 1 1 100%;
+        max-width: none;
+    }
+}
+
+/* Enemy card vitals: vertical HULL fill must win over older horizontal enemy-bar rules. */
+html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar.is-hull {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 22px;
+    --vital-color: #e2b45a;
+}
+html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill {
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    border: 2px solid color-mix(in srgb, #e2b45a 85%, #05060a) !important;
+    background: #120e08 !important;
+    overflow: hidden !important;
+    box-shadow: inset 0 0 0 1px #05060a;
+}
+html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill::before {
+    content: '' !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: var(--health-width, 100%) !important;
+    background-color: #e2b45a !important;
+    background-image: repeating-linear-gradient(to top, transparent 0 2px, rgba(0, 0, 0, 0.28) 2px 4px) !important;
+    transition: height 0.12s steps(8, end) !important;
+    opacity: 1 !important;
+}
+html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-hp-text {
+    display: none !important;
+}
+html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-hull {
+    color: #e2b45a;
+}
+html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-shield {
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    color: var(--vital-shield, #6ec8e8);
+    max-width: calc(100% - 36px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Victory panel: stats / loot / buttons stretch across the full width. */
+html body .victory-screen .victory-content {
+    width: min(96%, 1180px) !important;
+    max-height: calc(100% - 12px) !important;
+    height: auto !important;
+    min-height: min(88%, calc(100% - 12px));
+    justify-content: space-between !important;
+    gap: 14px !important;
+    padding-left: 28px !important;
+    padding-right: 28px !important;
+}
+html body .victory-screen .victory-stats {
+    display: flex !important;
+    width: 100% !important;
+    box-sizing: border-box;
+    justify-content: stretch !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    margin: 0 !important;
+    padding: 12px 10px !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+}
+html body .victory-screen .victory-stats .stat-item {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+    gap: 12px !important;
+    padding: 10px 14px !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent);
+}
+html body .victory-screen .victory-stats .stat-icon {
+    width: 44px !important;
+    height: 44px !important;
+    flex: none;
+}
+html body .victory-screen .victory-stats .stat-icon img,
+html body .victory-screen .victory-stats .stat-icon canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+html body .victory-screen .victory-stats .stat-value {
+    font-size: calc(var(--font-h2) * 2.05) !important;
+    line-height: 1 !important;
+    letter-spacing: 0.04em;
+}
+html body .victory-screen .victory-body {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+    justify-content: flex-end !important;
+    gap: 12px !important;
+}
+html body .victory-screen .victory-loot {
+    width: 100% !important;
+    box-sizing: border-box;
+    min-height: 0 !important;
+    padding: 12px 10px !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+}
+html body .victory-screen .victory-loot-list {
+    display: flex !important;
+    width: 100% !important;
+    justify-content: stretch !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+    flex-wrap: nowrap !important;
+}
+html body .victory-screen .victory-loot-row {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 10px 12px !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, transparent) !important;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent) !important;
+}
+html body .victory-screen .victory-loot-amount {
+    font-size: 36px !important;
+}
+html body .victory-screen .victory-buttons {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: stretch !important;
+    gap: 12px !important;
+}
+html body .victory-screen .victory-button {
+    flex: 1 1 0 !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    width: auto !important;
+    justify-content: center;
+}

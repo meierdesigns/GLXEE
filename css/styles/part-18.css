@@ -290,27 +290,14 @@
     pointer-events: auto;
 }
 
-/* Full-screen menu surfaces: same GUI zoom, sized to the bezel screen opening.
-   top/left ÷ zoom (CSS zoom quirk); width/height ÷ zoom so used size = glass. */
+/* Full-screen menu surfaces: shared .vf-glass recipe (part-19) — same opening
+   geometry as station shell and fight. Markup also carries class vf-glass. */
 .start-screen,
 .start-screen-overlay,
 .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
 .player-selection-overlay {
-    --_z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    zoom: 1;
-    transform: scale(var(--_z));            /* scale, not CSS zoom: DevTools and getBoundingClientRect then agree with what is drawn */
-    transform-origin: 0 0;
-    position: fixed;
-    left: var(--fr-open-side);
-    top: var(--fr-open-top);
-    right: auto;
-    bottom: auto;
-    width: calc(var(--fr-open-w) / var(--_z));
-    height: calc(var(--fr-open-h) / var(--_z));
-    max-width: none;
-    max-height: none;
-    box-sizing: border-box;
-    overflow: hidden;
+    /* Geometry from .vf-glass; keep a local --_z alias for any child rules. */
+    --_z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
 }
 
 .enemy-size-row { grid-template-columns: 64px 1fr; grid-template-areas: "label label" "num range"; }
@@ -908,7 +895,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active.hol
 }
 
 /* Station overlay: full stage for BG/parallax/::after. GUI scale lives on
-   .vf-browser-shell (part-15), not here — keeps one transform host. */
+   .vf-glass / .vf-browser-shell (part-19), not here. */
 .home-station-overlay {
     --u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bezel: calc(38 * var(--u));
@@ -921,38 +908,18 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active.hol
     transform: none !important;
     transition: none !important;
     box-shadow: none;
-    overflow: hidden !important;
+    /* Overlay spans the stage for BG/parallax; glass host clips the GUI. */
+    overflow: visible !important;
 }
 .home-station-overlay .home-station-content {
     --hs-pad-y: 0px;
 }
-.home-station-overlay::after,
-.vf-bezel::after {
-    position: fixed !important;
-    inset: var(--hs-frame-gap) !important;
-    font-size: calc(11 * var(--u));
-    letter-spacing: 0.3em;
-    clip-path: polygon(
-        calc(16 * var(--u)) 0, calc(100% - 16 * var(--u)) 0, calc(100% - 16 * var(--u)) calc(8 * var(--u)), calc(100% - 8 * var(--u)) calc(8 * var(--u)), calc(100% - 8 * var(--u)) calc(16 * var(--u)), 100% calc(16 * var(--u)),
-        100% calc(100% - 16 * var(--u)), calc(100% - 8 * var(--u)) calc(100% - 16 * var(--u)), calc(100% - 8 * var(--u)) calc(100% - 8 * var(--u)), calc(100% - 16 * var(--u)) calc(100% - 8 * var(--u)), calc(100% - 16 * var(--u)) 100%,
-        calc(16 * var(--u)) 100%, calc(16 * var(--u)) calc(100% - 8 * var(--u)), calc(8 * var(--u)) calc(100% - 8 * var(--u)), calc(8 * var(--u)) calc(100% - 16 * var(--u)), 0 calc(100% - 16 * var(--u)),
-        0 calc(16 * var(--u)), calc(8 * var(--u)) calc(16 * var(--u)), calc(8 * var(--u)) calc(8 * var(--u)), calc(16 * var(--u)) calc(8 * var(--u)));
-    background:
-        linear-gradient(var(--retro-ink) 0 0) calc(20 * var(--u)) calc(20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
-        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20 * var(--u)) calc(20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
-        linear-gradient(var(--retro-ink) 0 0) calc(20 * var(--u)) calc(100% - 20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
-        linear-gradient(var(--retro-ink) 0 0) calc(100% - 20 * var(--u)) calc(100% - 20 * var(--u)) / calc(6 * var(--u)) calc(6 * var(--u)) no-repeat,
-        linear-gradient(var(--retro-ink) 0 0) calc(100% - 48 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
-        linear-gradient(#3dff6a 0 0) calc(100% - 62 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
-        linear-gradient(var(--hull-dark) 0 0) calc(100% - 76 * var(--u)) calc(12 * var(--u)) / calc(8 * var(--u)) calc(8 * var(--u)) no-repeat,
-        repeating-linear-gradient(90deg, var(--hull-dark) 0 calc(4 * var(--u)), transparent calc(4 * var(--u)) calc(8 * var(--u))) calc(40 * var(--u)) calc(12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
-        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
-        repeating-linear-gradient(90deg, var(--retro-ink) 0 calc(8 * var(--u)), var(--hull-dark) calc(8 * var(--u)) calc(16 * var(--u))) calc(100% - 40 * var(--u)) calc(100% - 12 * var(--u)) / calc(96 * var(--u)) calc(8 * var(--u)) no-repeat,
-        linear-gradient(var(--hull-lit) 0 0) 0 0 / 100% calc(4 * var(--u)) no-repeat,
-        linear-gradient(var(--hull-lit) 0 0) 0 0 / calc(4 * var(--u)) 100% no-repeat,
-        linear-gradient(var(--hull-dark) 0 0) 0 100% / 100% calc(4 * var(--u)) no-repeat,
-        linear-gradient(var(--hull-dark) 0 0) 100% 0 / calc(4 * var(--u)) 100% no-repeat,
-        var(--hull);
+/* Legacy station hull frame retired — #vf-bezel owns the rim. Keep ::after
+   inert so it cannot paint over / under the glass edge. */
+.home-station-overlay::after {
+    content: none !important;
+    display: none !important;
+    background: none !important;
 }
 .hs-frame-ui-scale {
     position: fixed !important;
@@ -1449,13 +1416,18 @@ html body .hs-body .hs-mission { padding-block: 10px; }
    resource chambers. Column gap is a dedicated resize lane so handles never cover content. */
 .hs-station-grid {
     --hs-col-gap: 16px;
+    --hs-cover-h: 168px;
     width: 100%;
     box-sizing: border-box;
     grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
     grid-template-areas:
         "cover cover"
         "stack chambers";
-    grid-template-rows: minmax(110px, auto) minmax(0, 1fr);
+    /* Fixed banner + content row. align-content:start stops leftover free-space
+       stretching the cover (part-08 used align-content:stretch + 0.8fr). */
+    grid-template-rows: var(--hs-cover-h) minmax(0, 1fr);
+    align-content: start;
+    align-items: start;
     column-gap: var(--hs-col-gap);
     row-gap: 8px;
     height: 100%;
@@ -1463,6 +1435,11 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 }
 .hs-body > .hs-station-grid,
 .hs-body > .hs-section .hs-station-grid { flex: 1 1 auto; }
+.hs-station-grid > .hs-station-cover {
+    height: var(--hs-cover-h);
+    min-height: 0;
+    max-height: var(--hs-cover-h);
+}
 .hs-station-grid > .hs-panel-stack {
     grid-area: stack;
     display: flex;
@@ -1470,10 +1447,20 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     gap: 10px;
     min-width: 0;
     min-height: 0;
-    height: 100%;
+    /* Hug content; do not stretch empty chrome under the storage/ship rows. */
+    height: auto;
+    max-height: 100%;
+    align-self: start;
     overflow-y: auto;
     overflow-x: auto;
     scrollbar-width: thin;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
 }
 .hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-row {
     flex: 0 0 auto;
@@ -1493,6 +1480,15 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 }
 .hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row {
     overflow-x: auto;
+    /* Same bordered "window" look as a ship card (.hs-ship-card) around SHIP STORAGE,
+       so STATION STORAGE reads as its own framed panel instead of floating loose. */
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 4%, transparent);
+    padding: 10px;
+    box-sizing: border-box;
+    /* Never grow the framed bay to match a taller sibling column. */
+    align-self: start;
+    width: 100%;
 }
 .hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row .hs-storage-grid,
 .hs-station-grid > .hs-panel-stack > .hs-station-section .hs-ship-storage-row .hs-storage-grid {
@@ -1502,10 +1498,42 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     grid-area: chambers;
     min-width: 0;
     min-height: 0;
+    /* Fill the content row so the 2x2 silos scale with the panel, not a tiny graphic. */
     height: 100%;
-    overflow-y: auto;
-    overflow-x: auto;
-    scrollbar-width: thin;
+    max-height: 100%;
+    align-self: stretch;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.hs-station-grid .hs-panel-chambers > .hs-panel-title {
+    flex: 0 0 auto;
+}
+.hs-station-grid .hs-panel-chambers > .hs-row {
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    flex-direction: column;
+    min-height: 0;
+    margin-bottom: 0;
+    height: auto;
+    align-items: stretch;
+}
+.hs-station-grid .hs-panel-chambers .hs-res-chambers {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    align-content: stretch;
+}
+.hs-station-grid .hs-panel-chambers .hs-res-subcard {
+    min-height: 0;
+    height: 100%;
+}
+.hs-station-grid .hs-panel-chambers .hs-res-chamber-tube {
+    height: 100%;
+    width: auto;
+    max-width: 100%;
+    min-height: 0;
+    aspect-ratio: 48 / 140;
 }
 .hs-station-grid > .hs-panel-stack > .hs-station-section + .hs-station-section {
     margin-top: 4px;
@@ -1514,12 +1542,12 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 /* OWNED SHIPS / STATION STORAGE: collapsible sections + stacked/side-by-side layout switch. */
 .hs-panel-ships.hs-panel-storage {
     position: relative;
-    padding-top: 44px;
+    padding-bottom: 44px;
     overflow: visible;
 }
 .hs-panel-layout-toggle {
     position: absolute;
-    top: 8px;
+    bottom: 8px;
     right: 10px;
     z-index: 5;
     box-sizing: border-box;
@@ -1576,7 +1604,9 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 }
 .hs-panel-stack.is-side-by-side {
     flex-direction: row;
-    align-items: flex-start;
+    /* Stretch sections so the rule runs full height; rows stay content-sized
+       (flex:0 above) — stretching .hs-row was inflating the storage frame. */
+    align-items: stretch;
 }
 .hs-panel-stack.is-side-by-side > .hs-station-section {
     flex: 1 1 0;
@@ -1586,8 +1616,12 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     gap: 10px;
     overflow: auto;
 }
+.hs-panel-stack.is-side-by-side > .hs-station-section > .hs-row {
+    flex: 0 0 auto;
+}
 .hs-panel-stack.is-side-by-side > .hs-station-section + .hs-station-section {
     /* Light vertical rule between OWNED SHIPS and STATION STORAGE. */
+    margin-top: 0;
     border-left: 0;
     padding-left: 14px;
     margin-left: 4px;

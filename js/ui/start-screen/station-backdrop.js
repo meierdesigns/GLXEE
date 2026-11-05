@@ -233,7 +233,6 @@ class StartStationBackdrop {
         });
         this.devPanel.querySelector('#ssdCopy').addEventListener('click', () => {
             const text = 'Station backdrop dev values:\n' + JSON.stringify(this.adjust, null, 2) + '\nres: ' + this.devResMult;
-            console.log(text);
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
         });
     }

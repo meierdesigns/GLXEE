@@ -234,7 +234,10 @@ extendClass(PickupManager, {
         if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
             graphicsManager.createHitEffect(p.x, p.y, 6, def.color);
         }
-        if (typeof soundManager !== 'undefined' && soundManager.playReflect) soundManager.playReflect();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.playPowerUp) soundManager.playPowerUp();
+            else if (soundManager.playReflect) soundManager.playReflect();
+        }
         return true;
     },
 

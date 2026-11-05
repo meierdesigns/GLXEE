@@ -196,31 +196,52 @@ const physicalItem = (() => {
     };
 })();
 
-// Inventory grid positions per ship: { 'kind:id': [col, row] } (1-based grid lines).
+// Bucket (plural, used by profile.storagePos / Ship Storage) for a bay-inventory cell's
+// data-part-kind (singular, used for ship-slot matching — "blueprint" is a synthetic kind,
+// never a real slot type, so a blueprint cell can never register as an equip match).
+physicalItem.BUCKET_OF_KIND = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy', blueprint: 'blueprints' };
+
+// Inventory grid positions per ship: { 'bucket:id': [col, row] } (1-based grid lines) — the
+// exact same profile.storagePos map (scope 'ship:<shipId>') that SHIP STORAGE on the station
+// tab reads/writes (render-parts-list.js renderShipStorage), not a separate one: dragging an
+// item here and seeing it elsewhere use one shared position, not two that can drift apart.
 physicalItem.invPositions = function (shipId) {
-    try { return (JSON.parse(localStorage.getItem('vf_hs_inv_pos') || '{}') || {})[shipId] || {}; } catch (e) { return {}; }
+    if (typeof profileManager === 'undefined' || !profileManager.getStoragePosMap) return {};
+    const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+    if (!profile) return {};
+    return profileManager.getStoragePosMap(profile, 'ship', shipId);
 };
 /** Grid target for an inventory item with its top-left at client (x, y): { grid, col, row, w, h, free, all, at } or null. */
 physicalItem.gridTarget = function (cell, x, y) {
-    const grid = cell && cell.closest('.hs-bay-inv .hs-pick-grid');
+    const grid = cell && cell.closest('.hs-bay-inv .hs-storage-grid');
     if (!grid) return null;
     const gr = grid.getBoundingClientRect();
     const k = gr.width / Math.max(1, grid.offsetWidth);
-    const step = (48 + 4) * k;
+    const cs = parseFloat(getComputedStyle(grid).getPropertyValue('--cs')) || 48;
+    const gap = parseFloat(getComputedStyle(grid).columnGap) || 2;
+    const step = (cs + gap) * k;
+    // Tile (1,1)'s own top-left, not the grid's outer border-box edge: the grid now also
+    // carries the shared .hs-storage-grid border (same card framing as ship/station storage),
+    // so content starts border-width (+ any padding) in from gr.left/top — origin must match
+    // that or every column/row comes out shifted by that offset, landing drops a slot off.
+    const gcs = getComputedStyle(grid);
+    const originX = gr.left + ((parseFloat(gcs.borderLeftWidth) || 0) + (parseFloat(gcs.paddingLeft) || 0)) * k;
+    const originY = gr.top + ((parseFloat(gcs.borderTopWidth) || 0) + (parseFloat(gcs.paddingTop) || 0)) * k;
     const cols = Number(grid.getAttribute('data-inv-cols')) || 8;
     const spanOf = (c, prop) => Number((c.style[prop].match(/span (\d+)/) || [0, 1])[1]);
     const w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
     // Over the grid at all (by the item's centre)?
     const cx = x + w * step / 2, cy = y + h * step / 2;
     if (cx < gr.left || cx > gr.right || cy < gr.top || cy > gr.bottom) return null;
-    const col = Math.max(1, Math.min(cols - w + 1, Math.round((x - gr.left) / step) + 1));
+    const col = Math.max(1, Math.min(cols - w + 1, Math.round((x - originX) / step) + 1));
     const rows = Number(grid.getAttribute('data-inv-rows')) || 99;
-    const row = Math.max(1, Math.min(rows - h + 1, Math.round((y - gr.top) / step) + 1));
+    const row = Math.max(1, Math.min(rows - h + 1, Math.round((y - originY) / step) + 1));
     // Every other item keeps its current tile; the target must be free.
-    const all = Array.from(grid.querySelectorAll('.hs-pick-cell'));
+    // (Empty placeholder cells just tile the unused grid area visually and don't occupy anything.)
+    const all = Array.from(grid.querySelectorAll('[data-part-id]'));
     const at = (c) => {
         const r = c.getBoundingClientRect();
-        return [Math.round((r.left - gr.left) / step) + 1, Math.round((r.top - gr.top) / step) + 1, spanOf(c, 'gridColumn'), spanOf(c, 'gridRow')];
+        return [Math.round((r.left - originX) / step) + 1, Math.round((r.top - originY) / step) + 1, spanOf(c, 'gridColumn'), spanOf(c, 'gridRow')];
     };
     const free = !all.some((c) => {
         if (c === cell) return false;
@@ -234,13 +255,29 @@ physicalItem.previewInGrid = function (cell, x, y) {
     const old = document.querySelector('.hs-inv-drop-preview');
     const t = x == null ? null : physicalItem.gridTarget(cell, x, y);
     if (!t) { if (old) old.remove(); return; }
-    const el = old && old.parentNode === t.grid ? old : document.createElement('div');
-    if (el !== old && old) old.remove();
-    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-blocked');
-    el.style.left = `${(t.col - 1) * 52}px`;
-    el.style.top = `${(t.row - 1) * 52}px`;
-    el.style.width = `${t.w * 52 - 4}px`;
-    el.style.height = `${t.h * 52 - 4}px`;
+    const isNew = !(old && old.parentNode === t.grid);
+    const el = isNew ? document.createElement('div') : old;
+    if (isNew && old) old.remove();
+    // Dropping on an occupied tile now swaps instead of being refused, so the preview reads
+    // "swap" rather than "blocked" there — never a dead-end red X for a drop that will work.
+    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-swap');
+    const gcs = getComputedStyle(t.grid);
+    const cs = parseFloat(gcs.getPropertyValue('--cs')) || 48;
+    const gap = parseFloat(gcs.columnGap) || 2;
+    const step = cs + gap;
+    // Absolute left/top are from the grid's padding edge; cells sit after padding — match that
+    // or the preview paints in the padding gutter while Inspect still shows the cell elsewhere.
+    const padL = parseFloat(gcs.paddingLeft) || 0;
+    const padT = parseFloat(gcs.paddingTop) || 0;
+    el.style.left = `${padL + (t.col - 1) * step}px`;
+    el.style.top = `${padT + (t.row - 1) * step}px`;
+    el.style.width = `${t.w * step - gap}px`;
+    el.style.height = `${t.h * step - gap}px`;
+    // The dragged item's own casing sitting in the hovered tile, not a highlighted box.
+    if (isNew) {
+        const body = cell && cell.querySelector && cell.querySelector('.hs-item-body');
+        if (body) el.appendChild(body.cloneNode(true));
+    }
     if (!el.parentNode) t.grid.appendChild(el);
 };
 /** Drop an inventory item with its top-left at client (x, y). Returns true when it landed in the grid. */
@@ -248,64 +285,53 @@ physicalItem.dropInGrid = function (ui, cell, x, y) {
     physicalItem.previewInGrid(null);
     const t = physicalItem.gridTarget(cell, x, y);
     if (!t) return false;
-    if (!t.free) return true; // over the grid but occupied: stay where it was
-    const key = (c) => c.getAttribute('data-part-kind') + ':' + c.getAttribute('data-part-id');
-    let store = {};
-    try { store = JSON.parse(localStorage.getItem('vf_hs_inv_pos') || '{}') || {}; } catch (e) { /* ignore */ }
+    if (typeof profileManager === 'undefined' || !profileManager.freezeStoragePositions) return false;
+    const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+    if (!profile) return false;
+    const key = (c) => {
+        const kind = c.getAttribute('data-part-kind');
+        return (physicalItem.BUCKET_OF_KIND[kind] || kind) + ':' + c.getAttribute('data-part-id');
+    };
+    const posByKey = {};
     // Pin every item to where it is now, so the others don't reflow around the moved one.
-    const ship = store[ui.hangarShipId] = {};
-    t.all.forEach((c) => { const [c0, r0] = t.at(c); ship[key(c)] = [c0, r0]; });
-    ship[key(cell)] = [t.col, t.row];
-    try { localStorage.setItem('vf_hs_inv_pos', JSON.stringify(store)); } catch (e) { /* ignore */ }
+    t.all.forEach((c) => { const [c0, r0] = t.at(c); posByKey[key(c)] = [c0, r0]; });
+    const [oldCol, oldRow] = t.at(cell);
+    // Whatever already sits on the dropped-on tile(s) swaps back into this item's old tile
+    // instead of just blocking the drop (free is false exactly when this list is non-empty).
+    t.all.filter((c) => {
+        if (c === cell) return false;
+        const [c0, r0, cw, ch] = t.at(c);
+        return t.col < c0 + cw && c0 < t.col + t.w && t.row < r0 + ch && r0 < t.row + t.h;
+    }).forEach((c) => { posByKey[key(c)] = [oldCol, oldRow]; });
+    posByKey[key(cell)] = [t.col, t.row];
+    profileManager.freezeStoragePositions(profile, 'ship', ui.hangarShipId, posByKey);
     ui.createUI();
     return true;
 };
 
-// Hangar bay: switch the centre ship view to the part inventory (same physical items as the slot picker).
+// Hangar bay: switch the centre ship view to the part inventory. Literally renders through
+// HomeStationUI.renderShipStorage (render-parts-list.js) — the exact same function SHIP
+// STORAGE on the station tab uses for this ship — instead of a second, independent item
+// set/position/grid-size pipeline, which kept drifting out of sync with it (wrong item count,
+// wrong grid size, positions landing in the wrong spot).
 physicalItem.bayInventoryHtml = function (ui) {
     const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
     if (!slm || !ui || !ui.hangarShipId) return '';
+    const profile = typeof profileManager !== 'undefined' && profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+    if (!profile) return '';
+    const shipId = ui.hangarShipId;
     const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d;
     const colors = { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') };
-    const inv = slm.getInventory(ui.hangarShipId) || {}, L = slm.getLoadout(ui.hangarShipId) || {};
-    const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
-    const cells = [];
-    let occupied = 0;
-    const pos = physicalItem.invPositions(ui.hangarShipId);
-    // Cells whose installed state changed since the last draw play an equip / unequip animation.
-    const prev = ui._bayInvPrev && ui._bayInvPrev.ship === ui.hangarShipId ? ui._bayInvPrev.set : null;
-    const now = {};
-    pools.forEach(([kind, key]) => {
-        const eq = {};
-        ((kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[key]) || []).forEach((id) => { if (id) eq[id] = true; });
-        (inv[key] || []).forEach((id) => {
-            now[kind + ':' + id] = !!eq[id];
-            const anim = prev && prev[kind + ':' + id] !== undefined && prev[kind + ':' + id] !== !!eq[id] ? (eq[id] ? ' is-anim-equip' : ' is-anim-unequip') : '';
-            const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
-            const span = [[1, 1], [1, 2], [2, 2]][lv];
-            const label = ui.hangarModuleLabel(id);
-            // Compact tip: no repeated name line, short hint.
-            const tipLines = String(ui.hangarModuleTip(kind, id)).split('\n').filter((l, n) => !(n === 0 && l.trim().toUpperCase() === String(label).trim().toUpperCase()));
-            const tip = (tipLines.join('\n') + '\nSIZE: ' + slm.partSizeLabel(kind, id) + '\nSTATUS: ' + (eq[id] ? 'INSTALLED' : 'IN INVENTORY') + '\nDRAG OR RIGHT-CLICK TO TOGGLE').replace(/"/g, '&quot;');
-            const body = physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, colors[kind], '');
-            occupied += span[0] * span[1];
-            cells.push(`<span class="hs-pick-cell${eq[id] ? ' is-equipped' : ''}${anim}" data-part-kind="${kind}" data-part-id="${id}" style="grid-column: ${pos[kind + ':' + id] ? pos[kind + ':' + id][0] + ' / ' : ''}span ${span[0]}; grid-row: ${pos[kind + ':' + id] ? pos[kind + ':' + id][1] + ' / ' : ''}span ${span[1]}; --pk-c:${colors[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${ui.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ui.moduleIconHtml(kind, id, 32, 'hs-pixel', false)}</span><span class="hs-pick-size">${slm.partSizeLabel(kind, id)}</span></span>`);
-        });
-    });
-    ui._bayInvPrev = { ship: ui.hangarShipId, set: now };
-    const filter = ui._bayInvFilter || 'all', cs = 48;
-    // Grid size: the ship's inventory (start profile + frame level).
-    const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(ui.hangarShipId) : { cols: 4, rows: 2 };
-    // Fill the rest of the grid with empty placeholder cells so unused slots still read as a grid.
-    const freeCells = Math.max(0, invGrid.cols * invGrid.rows - occupied);
-    for (let i = 0; i < freeCells; i++) cells.push('<span class="hs-pick-cell hs-pick-cell-empty"></span>');
+    const filter = ui._bayInvFilter || 'all';
+    const cs = (ui.STORAGE_CELL_PX | 0) || 56;
+    const gridHtml = ui.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
-    const ico = (key, col) => (ir ? String(ir.imgHtml(key, 24, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
+    // Native 16×16 sprite grid — size ≥24 triggers Scale2x and looks mushy in these tiny filter buttons.
+    const ico = (key, col) => (ir ? String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]
         .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
     return `<div class="hs-slot-picker hs-bay-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div>` +
-        `</div>` +
-        `<div class="hs-pick-grid" data-inv-cols="${invGrid.cols}" data-inv-rows="${invGrid.rows}" style="grid-template-columns: repeat(${invGrid.cols}, var(--cs)); grid-template-rows: repeat(${invGrid.rows}, var(--cs)); width: calc(${invGrid.cols} * var(--cs) + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * var(--cs) + ${invGrid.rows - 1} * 4px); flex: 0 0 auto; align-self: flex-start">${cells.join('') || '<em>NO PARTS OWNED</em>'}</div></div>`;
+        `</div>${gridHtml}</div>`;
 };
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-bay-inv]');
@@ -317,32 +343,64 @@ document.addEventListener('click', (e) => {
     homeStationUI._hangarFit = null; homeStationUI._hangarBayZoom = 1; homeStationUI._hangarZoomTarget = 1;
     homeStationUI.createUI();
 }, true);
+// The grid itself is HomeStationUI.renderShipStorage's own markup (render-parts-list.js —
+// the same SHIP STORAGE grid shown on the station tab), which marks its buttons
+// draggable="true" for the *station's* pointer-suppressed-native-drag convention
+// (bindStorageDragAndDrop). That bind call skips anything inside .hs-bay-inv (the hangar
+// drag below needs those cells instead), so nothing else turns off the browser's native
+// HTML5 drag for them — do that here, or a native dragstart fights the pointer-based one.
+document.addEventListener('dragstart', (e) => {
+    if (e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]')) e.preventDefault();
+}, true);
 // Drag an inventory part onto a slot (reuses the hangar part drag; a plain click does nothing).
 document.addEventListener('pointerdown', (e) => {
-    const cell = e.target.closest && e.target.closest('.hs-bay-inv .hs-pick-cell');
-    if (!cell || e.button !== 0 || typeof homeStationUI === 'undefined') return;
+    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    // Slot-picker modal (.hs-pick-inv) owns its own drag/click → install into THAT slot.
+    if (!cell || cell.closest('.hs-pick-inv') || e.button !== 0 || typeof homeStationUI === 'undefined') return;
     e.preventDefault();
     const sx = e.clientX, sy = e.clientY;
     const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
     const mv = (m) => { if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return; off(); homeStationUI.startHangarPartDrag(cell, e); };
     window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
 }, true);
-// Right-click: install into a free slot that fits, else swap out an installed part of the same type.
-document.addEventListener('contextmenu', (e) => {
-    const cell = e.target.closest && e.target.closest('.hs-bay-inv .hs-pick-cell');
-    if (!cell || typeof homeStationUI === 'undefined') return;
-    e.preventDefault();
+// Toggle a bay-inventory part's slot state: installed → unequip, not installed → install into
+// a free slot that fits (else swap into the first slot that fits). Shared by a plain click
+// (the inventory's main gesture: tap a part to slot/unslot it) and right-click (same toggle,
+// kept as a muscle-memory alias for players used to the storage grid's right-click equip).
+function toggleHangarInventorySlot(cell) {
+    if (typeof homeStationUI === 'undefined') return;
     const ui = homeStationUI, slm = shipLoadoutManager;
     const kind = cell.getAttribute('data-part-kind'), id = cell.getAttribute('data-part-id');
     const idx = [];
     ui.overlay.querySelectorAll(`.hs-hangar-slot[data-slot-kind="${kind}"]`).forEach((el) => { const i = Number(el.getAttribute('data-slot-index') || 0); if (idx.indexOf(i) === -1) idx.push(i); });
     idx.sort((a, b) => a - b);
     const at = idx.find((i) => ui.hangarSlotModuleId(kind, i) === id);
-    if (at != null) { ui.applyHangarSlotChoice(kind, at, '', null); return; } // installed: right-click toggles it off
+    if (at != null) { ui.applyHangarSlotChoice(kind, at, '', null); return; } // installed: toggles it off
     const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(ui.hangarShipId, kind, id, i).ok;
     const target = idx.find((i) => !ui.hangarSlotModuleId(kind, i) && fits(i)) ?? idx.find((i) => fits(i));
     if (target == null) { ui.playButtonResult(cell, false, idx.length ? 'NO SLOT BIG ENOUGH' : 'NO ' + kind.toUpperCase() + ' SLOT'); return; }
     ui.applyHangarSlotChoice(kind, target, id, null);
+}
+document.addEventListener('contextmenu', (e) => {
+    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    if (!cell || cell.closest('.hs-pick-inv')) return;
+    e.preventDefault();
+    toggleHangarInventorySlot(cell);
+}, true);
+// Plain click: same toggle as right-click above. Needs its own flag since the pointerdown
+// handler right above already preventDefault()s and arms a drag-or-not watch — a click fired
+// without having dragged (the pointerup below the threshold) is this gesture, not a drag.
+// button !== 0 guard: a right-click on a <button> still fires a trailing 'click' (button 2) as
+// the browser's own activation behavior, after the 'contextmenu' listener above already ran the
+// toggle once — without this guard that trailing click ran the same toggle a second time,
+// immediately undoing it (equip-then-unequip), which is what made a part vanish on right-click.
+document.addEventListener('click', (e) => {
+    if (e.button !== 0) return;
+    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    if (!cell || cell.closest('.hs-pick-inv')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleHangarInventorySlot(cell);
 }, true);
 
 // Inventory filter + zoom: applied in place (no re-render), remembered on the UI.
@@ -351,9 +409,14 @@ document.addEventListener('click', (e) => {
     if (!b || typeof homeStationUI === 'undefined') return;
     e.preventDefault();
     const panel = b.closest('.hs-bay-inv');
-    homeStationUI._bayInvFilter = b.getAttribute('data-inv-filter');
-    try { localStorage.setItem('vf_hs_bay_inv_filter', homeStationUI._bayInvFilter); } catch (err) { /* ignore */ }
-    panel.setAttribute('data-filter', homeStationUI._bayInvFilter);
+    if (!panel) return;
+    const next = b.getAttribute('data-inv-filter');
+    // Slot-picker modal filter is local — don't overwrite the bay sidebar's remembered filter.
+    if (!panel.classList.contains('hs-pick-inv')) {
+        homeStationUI._bayInvFilter = next;
+        try { localStorage.setItem('vf_hs_bay_inv_filter', next); } catch (err) { /* ignore */ }
+    }
+    panel.setAttribute('data-filter', next);
     panel.querySelectorAll('[data-inv-filter]').forEach((x) => x.classList.toggle('is-active', x === b));
 }, true);
 

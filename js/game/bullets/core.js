@@ -229,7 +229,9 @@ class BulletManager {
             // Get canvas width from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
             if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
-                this.bullets.splice(i, 1);
+                const last = this.bullets.length - 1;
+                if (i !== last) this.bullets[i] = this.bullets[last];
+                this.bullets.pop();
             }
         }
 
@@ -261,7 +263,9 @@ class BulletManager {
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
             const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
             if (bullet.y > canvasHeight || bullet.x < 0 || bullet.x > canvasWidth) {
-                this.enemyBullets.splice(i, 1);
+                const last = this.enemyBullets.length - 1;
+                if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
+                this.enemyBullets.pop();
             }
         }
     }

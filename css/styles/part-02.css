@@ -1075,14 +1075,18 @@ html[data-faction="machine"] .mission-start-frame .ms-br,
     min-width: 0;
     height: 100%;
     padding: 0;
-    gap: 3px;
+    gap: 4px;
 }
 
 .player-vitals-side .health-stat-icon,
 .player-vitals-side .health-ship-icon {
     margin-right: 0;
-    margin-bottom: 4px;
-    /* Native 16×16 canvas → 3× nearest-neighbor (no Scale2x mush). */
+    margin-bottom: 2px;
+    flex: 0 0 auto;
+    display: block;
+    align-self: center;
+    object-fit: contain;
+    /* All three vitals canvases are native 48×48; keep one shared display size. */
     width: calc(48px * var(--hle-icon-scale, 1));
     height: calc(48px * var(--hle-icon-scale, 1));
     image-rendering: pixelated !important;
@@ -2018,27 +2022,119 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
     max-height: clamp(180px, calc(40 * var(--sv-h)), 320px);
 }
 .enemy-vitals-side .enemy-card-v .enemy-portrait {
+    --shield-pct: 100%;
+    --shield-color: var(--vital-shield, #4fd8ff);
     grid-area: portrait;
     position: relative;
     width: 100%;
     aspect-ratio: 1 / 1;
     flex: 0 0 auto;
-    overflow: hidden;
-    background: #05060a;
-    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    overflow: visible;
     box-sizing: border-box;
     image-rendering: pixelated;
+    background: #05060a;
+    /* Closed outer shell so the shield always fully wraps the image. */
+    padding: 6px;
+    border: 2px solid #05060a;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--shield-color) 35%, #05060a),
+        0 0 12px color-mix(in srgb, var(--shield-color) calc(var(--shield-pct) * 0.55), transparent);
 }
-.enemy-vitals-side .enemy-card-v .enemy-portrait > canvas,
-.enemy-vitals-side .enemy-card-v .enemy-portrait > svg,
-.enemy-vitals-side .enemy-card-v .enemy-portrait > img {
+.enemy-vitals-side .enemy-card-v .enemy-portrait-face {
+    position: relative;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #05060a;
+    border: 1px solid color-mix(in srgb, var(--shield-color) 28%, #05060a);
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait-face > canvas,
+.enemy-vitals-side .enemy-card-v .enemy-portrait-face > svg,
+.enemy-vitals-side .enemy-card-v .enemy-portrait-face > img {
     display: block;
     width: 100%;
     height: 100%;
     image-rendering: pixelated;
 }
+/* Full closed shield ring (SVG): dark track + bright stroke length = remaining %. */
+.enemy-vitals-side .enemy-card-v .enemy-shield-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: none;
+    overflow: visible;
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--shield-color) calc(var(--shield-pct) * 0.85), transparent));
+}
+.enemy-vitals-side .enemy-card-v .enemy-shield-track,
+.enemy-vitals-side .enemy-card-v .enemy-shield-fill {
+    fill: none;
+    stroke-linejoin: miter;
+    stroke-linecap: butt;
+}
+.enemy-vitals-side .enemy-card-v .enemy-shield-track {
+    stroke: color-mix(in srgb, var(--shield-color) 22%, #081018);
+    stroke-width: 9;
+}
+.enemy-vitals-side .enemy-card-v .enemy-shield-fill {
+    stroke: var(--shield-color);
+    stroke-width: 9;
+    stroke-dasharray: 100 100;
+    transition: stroke-dasharray 0.15s steps(5, end);
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-shield-charging .enemy-shield-ring {
+    animation: enemy-shield-frame-charge 0.6s steps(2) infinite;
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-shield-down {
+    --shield-color: #ff4f4f;
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-shield-down .enemy-shield-fill {
+    stroke: #ff4f4f;
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-no-shield {
+    padding: 0;
+    border: var(--ui-border-width-thin, 2px) solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    box-shadow: none;
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-no-shield .enemy-shield-ring,
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-no-shield .enemy-vital-tag.is-shield {
+    display: none;
+}
+.enemy-vitals-side .enemy-card-v .enemy-portrait.is-no-shield .enemy-portrait-face {
+    border-color: transparent;
+}
+@keyframes enemy-shield-frame-charge {
+    50% { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--shield-color) 95%, #fff)); }
+}
+.enemy-vitals-side .enemy-card-v .enemy-vital-tag {
+    position: absolute;
+    z-index: 3;
+    pointer-events: none;
+    font-size: 8px;
+    letter-spacing: 1px;
+    line-height: 1;
+    padding: 2px 4px;
+    background: #05060a;
+    border: 1px solid currentColor;
+    text-shadow: none;
+}
+.enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-shield {
+    left: 4px;
+    bottom: 4px;
+    color: var(--shield-color, #4fd8ff);
+}
+.enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-hull {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translate(-50%, -110%);
+    color: var(--vital-hull, #c4a574);
+    white-space: nowrap;
+}
 /* Pilot reactions (ui-manager updateEnemyFace): red flash + shake on a hit, drained and dimmed when dead. */
-.enemy-vitals-side .enemy-card-v .enemy-portrait::after {
+.enemy-vitals-side .enemy-card-v .enemy-portrait-face::after {
     content: '';
     position: absolute;
     inset: 0;
@@ -2049,15 +2145,21 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
 }
 .enemy-vitals-side .enemy-card-v.face-hit .enemy-portrait {
     animation: enemy-face-shake 0.18s steps(2) 3;
+}
+.enemy-vitals-side .enemy-card-v.face-hit .enemy-portrait.is-no-shield {
     border-color: #ff3a2a;
 }
-.enemy-vitals-side .enemy-card-v.face-hit .enemy-portrait::after {
+.enemy-vitals-side .enemy-card-v.face-hit .enemy-portrait-face::after {
     animation: enemy-face-flash 0.5s steps(4) forwards;
 }
 .enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait {
+    --shield-color: #3a3a42;
+    box-shadow: none;
+}
+.enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait.is-no-shield {
     border-color: #3a3a42;
 }
-.enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait > canvas {
+.enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait-face {
     filter: grayscale(0.8) brightness(0.6) contrast(1.2);
 }
 .enemy-vitals-side .enemy-card-v.face-dead .enemy-name {
@@ -2075,11 +2177,12 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
 }
 .enemy-vitals-side .enemy-card-v .enemy-crest {
     position: absolute;
-    right: 2px;
-    bottom: 2px;
+    right: 8px;
+    bottom: 8px;
     width: 24px;
     height: 24px;
     line-height: 0;
+    z-index: 3;
     /* dark outline first, then the glow (same treatment as other glowing icons) */
     filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a);
 }
@@ -2096,57 +2199,76 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbars {
     grid-area: bars;
     display: flex;
     flex-direction: row;
+    align-items: stretch;
     gap: 3px;
     flex: 0 0 auto;
+    padding-top: 14px;
 }
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar { display: flex; width: 12px; min-height: 0; }
-.enemy-vitals-side .enemy-card-v .enemy-vbar.is-hull { --vital-color: var(--vital-hull); }
-.enemy-vitals-side .enemy-card-v .enemy-vbar.is-shield { --vital-color: var(--vital-shield, #4fd8ff); }
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill,
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill {
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar {
+    position: relative;
+    display: flex;
+    width: 18px;
+    min-height: 0;
+}
+.enemy-vitals-side .enemy-card-v .enemy-vbar.is-hull { --vital-color: var(--vital-hull, #c4a574); }
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill {
     position: relative;
     flex: 1 1 auto;
     width: 100%;
     height: 100%;
     min-height: 0;
-    border: max(2px, var(--ui-border-width-thin, 2px)) solid color-mix(in srgb, var(--vital-color) 70%, transparent);
-    background: color-mix(in srgb, var(--vital-color) 12%, #05060a);
+    border: max(2px, var(--ui-border-width-thin, 2px)) solid color-mix(in srgb, var(--vital-color) 80%, transparent);
+    background: color-mix(in srgb, var(--vital-color) 14%, #05060a);
     box-sizing: border-box;
     image-rendering: pixelated;
+    box-shadow: inset 0 0 0 1px #05060a;
 }
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill::before,
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill::before {
+body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill::before {
     content: '';
     position: absolute;
     top: auto;
     bottom: 0;
     left: 0;
     width: 100%;
+    height: var(--health-width, 100%);
     background-color: var(--vital-color);
     background-image: repeating-linear-gradient(to top, transparent 0 2px, rgba(0, 0, 0, 0.35) 2px 4px);
     opacity: 1;
+    transition: height 0.12s steps(8, end);
 }
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill::before { height: var(--health-width, 100%); transition: height 0.12s steps(8, end); }
-body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill::before { height: var(--shield-width, 100%); transition: height 0.25s steps(8, end); }
-.enemy-vitals-side .enemy-card-v .enemy-shield-fill.is-none { opacity: 0.35; }
-.enemy-vitals-side .enemy-card-v .enemy-shield-fill.is-down { border-color: #ff4f4f; }
-/* The bars speak for themselves (values are in the tooltip). */
-.enemy-vitals-side .enemy-card-v .enemy-hp-text,
-.enemy-vitals-side .enemy-card-v .enemy-shield-text { display: none; }
+.enemy-vitals-side .enemy-card-v .enemy-hp-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    font-size: 8px;
+    letter-spacing: 0.5px;
+    color: #05060a;
+    text-shadow: 0 0 2px color-mix(in srgb, var(--vital-color) 70%, #fff);
+    pointer-events: none;
+    z-index: 1;
+}
 
-/* Hero vs line ships on the enemy cards: heroes get a thick faction frame with glow and their faction
-   rank on the portrait; line ships show their hull on a flat grey card without a pilot. */
-.enemy-vitals-side .enemy-card-v.is-hero .enemy-portrait {
+/* Hero vs line ships: heroes keep accent glow when unshielded; line ships stay flat. */
+.enemy-vitals-side .enemy-card-v.is-hero .enemy-portrait.is-no-shield {
     border: 3px solid var(--enemy-accent, var(--color-primary));
     box-shadow: 0 0 0 1px #05060a, 0 0 10px color-mix(in srgb, var(--enemy-accent, var(--color-primary)) 70%, transparent);
 }
 .enemy-vitals-side .enemy-card-v.is-hero .enemy-name { color: var(--enemy-accent, var(--color-primary)); font-weight: 700; }
-.enemy-vitals-side .enemy-card-v.is-boss .enemy-portrait { border-color: #ff6a5a; }
+.enemy-vitals-side .enemy-card-v.is-boss .enemy-portrait.is-no-shield { border-color: #ff6a5a; }
+.enemy-vitals-side .enemy-card-v.is-boss .enemy-portrait:not(.is-no-shield) {
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, #ff6a5a 55%, #05060a),
+        0 0 12px color-mix(in srgb, var(--shield-color) calc(var(--shield-pct) * 0.55), transparent);
+}
 .enemy-vitals-side .enemy-card-v .enemy-rank {
     position: absolute;
-    left: 0;
-    right: 0;
-    top: 0;
+    left: 6px;
+    right: 6px;
+    top: 6px;
     display: flex;
     align-items: center;
     gap: 4px;
@@ -2156,7 +2278,7 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill
     letter-spacing: 1px;
     line-height: 1.2;
     color: #fff;
-    z-index: 1;
+    z-index: 3;
     pointer-events: none;
 }
 .enemy-vitals-side .enemy-card-v .enemy-rank-pips { display: flex; gap: 1px; }
@@ -2168,8 +2290,13 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-shield-fill
 }
 .enemy-vitals-side .enemy-card-v .enemy-rank-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .enemy-vitals-side .enemy-card-v.is-line { opacity: .85; }
-.enemy-vitals-side .enemy-card-v.is-line .enemy-portrait {
+.enemy-vitals-side .enemy-card-v.is-line .enemy-portrait.is-no-shield {
     border: 1px dashed #4a4e58;
+    padding: 0;
     background: repeating-linear-gradient(0deg, #0b0c12 0 2px, #07080c 2px 4px);
+    box-shadow: none;
+}
+.enemy-vitals-side .enemy-card-v.is-line .enemy-portrait.is-no-shield .enemy-portrait-face {
+    background: transparent;
 }
 .enemy-vitals-side .enemy-card-v.is-line .enemy-name { color: #8a8f9a; }

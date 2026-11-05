@@ -70,7 +70,8 @@ extendClass(HomeStationUI, {
             const name = sl.id ? this.hangarModuleLabel(sl.id) : 'EMPTY ' + String(sl.kind).toUpperCase() + ' SLOT';
             const img = ir ? String((sl.kind === 'weapon' && sl.id && ir.weaponImgHtml ? ir.weaponImgHtml(sl.id, 32, 'hs-pixel', false) : ir.imgHtml(key, 32, 'hs-pixel', color[sl.kind], false)) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
             const partSz = sl.id && slm && slm.partSizeLabel ? slm.partSizeLabel(sl.kind, sl.id) : null;
-            const tip = ((sl.id ? this.hangarModuleTip(sl.kind, sl.id) : 'NO PART INSTALLED') + '\nSLOT SIZE: ' + 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(this.hangarShipId, sl.kind, sl.index) | 0))] + (partSz ? '\nPART SIZE: ' + partSz : '')).replace(/"/g, '&quot;');
+            const slotSz = 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(this.hangarShipId, sl.kind, sl.index) | 0))];
+            const tip = ((sl.id ? this.hangarModuleTip(sl.kind, sl.id) : 'NO PART INSTALLED') + '\nSIZE_FIT:' + slotSz + ':' + (partSz || slotSz)).replace(/"/g, '&quot;');
             // The installed part sits inside its slot at its own footprint (never bigger than the slot).
             const partLv = sl.id && slm.getPartSizeLevel ? Math.max(0, Math.min(lvl, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : lvl;
             const inner = sl.id
@@ -78,61 +79,27 @@ extendClass(HomeStationUI, {
                 : img;
             return `<span class="hs-slotview-cell${sl.id ? ' is-filled' : ''}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${tip}" style="--pk-c:${color[sl.kind]};--svw:${dims[lvl][0]}px;--svh:${dims[lvl][1]}px" role="button" tabindex="0" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" aria-label="${name}">${inner}<span class="hs-slotview-size">${'SML'[partLv]}</span></span>`;
         };
-        // Every row keeps the height of the biggest slot its area currently offers, filled or not.
-        const toggleable = slm && slm.getToggleableAreas ? slm.getToggleableAreas() : [];
-        const areaToggle = (area) => {
-            if (toggleable.indexOf(area) === -1) return '';
-            const on = !slm.isAreaEnabled || slm.isAreaEnabled(this.hangarShipId, area);
-            const areaLabel = this.areaLabel ? this.areaLabel(area) : area.toUpperCase();
-            return `<button type="button" class="hs-slotview-toggle" title="${on ? 'Switch off' : 'Switch on'}" data-slot-area-toggle-button="${this.hangarShipId}|${area}" aria-pressed="${on}" aria-label="${areaLabel} on/off"><span class="hs-slotview-switch${on ? ' is-on' : ''}" aria-hidden="true"></span><span>${on ? 'ON' : 'OFF'}</span></button>`;
-        };
-        const row = (label, items, lvl, ico, area) => `<div class="hs-slotview-row" style="--sv:${Math.max(...[dims[Math.min(2, Math.max(0, lvl | 0))][1]].concat(items.map((sl) => dims[sl.split && sl.kind === 'weapon' ? Math.max(0, slotLv(sl) - 1) : slotLv(sl)][1])))}px"><span class="hs-slotview-name">${ico || ''}<span>${label}</span>${areaToggle(area)}</span>` +
-            `<span class="hs-slotview-slots">${items.length ? items.map((sl) => (sl.split && sl.kind === 'weapon' ? cell(sl, 0) + cell(sl, 1) : cell(sl))).join('') : '<em>NO SLOT</em>'}</span></div>`;
-        const AREA_SHAPES = { front: '<path d="M8 1 L10.5 6 H5.5Z"/>', center: '<rect x="5.5" y="6.5" width="5" height="4"/>', back: '<path d="M5.5 11 H10.5 L11 15 H5Z"/>', wing: '<path d="M5 7 L0.5 13 L5 12Z M11 7 L15.5 13 L11 12Z"/>' };
-        const areaIco = (id) => `<svg class="hs-slotview-ico" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">` +
-            Object.keys(AREA_SHAPES).map((k) => `<g class="${k === id ? 'on' : ''}">${AREA_SHAPES[k]}</g>`).join('') + '</svg>';
-        const kindIco = (kind) => (ir ? String(ir.imgHtml(kindIcon[kind], 16, 'hs-pixel hs-slotview-ico', color[kind], false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
-        // Weapons sit in their hull area; every other slot type gets its own category row.
-        const rows = groups.map((g) => row(g.label, list.filter((sl) => sl.kind === 'weapon' && g.areas.indexOf(sl.area) !== -1), levels[g.lv], areaIco(g.lv), g.lv));
-        const strayWeapons = list.filter((sl) => sl.kind === 'weapon' && known.indexOf(sl.area) === -1);
-        if (strayWeapons.length) rows.push(row('WEAPONS', strayWeapons, 0, kindIco('weapon')));
-        [['defense', 'DEFENSE'], ['energy', 'ENERGY'], ['ability', 'ABILITIES']].forEach(([kind, label]) => {
-            const items = list.filter((sl) => sl.kind === kind);
-            if (items.length) rows.push(row(label, items, 0, kindIco(kind)));
-        });
-        return `<div class="hs-slotview">${rows.join('')}</div>`;
+        // Just the slots, side by side — no hull-area grouping/labels/toggles here any more
+        // (area on/off still lives in the AREAS/LAYOUT sub-tab, area-upgrades.js).
+        const cells = list.map((sl) => (sl.split && sl.kind === 'weapon' ? cell(sl, 0) + cell(sl, 1) : cell(sl))).join('');
+        return `<div class="hs-slotview"><div class="hs-slotview-row"><span class="hs-slotview-slots">${cells || '<em>NO SLOT</em>'}</span></div></div>`;
     },
-    /** Click on a slot in the SLOTS list: modal with the parts that can go in it, as a sortable grid inventory. */
+    /** Click on a slot in the SLOTS list: modal with the ship's real storage grid (same as bay / station). */
     openHangarSlotPicker(kind, index) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
-        if (!slm || !this.overlay) return;
+        const profile = typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+            ? profileManager.getActiveProfile() : null;
+        if (!slm || !this.overlay || !profile || !this.renderShipStorage) return;
         this.closeHangarSlotPicker();
         const shipId = this.hangarShipId;
         const poolKey = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[kind];
-        const inv = slm.getInventory(shipId) || {};
         const L = slm.getLoadout(shipId);
         const curList = (kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[poolKey]) || [];
         const current = curList[index] || '';
-        const equipped = {};
-        ((kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[poolKey]) || []).forEach((id) => { if (id) equipped[id] = true; });
-        // Every owned part of every type is shown; those that can't go into this slot are dimmed.
-        const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
-        const items = [];
-        pools.forEach(([k, key]) => (inv[key] || []).forEach((id) => items.push({ kind: k, id: id })));
-        const sizeOf = (it) => (slm.getPartSizeLevel ? slm.getPartSizeLevel(it.kind, it.id) : 0);
-        const labelOf = (it) => this.hangarModuleLabel(it.id);
-        const stat = (it, k) => {
-            const w = it.kind === 'weapon' && typeof weaponConfigManager !== 'undefined' ? weaponConfigManager.getWeapon(it.id) : null;
-            if (!w) return 0;
-            return k === 'damage' ? Number(w.damage) || 0 : (w.cooldown ? 1000 / w.cooldown : 0);
-        };
-        const sorts = [['name', 'NAME'], ['size', 'SIZE'], ['equipped', 'EQUIPPED']].concat(kind === 'weapon' ? [['damage', 'DAMAGE'], ['rate', 'FIRE RATE']] : []);
-        let sort = this._pickSort && sorts.some((x) => x[0] === this._pickSort) ? this._pickSort : 'name';
+        const pickSlotSz = 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(shipId, kind, index) | 0))];
         const kindColors = (() => { const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d; return { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') }; })();
-        const color = kindColors[kind];
-        const blockedOf = (it) => {
-            const id = it.id;
-            if (it.kind !== kind) return 'WRONG SLOT TYPE';
+        const blockedOf = (partKind, id) => {
+            if (partKind !== kind) return 'WRONG SLOT TYPE';
             if (id === current) return null;
             const fit = slm.partFitsSlot ? slm.partFitsSlot(shipId, kind, id, index) : { ok: true };
             if (!fit.ok) return 'NEEDS ' + slm.slotSizeLabel(fit.need) + ' SLOT';
@@ -140,8 +107,14 @@ extendClass(HomeStationUI, {
             if (chk.ok || chk.removing || chk.reason === 'FULL' || chk.reason === 'TOO_BIG') return null;
             return String(chk.reason || 'BLOCKED').replace(/_/g, ' ');
         };
-        const invPos = typeof physicalItem !== 'undefined' && physicalItem.invPositions ? physicalItem.invPositions(shipId) : {};
-        const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : { cols: 4, rows: 2 };
+        const cs = (this.STORAGE_CELL_PX | 0) || 56;
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const ico = (key, col) => (ir ? String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
+        const filter = kind; // default: this slot's type (same filter chips as bay inventory)
+        const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', kindColors.weapon], ['defense', 'DEFENSE', 'statArmor', kindColors.defense], ['ability', 'ABILITIES', 'statAbilities', kindColors.ability], ['energy', 'ENERGY', 'statEnergy', kindColors.energy]]
+            .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
+        // Exact same ship-storage markup as bay inventory / station SHIP STORAGE — one grid, one footprint layout.
+        const gridHtml = this.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
         const modal = document.createElement('div');
         modal.className = 'hs-res-buy-modal hs-slot-picker';
         modal.setAttribute('role', 'dialog');
@@ -149,68 +122,83 @@ extendClass(HomeStationUI, {
         modal.innerHTML = `<div class="hs-res-buy-dialog hs-pick-dialog">` +
             `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT ${index + 1}</h3>` +
             `<p class="hs-res-buy-sub">${this.shipName ? this.shipName(shipId) : ''} · SLOT SIZE ${slm.slotSizeLabel(slm.getSlotSizeLevel(shipId, kind, index))}</p></div>` +
-            `<div class="hs-pick-sort" role="group" aria-label="Sort"></div>` +
             `<div class="hs-pick-body">` +
-            // Same cols × rows as the ship's inventory (bay inventory / start profile).
-            `<div class="hs-pick-grid" style="--pk-c:${color}; grid-template-columns: repeat(${invGrid.cols}, 64px); grid-template-rows: repeat(${invGrid.rows}, 64px); width: calc(${invGrid.cols} * 64px + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * 64px + ${invGrid.rows - 1} * 4px); min-height: 0; max-height: none; overflow: hidden"></div>` +
+            `<div class="hs-slot-picker hs-bay-inv hs-pick-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div></div>${gridHtml}</div>` +
             (kind === 'weapon' ? `<div class="hs-pick-keys" role="group" aria-label="Shortcut"></div>` : '') +
             `</div>` +
             `<div class="hs-res-buy-actions">${current ? '<button type="button" class="action-button" data-pick-set="">EMPTY SLOT</button>' : ''}<button type="button" class="action-button hs-res-buy-close" data-pick-close>CLOSE</button></div></div>`;
-        const grid = modal.querySelector('.hs-pick-grid');
-        const bar = modal.querySelector('.hs-pick-sort');
-        // Shortcut of this weapon slot: every key that fires it (SPACE / A / S / D), any combination.
+        const inv = modal.querySelector('.hs-pick-inv');
+        const grid = modal.querySelector('.hs-storage-grid.hs-pick-grid');
         const keysBar = modal.querySelector('.hs-pick-keys');
+        const decorate = () => {
+            if (!grid) return;
+            grid.querySelectorAll('[data-part-id]').forEach((cell) => {
+                const partKind = cell.getAttribute('data-part-kind');
+                const id = cell.getAttribute('data-part-id');
+                if (!id || partKind === 'blueprint') return;
+                const blocked = blockedOf(partKind, id);
+                cell.setAttribute('data-pick-set', id);
+                cell.classList.toggle('is-current', partKind === kind && id === current);
+                cell.classList.toggle('is-blocked', !!blocked);
+                if (blocked) cell.setAttribute('disabled', '');
+                else cell.removeAttribute('disabled');
+                // Keep size-fit tip (same SIZE_FIT token the hangar tooltips parse).
+                const tip = (String(this.hangarModuleTip(partKind, id) || '') + '\nSIZE_FIT:' + pickSlotSz + ':' + (slm.partSizeLabel ? slm.partSizeLabel(partKind, id) : 'S') + (blocked ? '\n' + blocked : '')).replace(/"/g, '&quot;');
+                cell.setAttribute('data-ui-tip', tip);
+                cell.setAttribute('data-ui-tip-instant', '');
+            });
+        };
+        decorate();
         const drawKeys = () => {
             if (!keysBar) return;
-            const L = slm.getLoadout(shipId);
-            const set = slm.getWeaponKeySet(L, index);
-            const allKey = slm.getAllFireKey ? slm.getAllFireKey(L) : 'space';
+            const loadout = slm.getLoadout(shipId);
+            const set = slm.getWeaponKeySet(loadout, index);
+            const allKey = slm.getAllFireKey ? slm.getAllFireKey(loadout) : 'space';
             keysBar.innerHTML = '<span class="hs-pick-keys-label">SHORTCUT</span>' + ['space', 'a', 's', 'd'].map((k) => {
-                const taken = k === allKey && k !== 'space';   // that key already fires every weapon
+                const taken = k === allKey && k !== 'space';
                 const on = set.indexOf(k) !== -1;
                 return `<button type="button" role="checkbox" aria-checked="${on}" class="hs-pick-keyopt${on ? ' is-on' : ''}${taken ? ' is-off' : ''}" data-pick-key="${k}"${taken ? ' disabled data-ui-tip="ALREADY FIRES ALL WEAPONS"' : ''}><span class="hs-pick-keybox"></span><span class="hs-pick-keyname">${k.toUpperCase()}</span></button>`;
             }).join('');
         };
-        const draw = () => {
-            bar.innerHTML = sorts.map(([k, l]) => `<button type="button" class="hs-pick-sortbtn${k === sort ? ' is-active' : ''}" data-pick-sort="${k}">${l}</button>`).join('');
-            const sorted = items.slice().sort((a, b) => {
-                const bySlot = (blockedOf(a) ? 1 : 0) - (blockedOf(b) ? 1 : 0);   // placeable parts first
-                if (bySlot) return bySlot;
-                if (sort === 'size') return sizeOf(a) - sizeOf(b) || labelOf(a).localeCompare(labelOf(b));
-                if (sort === 'equipped') return ((b.kind === kind && equipped[b.id]) ? 1 : 0) - ((a.kind === kind && equipped[a.id]) ? 1 : 0) || labelOf(a).localeCompare(labelOf(b));
-                if (sort === 'damage') return stat(b, 'damage') - stat(a, 'damage');
-                if (sort === 'rate') return stat(b, 'rate') - stat(a, 'rate');
-                return labelOf(a).localeCompare(labelOf(b));
-            });
-            grid.innerHTML = sorted.map((it) => {
-                const id = it.id;
-                const blocked = blockedOf(it);
-                const tip = (String(this.hangarModuleTip(it.kind, id)) + '\nPART SIZE ' + slm.partSizeLabel(it.kind, id) + (blocked ? '\n' + blocked : '')).replace(/"/g, '&quot;');
-                // Diablo-style footprint: S = 1x1, M = 1 wide x 2 tall, L = 2x2 cells.
-                const lv = Math.max(0, Math.min(2, sizeOf(it)));
-                const span = [[1, 1], [1, 2], [2, 2]][lv];
-                // Same tile as in the ship's inventory (bay inventory positions).
-                const pp = invPos[it.kind + ':' + id];
-                const here = it.kind === kind;
-                const usedElsewhere = here && equipped[id] && id !== current;
-                const assignedBadge = usedElsewhere
-                    ? `<span class="hs-pick-assigned" data-ui-tip="ALREADY ASSIGNED TO ANOTHER SLOT"><svg viewBox="0 0 10 10" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5l2 2 5-5-1-1-4 4-1-1z"/></svg></span>`
-                    : '';
-                return `<button type="button" style="grid-column: ${pp ? pp[0] + ' / ' : ''}span ${span[0]}; grid-row: ${pp ? pp[1] + ' / ' : ''}span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
-                    `${typeof physicalItem !== 'undefined' ? physicalItem.wrap(it.kind, id, span[0] * 64 + (span[0] - 1) * 4 - 8, span[1] * 64 + (span[1] - 1) * 4 - 8, kindColors[it.kind], '') : ''}<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
-                    assignedBadge +
-                    `<span class="hs-pick-size">${slm.partSizeLabel(it.kind, id)}</span></button>`;
-            }).join('');
-        };
-        draw();
         drawKeys();
         const close = () => this.closeHangarSlotPicker();
+        // Drag a cell onto a ship slot to install it there; a plain click installs into THIS slot.
+        // Capture on the modal so the bay-inv document click (toggle any free slot) never steals it.
+        let dragged = false;
+        inv.addEventListener('pointerdown', (e) => {
+            const cell = e.target.closest('[data-pick-set]');
+            if (!cell || cell.disabled || e.button !== 0) return;
+            e.stopPropagation();
+            const sx = e.clientX, sy = e.clientY;
+            const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
+            const mv = (m) => {
+                if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return;
+                off();
+                dragged = true;
+                this.startHangarPartDrag(cell, e);
+                const closeOnce = () => { window.removeEventListener('pointerup', closeOnce, true); window.removeEventListener('pointercancel', closeOnce, true); close(); };
+                window.addEventListener('pointerup', closeOnce, true);
+                window.addEventListener('pointercancel', closeOnce, true);
+            };
+            window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
+        }, true);
+        inv.addEventListener('click', (e) => {
+            const cell = e.target.closest('[data-pick-set]');
+            if (!cell) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (cell.disabled) return;
+            if (dragged) { dragged = false; return; }
+            close();
+            this.applyHangarSlotChoice(kind, index, cell.getAttribute('data-pick-set'), null);
+        }, true);
         modal.addEventListener('click', (e) => {
             if (e.target === modal || e.target.closest('[data-pick-close]')) { close(); return; }
-            const sb = e.target.closest('[data-pick-sort]');
-            if (sb) { sort = this._pickSort = sb.getAttribute('data-pick-sort'); draw(); return; }
-            const cell = e.target.closest('[data-pick-set]');
-            if (cell && !cell.disabled) { close(); this.applyHangarSlotChoice(kind, index, cell.getAttribute('data-pick-set'), null); }
+            const empty = e.target.closest('[data-pick-set=""]');
+            if (empty && empty.closest('.hs-res-buy-actions')) {
+                close();
+                this.applyHangarSlotChoice(kind, index, '', null);
+            }
         });
         if (keysBar) {
             keysBar.addEventListener('click', (e) => {
@@ -225,7 +213,6 @@ extendClass(HomeStationUI, {
         }
         this._pickKeys = (e) => { if (e.key === 'Escape' || e.key === 'Backspace') { close(); e.preventDefault(); e.stopImmediatePropagation(); } };
         document.addEventListener('keydown', this._pickKeys, true);
-        // The slot being edited stays highlighted in the SLOTS list while the picker is open.
         const slotEl = this.overlay.querySelector(`[data-slot-pick="${kind}"][data-slot-index="${index}"]`);
         if (slotEl) slotEl.classList.add('is-picking');
         this.overlay.appendChild(modal);
@@ -456,7 +443,7 @@ extendClass(HomeStationUI, {
         for (let i = 0; i < cap; i++) {
             const id = equipped[i];
             boxes += id
-                ? `<span class="hs-section-slot is-filled" data-section-slot="${sec.kind}|${i}" data-ui-tip="${this.hangarModuleLabel(id)} — CLICK TO UNEQUIP">` +
+                ? `<span class="hs-section-slot is-filled" data-section-slot="${sec.kind}|${i}" data-ui-tip="${this.hangarModuleLabel(id)} — DRAG OFF TO UNEQUIP">` +
                   `${this.moduleIconHtml(sec.kind, id, 24, 'hs-pixel', false)}</span>`
                 : `<span class="hs-section-slot" data-ui-tip="FREE ${sec.label.replace(/S$/, '')} SLOT"></span>`;
         }
@@ -538,12 +525,14 @@ extendClass(HomeStationUI, {
                 if (caret) caret.textContent = c ? '▼' : '▲';
             };
             head.addEventListener('click', (e) => {
+                // A plain click on a filled slot box in the section header used to unequip that
+                // part — too easy to trigger by accident while just opening/closing the section,
+                // right next to the collapse caret. Dragging a filled box off the ship still
+                // unequips it (below); a click here only toggles the section now.
                 const box = e.target.closest('[data-section-slot]');
                 if (box) {
-                    // Filled slot box: unequip that part.
                     e.stopPropagation();
-                    const [kind, idx] = box.getAttribute('data-section-slot').split('|');
-                    this.applyHangarSlotChoice(kind, Number(idx), '', null);
+                    if (box._vfDragged) { box._vfDragged = false; } // tail end of a drag, already handled
                     return;
                 }
                 toggle();
@@ -552,6 +541,21 @@ extendClass(HomeStationUI, {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 e.preventDefault();
                 toggle();
+            });
+        });
+        // Drag a filled section-slot box onto a ship slot to move the part there, or off the ship to unequip it.
+        this.overlay.querySelectorAll('.hs-section-slot.is-filled[data-section-slot]').forEach((box) => {
+            box.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                const sx = e.clientX, sy = e.clientY;
+                const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
+                const mv = (m) => {
+                    if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return;
+                    off();
+                    box._vfDragged = true;
+                    this.startHangarSectionSlotPull(box, e);
+                };
+                window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
             });
         });
         this.overlay.querySelectorAll('.hs-hangar-part').forEach((cell) => {
@@ -585,7 +589,10 @@ extendClass(HomeStationUI, {
             });
         });
     },
-    /** Non-weapon part: switch it on (first free slot, else the first) or off. */
+    /** Non-weapon part: switch it on (first free slot, else the first). A click while it's
+     *  already on no longer switches it off directly — same change as the weapon rows and the
+     *  section-header slot strip: too easy to unequip by accident with a plain click. It opens
+     *  the details panel (explicit UNEQUIP button there) instead. */
     toggleHangarPart(cell) {
         const kind = cell.getAttribute('data-part-kind');
         const id = cell.getAttribute('data-part-id');
@@ -593,7 +600,7 @@ extendClass(HomeStationUI, {
         const list = shipLoadoutManager.getLoadout(this.hangarShipId)[key] || [];
         const at = list.indexOf(id);
         if (at !== -1) {
-            this.applyHangarSlotChoice(kind, at, '', null);
+            this.toggleHangarPartDetails(cell);
             return;
         }
         const caps = shipLoadoutManager.getSlotCaps(this.hangarShipId, shipLoadoutManager.resolveModelClass(this.hangarShipId));
@@ -663,6 +670,22 @@ extendClass(HomeStationUI, {
             ? L.weaponSlots
             : (L[shipLoadoutManager.kindToLoadoutKey(kind)] || []);
         return list[Number(index) || 0] || null;
+    },
+    /** Drag out of a section header's filled slot box (sidebar list), same pull as dragging off the ship itself. */
+    startHangarSectionSlotPull(box, downEvent) {
+        const [kind, idxStr] = box.getAttribute('data-section-slot').split('|');
+        const index = Number(idxStr) || 0;
+        const id = this.hangarSlotModuleId(kind, index);
+        if (!id) return;
+        const holder = document.createElement('span');
+        holder.innerHTML = this.moduleIconHtml(kind, id, 32, 'hs-pixel', false);
+        this.startHangarPartDrag(null, downEvent, {
+            kind: kind,
+            id: id,
+            iconEl: holder.querySelector('img'),
+            sourceSlot: box,
+            sourceIndex: index
+        });
     },
     startHangarSlotPull(slotEl, downEvent) {
         const kind = slotEl.getAttribute('data-slot-kind');

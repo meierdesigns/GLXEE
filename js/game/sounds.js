@@ -4,14 +4,34 @@
 // which index.html loads before this file.
 const soundManager = new SoundManager();
 
+// Pull slider values if volume UI already booted (script order varies in bundle).
+if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.applyVolumes) {
+    try { volumeControlsManager.applyVolumes(); } catch (e) { /* ignore */ }
+}
+
 function resumeSoundContext() {
-    // Opens (or resumes) the AudioContext after a real user gesture.
+    // Opens (or resumes) the AudioContext after a real user gesture, then
+    // kicks any menu/planet vftrack that was waiting on unlock.
+    if (typeof soundManager.markAudioUnlocked === 'function') soundManager.markAudioUnlocked();
     if (typeof soundManager.ensureContext === 'function') soundManager.ensureContext();
+    if (typeof soundManager.resumePendingMusic === 'function') soundManager.resumePendingMusic();
 }
 
 document.addEventListener('pointerdown', resumeSoundContext, { once: true, capture: true });
 document.addEventListener('keydown', resumeSoundContext, { once: true, capture: true });
 document.addEventListener('touchstart', resumeSoundContext, { once: true, capture: true });
+// If the context suspends again, or the first gesture landed before the
+// tracker manager existed, retry once music is pending.
+document.addEventListener('pointerdown', () => {
+    if (typeof soundManager === 'undefined' || !soundManager.resumePendingMusic) return;
+    if (!soundManager.musicEnabled) return;
+    const suspended = soundManager.audioContext && soundManager.audioContext.state === 'suspended';
+    const pending = !!soundManager._pendingMusic;
+    if (suspended || pending) {
+        soundManager.ensureContext();
+        soundManager.resumePendingMusic();
+    }
+}, true);
 
 // Generic UI click sound: delegated so every clickable control, present or
 // future, gets one without each menu file wiring its own sound call. Covers

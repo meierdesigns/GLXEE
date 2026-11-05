@@ -30,6 +30,93 @@ class PickupManager {
         return fallback[id] || 'resScrap';
     }
 
+    pickupLootKind(p) {
+        if (!p) return 'resource';
+        if (p.lootKind) return p.lootKind;
+        if (p.powerUp) return 'powerUp';
+        return 'resource';
+    }
+
+    pickupRunKey(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint') return 'blueprint:' + p.id;
+        if (kind === 'part') return 'part:' + (p.partKind || 'weapon') + ':' + p.id;
+        return p.id;
+    }
+
+    pickupLabel(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint' && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return 'BP ' + profileManager.getBlueprintName(p.id);
+        }
+        if (kind === 'part' && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return profileManager.getBlueprintName((p.partKind || 'weapon') + ':' + p.id);
+        }
+        if (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel) {
+            return economyConfig.getResourceLabel(p.id);
+        }
+        return String(p.id || '').toUpperCase();
+    }
+
+    pickupIconKey(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint') return 'hsBlueprint';
+        if (kind === 'part') {
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleIcon) {
+                const key = shipLoadoutManager.resolveModuleIcon({ kind: p.partKind || 'weapon', id: p.id });
+                if (key) return key;
+            }
+            return 'hsCraft';
+        }
+        return this.resourceIconKey(p.id);
+    }
+
+    pickupTint(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint') return '#ffd24a';
+        if (kind === 'part') {
+            const pk = p.partKind || 'weapon';
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) {
+                return iconRenderer.getModuleKindColor(pk) || '#c08cff';
+            }
+            const fallback = { weapon: '#ff6a4a', defense: '#4ac8ff', energy: '#ffd24a', ability: '#c08cff' };
+            return fallback[pk] || '#c08cff';
+        }
+        return this.resourceColor(p.id);
+    }
+
+    pushPickup(base) {
+        this.pickups.push(base);
+    }
+
+    spawnSalvageFromKill(info, baseX, baseY) {
+        if (!info || typeof profileManager === 'undefined') return;
+        const life = this.lootPhase ? 22000 : 18000;
+        const scatter = (lootKind, extra) => {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 6 + Math.random() * 12;
+            this.pushPickup(Object.assign({
+                lootKind: lootKind,
+                amount: 1,
+                x: baseX + Math.cos(angle) * dist,
+                y: baseY + Math.sin(angle) * dist,
+                vx: Math.cos(angle) * (0.45 + Math.random() * 0.7),
+                vy: Math.sin(angle) * (0.45 + Math.random() * 0.7) - 0.35,
+                age: 0,
+                life: life,
+                size: lootKind === 'blueprint' ? 12 : 11
+            }, extra));
+        };
+        if (profileManager.tryBlueprintDrop) {
+            const bpKey = profileManager.tryBlueprintDrop(info);
+            if (bpKey) scatter('blueprint', { id: bpKey });
+        }
+        if (profileManager.tryPartDrop) {
+            const part = profileManager.tryPartDrop(info);
+            if (part) scatter('part', { id: part.id, partKind: part.kind });
+        }
+    }
+
     reset(clearCollected) {
         this.pickups.length = 0;
         this.popups = [];
@@ -102,29 +189,32 @@ class PickupManager {
             if (ss > 0) yieldMul *= Math.max(0.75, Math.min(1.6, 0.85 + ss * 0.2));
         } catch (e) { /* ignore */ }
         const drops = economyConfig.rollEnemyKillDrops(info, planetId, yieldMul);
-        if (!drops || !drops.length) return;
 
         const cx = Number(info.x);
         const cy = Number(info.y);
         const baseX = isFinite(cx) ? cx : 120;
         const baseY = isFinite(cy) ? cy : 80;
 
-        drops.forEach((drop, i) => {
-            const angle = (Math.PI * 2 * i) / Math.max(1, drops.length) + Math.random() * 0.6;
-            const dist = 4 + Math.random() * 10;
-            const life = this.lootPhase ? 22000 : 18000;
-            this.pickups.push({
-                id: drop.id,
-                amount: drop.amount,
-                x: baseX + Math.cos(angle) * dist,
-                y: baseY + Math.sin(angle) * dist,
-                vx: Math.cos(angle) * (0.4 + Math.random() * 0.6),
-                vy: Math.sin(angle) * (0.4 + Math.random() * 0.6) - 0.3,
-                age: 0,
-                life: life,
-                size: 9 + Math.min(5, drop.amount)
+        if (drops && drops.length) {
+            drops.forEach((drop, i) => {
+                const angle = (Math.PI * 2 * i) / Math.max(1, drops.length) + Math.random() * 0.6;
+                const dist = 4 + Math.random() * 10;
+                const life = this.lootPhase ? 22000 : 18000;
+                this.pushPickup({
+                    lootKind: 'resource',
+                    id: drop.id,
+                    amount: drop.amount,
+                    x: baseX + Math.cos(angle) * dist,
+                    y: baseY + Math.sin(angle) * dist,
+                    vx: Math.cos(angle) * (0.4 + Math.random() * 0.6),
+                    vy: Math.sin(angle) * (0.4 + Math.random() * 0.6) - 0.3,
+                    age: 0,
+                    life: life,
+                    size: 9 + Math.min(5, drop.amount)
+                });
             });
-        });
+        }
+        this.spawnSalvageFromKill(info, baseX, baseY);
     }
 
     /**
@@ -194,15 +284,33 @@ class PickupManager {
         });
         this.pickups.forEach((p) => {
             if (p.powerUp) return;
-            lost[p.id] = (lost[p.id] || 0) + (p.amount || 0);
+            const key = this.pickupRunKey(p);
+            lost[key] = (lost[key] || 0) + (p.amount || 0);
         });
         const profile = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
             ? profileManager.getActiveProfile()
             : null;
-        if (profile && profile.cargo && profile.cargo.resources) {
+        if (profile && profile.cargo) {
             Object.keys(this.collectedThisRun).forEach((id) => {
-                const have = profile.cargo.resources[id] || 0;
-                profile.cargo.resources[id] = Math.max(0, have - (this.collectedThisRun[id] || 0));
+                const n = this.collectedThisRun[id] || 0;
+                if (n <= 0) return;
+                if (id.indexOf('blueprint:') === 0) {
+                    const key = id.slice(10);
+                    if (profile.cargo.blueprints) {
+                        profile.cargo.blueprints[key] = Math.max(0, (profile.cargo.blueprints[key] || 0) - n);
+                        if (profile.cargo.blueprints[key] <= 0) delete profile.cargo.blueprints[key];
+                    }
+                } else if (id.indexOf('part:') === 0) {
+                    const key = id.slice(5);
+                    if (profile.cargo.parts) {
+                        profile.cargo.parts[key] = Math.max(0, (profile.cargo.parts[key] || 0) - n);
+                        if (profile.cargo.parts[key] <= 0) delete profile.cargo.parts[key];
+                    }
+                } else if (profile.cargo.resources) {
+                    const have = profile.cargo.resources[id] || 0;
+                    profile.cargo.resources[id] = Math.max(0, have - n);
+                    if (profile.cargo.resources[id] <= 0) delete profile.cargo.resources[id];
+                }
             });
             if (profileManager.save) profileManager.save();
         }
@@ -305,26 +413,42 @@ class PickupManager {
             if (this.collectPowerUp) this.collectPowerUp(pickup);
             return;
         }
-        let granted = pickup.amount;
-        if (typeof profileManager !== 'undefined' && profileManager.addCargoResource) {
-            const result = profileManager.addCargoResource(pickup.id, pickup.amount, { skipSave: true });
-            granted = typeof result === 'number' ? result : (result ? pickup.amount : 0);
+        const lootKind = this.pickupLootKind(pickup);
+        const runKey = this.pickupRunKey(pickup);
+        let granted = 0;
+        if (typeof profileManager !== 'undefined') {
+            if (lootKind === 'blueprint' && profileManager.addCargoBlueprint) {
+                const result = profileManager.addCargoBlueprint(pickup.id, pickup.amount || 1, { skipSave: true });
+                granted = typeof result === 'number' ? result : (result ? 1 : 0);
+            } else if (lootKind === 'part' && profileManager.addCargoPart) {
+                const result = profileManager.addCargoPart(
+                    pickup.partKind || 'weapon',
+                    pickup.id,
+                    pickup.amount || 1,
+                    { skipSave: true }
+                );
+                granted = typeof result === 'number' ? result : (result ? 1 : 0);
+            } else if (profileManager.addCargoResource) {
+                const result = profileManager.addCargoResource(pickup.id, pickup.amount, { skipSave: true });
+                granted = typeof result === 'number' ? result : (result ? pickup.amount : 0);
+            }
         }
+        const tint = this.pickupTint(pickup);
         if (granted > 0) {
-            this.collectedThisRun[pickup.id] = (this.collectedThisRun[pickup.id] || 0) + granted;
+            this.collectedThisRun[runKey] = (this.collectedThisRun[runKey] || 0) + granted;
             this._saveDirty = true;
+            if (typeof soundManager !== 'undefined' && soundManager.playPickupCollect) {
+                soundManager.playPickupCollect(lootKind === 'resource' ? pickup.id : 'crystal');
+            }
             if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                const label = (typeof economyConfig !== 'undefined')
-                    ? economyConfig.getResourceLabel(pickup.id)
-                    : String(pickup.id).toUpperCase();
-                levelInfoManager.showLootNotice('+' + granted + ' ' + label);
+                levelInfoManager.showLootNotice('+' + granted + ' ' + this.pickupLabel(pickup));
             }
             if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
-                graphicsManager.createHitEffect(pickup.x, pickup.y, 4, this.resourceColor(pickup.id));
+                graphicsManager.createHitEffect(pickup.x, pickup.y, 4, tint);
             }
         }
         // Always confirm the pickup over the ship; 0 granted = cargo full for this resource.
-        this.addPopup(pickup.id, Math.max(0, granted || 0));
+        this.addPopup(runKey, Math.max(0, granted || 0), pickup);
     }
 
     /** Vacuum remaining pickups into cargo (victory / end of run). */
@@ -345,7 +469,7 @@ class PickupManager {
     }
 
     /** "+N" above the player on pickup; a fresh popup of the same resource sums up instead of stacking. */
-    addPopup(id, amount) {
+    addPopup(id, amount, source) {
         if (this.lootPhase) return;
         const recent = this.popups.find((p) => p.id === id && p.age < 250);
         if (recent) {
@@ -353,7 +477,14 @@ class PickupManager {
             recent.age = 0;
             return;
         }
-        this.popups.push({ id: id, amount: amount, age: 0, life: 1100 });
+        this.popups.push({
+            id: id,
+            amount: amount,
+            age: 0,
+            life: 1100,
+            iconKey: source ? this.pickupIconKey(source) : this.resourceIconKey(id),
+            tint: source ? this.pickupTint(source) : this.resourceColor(id)
+        });
     }
 
     updatePopups(dt) {
@@ -387,8 +518,10 @@ class PickupManager {
             const x = Math.round(player.x + player.width / 2 - w / 2);
             const y = Math.round(player.y - 12 - i * (fontPx + 2) - rise * 28);
             ctx.globalAlpha = k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+            const iconKey = p.iconKey || this.resourceIconKey(p.id);
+            const tint = p.tint || this.resourceColor(p.id);
             if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
-                iconRenderer.drawKey(ctx, this.resourceIconKey(p.id), x, y - icon / 2, icon, this.resourceColor(p.id));
+                iconRenderer.drawKey(ctx, iconKey, x, y - icon / 2, icon, tint);
             }
             const tx = x + icon + 3;
             ctx.fillStyle = '#05060a';
@@ -396,7 +529,7 @@ class PickupManager {
             ctx.fillText(text, tx + o, y);
             ctx.fillText(text, tx, y - o);
             ctx.fillText(text, tx, y + o);
-            ctx.fillStyle = this.resourceColor(p.id);
+            ctx.fillStyle = tint;
             ctx.fillText(text, tx, y);
         });
         ctx.restore();
@@ -427,8 +560,8 @@ class PickupManager {
                 ctx.restore();
                 return;
             }
-            const key = this.resourceIconKey(p.id);
-            const tint = this.resourceColor(p.id);
+            const key = this.pickupIconKey(p);
+            const tint = this.pickupTint(p);
             const fade = p.age > p.life - 2000 ? Math.max(0.25, (p.life - p.age) / 2000) : 1;
             ctx.save();
             ctx.imageSmoothingEnabled = false;

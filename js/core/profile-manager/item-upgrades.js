@@ -10,15 +10,130 @@
 extendClass(ProfileManager, {
     ITEM_UPGRADE_BUCKETS: ['weapons', 'defenses', 'abilities', 'energy'],
 
+    /** Split `defId` / `defId#unit` so each owned copy can keep its own upgrades. */
+    parsePartInstanceId(itemId) {
+        const raw = String(itemId || '');
+        const m = raw.match(/^(.*)#(\d+)$/);
+        if (m) {
+            return {
+                defId: m[1],
+                unit: Math.max(0, parseInt(m[2], 10) || 0),
+                instanceId: raw
+            };
+        }
+        return { defId: raw, unit: null, instanceId: raw };
+    },
+
+    partDefId(itemId) {
+        return this.parsePartInstanceId(itemId).defId;
+    },
+
+    /** Canonical upgrade bag key for one owned copy (`defId#unit`). Bare defId → #0. */
+    partInstanceKey(itemId) {
+        const p = this.parsePartInstanceId(itemId);
+        if (!p.defId) return '';
+        const unit = p.unit != null ? p.unit : 0;
+        return p.defId + '#' + unit;
+    },
+
+    /**
+     * Stable unit indices 0..owned-1 packed by location: each ship's equipped copies,
+     * then that ship's filed copies (ownedShipIds order), then station leftovers.
+     */
+    getPartInstanceLayout(profile, bucket, defId) {
+        const p = profile || this.getActiveProfile();
+        const id = String(defId || '');
+        const out = { station: [], ships: {}, owned: 0 };
+        if (!p || !id || bucket === 'blueprints') return out;
+        let owned = Math.max(0, Math.round(Number(this._ownedStorageCount(p, bucket, id)) || 0));
+        if (owned <= 0) {
+            // Starter loadout parts can be visible with owned=0 (filed/equipped only).
+            const ships = p.ownedShipIds || [];
+            let visible = 0;
+            ships.forEach((shipId) => {
+                visible += this._equippedStorageCount(p, shipId, bucket, id);
+                const entry = (p.shipStorage || {})[shipId];
+                visible += (entry && entry[bucket] && entry[bucket][id]) || 0;
+            });
+            owned = Math.max(0, visible);
+        }
+        out.owned = owned;
+        let cursor = 0;
+        const take = (n) => {
+            const slice = [];
+            const count = Math.max(0, Math.round(Number(n) || 0));
+            for (let i = 0; i < count && cursor < owned; i++) slice.push(cursor++);
+            return slice;
+        };
+        (p.ownedShipIds || []).forEach((shipId) => {
+            const eq = this._equippedStorageCount(p, shipId, bucket, id);
+            const entry = (p.shipStorage || {})[shipId];
+            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+            out.ships[shipId] = take(eq).concat(take(filed));
+        });
+        while (cursor < owned) out.station.push(cursor++);
+        return out;
+    },
+
+    /** Upgrade-bag key for the Nth equipped copy of defId on a ship (0-based). */
+    getEquippedInstanceId(profile, shipId, bucket, defId, occurrence) {
+        const id = String(defId || '');
+        const occ = Math.max(0, Math.round(Number(occurrence) || 0));
+        const layout = this.getPartInstanceLayout(profile, bucket, id);
+        const shipUnits = (layout.ships && layout.ships[shipId]) || [];
+        const eq = this._equippedStorageCount(profile, shipId, bucket, id);
+        if (occ >= eq || occ >= shipUnits.length) return this.partInstanceKey(id);
+        return id + '#' + shipUnits[occ];
+    },
+
+    /**
+     * After a station↔ship move of one specific unit, slide upgrade bags so the
+     * dragged copy keeps its levels under the new packed index.
+     */
+    remapPartInstanceUpgrades(profile, bucket, defId, fromUnit, toIndex) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !defId || bucket === 'blueprints') return;
+        this.ensureEconomyDefaults(p);
+        const bag = p.itemUpgrades && p.itemUpgrades[bucket];
+        if (!bag) return;
+        const owned = Math.max(0, Math.round(Number(this._ownedStorageCount(p, bucket, defId)) || 0));
+        if (owned <= 1) return;
+        const from = Math.max(0, Math.round(Number(fromUnit) || 0));
+        const to = Math.max(0, Math.round(Number(toIndex) || 0));
+        if (from === to || from >= owned || to >= owned) return;
+        const arr = [];
+        for (let i = 0; i < owned; i++) {
+            const k = defId + '#' + i;
+            if (bag[k] && typeof bag[k] === 'object') arr.push(bag[k]);
+            else if (i === 0 && bag[defId] && typeof bag[defId] === 'object') arr.push(bag[defId]);
+            else arr.push(null);
+        }
+        const moved = arr.splice(from, 1)[0];
+        arr.splice(to, 0, moved);
+        if (bag[defId]) delete bag[defId];
+        for (let i = 0; i < owned; i++) {
+            const k = defId + '#' + i;
+            if (arr[i]) bag[k] = arr[i];
+            else delete bag[k];
+        }
+    },
+
     /** Raw per-item entry ({ tracks, mode, tune }), ensuring buckets exist first. */
     _itemUpgradeEntry(bucket, itemId, profile) {
         const p = profile || this.getActiveProfile();
         if (!p) return null;
         this.ensureEconomyDefaults(p);
         const b = String(bucket || '');
-        const id = String(itemId || '');
+        const parsed = this.parsePartInstanceId(itemId);
+        if (!parsed.defId) return null;
+        const id = this.partInstanceKey(parsed.instanceId);
         const bag = p.itemUpgrades && p.itemUpgrades[b];
         if (!bag) return null;
+        // Legacy saves keyed upgrades by bare defId — fold onto #0 once.
+        if (!bag[id] && bag[parsed.defId] && typeof bag[parsed.defId] === 'object') {
+            bag[id] = bag[parsed.defId];
+            delete bag[parsed.defId];
+        }
         if (!bag[id] || typeof bag[id] !== 'object') {
             bag[id] = { tracks: {}, mode: 'single', tune: 0.5, tuneUnlocked: false };
         }
@@ -38,10 +153,26 @@ extendClass(ProfileManager, {
         return Object.keys(entry.tracks).reduce((sum, t) => sum + Math.max(0, Math.round(Number(entry.tracks[t]) || 0)), 0);
     },
 
-    /** Owned anywhere (station/ship storage) or currently equipped on any owned ship. */
+    /** Owned anywhere (station/ship storage) or currently equipped on any owned ship.
+     *  Instance ids (`defId#unit`) resolve against the bare defId ledger. */
     _itemIsOwnedOrEquipped(profile, bucket, itemId) {
-        if (this._ownedStorageCount(profile, bucket, itemId) > 0) return true;
-        return this._equippedStorageCountAll(profile, bucket, itemId) > 0;
+        const parsed = this.parsePartInstanceId(itemId);
+        const defId = parsed.defId;
+        if (!defId) return false;
+        const owned = this._ownedStorageCount(profile, bucket, defId);
+        if (parsed.unit != null) {
+            if (owned > 0) return parsed.unit >= 0 && parsed.unit < owned;
+            // owned=0 starter copies still upgradeable while filed/equipped
+            const layout = this.getPartInstanceLayout(profile, bucket, defId);
+            return parsed.unit >= 0 && parsed.unit < layout.owned;
+        }
+        if (owned > 0) return true;
+        if (this._equippedStorageCountAll(profile, bucket, defId) > 0) return true;
+        const map = profile.shipStorage || {};
+        return Object.keys(map).some((shipId) => {
+            const entry = map[shipId] && map[shipId][bucket];
+            return !!(entry && (entry[defId] || 0) > 0);
+        });
     },
 
     canPurchaseItemTrackUpgrade(bucket, itemId, track, profile) {

@@ -53,7 +53,7 @@ class BeatSyncManager {
     start(planetId, bpm) {
         const id = String(planetId || 'mars').toLowerCase().split('-')[0];
         this.planetId = id;
-        this.bpm = Math.max(60, Math.min(220, Number(bpm) || this.resolveBpm(id)));
+        this.bpm = Math.max(60, Math.min(960, Number(bpm) || this.resolveBpm(id)));
         this.startMs = performance.now();
         this.offsetMs = 0;
         this.active = true;
@@ -81,7 +81,7 @@ class BeatSyncManager {
     setBpm(bpm) {
         const n = Number(bpm);
         if (!Number.isFinite(n)) return;
-        this.bpm = Math.max(60, Math.min(220, n));
+        this.bpm = Math.max(60, Math.min(960, n));
     }
 
     beatDurationMs() {

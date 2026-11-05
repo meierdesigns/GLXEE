@@ -1074,6 +1074,16 @@ var EconomyConfig = class EconomyConfig {
             champion: 0.15,
             default: 0.03
         };
+        /** Finished parts shed less often than schematics. */
+        this.partDropChance = {
+            scout: 0.008,
+            assault: 0.015,
+            heavy: 0.025,
+            elite: 0.04,
+            capital: 0.06,
+            champion: 0.08,
+            default: 0.012
+        };
         this.defaultPlanetResources = {
             mars: [
                 { id: 'scrap', weight: 4, min: 12, max: 28 },
@@ -1664,6 +1674,15 @@ extendClass(EconomyConfig, {
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.blueprintDropChance[cls] != null) return this.blueprintDropChance[cls];
         return this.blueprintDropChance.default;
+    },
+
+    getPartDropChance(info) {
+        const table = this.partDropChance || {};
+        if (!info) return table.default != null ? table.default : 0.012;
+        if (info.champion) return table.champion != null ? table.champion : 0.08;
+        const cls = String(info.enemyClass || '').toLowerCase();
+        if (table[cls] != null) return table[cls];
+        return table.default != null ? table.default : 0.012;
     },
 
     rollAmount(min, max) {
@@ -5248,7 +5267,7 @@ extendClass(PlanetConfigManager, {
             // (a champion only spawns once the previous one is down).
             const n = 3 + (rng() < 0.5 ? 1 : 0);
             for (let i = 0; i < n; i++) {
-                enemies.push({ id: id + '_pack' + i, type: this.pickSeeded(rng, pool) || 'enemyBasic', weight: 1, champion: true, faction: 'pirate', level: 1, spawnAt: i });
+                enemies.push({ id: id + '_pack' + i, type: this.pickSeeded(rng, pool) || 'enemyBasic', weight: 1, champion: true, faction: 'pirate', level: 1, spawnAt: i * 3 });
             }
             sides(1 + Math.floor(tier / 2), 's');
             enemyHealth = 35 + tier * 15;
@@ -5536,7 +5555,7 @@ var ProfileManager = class ProfileManager {
     }
 
     emptyCargo() {
-        return { resources: {}, blueprints: {} };
+        return { resources: {}, blueprints: {}, parts: {} };
     }
 
     ensureEconomyDefaults(profile) {
@@ -5595,8 +5614,11 @@ var ProfileManager = class ProfileManager {
         if (!profile.cargo.blueprints || typeof profile.cargo.blueprints !== 'object') {
             profile.cargo.blueprints = {};
         }
+        if (!profile.cargo.parts || typeof profile.cargo.parts !== 'object') {
+            profile.cargo.parts = {};
+        }
         // Blueprints are for parts now (`kind:partId`); drop old ship-id blueprints.
-        [profile.blueprints, profile.cargo.blueprints].forEach((map) => {
+        [profile.blueprints, profile.cargo.blueprints, profile.cargo.parts].forEach((map) => {
             Object.keys(map).forEach((k) => {
                 if (k.indexOf(':') === -1) delete map[k];
             });
@@ -6805,16 +6827,39 @@ extendClass(ProfileManager, {
         return applied.granted;
     },
 
-    addCargoBlueprint(key, amount) {
+    addCargoBlueprint(key, amount, options) {
         const profile = this.getActiveProfile();
-        if (!profile) return false;
+        if (!profile) return 0;
         this.ensureEconomyDefaults(profile);
         const bp = this.parseBlueprintKey(key);
         const n = Math.round(Number(amount) || 1);
-        if (!bp || n <= 0) return false;
+        if (!bp || n <= 0) return 0;
         profile.cargo.blueprints[bp.key] = (profile.cargo.blueprints[bp.key] || 0) + n;
-        this.save();
-        return true;
+        if (!(options && options.skipSave)) {
+            this.save();
+        }
+        return n;
+    },
+
+    /** Mission salvage part into cargo (`kind:partId`), pending station teleport. */
+    addCargoPart(kind, partId, amount, options) {
+        const profile = this.getActiveProfile();
+        if (!profile) return 0;
+        this.ensureEconomyDefaults(profile);
+        const k = String(kind || '');
+        const id = String(partId || '');
+        if (!id || (k !== 'weapon' && k !== 'defense' && k !== 'ability' && k !== 'energy')) return 0;
+        if (!this.getPartItem(k, id)) return 0;
+        const n = Math.round(Number(amount) || 1);
+        if (n <= 0) return 0;
+        const key = k + ':' + id;
+        profile.cargo.parts[key] = (profile.cargo.parts[key] || 0) + n;
+        const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[k];
+        if (discoverCat && this.discover) this.discover(discoverCat, id);
+        if (!(options && options.skipSave)) {
+            this.save();
+        }
+        return n;
     },
 
     grantPlanetResources(planetId) {
@@ -6856,6 +6901,10 @@ extendClass(ProfileManager, {
 
 // ProfileManager methods, split from profile-manager.js.
 extendClass(ProfileManager, {
+    /**
+     * Roll a blueprint schematic for a kill. Does not grant cargo — the world
+     * pickup must be collected first (see pickupManager.spawnFromKill).
+     */
     tryBlueprintDrop(killInfo) {
         const profile = this.getActiveProfile();
         if (!profile || typeof economyConfig === 'undefined') return null;
@@ -6865,9 +6914,68 @@ extendClass(ProfileManager, {
         if (Math.random() > chance) return null;
         const pool = this.getBlueprintPool();
         if (!pool.length) return null;
-        const key = pool[Math.floor(Math.random() * pool.length)];
-        this.addCargoBlueprint(key, 1);
-        return key;
+        return pool[Math.floor(Math.random() * pool.length)];
+    },
+
+    /** Parts an enemy wreck can shed: its own weapons/abilities, else the global pool. */
+    getEnemySalvagePool(killInfo) {
+        const pool = [];
+        const seen = {};
+        const push = (kind, id) => {
+            const k = String(kind || '');
+            const pid = String(id || '');
+            if (!pid || (k !== 'weapon' && k !== 'defense' && k !== 'ability' && k !== 'energy')) return;
+            if (!this.getPartItem || !this.getPartItem(k, pid)) return;
+            const key = k + ':' + pid;
+            if (seen[key]) return;
+            seen[key] = true;
+            pool.push({ kind: k, id: pid, key: key });
+        };
+        const type = killInfo && killInfo.type;
+        if (type && typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getConfig) {
+            const cfg = enemyConfigManager.getConfig(type);
+            if (cfg) {
+                if (cfg.defaultWeapon) push('weapon', cfg.defaultWeapon);
+                (cfg.availableWeapons || []).forEach((w) => push('weapon', w));
+                const list = cfg.abilities || cfg.defenseMechanisms || [];
+                list.forEach((a) => {
+                    if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.isEnergyId
+                        && shipLoadoutManager.isEnergyId(a)) {
+                        push('energy', a);
+                    } else if (this.isDefenseAbilityId && this.isDefenseAbilityId(a)) {
+                        push('defense', a);
+                    } else {
+                        push('ability', a);
+                    }
+                });
+            }
+        }
+        if (!pool.length && this.getBlueprintPool) {
+            this.getBlueprintPool().forEach((key) => {
+                const bp = this.parseBlueprintKey(key);
+                if (bp) push(bp.kind, bp.id);
+            });
+        }
+        return pool;
+    },
+
+    /**
+     * Roll a finished part drop. Rarer than blueprints. Returns {kind,id,key} or null.
+     * Does not grant cargo — pickup collection does.
+     */
+    tryPartDrop(killInfo) {
+        const profile = this.getActiveProfile();
+        if (!profile || typeof economyConfig === 'undefined') return null;
+        this.ensureEconomyDefaults(profile);
+        const stats = this.getStationStats(profile);
+        const base = economyConfig.getPartDropChance
+            ? economyConfig.getPartDropChance(killInfo)
+            : 0.012;
+        const chance = Math.min(0.35, base + (stats.dropBonus || 0) * 0.5);
+        if (Math.random() > chance) return null;
+        const pool = this.getEnemySalvagePool(killInfo);
+        if (!pool.length) return null;
+        return pool[Math.floor(Math.random() * pool.length)];
     },
 
     hasCargo() {
@@ -6876,7 +6984,8 @@ extendClass(ProfileManager, {
         this.ensureEconomyDefaults(profile);
         const hasRes = Object.keys(profile.cargo.resources).some((k) => profile.cargo.resources[k] > 0);
         const hasBp = Object.keys(profile.cargo.blueprints).some((k) => profile.cargo.blueprints[k] > 0);
-        return hasRes || hasBp;
+        const hasParts = Object.keys(profile.cargo.parts || {}).some((k) => profile.cargo.parts[k] > 0);
+        return hasRes || hasBp || hasParts;
     },
 
     teleportCargoToStation() {
@@ -6907,7 +7016,29 @@ extendClass(ProfileManager, {
                 moved = true;
             }
         });
-        if (!Object.keys(profile.cargo.resources).length && !Object.keys(profile.cargo.blueprints).length) {
+        Object.keys(profile.cargo.parts || {}).forEach((key) => {
+            const n = profile.cargo.parts[key] || 0;
+            if (n <= 0) {
+                delete profile.cargo.parts[key];
+                return;
+            }
+            const bp = this.parseBlueprintKey(key);
+            if (!bp) {
+                delete profile.cargo.parts[key];
+                return;
+            }
+            const bag = bp.kind === 'weapon' ? profile.parts.weapons
+                : (bp.kind === 'defense' ? profile.parts.defenses
+                    : (bp.kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+            bag[bp.id] = (bag[bp.id] || 0) + n;
+            const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+            if (discoverCat && this.discover) this.discover(discoverCat, bp.id);
+            delete profile.cargo.parts[key];
+            moved = true;
+        });
+        if (!Object.keys(profile.cargo.resources).length
+            && !Object.keys(profile.cargo.blueprints).length
+            && !Object.keys(profile.cargo.parts || {}).length) {
             profile.cargo = this.emptyCargo();
         }
         profile.homeStation.lastTeleportAt = Date.now();
@@ -7510,27 +7641,162 @@ extendClass(ProfileManager, {
 
     /** How many of a bucket/id are filed into the given ship's storage, plus any equipped on that ship. */
     getShipStorageQty(profile, shipId, bucket, id) {
+        this._repairShipFiledCount(profile, shipId, bucket, id);
         const entry = (profile.shipStorage || {})[shipId];
         const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
-        return filed + this._equippedStorageCount(profile, shipId, bucket, id);
+        const eq = this._equippedStorageCount(profile, shipId, bucket, id);
+        const owned = this._ownedStorageCount(profile, bucket, id);
+        // Starter loadout parts often have owned=0: after unequip they live only as
+        // filed. Never add filed+eq for those (legacy overlap looked like ×2), and
+        // never let repair wipe them — that made right-click unequip delete the part.
+        if (owned <= 0) return Math.max(filed, eq);
+        return filed + eq;
+    },
+
+    /**
+     * filed + equipped on this ship cannot exceed owned minus claims on other ships.
+     * Older equip/unequip cycles forgot to consume filed on equip, so ×2/×3 badges
+     * appeared for a single instance — clamp the ledger when read.
+     * Skip owned<=0: those are starter-loadout parts kept visible via fileUnequippedPart.
+     */
+    _repairShipFiledCount(profile, shipId, bucket, id) {
+        if (!profile || !shipId || !bucket || bucket === 'blueprints' || !id) return;
+        const entry = (profile.shipStorage || {})[shipId];
+        if (!entry || !entry[bucket]) return;
+        let filed = entry[bucket][id] || 0;
+        if (filed <= 0) return;
+        const owned = this._ownedStorageCount(profile, bucket, id);
+        if (owned <= 0) return;
+        const eq = this._equippedStorageCount(profile, shipId, bucket, id);
+        const otherFiled = this._allocatedStorageCount(profile, bucket, id) - filed;
+        const otherEq = this._equippedStorageCountAll(profile, bucket, id) - eq;
+        const maxFiled = Math.max(0, owned - otherFiled - otherEq - eq);
+        if (filed <= maxFiled) return;
+        if (maxFiled <= 0) delete entry[bucket][id];
+        else entry[bucket][id] = maxFiled;
+        try { this.save(); } catch (e) { /* ignore */ }
+    },
+
+    /** Unequipping a part must never make it vanish: the "filed on this ship" count is normally
+     *  what keeps it visible (getShipStorageQty = filed + equipped), but a part equipped straight
+     *  from a purchase/craft flow — or from station storage, never routed through
+     *  moveToShipStorage — can reach a slot with filed=0. Clearing that slot alone then drops
+     *  filed+equipped to 0 and the part disappears from every storage grid. Call this right
+     *  after clearing a slot (moduleId '') to file the part the unequip just freed up, so it
+     *  stays visible on this ship — deactivated, not gone. */
+    fileUnequippedPart(profile, shipId, bucket, id) {
+        if (!bucket || bucket === 'blueprints' || !id) return;
+        const entry = this.getShipStorageEntry(profile, shipId);
+        entry[bucket][id] = (entry[bucket][id] || 0) + 1;
+        this.save();
+    },
+
+    /** Equipping a filed cargo instance into a slot: leave cargo (filed−1). No-op if filed is 0
+     *  (part came from station / craft / purchase straight into the slot). */
+    consumeFiledPart(profile, shipId, bucket, id) {
+        if (!bucket || bucket === 'blueprints' || !id) return;
+        const entry = this.getShipStorageEntry(profile, shipId);
+        const n = entry[bucket][id] || 0;
+        if (n <= 0) return;
+        entry[bucket][id] = n - 1;
+        if (entry[bucket][id] <= 0) delete entry[bucket][id];
+        this.save();
     },
 
     moveToShipStorage(profile, shipId, bucket, id, qty) {
         qty = Math.max(1, Math.floor(qty) || 1);
-        const atStation = this.getStationStorageQty(profile, bucket, id);
+        const defId = this.partDefId ? this.partDefId(id) : String(id || '');
+        const atStation = this.getStationStorageQty(profile, bucket, defId);
         const move = Math.min(qty, atStation);
         if (move <= 0) return { ok: false, reason: 'NONE AT STATION' };
         const entry = this.getShipStorageEntry(profile, shipId);
-        entry[bucket][id] = (entry[bucket][id] || 0) + move;
+        entry[bucket][defId] = (entry[bucket][defId] || 0) + move;
         this.save();
         return { ok: true, moved: move };
     },
 
+    /** Clear up to `count` instances of bucket/id out of the ship's equipped loadout
+     *  (not its filed storage) so they free up as station storage. Returns how many it cleared. */
+    _unequipFromLoadout(shipId, bucket, id, count) {
+        if (typeof shipLoadoutManager === 'undefined') return 0;
+        const kindOf = { weapons: 'weapon', defenses: 'defense', abilities: 'ability', energy: 'energy' };
+        const kind = kindOf[bucket];
+        if (!kind) return 0;
+        let removed = 0;
+        while (removed < count) {
+            const L = shipLoadoutManager.getLoadout(shipId);
+            if (!L) break;
+            const list = bucket === 'weapons' ? (L.weaponSlots || []) : (L[bucket] || []);
+            const idx = list.indexOf(id);
+            if (idx === -1) break;
+            const res = shipLoadoutManager.setSlotModule(shipId, kind, idx, null);
+            if (!res || !res.ok) break;
+            removed++;
+        }
+        return removed;
+    },
+
+    /** Key into profile.storageOrder / profile.storagePos for a storage grid: 'station' or
+     *  'ship:<shipId>'. The hangar bay-inventory grid (physical-item.js) is scope 'ship' too —
+     *  it renders through HomeStationUI.renderShipStorage, the same SHIP STORAGE grid shown on
+     *  the station tab, so it shares this exact position map rather than keeping its own. */
+    _storageOrderKey(scope, shipId) {
+        if (scope === 'ship') return 'ship:' + shipId;
+        return 'station';
+    },
+
+    /** The manually-arranged order for a storage grid's current item keys ("bucket:id").
+     *  Items no longer present are dropped; new items are appended at the end. Never auto-sorts
+     *  — the order persists as the player arranges it, across renders and sessions. */
+    getStorageOrderList(profile, scope, shipId, currentKeys) {
+        if (!profile.storageOrder || typeof profile.storageOrder !== 'object') profile.storageOrder = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        let order = Array.isArray(profile.storageOrder[ok]) ? profile.storageOrder[ok].slice() : [];
+        const curSet = new Set(currentKeys);
+        order = order.filter((k) => curSet.has(k));
+        currentKeys.forEach((k) => { if (order.indexOf(k) === -1) order.push(k); });
+        profile.storageOrder[ok] = order;
+        return order;
+    },
+
+    /** The player's pinned (col, row) per item key ("bucket:id") for one storage grid.
+     *  Unlike storageOrder (a replay list), this is an absolute CSS grid position: items the
+     *  player hasn't dragged have no entry and simply auto-pack into the first free cell. */
+    getStoragePosMap(profile, scope, shipId) {
+        if (!profile.storagePos || typeof profile.storagePos !== 'object') profile.storagePos = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        const map = profile.storagePos[ok];
+        return (map && typeof map === 'object') ? map : {};
+    },
+
+    /** Pin `key` at (col, row) in one storage grid — the exact tile it was dropped on, not just
+     *  a position in the replay order. */
+    setStoragePos(profile, scope, shipId, key, col, row) {
+        if (!profile.storagePos || typeof profile.storagePos !== 'object') profile.storagePos = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        if (!profile.storagePos[ok] || typeof profile.storagePos[ok] !== 'object') profile.storagePos[ok] = {};
+        profile.storagePos[ok][key] = [col, row];
+    },
+
+    /** Replace a storage grid's whole pinned-position map at once (every item currently shown
+     *  pins to its current tile) — used right after a drop so the other items don't silently
+     *  reflow around the one that just moved. */
+    freezeStoragePositions(profile, scope, shipId, posByKey) {
+        if (!profile.storagePos || typeof profile.storagePos !== 'object') profile.storagePos = {};
+        const ok = this._storageOrderKey(scope, shipId);
+        profile.storagePos[ok] = Object.assign({}, posByKey);
+        this.save();
+    },
+
     moveToStationStorage(profile, shipId, bucket, id, qty) {
         qty = Math.max(1, Math.floor(qty) || 1);
+        const defId = this.partDefId ? this.partDefId(id) : String(id || '');
         const entry = this.getShipStorageEntry(profile, shipId);
-        const onShip = entry[bucket][id] || 0;
-        const move = Math.min(qty, onShip);
+        const onShip = entry[bucket][defId] || 0;
+        // The ship storage grid also shows currently-equipped items (so you can drag gear
+        // straight off the ship); those aren't "filed" yet, so fall back to unequipping them.
+        const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, defId) : 0;
+        const move = Math.min(qty, onShip + equipped);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
         // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
         // push occupied cells past the budget is refused — the item stays filed on the ship.
@@ -7546,18 +7812,24 @@ extendClass(ProfileManager, {
             return 1;
         };
         this.SHIP_STORAGE_BUCKETS.forEach((b) => {
-            // Count every distinct item currently sitting at the station.
+            // Count every station-filed copy (parts no longer stack into one cell).
             const owned = b === 'blueprints'
                 ? Object.keys(profile.blueprints || {})
                 : Object.keys((profile.parts && profile.parts[b]) || {});
             owned.forEach((itemId) => {
-                if (this.getStationStorageQty(profile, b, itemId) > 0) used += spanOf(b, itemId);
+                const q = this.getStationStorageQty(profile, b, itemId);
+                if (q <= 0) return;
+                const span = spanOf(b, itemId);
+                used += b === 'blueprints' ? span : span * q;
             });
         });
-        const add = spanOf(bucket, id) * move;
+        const add = spanOf(bucket, defId) * move;
         if (used + add > cap) return { ok: false, reason: 'BAY FULL' };
-        entry[bucket][id] = onShip - move;
-        if (entry[bucket][id] <= 0) delete entry[bucket][id];
+        const fromFiled = Math.min(move, onShip);
+        const fromEquipped = move - fromFiled;
+        if (fromEquipped > 0) this._unequipFromLoadout(shipId, bucket, defId, fromEquipped);
+        entry[bucket][defId] = onShip - fromFiled;
+        if (entry[bucket][defId] <= 0) delete entry[bucket][defId];
         this.save();
         return { ok: true, moved: move };
     }
@@ -11021,34 +11293,34 @@ var AbilityConfigManager = class AbilityConfigManager {
             shield_generator: this.makeAbility({
                 id: 'shield_generator',
                 name: 'Shield Generator',
-                description: 'Energy barrier generation system',
+                description: 'Energy barrier generation system. Self-recharges while undamaged.',
                 icon: 'ability_shield_generator',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 2,
-                uiDescription: 'Provides energy shield capacity',
+                uiDescription: 'Shield capacity + self-recharge',
                 faction: 'terran'
             }),
             energy_shield: this.makeAbility({
                 id: 'energy_shield',
                 name: 'Energy Shield',
-                description: 'High-capacity energy deflection field',
+                description: 'High-capacity energy deflection field with built-in self-recharge.',
                 icon: 'ability_energy_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 2,
-                uiDescription: 'Strong energy shield',
+                uiDescription: 'Strong shield + REGEN',
                 faction: 'terran'
             }),
             capacitor_shield_regen: this.makeAbility({
                 id: 'capacitor_shield_regen',
                 name: 'Capacitor Shield',
-                description: 'Bulkier shield capacitor bank. Higher capacity and steady regen, needs a larger core mount.',
+                description: 'Bulkier shield capacitor bank. Higher capacity and faster self-recharge, needs a larger core mount.',
                 icon: 'ability_energy_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 3,
-                uiDescription: 'Large-capacity shield with built-in regen',
+                uiDescription: 'Large shield + strong REGEN',
                 faction: null,
                 visual: 'plating_capacitor',
                 slotMode: 'insert',
@@ -11058,23 +11330,23 @@ var AbilityConfigManager = class AbilityConfigManager {
             adaptive_shield: this.makeAbility({
                 id: 'adaptive_shield',
                 name: 'Adaptive Shield',
-                description: 'Shield that adapts to incoming damage types',
+                description: 'Shield that adapts to incoming damage types and slowly self-recharges.',
                 icon: 'ability_adaptive_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 2,
-                uiDescription: 'Adaptive damage mitigation',
+                uiDescription: 'Adaptive shield + REGEN',
                 faction: 'terran'
             }),
             shield_regen: this.makeAbility({
                 id: 'shield_regen',
                 name: 'Shield Regen',
-                description: 'Automatic shield recharge over time',
+                description: 'Boosts automatic shield recharge rate over time',
                 icon: 'ability_shield_regen',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 1,
-                uiDescription: 'Passive shield regeneration',
+                uiDescription: 'Extra shield REGEN /s',
                 faction: 'terran'
             })
         };
@@ -11093,12 +11365,11 @@ extendClass(AbilityConfigManager, {
             balanced_combat: this.makeAbility({
                 id: 'balanced_combat',
                 name: 'Balanced Combat',
-                description: 'Versatile combat system with balanced offense and defense',
+                description: 'Lightweight thruster tuning for balanced maneuvering',
                 icon: 'ability_balanced_combat',
                 cluster: 'combat',
                 type: 'passive',
-                tier: 1,
-                uiDescription: 'Balanced performance across combat metrics'
+                tier: 1
             }),
             boss_ai: this.makeAbility({
                 id: 'boss_ai',
@@ -13096,6 +13367,14 @@ extendClass(ShipConfigManager, {
             const bonuses = (typeof profileManager !== 'undefined' && profileManager.getModuleUpgradeBonuses)
                 ? profileManager.getModuleUpgradeBonuses()
                 : null;
+            const weaponOcc = {};
+            const resolveInstance = (bucket, defId) => {
+                if (typeof profileManager === 'undefined' || !profileManager.getEquippedInstanceId) return defId;
+                const occ = weaponOcc[bucket + ':' + defId] || 0;
+                weaponOcc[bucket + ':' + defId] = occ + 1;
+                const profile = profileManager.getActiveProfile && profileManager.getActiveProfile();
+                return profileManager.getEquippedInstanceId(profile, typeId, bucket, defId, occ) || defId;
+            };
             (L.weapons || merged.availableWeapons).forEach((w) => {
                 const fromRegistry = (typeof weaponConfigManager !== 'undefined')
                     ? weaponConfigManager.getDefaultsForShip(w)
@@ -13112,16 +13391,17 @@ extendClass(ShipConfigManager, {
                         height: fromRegistry.height != null ? fromRegistry.height : 8
                     }
                 );
+                const instanceId = resolveInstance('weapons', w);
                 const itemBonus = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeBonuses)
-                    ? profileManager.getItemUpgradeBonuses('weapons', w)
+                    ? profileManager.getItemUpgradeBonuses('weapons', instanceId)
                     : null;
                 // Fire mode (SINGLE/BURST/AUTO, free to switch once unlocked) and the
                 // fine-tune slider (0..1, biases damage against cooldown) both layer on
                 // top of the track-level bonuses above, same multiplier pipeline.
                 const modeDef = (typeof profileManager !== 'undefined' && typeof economyConfig !== 'undefined' && economyConfig.itemFireModes)
-                    ? economyConfig.itemFireModes[profileManager.getItemMode('weapons', w)]
+                    ? economyConfig.itemFireModes[profileManager.getItemMode('weapons', instanceId)]
                     : null;
-                const tune = (typeof profileManager !== 'undefined') ? profileManager.getItemTune('weapons', w) : 0.5;
+                const tune = (typeof profileManager !== 'undefined') ? profileManager.getItemTune('weapons', instanceId) : 0.5;
                 const tuneDmgMul = 0.85 + tune * 0.3;
                 const tuneCdMul = 1.15 - tune * 0.3;
                 if (bonuses) {
@@ -13159,19 +13439,22 @@ extendClass(ShipConfigManager, {
                 // above, so their bonuses are combined onto the aggregate ship-wide
                 // multipliers instead (each equipped item contributes independently).
                 (L.defenses || []).forEach((id) => {
-                    const b = profileManager.getItemUpgradeBonuses('defenses', id);
+                    if (!id) return;
+                    const b = profileManager.getItemUpgradeBonuses('defenses', resolveInstance('defenses', id));
                     bonuses.defenseCapacityMul *= b.capacityMul;
                     bonuses.defenseHarden = Math.min(0.6, bonuses.defenseHarden + b.harden);
                     bonuses.defenseRegenMul *= b.regenMul;
                 });
                 (L.abilities || []).forEach((id) => {
-                    const b = profileManager.getItemUpgradeBonuses('abilities', id);
+                    if (!id) return;
+                    const b = profileManager.getItemUpgradeBonuses('abilities', resolveInstance('abilities', id));
                     bonuses.abilityCooldownMul = Math.max(0.3, bonuses.abilityCooldownMul * b.cooldownMul);
                     bonuses.abilityPotencyMul *= b.potencyMul;
                     bonuses.abilityDurationMul *= b.durationMul;
                 });
                 (L.energy || []).forEach((id) => {
-                    const b = profileManager.getItemUpgradeBonuses('energy', id);
+                    if (!id) return;
+                    const b = profileManager.getItemUpgradeBonuses('energy', resolveInstance('energy', id));
                     bonuses.abilityCooldownMul = Math.max(0.3, bonuses.abilityCooldownMul * b.cooldownMul);
                 });
             }
@@ -15351,7 +15634,10 @@ extendClass(ShipLoadoutManager, {
             String(w).replace(/\b\w/g, (c) => c.toUpperCase())
         );
 
-        const defStats = this.computeDefenseStats(model.abilities);
+        // Shield/armor mechanisms aren't only equipped as abilities or defenses — a shield
+        // generator can sit in the energy slot too, so computeDefenseStats needs that list as
+        // well or an energy-slot shield generator contributes no shieldMax at all.
+        const defStats = this.computeDefenseStats(model.abilities.concat(layout.loadout.energy || []));
         model.shieldMax = defStats.shieldMax;
         model.shieldRegen = defStats.shieldRegen;
         model.damageReduction = defStats.damageReduction;
@@ -15395,7 +15681,11 @@ extendClass(ShipLoadoutManager, {
             if (s.indexOf('shield') !== -1) {
                 shieldMax += s.indexOf('adaptive') !== -1 ? 18
                     : (s.indexOf('generator') !== -1 ? 22 : 12);
-                if (s.indexOf('regen') !== -1) shieldRegen += 4;
+                // Every shield self-recharges; dedicated regen / capacitor banks charge faster.
+                // shieldRegen is points per second against shieldMax (playerManager update loop).
+                shieldRegen += 1.5;
+                if (s.indexOf('regen') !== -1) shieldRegen += 3.5;
+                if (s.indexOf('capacitor') !== -1) shieldRegen += 1;
             }
             if (s.indexOf('massive_armor') !== -1) {
                 damageReduction = Math.max(damageReduction, 15);
@@ -16989,7 +17279,6 @@ extendClass(ShipLoadoutManager, {
     exportHangarLayout(shipId) {
         const json = JSON.stringify(this.snapshotHangarLayout(shipId));
         try { navigator.clipboard.writeText(json); } catch (e) { /* ignore */ }
-        console.log(json);
         return json;
     },
 
@@ -17600,7 +17889,7 @@ var ABILITY_STAT_EFFECTS = {
     heavy_armor:        { armor: 2, speedMul: 0.95 },
     massive_armor:      { armor: 4, speedMul: 0.90 },
     weapon_systems:     { damageMul: 1.04 },
-    balanced_combat:    { damageMul: 1.04, armor: 1 }
+    balanced_combat:    { speedMul: 1.08 }
 };
 
 extendClass(ShipLoadoutManager, {
@@ -17776,7 +18065,6 @@ var ObjectiveManager = class ObjectiveManager {
         this.label = '';
         this.goal = null;
         this.enter = null;
-        this.hasShop = false;
     }
 
     reset() {
@@ -17795,9 +18083,9 @@ var ObjectiveManager = class ObjectiveManager {
         this.exitGate = false;
     }
 
-    /** End of the level reached (goal in view, objective met or won): nothing new may spawn. */
+    /** End of the level reached (exit gate / sluice phase, goal in view, objective met or won): nothing new may spawn. */
     isLevelEnding() {
-        return !!(this.goal || this.completed || this.won || this.awaitingFieldClear);
+        return !!(this.exitGate || this.goal || this.completed || this.won || this.awaitingFieldClear);
     }
 
     needsFieldClear() {
@@ -17875,6 +18163,16 @@ var ObjectiveManager = class ObjectiveManager {
         const kRise = Math.min(1, a.t / a.riseMs);
         a.y = -(a.h + a.dome.depth) + (a.restY + a.h + a.dome.depth) * out(kRise);
         a.dome.split = Math.max(0, Math.min(1, (a.t - a.riseMs) / a.openMs));
+        if (typeof soundManager !== 'undefined') {
+            if (kRise > 0.05 && !a._sfxRise && soundManager.playArrivalRise) {
+                a._sfxRise = true;
+                soundManager.playArrivalRise();
+            }
+            if (a.dome.split > 0.05 && !a._sfxOpen && soundManager.playArrivalOpen) {
+                a._sfxOpen = true;
+                soundManager.playArrivalOpen();
+            }
+        }
     }
 
     /** Arrival: tube rises in, dome opens, ship flies out, then the hatch scrolls away below. */
@@ -17914,6 +18212,16 @@ var ObjectiveManager = class ObjectiveManager {
     /** Enemies hold fire while the ship comes out of the arrival hatch and until the hatch has scrolled away. */
     isArrivalGrace() {
         return !!(this.arrival && !this.arrival.done);
+    }
+
+    /** Ship is locked into the sluice / warp fly-in — no combat damage, no steering. */
+    isGateEnter() {
+        return !!this.enter;
+    }
+
+    /** Arrival hatch fly-out or sluice enter: enemies hold fire, collisions skip the ship. */
+    isCombatGrace() {
+        return this.isArrivalGrace() || this.isGateEnter();
     }
 
     /** No spawns until the hatch has scrolled away plus a short quiet spell after it. */
@@ -18074,26 +18382,6 @@ var ObjectiveManager = class ObjectiveManager {
         }
     }
 
-    /** Shop station beside the sluice gate, on stages seeded with `hasShop`. Rides along with the gate's scroll. */
-    getShopStation() {
-        if (!this.hasShop || !this.goal || this.goal.kind !== 'sluice') return null;
-        if (this.completed || this.won || this.enter) return null;
-        const g = this.goal;
-        return { cx: g.cx + 70, y: g.y, h: g.h, range: 34 };
-    }
-
-    /** True while the player ship sits close enough to the shop station to interact. */
-    isNearShopStation() {
-        const s = this.getShopStation();
-        if (!s) return false;
-        const pm = typeof playerManager !== 'undefined' ? playerManager : null;
-        const p = pm && pm.player;
-        if (!p) return false;
-        const px = p.x + p.width / 2;
-        const py = p.y + p.height / 2;
-        return Math.abs(px - s.cx) <= s.range && Math.abs(py - (s.y + s.h / 2)) <= s.range;
-    }
-
     /** Transit stage: the goal scrolls in once the timer ends; fly into the opening. */
     updateGoal(deltaTime) {
         const o = this.objective;
@@ -18102,7 +18390,10 @@ var ObjectiveManager = class ObjectiveManager {
             || (typeof renderManager !== 'undefined' && renderManager.width) || 240;
         if (!this.goal) {
             if (!this.exitGate && this.elapsedMs < o.seconds * 1000) return;
-            const open = o.goal === 'warp' ? 44 : 64;
+            const shipW = (typeof playerManager !== 'undefined' && playerManager.player)
+                ? (playerManager.player.width || 18) : 18;
+            // Warp used to be only 44px — a scaled ship plus canyon lips scraped it to death on enter.
+            const open = Math.max(o.goal === 'warp' ? 52 : 64, Math.ceil(shipW + 20));
             this.goal = {
                 kind: o.goal === 'warp' ? 'warp' : 'sluice',
                 y: -30,
@@ -18113,6 +18404,10 @@ var ObjectiveManager = class ObjectiveManager {
                 // Sluice: a Metroid-style hatch dome seals the opening until it is shot open. A hero breaks through, not out.
                 dome: o.goal === 'warp' ? null : { hp: 300, max: 300, depth: 22, flashMs: 0, burstMs: 0 }
             };
+            if (typeof soundManager !== 'undefined') {
+                if (o.goal === 'warp' && soundManager.playWarpAppear) soundManager.playWarpAppear();
+                else if (soundManager.playSluiceAppear) soundManager.playSluiceAppear();
+            }
             return;
         }
         const g = this.goal;
@@ -18122,12 +18417,19 @@ var ObjectiveManager = class ObjectiveManager {
             // Shot open: the halves fold back like the arrival hatch instead of bursting.
             if (g.dome.hp <= 0 && g.dome.closing) {
                 // Auto-opened hatch closing again: the halves fold back in, then it is sealed.
+                if (!g.dome._closeSfx) {
+                    g.dome._closeSfx = true;
+                    if (typeof soundManager !== 'undefined' && soundManager.playGateDomeClose) {
+                        soundManager.playGateDomeClose();
+                    }
+                }
                 g.dome.burstMs = Math.max(0, g.dome.burstMs - deltaTime);
                 g.dome.split = g.dome.burstMs / 500;
                 if (g.dome.burstMs <= 0) {
                     g.dome.hp = g.dome.max;
                     g.dome.closing = false;
                     g.dome.split = 0;
+                    g.dome._closeSfx = false;
                 }
             } else if (g.dome.hp <= 0) {
                 g.dome.burstMs = Math.min(500, g.dome.burstMs + deltaTime);
@@ -18173,6 +18475,16 @@ var ObjectiveManager = class ObjectiveManager {
         }
         if (py <= g.y + g.h && inOpening) {
             this.enter = { t: 0, dur: 1500, fromX: p.x, fromY: p.y };
+            // Cover the full fly-in: leftover shots / wall scrapes used to kill the ship mid-enter.
+            if (pm && typeof pm.invuln === 'number') {
+                pm.invuln = Math.max(pm.invuln || 0, this.enter.dur + 400);
+            }
+            if (typeof bulletManager !== 'undefined' && bulletManager.enemyBullets) {
+                bulletManager.enemyBullets.length = 0;
+            }
+            if (typeof soundManager !== 'undefined' && soundManager.playGateEnter) {
+                soundManager.playGateEnter(g.kind || 'sluice');
+            }
             // Leftover drops stream after the ship while it flies in, so no loot scoop is needed afterwards.
             if (typeof pickupManager !== 'undefined' && pickupManager.beginLootPhase) pickupManager.beginLootPhase(4000);
             return;
@@ -18209,6 +18521,9 @@ var ObjectiveManager = class ObjectiveManager {
         d.closing = false;
         d.burstMs = 0;
         d.split = 0;
+        if (typeof soundManager !== 'undefined' && soundManager.playGateDomeOpen) {
+            soundManager.playGateDomeOpen();
+        }
     }
 
     /** A player shot hits the hatch dome; returns true once it bursts. */
@@ -18218,10 +18533,18 @@ var ObjectiveManager = class ObjectiveManager {
         d.hp = Math.max(0, d.hp - Math.max(1, Number(amount) || 10));
         d.flashMs = 90;
         d.auto = false;
-        if (d.hp > 0) return false;
+        if (d.hp > 0) {
+            if (typeof soundManager !== 'undefined' && soundManager.playGateDomeHit) {
+                soundManager.playGateDomeHit();
+            }
+            return false;
+        }
         d.burstMs = 0;
         d.split = 0;
-        if (typeof soundManager !== 'undefined' && soundManager.playExplosion) soundManager.playExplosion();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.playGateDomeOpen) soundManager.playGateDomeOpen();
+            else if (soundManager.playExplosion) soundManager.playExplosion();
+        }
         if (typeof game !== 'undefined' && game) game.score += 250;
         return true;
     }
@@ -18269,7 +18592,6 @@ var ObjectiveManager = class ObjectiveManager {
             this.renderGateFrame(oc, g, W, pulse);
             if (g.dome) this.renderGateDome(oc, g);
         });
-        this.renderShopStation(ctx, pulse);
         ctx.save();
         const l = g.cx - g.open / 2;
         // Entry animation: the opening lights up as the ship flies in, then a flash washes over the field.
@@ -18403,33 +18725,6 @@ var ObjectiveManager = class ObjectiveManager {
                 ctx.fillRect(x + 1, y + 1, 2, 2);
             }
         });
-    }
-
-    /** Small kiosk floating beside the sluice on stages that got a shop; shows a "press E" hint up close. */
-    renderShopStation(ctx, pulse) {
-        const s = this.getShopStation();
-        if (!s) return;
-        const w = 26, h = 20;
-        const x = Math.round(s.cx - w / 2), y = Math.round(s.y + s.h / 2 - h / 2);
-        ctx.save();
-        ctx.fillStyle = '#05060a';
-        ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
-        ctx.fillStyle = '#2a3a4e';
-        ctx.fillRect(x, y, w, h);
-        ctx.fillStyle = 'rgba(255,200,90,' + (0.5 + pulse * 0.4) + ')';
-        ctx.fillRect(x + 3, y + 3, w - 6, 4);
-        ctx.fillStyle = '#ffc85a';
-        ctx.fillRect(x + w / 2 - 1, y + 9, 2, 2);
-        ctx.fillRect(x + w / 2 - 5, y + 13, 10, 2);
-        if (this.isNearShopStation()) {
-            ctx.fillStyle = '#05060a';
-            ctx.fillRect(x + w / 2 - 7, y - 14, 14, 10);
-            ctx.fillStyle = '#ffe9a8';
-            ctx.font = '8px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('[E]', x + w / 2, y - 6);
-        }
-        ctx.restore();
     }
 
     /**
@@ -19434,16 +19729,6 @@ extendClass(CoreLevelManager, {
             };
         }
 
-        // A random subset of sluice transit stages also get a shop station
-        // beside the gate (seeded on planet+stage so it's stable per replay).
-        let hasShop = false;
-        if (isTransit && resolved.objective && resolved.objective.goal === 'sluice') {
-            const key = `${parsed.planetId}:${parsed.stageIndex}:shop`;
-            let h = 2166136261;
-            for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
-            hasShop = ((h >>> 0) % 100) < 35;
-        }
-
         const champion = (resolved.enemies || []).find(e => e.champion) || (resolved.enemies || [])[0];
         const enemyType = parsed.isBoss
             ? (base.bossEnemyType || 'enemyBoss')
@@ -19471,7 +19756,6 @@ extendClass(CoreLevelManager, {
             enemyCount: (resolved.enemies && resolved.enemies.length) || base.enemyCount || 3,
             enemies: resolved.enemies || [],
             objective: resolved.objective || null,
-            hasShop,
             dailies: base.dailies || null,
             obstacles: base.obstacles || [],
             obstacleSpawnRate: Math.max(250, Math.round((base.obstacleSpawnRate || 2000) * spawnMult * tierMods.spawn)),
@@ -19542,7 +19826,11 @@ extendClass(CoreLevelManager, {
     },
 
     applyLevelSettings(level) {
-        const planetId = (level && (level.planetId || level.background || level.id || '')).toString().toLowerCase().split('-')[0];
+        // Keep full planet slugs (explored / ambush). Only strip stage suffixes.
+        const rawPid = (level && (level.planetId || level.background || level.id || '')).toString().toLowerCase();
+        const planetId = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(rawPid)
+            : rawPid.replace(/-(?:\d+|boss|b)$/, '') || 'mars';
 
         this.gameState.setObstacleSpawnInterval(level.obstacleSpawnRate);
 
@@ -19574,7 +19862,6 @@ extendClass(CoreLevelManager, {
 
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.start(objective, enemies);
-            objectiveManager.hasShop = !!level.hasShop;
         }
 
         const champion = enemies.find(e => e.champion) || enemies[0];
@@ -19934,8 +20221,12 @@ var GameControlSystem = class GameControlSystem {
             menuStateManager.setScreen('ingame', { levelId: levelId, endKind: null, endStats: null, endLoot: null });
         }
 
-        if (typeof soundManager !== 'undefined' && soundManager.stopMenuMusic) {
-            soundManager.stopMenuMusic();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.markAudioUnlocked) soundManager.markAudioUnlocked();
+            if (soundManager.ensureContext) soundManager.ensureContext();
+            if (soundManager.stopMenuMusic) soundManager.stopMenuMusic();
+            // Drop any leftover hub tracker so setStageContext can start planet music cleanly.
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
         }
 
         // Always clear pause/settings overlays before combat HUD shows
@@ -20022,6 +20313,9 @@ var GameControlSystem = class GameControlSystem {
         }
         if (typeof inStageShop !== 'undefined' && inStageShop.close) {
             inStageShop.close();
+        }
+        if (typeof inStageShop !== 'undefined' && inStageShop.applyPending) {
+            inStageShop.applyPending();
         }
         if (typeof explosionSystem !== 'undefined' && explosionSystem.clear) {
             explosionSystem.clear();
@@ -20410,9 +20704,11 @@ extendClass(GameControlSystem, {
                         this.lastVictoryLoot = granted && Object.keys(granted).length ? granted : null;
                         if (granted && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
                             const parts = Object.keys(granted).map((id) => {
-                                const label = (typeof economyConfig !== 'undefined')
-                                    ? economyConfig.getResourceLabel(id)
-                                    : id.toUpperCase();
+                                const label = (this.victoryLootLabel)
+                                    ? this.victoryLootLabel(id)
+                                    : ((typeof economyConfig !== 'undefined')
+                                        ? economyConfig.getResourceLabel(id)
+                                        : id.toUpperCase());
                                 return granted[id] + ' ' + label;
                             });
                             if (parts.length) {
@@ -20568,21 +20864,19 @@ extendClass(GameControlSystem, {
 
         // Create / refresh victory overlay layout
         let victoryOverlay = document.getElementById('victoryOverlay');
-        // Template always has next + leave; ambush hides leave after paint.
+        // Template: next + shop + leave; ambush/boss hide leave after paint.
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuItems = ['nextLevel', 'levelSelection'];
+            uiManager.victoryMenuItems = ['nextLevel', 'shop', 'levelSelection'];
         }
         const existingBtns = victoryOverlay
             ? victoryOverlay.querySelectorAll('.victory-button').length
             : 0;
-        // Rebuild when missing, or when stale HTML still has PLAY AGAIN / a
-        // third button while the menu only has next + leave (index mismatch
-        // made "BOSS ROOM" fire planet select).
+        // Rebuild when missing, or when stale HTML lacks the shop button.
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
-            || existingBtns < 2
-            || existingBtns > 2
-            || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]');
+            || existingBtns !== 3
+            || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
+            || !victoryOverlay.querySelector('.victory-button[data-action="shop"]');
         if (!victoryOverlay) {
             victoryOverlay = document.createElement('div');
             victoryOverlay.id = 'victoryOverlay';
@@ -20623,7 +20917,11 @@ extendClass(GameControlSystem, {
                                 <span class="button-icon" data-icon="menuStart"></span>
                                 <span class="button-text">NEXT STAGE</span>
                             </button>
-                            <button type="button" class="victory-button" data-index="1" data-action="levelSelection" tabindex="-1">
+                            <button type="button" class="victory-button" data-index="1" data-action="shop" id="victoryShopButton" tabindex="-1">
+                                <span class="button-icon" data-icon="hsShop"></span>
+                                <span class="button-text">SHOP</span>
+                            </button>
+                            <button type="button" class="victory-button" data-index="2" data-action="levelSelection" tabindex="-1">
                                 <span class="button-icon" data-icon="menuPlanets"></span>
                                 <span class="button-text">Leave Planet</span>
                             </button>
@@ -20682,6 +20980,19 @@ extendClass(GameControlSystem, {
     },
 
     victoryResourceIconKey(id) {
+        if (String(id || '').indexOf('blueprint:') === 0) return 'hsBlueprint';
+        if (String(id || '').indexOf('part:') === 0) {
+            const rest = String(id).slice(5);
+            const sep = rest.indexOf(':');
+            if (sep !== -1 && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleIcon) {
+                const key = shipLoadoutManager.resolveModuleIcon({
+                    kind: rest.slice(0, sep),
+                    id: rest.slice(sep + 1)
+                });
+                if (key) return key;
+            }
+            return 'hsCraft';
+        }
         if (typeof economyConfig !== 'undefined' && economyConfig.getResourceIconKey) {
             return economyConfig.getResourceIconKey(id);
         }
@@ -20694,6 +21005,38 @@ extendClass(GameControlSystem, {
         return map[id] || 'resScrap';
     },
 
+    victoryLootLabel(id) {
+        const raw = String(id || '');
+        if (raw.indexOf('blueprint:') === 0 && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return 'BP ' + profileManager.getBlueprintName(raw.slice(10));
+        }
+        if (raw.indexOf('part:') === 0 && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return profileManager.getBlueprintName(raw.slice(5));
+        }
+        if (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel) {
+            return economyConfig.getResourceLabel(id);
+        }
+        return raw.toUpperCase();
+    },
+
+    victoryLootTint(id) {
+        const raw = String(id || '');
+        if (raw.indexOf('blueprint:') === 0) return '#ffd24a';
+        if (raw.indexOf('part:') === 0) {
+            const rest = raw.slice(5);
+            const sep = rest.indexOf(':');
+            const kind = sep !== -1 ? rest.slice(0, sep) : 'weapon';
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) {
+                return iconRenderer.getModuleKindColor(kind) || '#c08cff';
+            }
+            return '#c08cff';
+        }
+        if (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor) {
+            return economyConfig.getResourceColor(id);
+        }
+        return undefined;
+    },
+
     renderVictoryLootHtml(loot) {
         const entries = loot
             ? Object.keys(loot).filter((id) => (loot[id] || 0) > 0)
@@ -20703,18 +21046,15 @@ extendClass(GameControlSystem, {
         }
         return entries.map((id) => {
             const amount = loot[id] || 0;
-            const label = (typeof economyConfig !== 'undefined')
-                ? economyConfig.getResourceLabel(id)
-                : String(id).toUpperCase();
+            const label = this.victoryLootLabel(id);
             const iconKey = this.victoryResourceIconKey(id);
-            const tint = (typeof economyConfig !== 'undefined' && economyConfig.getResourceColor)
-                ? economyConfig.getResourceColor(id)
-                : undefined;
+            const tint = this.victoryLootTint(id);
             const iconHtml = (typeof iconRenderer !== 'undefined')
                 ? iconRenderer.imgHtml(iconKey, 28, 'victory-loot-pixel', tint)
                 : '';
             const color = tint || '#ccc';
-            return `<div class="victory-loot-row victory-loot-${id}" style="--victory-res-color:${color}" title="${label}">` +
+            const safeClass = String(id).replace(/[^a-z0-9_-]+/gi, '-');
+            return `<div class="victory-loot-row victory-loot-${safeClass}" style="--victory-res-color:${color}" title="${label}">` +
                 `<span class="victory-loot-icon">${iconHtml}</span>` +
                 `<span class="victory-loot-label">${label}</span>` +
                 `<span class="victory-loot-amount">${amount}</span>` +
@@ -20726,7 +21066,8 @@ extendClass(GameControlSystem, {
         if (!victoryOverlay) return;
         const defaults = {
             '0': 'menuStart',
-            '1': 'menuPlanets'
+            '1': 'hsShop',
+            '2': 'menuPlanets'
         };
         if (typeof iconRenderer !== 'undefined') {
             victoryOverlay.querySelectorAll('.victory-stats .stat-icon[data-icon]').forEach((iconEl) => {
@@ -20772,7 +21113,8 @@ extendClass(GameControlSystem, {
             : null;
         const cleared = !!(currentLevel && currentLevel.isBoss) || !meta || meta.kind === 'planet';
         if (!cleared) return;
-        const label = overlay.querySelector('.victory-button[data-index="1"] .button-text');
+        const leaveBtn = overlay.querySelector('.victory-button[data-action="levelSelection"]');
+        const label = leaveBtn && leaveBtn.querySelector('.button-text');
         let left = 4;
         const tick = () => {
             if (label) label.textContent = `Leave Planet (${left})`;
@@ -20785,8 +21127,12 @@ extendClass(GameControlSystem, {
             left -= 1;
             this._victoryAutoReturn = setTimeout(tick, 1000);
         };
-        if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuIndex = 1;
+        if (typeof uiManager !== 'undefined' && leaveBtn) {
+            const buttons = typeof uiManager.getVictoryButtons === 'function'
+                ? uiManager.getVictoryButtons()
+                : [];
+            const leaveIdx = buttons.indexOf(leaveBtn);
+            uiManager.victoryMenuIndex = leaveIdx >= 0 ? leaveIdx : Math.max(0, buttons.length - 1);
             uiManager.updateVictoryMenuDisplay();
         }
         tick();
@@ -20797,7 +21143,7 @@ extendClass(GameControlSystem, {
             clearTimeout(this._victoryAutoReturn);
             this._victoryAutoReturn = null;
         }
-        const label = document.querySelector('#victoryOverlay .victory-button[data-index="1"] .button-text');
+        const label = document.querySelector('#victoryOverlay .victory-button[data-action="levelSelection"] .button-text');
         if (label) label.textContent = 'Leave Planet';
     },
 
@@ -20857,9 +21203,12 @@ extendClass(GameControlSystem, {
         }
         if (typeof uiManager !== 'undefined') {
             uiManager.victoryMenuItems = hideLeaveBtn
-                ? ['nextLevel']
-                : ['nextLevel', 'levelSelection'];
-            if (hideLeaveBtn && uiManager.victoryMenuIndex > 0) {
+                ? ['nextLevel', 'shop']
+                : ['nextLevel', 'shop', 'levelSelection'];
+            const visible = typeof uiManager.getVictoryButtons === 'function'
+                ? uiManager.getVictoryButtons().length
+                : uiManager.victoryMenuItems.length;
+            if (uiManager.victoryMenuIndex >= visible) {
                 uiManager.victoryMenuIndex = 0;
             }
         }
@@ -21143,6 +21492,8 @@ extendClass(GameControlSystem, {
             if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
             if (soundManager.clearMusicContext) soundManager.clearMusicContext();
+            // Back to station / map — restore hub soundtrack.
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
         }
 
         if (typeof planetEditorUI !== 'undefined' && planetEditorUI.visible) {
@@ -21206,6 +21557,10 @@ extendClass(GameControlSystem, {
 
     // Level selection (planet map) — default exit after a run
     showLevelSelection() {
+        if (typeof inStageShop !== 'undefined') {
+            if (inStageShop.close) inStageShop.close();
+            if (inStageShop.refundPending) inStageShop.refundPending();
+        }
         // The planet just fought on: the map opens with it already selected.
         let foughtPlanet = null;
         try {
@@ -22443,7 +22798,7 @@ var UIManager = class UIManager {
         this.gameOverMenuIndex = 0;
         this.gameOverMenuItems = ['restart', 'mainMenu'];
         this.victoryMenuIndex = 0;
-        this.victoryMenuItems = ['nextLevel', 'levelSelection'];
+        this.victoryMenuItems = ['nextLevel', 'shop', 'levelSelection'];
         this._enemyBarKeys = '';
         this._playerShipIconKey = '';
         this._playerStatIconKey = '';
@@ -22495,7 +22850,7 @@ var UIManager = class UIManager {
         const canvas = document.getElementById('playerShipIcon');
         if (!canvas || typeof playerManager === 'undefined') return;
         const model = playerManager.getCurrentShipModel ? playerManager.getCurrentShipModel() : null;
-        const key = (model ? (model.id || model.type || model.name || 'player') : '') + '|48nn';
+        const key = (model ? (model.id || model.type || model.name || 'player') : '') + '|48fill';
         if (key === this._playerShipIconKey) return;
         this._playerShipIconKey = key;
         this.renderHealthShipIcon(canvas, model);
@@ -22508,16 +22863,16 @@ var UIManager = class UIManager {
             : null;
         const energyTint = res('voltex') || '#c86ef0';
         const shieldTint = res('crystal') || '#6ec8e8';
-        const key = energyTint + '|' + shieldTint + '|16raw';
+        // Same 48×48 backing as the ship icon so CSS size and optical weight match.
+        const key = energyTint + '|' + shieldTint + '|48nn-e2';
         if (key === this._playerStatIconKey) return;
         this._playerStatIconKey = key;
         const energy = document.getElementById('playerEnergyIcon');
         const shield = document.getElementById('playerShieldIcon');
-        // Native 16px sprite + CSS 3× pixelated — skip Scale2x/@4x (looks muddy).
         const paint = (el, iconKey, tint) => {
             if (!el) return;
-            if (el.width !== 16) el.width = 16;
-            if (el.height !== 16) el.height = 16;
+            if (el.width !== 48) el.width = 48;
+            if (el.height !== 48) el.height = 48;
             iconRenderer.drawToCanvas(el, iconKey, tint, false, false, false);
         };
         paint(energy, 'statEnergy', energyTint);
@@ -22632,7 +22987,7 @@ var UIManager = class UIManager {
         const keys = enemies.map((e) =>
             e.key + ':' + (e.factionId || '') + ':' + (e.type || '') + ':' +
             (e.enemyClass || '') + ':' + (e.tier != null ? e.tier : '') + ':' +
-            (e.width || '') + 'x' + (e.height || '') + ':' + (e.shieldMax > 0 ? 's' : '')
+            (e.width || '') + 'x' + (e.height || '') + ':' + (e.shieldMax > 0 ? 's' : '') + ':ring2'
         ).join('|');
         const layout = this.enemyHudLayout(Math.max(enemies.length, 1));
 
@@ -22656,10 +23011,17 @@ var UIManager = class UIManager {
             if (!enemy || !fill) continue;
             this.updateEnemyFace(card, enemy);
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
-            const hpLabel = Math.max(0, Math.ceil(enemy.health)) + ' / ' + Math.ceil(enemy.maxHealth || 0);
+            const hpCur = Math.max(0, Math.ceil(enemy.health));
+            const hpMax = Math.ceil(enemy.maxHealth || 0);
+            const hpLabel = hpCur + '/' + hpMax;
             if (fill._vfHpPct !== pct) {
                 fill._vfHpPct = pct;
                 fill.style.setProperty('--health-width', pct + '%');
+            }
+            const hullTag = card.querySelector('.enemy-vital-tag.is-hull');
+            if (hullTag && hullTag._vfHpLabel !== hpLabel) {
+                hullTag._vfHpLabel = hpLabel;
+                hullTag.textContent = 'HULL ' + hpLabel;
             }
             const hpText = fill.querySelector('.enemy-hp-text');
             if (hpText && hpText._vfHpLabel !== hpLabel) {
@@ -22667,30 +23029,46 @@ var UIManager = class UIManager {
                 hpText.textContent = hpLabel;
                 fill.title = 'HULL ' + hpLabel;
             }
-            // Shield: level + a pulsing charge state while it refills.
-            const sh = card.querySelector('.enemy-shield-fill');
-            if (sh && !(enemy.shieldMax > 0)) {
-                if (!sh.classList.contains('is-none')) sh.classList.add('is-none');
-                if (sh._vfShPct !== 0) {
-                    sh._vfShPct = 0;
-                    sh.style.setProperty('--shield-width', '0%');
+            // Shield wraps the portrait as its frame (SVG stroke = remaining %).
+            const portrait = card.querySelector('.enemy-portrait');
+            if (portrait) {
+                const shFill = portrait.querySelector('.enemy-shield-fill');
+                const shTag = portrait.querySelector('.enemy-vital-tag.is-shield');
+                if (!(enemy.shieldMax > 0)) {
+                    portrait.classList.add('is-no-shield');
+                    portrait.classList.remove('is-shield-down', 'is-shield-charging');
+                    if (portrait._vfShPct !== -1) {
+                        portrait._vfShPct = -1;
+                        portrait.style.setProperty('--shield-pct', '0%');
+                        if (shFill) shFill.setAttribute('stroke-dasharray', '0 100');
+                    }
+                    if (portrait._vfShLabel !== 'NO SHIELD') {
+                        portrait._vfShLabel = 'NO SHIELD';
+                        if (shTag) shTag.textContent = 'NO SHIELD';
+                    }
+                } else {
+                    portrait.classList.remove('is-no-shield');
+                    const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
+                    const prev = Number(portrait.dataset.prevShield || sp);
+                    if (portrait._vfShPct !== sp) {
+                        portrait._vfShPct = sp;
+                        portrait.style.setProperty('--shield-pct', sp + '%');
+                        if (shFill) shFill.setAttribute('stroke-dasharray', sp.toFixed(1) + ' 100');
+                    }
+                    portrait.classList.toggle('is-shield-charging', sp < 100 && sp > prev);
+                    portrait.classList.toggle('is-shield-down', sp <= 0);
+                    portrait.dataset.prevShield = String(sp);
+                    const shCur = Math.ceil(enemy.shield);
+                    const shMax = Math.ceil(enemy.shieldMax);
+                    const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SHIELD ' + shCur + '/' + shMax;
+                    if (portrait._vfShLabel !== shLabel) {
+                        portrait._vfShLabel = shLabel;
+                        if (shTag) shTag.textContent = shLabel;
+                        const tip = portrait.getAttribute('data-ui-tip') || '';
+                        const base = tip.split(' · SH')[0].split(' · SHIELD')[0];
+                        portrait.setAttribute('data-ui-tip', base + ' · ' + shLabel);
+                    }
                 }
-                const t = sh.querySelector('.enemy-shield-text');
-                if (t && t._vfShLabel !== 'NO SHIELD') { t._vfShLabel = 'NO SHIELD'; t.textContent = 'NO SHIELD'; }
-            } else if (sh) {
-                const sp = Math.max(0, Math.min(100, (enemy.shield / enemy.shieldMax) * 100));
-                const prev = Number(sh.dataset.prev || sp);
-                if (sh._vfShPct !== sp) {
-                    sh._vfShPct = sp;
-                    sh.style.setProperty('--shield-width', sp + '%');
-                }
-                sh.classList.toggle('is-charging', sp < 100 && sp > prev);
-                sh.classList.toggle('is-down', sp <= 0);
-                sh.dataset.prev = String(sp);
-                const t = sh.querySelector('.enemy-shield-text');
-                const shLabel = sp <= 0 ? 'SHIELD DOWN' : 'SH ' + Math.ceil(enemy.shield) + ' / ' + Math.ceil(enemy.shieldMax) +
-                    (enemy.shieldRegen > 0 ? '  +' + (Math.round(enemy.shieldRegen * 10) / 10) + '/S' : '');
-                if (t && t._vfShLabel !== shLabel) { t._vfShLabel = shLabel; t.textContent = shLabel; sh.title = shLabel; }
             }
         }
     }
@@ -22719,7 +23097,7 @@ var UIManager = class UIManager {
 
     /** Portrait expression: dead once defeated, pain on a hit (anger once the hull is low), calm otherwise. */
     updateEnemyFace(card, enemy) {
-        const canvas = card.querySelector('canvas.vx-portrait');
+        const canvas = card.querySelector('.enemy-portrait-face canvas.vx-portrait, canvas.vx-portrait');
         if (!canvas || typeof voxelPortrait === 'undefined' || !voxelPortrait.setState) return;
         const now = performance.now();
         const total = (enemy.health || 0) + (enemy.shield || 0);
@@ -22762,7 +23140,7 @@ var UIManager = class UIManager {
 
     /**
      * Sidebar card for a big enemy: portrait on top with the faction crest in its lower-right corner,
-     * the name, then vertical hull + shield bars like the player's own vitals.
+     * the name, one vertical hull bar, and the shield as the portrait frame.
      */
     /** Hero = boss or elite / capital craft; everything else on a card is a plain line ship. */
     isHeroEnemy(enemy) {
@@ -22804,6 +23182,8 @@ var UIManager = class UIManager {
         const portrait = document.createElement('div');
         portrait.className = 'enemy-portrait';
         portrait.setAttribute('data-ui-tip', name);
+        const faceWrap = document.createElement('div');
+        faceWrap.className = 'enemy-portrait-face';
         let face = '';
         try {
             // Line ships have no pilot portrait: their card shows the hull, so they never pass for a hero.
@@ -22812,16 +23192,39 @@ var UIManager = class UIManager {
             }
         } catch (err) { face = ''; }
         if (face) {
-            portrait.innerHTML = face;
+            faceWrap.innerHTML = face;
         } else {
             // No portrait renderer: fall back to the ship icon.
             const icon = document.createElement('canvas');
             icon.className = 'health-ship-icon';
             icon.width = 88;
             icon.height = 88;
-            portrait.appendChild(icon);
+            faceWrap.appendChild(icon);
             this.renderEnemyHealthIcon(icon, enemy);
         }
+        portrait.appendChild(faceWrap);
+        const shieldRing = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        shieldRing.setAttribute('class', 'enemy-shield-ring');
+        shieldRing.setAttribute('viewBox', '0 0 100 100');
+        shieldRing.setAttribute('preserveAspectRatio', 'none');
+        shieldRing.setAttribute('aria-hidden', 'true');
+        const mkRect = (cls) => {
+            const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            r.setAttribute('class', cls);
+            r.setAttribute('x', '5');
+            r.setAttribute('y', '5');
+            r.setAttribute('width', '90');
+            r.setAttribute('height', '90');
+            r.setAttribute('pathLength', '100');
+            return r;
+        };
+        shieldRing.appendChild(mkRect('enemy-shield-track'));
+        shieldRing.appendChild(mkRect('enemy-shield-fill'));
+        portrait.appendChild(shieldRing);
+        const shieldTag = document.createElement('span');
+        shieldTag.className = 'enemy-vital-tag is-shield';
+        shieldTag.textContent = 'SHIELD';
+        portrait.appendChild(shieldTag);
         const crestHtml = (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml)
             ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
         if (crestHtml) {
@@ -22850,23 +23253,24 @@ var UIManager = class UIManager {
         bars.className = 'enemy-vbars';
         const hull = document.createElement('div');
         hull.className = 'enemy-vbar is-hull';
+        const hullTag = document.createElement('span');
+        hullTag.className = 'enemy-vital-tag is-hull';
+        hullTag.textContent = 'HULL';
         const fill = document.createElement('div');
         fill.className = 'health-fill';
         fill.dataset.enemyKey = enemy.key;
         const hpText = document.createElement('span');
         hpText.className = 'enemy-hp-text';
         fill.appendChild(hpText);
+        hull.appendChild(hullTag);
         hull.appendChild(fill);
-        const shield = document.createElement('div');
-        shield.className = 'enemy-vbar is-shield';
-        const sh = document.createElement('div');
-        sh.className = 'enemy-shield-fill';
-        const shText = document.createElement('span');
-        shText.className = 'enemy-shield-text';
-        sh.appendChild(shText);
-        shield.appendChild(sh);
         bars.appendChild(hull);
-        bars.appendChild(shield);
+        if (!(enemy.shieldMax > 0)) portrait.classList.add('is-no-shield');
+        else {
+            portrait.style.setProperty('--shield-pct', '100%');
+            const fillEl = shieldRing.querySelector('.enemy-shield-fill');
+            if (fillEl) fillEl.setAttribute('stroke-dasharray', '100 100');
+        }
 
         card.appendChild(portrait);
         card.appendChild(nameEl);
@@ -22950,14 +23354,26 @@ var UIManager = class UIManager {
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader)
             || (typeof shipAssetLoader !== 'undefined' ? shipAssetLoader : null);
         if (loader && loader.renderShip) {
-            const shipW = shipModel.width || 16;
-            const shipH = shipModel.height || 12;
-            const fit = Math.max(1, Math.floor(Math.min(canvas.width / shipW, canvas.height / shipH)));
-            const rw = shipW * fit;
-            const rh = shipH * fit;
+            const shipW = Math.max(1, shipModel.width || 16);
+            const shipH = Math.max(1, shipModel.height || 12);
+            // Integer base render, then nearest-neighbor stretch to fill the icon box
+            // (wide hulls used to sit tiny at fit=1 next to full-bleed 48px stat icons).
+            const baseFit = Math.max(1, Math.floor(Math.min(24 / shipW, 24 / shipH)) || 1);
+            const bw = Math.max(1, Math.round(shipW * baseFit));
+            const bh = Math.max(1, Math.round(shipH * baseFit));
+            const base = document.createElement('canvas');
+            base.width = bw;
+            base.height = bh;
+            const bctx = base.getContext('2d');
+            if (!bctx) return;
+            bctx.imageSmoothingEnabled = false;
+            loader.renderShip(bctx, shipModel, 0, 0, baseFit, null, 0);
+            const scale = Math.min(canvas.width / bw, canvas.height / bh);
+            const rw = Math.max(1, Math.round(bw * scale));
+            const rh = Math.max(1, Math.round(bh * scale));
             const ox = Math.floor((canvas.width - rw) / 2);
             const oy = Math.floor((canvas.height - rh) / 2);
-            loader.renderShip(ctx, shipModel, ox, oy, fit, null, 0);
+            ctx.drawImage(base, 0, 0, bw, bh, ox, oy, rw, rh);
             return;
         }
 
@@ -23035,6 +23451,16 @@ extendClass(UIManager, {
         event.preventDefault();
         if (typeof event.stopPropagation === 'function') event.stopPropagation();
 
+        // Shop overlay owns keys / gamepad while open (arrows, Enter, Escape).
+        if (typeof inStageShop !== 'undefined' && inStageShop.isOpen) {
+            if (typeof inStageShop.handleInput === 'function') {
+                inStageShop.handleInput(event);
+            } else if (event.key === 'Escape' || event.key === 'e' || event.key === 'E') {
+                if (!event.repeat) inStageShop.close();
+            }
+            return;
+        }
+
         // Buttons sit side by side: every arrow steps through the visible ones.
         const count = this.getVictoryButtons().length || this.victoryMenuItems.length || 1;
         switch (event.key) {
@@ -23056,6 +23482,9 @@ extendClass(UIManager, {
                 this.selectVictoryOption();
                 break;
             case 'Escape':
+                if (typeof inStageShop !== 'undefined' && inStageShop.refundPending) {
+                    inStageShop.refundPending();
+                }
                 if (typeof game !== 'undefined') {
                     game.showLevelSelection();
                 }
@@ -23095,12 +23524,20 @@ extendClass(UIManager, {
                     game.nextLevel();
                 }
                 break;
+            case 'shop':
+                if (typeof inStageShop !== 'undefined' && inStageShop.showFromVictory) {
+                    inStageShop.showFromVictory();
+                }
+                break;
             case 'restartGame':
                 if (typeof game !== 'undefined') {
                     game.restartGame();
                 }
                 break;
             case 'levelSelection':
+                if (typeof inStageShop !== 'undefined' && inStageShop.refundPending) {
+                    inStageShop.refundPending();
+                }
                 if (typeof game !== 'undefined') {
                     game.showLevelSelection();
                 }
@@ -23999,8 +24436,9 @@ var CoreRenderManager = class CoreRenderManager {
     // Global bezel around the stage with the resolution slider.
     function ensureBezel() {
         // The frame is static in index.html (painted with the first frame); create only as a fallback.
-        if (!document.getElementById('vf-bezel')) {
-            const frame = document.createElement('div');
+        let frame = document.getElementById('vf-bezel');
+        if (!frame) {
+            frame = document.createElement('div');
             frame.id = 'vf-bezel';
             frame.className = 'vf-bezel';
             const back = document.createElement('div');
@@ -24008,6 +24446,11 @@ var CoreRenderManager = class CoreRenderManager {
             back.setAttribute('aria-hidden', 'true');
             frame.appendChild(back);
             frame.insertAdjacentHTML('beforeend', FRAME_PLATES_HTML);
+            document.body.appendChild(frame);
+        }
+        // Keep the rim above glass hosts: overlays append later and transform:scale
+        // glass can promote above an early absolute sibling in the compositor.
+        if (frame.parentElement === document.body && document.body.lastElementChild !== frame) {
             document.body.appendChild(frame);
         }
         let el = document.getElementById('vf-res');
@@ -25056,10 +25499,14 @@ var CoreRenderManager = class CoreRenderManager {
             applyFrameStyle();
         }
         else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
-            const pct = Math.max(0, Math.min(100, v)) / 100;
-            if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
-            else if (parts[1] === 'sound') volumeControlsManager.setSoundVolume(pct);
-            else if (parts[1] === 'music') volumeControlsManager.setMusicVolume(pct);
+            if (parts[1] === 'speed' && volumeControlsManager.setMusicSpeed) {
+                volumeControlsManager.setMusicSpeed(Math.max(0.5, Math.min(4, v)));
+            } else {
+                const pct = Math.max(0, Math.min(100, v)) / 100;
+                if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
+                else if (parts[1] === 'sound') volumeControlsManager.setSoundVolume(pct);
+                else if (parts[1] === 'music') volumeControlsManager.setMusicVolume(pct);
+            }
         }
     }
     const FXOPEN_KEY = 'vf-fx-open';
@@ -25454,12 +25901,17 @@ var CoreRenderManager = class CoreRenderManager {
             const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
             const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
             const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
+            const musicSpeed = vol && vol.getMusicSpeed
+                ? Math.round(vol.getMusicSpeed() * 100) / 100
+                : 3.5;
             const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
             const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
             h += '<div class="vf-fx-title">VOLUME</div>' +
                 fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
                 fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
                 fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
+                '<div class="vf-fx-title">SPEED</div>' +
+                fxSlider('MUSIC SPEED', 'au:speed', 0.5, 4, 0.02, musicSpeed, '×') +
                 '<div class="vf-fx-title">TOGGLES</div>' +
                 '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
                 '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +
@@ -26923,10 +27375,10 @@ var CoreRenderManager = class CoreRenderManager {
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);
-        const openL = 44 * u;
-        const openR = 44 * u;
+        const openL = 56 * u;          // keep in sync with --fr-open-side (part-19)
+        const openR = 56 * u;
         const openT = (44 + 50) * u;   // keep in sync with --bz-extra (styles part-19)
-        const openB = 44 * u;
+        const openB = 56 * u;          // keep in sync with --fr-open-bottom (part-19)
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;
         const vh = (real.vh - openT - openB - 2 * inset) / zoom;
@@ -27215,7 +27667,6 @@ var factionGui = (() => {
         const bz = bezel();
         const same = id === shown && (!bz || bz.getAttribute('data-faction') === id);
         if (same) { stamp(); return id; }                        // colour edits of the same faction: no animation
-        if (window.vfDebugFactionGui && window.console && console.info) console.info('[factionGui] ' + shown + ' -> ' + id + (ready ? ' (animated)' : ' (instant)'), new Error().stack.split('\n').slice(2, 6).join(' | '));
         log('go ' + shown + ' -> ' + id + ' | ready=' + ready + ' busy=' + busy + ' reduce=' + reduce());
         if (window.vfLog && window.vfLog.watch) window.vfLog.watch('go ' + id);
         if (busy) { log('busy: request queued, newest wins'); pendingStamp = stamp; return id; }           // a switch is playing: the newest request wins afterwards
@@ -27274,7 +27725,6 @@ var factionGui = (() => {
         if (!want) return;
         const docOk = ROOT.getAttribute('data-faction') === want && ROOT.getAttribute('data-vf-faction') === want;
         if (docOk && bz.getAttribute('data-faction') === want) return;
-        if (window.vfDebugFactionGui && window.console && console.info) console.info('[factionGui] reconcile -> ' + want + ' (instant)');
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) factionShipStyles.applyDocumentFactionTheme(want);
         else commit(want, () => {});
     }
@@ -27792,9 +28242,10 @@ var SoundManager = class SoundManager {
         this.soundEnabled = true;
         this.musicEnabled = true;
         this.activeTimeouts = [];
-        this.masterVolume = 0.1;
-        this.soundVolume = 0.05;
-        this.musicVolume = 0.2;
+        this.masterVolume = 0.75;
+        this.soundVolume = 0.5;
+        this.musicVolume = 0.65;
+        this._audioUnlocked = false;
 
         this.ambientNodes = null;
         this.ambientPlanetId = null;
@@ -27819,14 +28270,18 @@ var SoundManager = class SoundManager {
         this.enabled = !!(window.AudioContext || window.webkitAudioContext);
     }
 
+    markAudioUnlocked() {
+        this._audioUnlocked = true;
+    }
+
     ensureContext() {
         if (!this.enabled) return null;
         if (!this.audioContext) {
             // Avoid the autoplay console warning: do not construct until
             // the document has seen a real user activation.
-            if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
-                return null;
-            }
+            const unlocked = this._audioUnlocked
+                || (navigator.userActivation && navigator.userActivation.hasBeenActive);
+            if (!unlocked) return null;
             try {
                 this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
             } catch (e) {
@@ -27842,12 +28297,24 @@ var SoundManager = class SoundManager {
 
     sfxVolume(scale) {
         const s = scale == null ? 1 : scale;
-        return Math.max(0.0001, 0.12 * this.masterVolume * this.soundVolume * s);
+        // Linear master×sound — slider 100%/100% ≈ full SFX.
+        return Math.max(0.0001, Math.min(1, this.masterVolume * this.soundVolume * s));
     }
 
     musicVol(scale) {
         const s = scale == null ? 1 : scale;
-        return Math.max(0.0001, 0.08 * this.masterVolume * this.musicVolume * s);
+        return Math.max(0.0001, Math.min(1, this.masterVolume * this.musicVolume * (s == null ? 1 : s) * 0.35));
+    }
+
+    /**
+     * Linear music bus: MASTER% × MUSIC% (0..1). No hidden ×8 boost —
+     * that made the sliders feel broken. Tracker instruments are already loud.
+     */
+    musicBusVolume() {
+        const m = Number(this.masterVolume);
+        const u = Number(this.musicVolume);
+        if (!Number.isFinite(m) || !Number.isFinite(u)) return 0.4;
+        return Math.max(0, Math.min(1, m * u));
     }
 
     canPlaySfx() {
@@ -27856,6 +28323,44 @@ var SoundManager = class SoundManager {
 
     canPlayMusic() {
         return !!(this.enabled && this.ensureContext() && this.musicEnabled);
+    }
+
+    /** Remember what should play once AudioContext unlocks. */
+    notePendingMusic(kind, id) {
+        this._pendingMusic = { kind: kind || null, id: id || null };
+    }
+
+    clearPendingMusic() {
+        this._pendingMusic = null;
+    }
+
+    resumePendingMusic() {
+        if (!this.musicEnabled) return;
+        if (!this.ensureContext()) return;
+        const pending = this._pendingMusic;
+        this._pendingMusic = null;
+        if (pending && (pending.kind === 'victory' || pending.kind === 'lose')) {
+            if (this.startEndMusic) this.startEndMusic(pending.kind);
+            return;
+        }
+        if (this._musicContextActive && this._reevaluateMusic) {
+            this._activeOverrideKey = null;
+            this._reevaluateMusic();
+            return;
+        }
+        if (this.ambientPlanetId) {
+            this.startPlanetAmbient(this.ambientPlanetId);
+            return;
+        }
+        if (pending && pending.kind === 'planet' && pending.id) {
+            this.startPlanetAmbient(pending.id);
+            return;
+        }
+        if (pending && pending.kind === 'menu') {
+            this.startMenuMusic();
+            return;
+        }
+        if (this.startMenuMusic) this.startMenuMusic();
     }
 
     // --- Synth primitives ---
@@ -27985,6 +28490,7 @@ var SoundManager = class SoundManager {
                 this.playVictory();
                 break;
             default:
+                if (this.playEnv) this.playEnv(id, o);
                 break;
         }
     }
@@ -28140,6 +28646,8 @@ var SoundManager = class SoundManager {
 // SoundManager methods, split from sounds.js.
 extendClass(SoundManager, {
     playGameOver() {
+        this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
+        this._endMusicFaction = this._currentHostileFaction || null;
         this.clearActiveTimeouts();
         this.stopPlanetAmbientNodesOnly();
         this.ambientPlanetId = null;
@@ -28147,9 +28655,12 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(250, 0.3, 'sine', 0.85), 300);
         this.schedule(() => this.createBeep(200, 0.5, 'sine', 0.9), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
+        this.schedule(() => this.startEndMusic('lose'), 950);
     },
 
     playVictory() {
+        this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
+        this._endMusicFaction = this._currentHostileFaction || null;
         this.clearActiveTimeouts();
         this.stopPlanetAmbientNodesOnly();
         this.ambientPlanetId = null;
@@ -28158,6 +28669,28 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
+        this.schedule(() => this.startEndMusic('victory'), 900);
+    },
+
+    /** Looping victory / lose vftrack, biased by hostile faction (+ optional planet). */
+    startEndMusic(kind) {
+        if (!this.musicEnabled) return;
+        const mode = kind === 'victory' ? 'victory' : 'lose';
+        this.notePendingMusic(mode, mode);
+        if (!this.ensureContext()) return;
+        const faction = String(this._endMusicFaction || this._currentHostileFaction || '').toLowerCase();
+        const planet = String(this._endMusicPlanet || this._currentPlanetId || '').toLowerCase().split('-')[0];
+        const keys = [];
+        if (planet && faction) keys.push(mode + ':' + faction + ':' + planet);
+        if (faction) keys.push(mode + ':' + faction);
+        if (planet) keys.push(mode + ':' + planet);
+        keys.push(mode);
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof vfTrackerManager === 'undefined') return;
+        vfTrackerManager.setVolume(this.musicBusVolume());
+        vfTrackerManager.setEnabled(true);
+        if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
     },
 
     playPowerUp() {
@@ -28170,19 +28703,40 @@ extendClass(SoundManager, {
     // --- Planet ambient (music bus) ---
 
     startPlanetAmbient(planetId) {
-        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
         this.ambientPlanetId = id;
+        this.notePendingMusic('planet', id);
+        this.markAudioUnlocked && this.markAudioUnlocked();
+
+        // Mission boot: coded intro fanfare, then this method again for combat.
+        if (this._pendingMissionIntro && this.musicEnabled && !this._introPlaying) {
+            if (this._startMissionIntroThenCombat && this._startMissionIntroThenCombat(id)) {
+                return;
+            }
+        }
+        // Intro already owning the bus — don't clobber it with combat yet.
+        if (this._introPlaying) return;
+
         this.stopPlanetAmbientNodesOnly();
 
+        // Leaving hub: kill menu sources so they can't mask planet music.
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
+            localAudioManager.stop();
+        }
+
         if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasPlanetTrack(id)) {
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (!this.musicEnabled) {
                 youtubeSoundtrackManager.setEnabled(false);
                 if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
                 return;
             }
             youtubeSoundtrackManager.setEnabled(true);
-            youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+            youtubeSoundtrackManager.setVolume(this.musicBusVolume());
             youtubeSoundtrackManager.playPlanet(id);
+            this.clearPendingMusic();
             if (typeof beatSyncManager !== 'undefined') {
                 beatSyncManager.start(id);
             }
@@ -28191,13 +28745,38 @@ extendClass(SoundManager, {
         if (typeof youtubeSoundtrackManager !== 'undefined') {
             youtubeSoundtrackManager.stop();
         }
-        if (!this.canPlayMusic()) {
-            if (typeof beatSyncManager !== 'undefined') {
-                beatSyncManager.start(id);
-            }
+        if (!this.musicEnabled) {
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
+            return;
+        }
+        if (!this.ensureContext()) {
+            // Wait for first user gesture (resumePendingMusic).
+            if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
             return;
         }
 
+        // Prefer coded vftrack: planet×faction (and boss) over the old drone.
+        if (typeof vfTrackerManager !== 'undefined') {
+            if (!this._currentHostileFaction) {
+                this._currentHostileFaction = this._resolveHostileFaction
+                    ? this._resolveHostileFaction(id) : '';
+            }
+            const keys = this.combatTrackKeys
+                ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+                : [id];
+            // Always include bare planet as last-ditch playable key.
+            if (keys.indexOf(id) === -1) keys.push(id);
+            vfTrackerManager.setEnabled(true);
+            vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+            const played = vfTrackerManager.playFirst(keys);
+            if (played) {
+                this.clearPendingMusic();
+                return;
+            }
+        }
+
+        // Last-resort soft drone if tracker failed to start.
         const profile = this.planetAmbient[id] || this.planetAmbient.mars;
         const ctx = this.audioContext;
         const now = ctx.currentTime;
@@ -28246,6 +28825,7 @@ extendClass(SoundManager, {
     },
 
     stopPlanetAmbientNodesOnly() {
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
         if (!this.ambientNodes) return;
         const nodes = this.ambientNodes;
         const ctx = this.audioContext;
@@ -28283,9 +28863,11 @@ extendClass(SoundManager, {
     },
 
     startMenuMusic() {
+        this.notePendingMusic('menu', 'menu');
         if (!this.musicEnabled) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
             if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             return;
         }
         this.stopPlanetAmbientNodesOnly();
@@ -28295,9 +28877,21 @@ extendClass(SoundManager, {
             ? soundtrackConfigManager.getMenuTrack() : null;
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (typeof localAudioManager !== 'undefined') {
-                localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+                localAudioManager.setVolume(this.musicBusVolume());
                 localAudioManager.play('menu', menuTrack.localAudioData);
+                this.clearPendingMusic();
+            }
+            return;
+        }
+        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.trackerData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (!this.ensureContext()) return;
+            if (typeof vfTrackerManager !== 'undefined') {
+                vfTrackerManager.setVolume(this.musicBusVolume());
+                if (vfTrackerManager.play('menu', menuTrack.trackerData)) this.clearPendingMusic();
             }
             return;
         }
@@ -28305,18 +28899,29 @@ extendClass(SoundManager, {
             localAudioManager.stop();
         }
 
-        if (typeof youtubeSoundtrackManager === 'undefined') return;
-        youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
-        youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
-        if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
-            youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
-            return;
-        }
-        if (!youtubeSoundtrackManager.hasMenuTrack()) {
+        if (typeof youtubeSoundtrackManager !== 'undefined') {
+            youtubeSoundtrackManager.setVolume(this.musicBusVolume());
+            youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
+            if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
+                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
+                this.clearPendingMusic();
+                return;
+            }
+            if (youtubeSoundtrackManager.hasMenuTrack()) {
+                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                youtubeSoundtrackManager.playMenu();
+                this.clearPendingMusic();
+                return;
+            }
             youtubeSoundtrackManager.stop();
-            return;
         }
-        youtubeSoundtrackManager.playMenu();
+
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager !== 'undefined') {
+            vfTrackerManager.setVolume(this.musicBusVolume());
+            if (vfTrackerManager.playMenu()) this.clearPendingMusic();
+        }
     },
 
     stopMenuMusic() {
@@ -28327,14 +28932,21 @@ extendClass(SoundManager, {
         if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
             localAudioManager.stop();
         }
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey === 'menu') {
+            vfTrackerManager.stop();
+        }
     },
 
     updateAmbientVolume() {
+        const bus = this.musicBusVolume();
         if (typeof youtubeSoundtrackManager !== 'undefined') {
-            youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+            youtubeSoundtrackManager.setVolume(bus);
         }
         if (typeof localAudioManager !== 'undefined') {
-            localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+            localAudioManager.setVolume(bus);
+        }
+        if (typeof vfTrackerManager !== 'undefined') {
+            vfTrackerManager.setVolume(bus);
         }
         if (!this.ambientGain || !this.audioContext) return;
         const now = this.audioContext.currentTime;
@@ -28392,12 +29004,15 @@ extendClass(SoundManager, {
             if (typeof localAudioManager !== 'undefined') {
                 localAudioManager.stop();
             }
+            if (typeof vfTrackerManager !== 'undefined') {
+                vfTrackerManager.stop();
+            }
         } else if (this._musicContextActive) {
             this._activeOverrideKey = null;
             this._reevaluateMusic();
         } else if (this.ambientPlanetId) {
             this.startPlanetAmbient(this.ambientPlanetId);
-        } else if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasMenuTrack()) {
+        } else {
             this.startMenuMusic();
         }
     },
@@ -28412,6 +29027,230 @@ extendClass(SoundManager, {
 });
 
 
+/* --- js/game/sounds/env-sfx.js --- */
+"use strict";
+
+/**
+ * Coded (Web Audio) environment SFX — sluice/hatch/warp, rocks, shields,
+ * crystals, pickups, wall scrape. No samples; all synthesized.
+ */
+extendClass(SoundManager, {
+    _envThrottle(key, minMs) {
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        if (!this._envLast) this._envLast = {};
+        if (now - (this._envLast[key] || 0) < (minMs || 80)) return false;
+        this._envLast[key] = now;
+        return true;
+    },
+
+    // --- Arrival hatch / station launch ---
+
+    playArrivalRise() {
+        if (!this.canPlaySfx() || !this._envThrottle('arrivalRise', 400)) return;
+        this.createSweep(60, 140, 0.45, 'triangle', 0.7);
+        this.createNoiseBurst(0.12, 0.35, 400);
+        this.schedule(() => this.createBeep(90, 0.08, 'sine', 0.35), 200);
+    },
+
+    playArrivalOpen() {
+        if (!this.canPlaySfx() || !this._envThrottle('arrivalOpen', 350)) return;
+        this.createSweep(180, 420, 0.28, 'sawtooth', 0.55);
+        this.createNoiseBurst(0.08, 0.4, 900);
+        this.schedule(() => this.createBeep(520, 0.06, 'triangle', 0.45), 120);
+        this.schedule(() => this.createBeep(780, 0.05, 'triangle', 0.35), 200);
+    },
+
+    // --- Sluice / warp gate ---
+
+    playSluiceAppear() {
+        if (!this.canPlaySfx() || !this._envThrottle('sluiceAppear', 500)) return;
+        this.createSweep(40, 110, 0.55, 'sine', 0.75);
+        this.createNoiseBurst(0.18, 0.45, 350);
+        this.schedule(() => this.createDualTone(140, 210, 0.2, 'triangle', 0.5), 180);
+        this.schedule(() => this.createBeep(70, 0.15, 'sine', 0.4), 320);
+    },
+
+    playWarpAppear() {
+        if (!this.canPlaySfx() || !this._envThrottle('warpAppear', 500)) return;
+        this.createSweep(220, 880, 0.5, 'sine', 0.55);
+        this.createDualTone(440, 660, 0.35, 'sine', 0.4);
+        this.schedule(() => this.createSweep(880, 1320, 0.25, 'sine', 0.35), 200);
+    },
+
+    playGateDomeHit(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('gateHit', 45)) return;
+        const s = scale == null ? 1 : scale;
+        this.createNoiseBurst(0.04 * s, 0.55 * s, 1600);
+        this.createBeep(260 + Math.random() * 80, 0.05, 'triangle', 0.45 * s);
+        this.createSweep(400, 180, 0.07, 'square', 0.35 * s);
+    },
+
+    playGateDomeOpen() {
+        if (!this.canPlaySfx() || !this._envThrottle('gateOpen', 280)) return;
+        this.createSweep(90, 320, 0.35, 'sawtooth', 0.7);
+        this.createNoiseBurst(0.14, 0.55, 700);
+        this.schedule(() => this.createBeep(480, 0.07, 'square', 0.4), 100);
+        this.schedule(() => this.createSweep(320, 160, 0.18, 'triangle', 0.45), 160);
+    },
+
+    playGateDomeClose() {
+        if (!this.canPlaySfx() || !this._envThrottle('gateClose', 280)) return;
+        this.createSweep(320, 90, 0.32, 'sawtooth', 0.55);
+        this.createNoiseBurst(0.1, 0.4, 500);
+        this.schedule(() => this.createBeep(70, 0.1, 'sine', 0.4), 180);
+    },
+
+    playGateEnter(kind) {
+        if (!this.canPlaySfx() || !this._envThrottle('gateEnter', 600)) return;
+        const warp = String(kind || '') === 'warp';
+        if (warp) {
+            this.createSweep(300, 1200, 0.7, 'sine', 0.7);
+            this.createDualTone(600, 900, 0.4, 'sine', 0.45);
+            this.schedule(() => this.createSweep(1200, 2400, 0.45, 'sine', 0.4), 250);
+            this.schedule(() => this.createNoiseBurst(0.2, 0.35, 2000), 500);
+        } else {
+            this.createSweep(120, 60, 0.55, 'triangle', 0.75);
+            this.createNoiseBurst(0.2, 0.5, 450);
+            this.schedule(() => this.createSweep(200, 80, 0.35, 'sawtooth', 0.45), 180);
+            this.schedule(() => this.createBeep(50, 0.2, 'sine', 0.5), 400);
+        }
+    },
+
+    // --- Obstacles / terrain ---
+
+    playRockHit(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('rockHit', 35)) return;
+        const s = scale == null ? 1 : scale;
+        this.createNoiseBurst(0.035 * s, 0.5 * s, 1200);
+        this.createBeep(140 + Math.random() * 60, 0.045, 'triangle', 0.4 * s);
+    },
+
+    playRockBreak(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('rockBreak', 50)) return;
+        const s = scale == null ? 1 : scale;
+        this.createNoiseBurst(0.14 * s, 0.9 * s, 800);
+        this.createSweep(220, 60, 0.18 * s, 'sawtooth', 0.7 * s);
+        this.schedule(() => this.createNoiseBurst(0.08 * s, 0.45 * s, 500), 60);
+    },
+
+    playShieldHit(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('shieldHit', 35)) return;
+        const s = scale == null ? 1 : scale;
+        this.createDualTone(700, 1100, 0.05 * s, 'sine', 0.55 * s);
+        this.createSweep(1400, 600, 0.07 * s, 'triangle', 0.4 * s);
+    },
+
+    playShieldBreak(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('shieldBreak', 60)) return;
+        const s = scale == null ? 1 : scale;
+        this.createNoiseBurst(0.1 * s, 0.7 * s, 2200);
+        this.createSweep(1600, 200, 0.22 * s, 'sine', 0.65 * s);
+        this.schedule(() => this.createBeep(900, 0.05, 'sine', 0.35 * s), 80);
+    },
+
+    playCrystalHit(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('crystalHit', 40)) return;
+        const s = scale == null ? 1 : scale;
+        this.createBeep(1200 + Math.random() * 400, 0.05, 'sine', 0.5 * s);
+        this.createBeep(1800 + Math.random() * 300, 0.04, 'triangle', 0.35 * s);
+    },
+
+    playCrystalShatter(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('crystalShatter', 70)) return;
+        const s = scale == null ? 1 : scale;
+        this.createNoiseBurst(0.08 * s, 0.55 * s, 3000);
+        this.createBeep(1600, 0.06, 'sine', 0.55 * s);
+        this.schedule(() => this.createBeep(2200, 0.05, 'sine', 0.45 * s), 40);
+        this.schedule(() => this.createBeep(2800, 0.08, 'triangle', 0.35 * s), 90);
+        this.schedule(() => this.createSweep(2000, 400, 0.15, 'sine', 0.3 * s), 120);
+    },
+
+    playObstacleHit(obstacle) {
+        const kind = String((obstacle && (obstacle.kind || obstacle.type)) || '').toLowerCase();
+        if (kind.indexOf('crystal') !== -1) this.playCrystalHit();
+        else if (kind.indexOf('shield') !== -1) this.playShieldHit();
+        else if (kind.indexOf('crate') !== -1 || obstacle && obstacle.isCrate) this.playCrateHit();
+        else this.playRockHit();
+    },
+
+    playObstacleBreak(obstacle) {
+        const kind = String((obstacle && (obstacle.kind || obstacle.type || obstacle.explosionId)) || '').toLowerCase();
+        if (kind.indexOf('crystal') !== -1) this.playCrystalShatter();
+        else if (kind.indexOf('crate') !== -1 || (obstacle && obstacle.isCrate)) this.playCrateBreak();
+        else if (kind.indexOf('shield') !== -1 || kind.indexOf('pop') !== -1) this.playShieldBreak();
+        else this.playRockBreak();
+    },
+
+    playWallScrape(scale) {
+        if (!this.canPlaySfx() || !this._envThrottle('wallScrape', 180)) return;
+        const s = scale == null ? 1 : scale;
+        this.createNoiseBurst(0.09 * s, 0.55 * s, 600);
+        this.createSweep(180, 90, 0.12 * s, 'sawtooth', 0.4 * s);
+    },
+
+    playWallChip() {
+        if (!this.canPlaySfx() || !this._envThrottle('wallChip', 40)) return;
+        this.createNoiseBurst(0.03, 0.4, 1400);
+        this.createBeep(200 + Math.random() * 100, 0.03, 'triangle', 0.3);
+    },
+
+    // --- Pickups / crates ---
+
+    playPickupCollect(id) {
+        if (!this.canPlaySfx() || !this._envThrottle('pickup', 40)) return;
+        const key = String(id || '').toLowerCase();
+        let f = 720;
+        if (key.indexOf('credit') !== -1 || key === 'credits') f = 880;
+        else if (key.indexOf('scrap') !== -1) f = 520;
+        else if (key.indexOf('crystal') !== -1 || key.indexOf('ore') !== -1) f = 1100;
+        else if (key.indexOf('fuel') !== -1 || key.indexOf('plasma') !== -1) f = 640;
+        this.createBeep(f, 0.045, 'sine', 0.7);
+        this.schedule(() => this.createBeep(f * 1.35, 0.06, 'triangle', 0.55), 35);
+    },
+
+    playCrateHit() {
+        if (!this.canPlaySfx() || !this._envThrottle('crateHit', 50)) return;
+        this.createNoiseBurst(0.05, 0.5, 1000);
+        this.createBeep(180, 0.05, 'square', 0.4);
+    },
+
+    playCrateBreak() {
+        if (!this.canPlaySfx() || !this._envThrottle('crateBreak', 80)) return;
+        this.createNoiseBurst(0.12, 0.75, 900);
+        this.createSweep(300, 80, 0.16, 'sawtooth', 0.6);
+        this.schedule(() => this.createBeep(600, 0.05, 'triangle', 0.4), 70);
+    },
+
+    playEnv(eventId, opts) {
+        const id = String(eventId || '').toLowerCase();
+        const o = opts || {};
+        switch (id) {
+            case 'arrivalrise': return this.playArrivalRise();
+            case 'arrivalopen': return this.playArrivalOpen();
+            case 'sluiceappear': case 'gateappear': return this.playSluiceAppear();
+            case 'warpappear': return this.playWarpAppear();
+            case 'gatedomehit': case 'gatehit': return this.playGateDomeHit(o.scale);
+            case 'gatedomeopen': case 'gateopen': return this.playGateDomeOpen();
+            case 'gatedomeclose': case 'gateclose': return this.playGateDomeClose();
+            case 'gateenter': case 'sluiceenter': return this.playGateEnter(o.kind || 'sluice');
+            case 'warpenter': return this.playGateEnter('warp');
+            case 'rockhit': return this.playRockHit(o.scale);
+            case 'rockbreak': return this.playRockBreak(o.scale);
+            case 'shieldhit': return this.playShieldHit(o.scale);
+            case 'shieldbreak': return this.playShieldBreak(o.scale);
+            case 'crystalhit': return this.playCrystalHit(o.scale);
+            case 'crystalshatter': return this.playCrystalShatter(o.scale);
+            case 'wallscrape': return this.playWallScrape(o.scale);
+            case 'wallchip': return this.playWallChip();
+            case 'pickup': return this.playPickupCollect(o.id);
+            case 'cratehit': return this.playCrateHit();
+            case 'cratebreak': return this.playCrateBreak();
+            default: break;
+        }
+    }
+});
+
+
 /* --- js/game/sounds.js --- */
 "use strict";
 
@@ -28419,14 +29258,34 @@ extendClass(SoundManager, {
 // which index.html loads before this file.
 var soundManager = new SoundManager();
 
+// Pull slider values if volume UI already booted (script order varies in bundle).
+if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.applyVolumes) {
+    try { volumeControlsManager.applyVolumes(); } catch (e) { /* ignore */ }
+}
+
 function resumeSoundContext() {
-    // Opens (or resumes) the AudioContext after a real user gesture.
+    // Opens (or resumes) the AudioContext after a real user gesture, then
+    // kicks any menu/planet vftrack that was waiting on unlock.
+    if (typeof soundManager.markAudioUnlocked === 'function') soundManager.markAudioUnlocked();
     if (typeof soundManager.ensureContext === 'function') soundManager.ensureContext();
+    if (typeof soundManager.resumePendingMusic === 'function') soundManager.resumePendingMusic();
 }
 
 document.addEventListener('pointerdown', resumeSoundContext, { once: true, capture: true });
 document.addEventListener('keydown', resumeSoundContext, { once: true, capture: true });
 document.addEventListener('touchstart', resumeSoundContext, { once: true, capture: true });
+// If the context suspends again, or the first gesture landed before the
+// tracker manager existed, retry once music is pending.
+document.addEventListener('pointerdown', () => {
+    if (typeof soundManager === 'undefined' || !soundManager.resumePendingMusic) return;
+    if (!soundManager.musicEnabled) return;
+    const suspended = soundManager.audioContext && soundManager.audioContext.state === 'suspended';
+    const pending = !!soundManager._pendingMusic;
+    if (suspended || pending) {
+        soundManager.ensureContext();
+        soundManager.resumePendingMusic();
+    }
+}, true);
 
 // Generic UI click sound: delegated so every clickable control, present or
 // future, gets one without each menu file wiring its own sound call. Covers
@@ -28447,9 +29306,9 @@ document.addEventListener('click', (e) => {
 
 /**
  * Per-stage / per-enemy-type soundtrack overrides, layered on top of the
- * per-planet YouTube soundtrack (planetConfigManager) and the procedural
- * ambient drone fallback. Resolution priority (see soundtrack-override.js):
- * active enemy type > current stage > planet > procedural drone.
+ * per-planet YouTube / vftrack soundtrack. Resolution priority
+ * (see soundtrack-override.js): active enemy type > current stage >
+ * planet YouTube > planet vftrack > procedural drone.
  */
 var SoundtrackConfigManager = class SoundtrackConfigManager {
     constructor() {
@@ -28487,8 +29346,27 @@ var SoundtrackConfigManager = class SoundtrackConfigManager {
         }
     }
 
+    _packTrack(data) {
+        let trackerData = null;
+        if (data && data.trackerData) {
+            try {
+                trackerData = typeof VFTrackerParse !== 'undefined'
+                    ? VFTrackerParse.toCompact(data.trackerData)
+                    : data.trackerData;
+            } catch (e) {
+                trackerData = null;
+            }
+        }
+        return {
+            youtubeUrl: (data && data.youtubeUrl) || '',
+            localAudioData: (data && data.localAudioData) || '',
+            localAudioName: (data && data.localAudioName) || '',
+            trackerData
+        };
+    }
+
     hasTrack(entry) {
-        return !!(entry && (entry.youtubeUrl || entry.localAudioData));
+        return !!(entry && (entry.youtubeUrl || entry.localAudioData || entry.trackerData));
     }
 
     getStageTrack(stageId) {
@@ -28500,11 +29378,7 @@ var SoundtrackConfigManager = class SoundtrackConfigManager {
         if (!this.hasTrack(data)) {
             delete this.stageTracks[stageId];
         } else {
-            this.stageTracks[stageId] = {
-                youtubeUrl: data.youtubeUrl || '',
-                localAudioData: data.localAudioData || '',
-                localAudioName: data.localAudioName || ''
-            };
+            this.stageTracks[stageId] = this._packTrack(data);
         }
         this.save();
     }
@@ -28517,11 +29391,7 @@ var SoundtrackConfigManager = class SoundtrackConfigManager {
         if (!this.hasTrack(data)) {
             this.menuTrack = null;
         } else {
-            this.menuTrack = {
-                youtubeUrl: data.youtubeUrl || '',
-                localAudioData: data.localAudioData || '',
-                localAudioName: data.localAudioName || ''
-            };
+            this.menuTrack = this._packTrack(data);
         }
         this.save();
     }
@@ -28535,11 +29405,7 @@ var SoundtrackConfigManager = class SoundtrackConfigManager {
         if (!this.hasTrack(data)) {
             delete this.enemyTracks[enemyTypeId];
         } else {
-            this.enemyTracks[enemyTypeId] = {
-                youtubeUrl: data.youtubeUrl || '',
-                localAudioData: data.localAudioData || '',
-                localAudioName: data.localAudioName || ''
-            };
+            this.enemyTracks[enemyTypeId] = this._packTrack(data);
         }
         this.save();
     }
@@ -28560,6 +29426,7 @@ var LocalAudioManager = class LocalAudioManager {
         this.el = null;
         this.currentKey = null;
         this.volume = 0.2;
+        this.playbackRate = 1;
     }
 
     ensureEl() {
@@ -28580,8 +29447,14 @@ var LocalAudioManager = class LocalAudioManager {
         this.currentKey = key;
         el.src = dataUrl;
         el.volume = Math.max(0, Math.min(1, this.volume));
+        el.playbackRate = Math.max(0.5, Math.min(4, Number(this.playbackRate) || 1));
         el.play().catch(() => { /* needs a user gesture first — fine, next interaction retries */ });
         return true;
+    }
+
+    setPlaybackRate(rate) {
+        this.playbackRate = Math.max(0.5, Math.min(4, Number(rate) || 1));
+        if (this.el) this.el.playbackRate = this.playbackRate;
     }
 
     stop() {
@@ -28605,19 +29478,1909 @@ var LocalAudioManager = class LocalAudioManager {
 var localAudioManager = new LocalAudioManager();
 
 
+/* --- js/game/tracker/parse.js --- */
+"use strict";
+
+/**
+ * VF Tracker (.vftrack) — JSON chiptune format for LLM / code authored BGM.
+ * Canonical schema lives in assets/soundtracks/template.vftrack.json.
+ */
+var VFTrackerParse = {
+    SEMITONE: { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 },
+
+    noteToMidi(note) {
+        if (!note || typeof note !== 'string') return null;
+        const s = note.trim().toUpperCase();
+        if (s === 'OFF' || s === '===' || s === 'CUT') return 'OFF';
+        if (s === '.' || s === '---' || s === '...') return null;
+        // Tracker naturals: C-4 / sharps: C#4 / flats: Db4
+        const m = /^([A-G])([#B-]?)(-?\d+)$/.exec(s);
+        if (!m) return null;
+        const letter = m[1];
+        let acc = m[2];
+        const oct = Number(m[3]);
+        if (acc === '-' || acc === '') acc = '';
+        if (acc === 'B') acc = 'b';
+        let semi = this.SEMITONE[letter];
+        if (acc === '#') semi += 1;
+        if (acc === 'b') semi -= 1;
+        return (oct + 1) * 12 + semi;
+    },
+
+    midiToFreq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+    },
+
+    noteToFreq(note) {
+        const midi = this.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return midi;
+        return this.midiToFreq(midi);
+    },
+
+    midiToNote(midi) {
+        const n = Math.round(Number(midi));
+        if (!Number.isFinite(n)) return null;
+        const NOTES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
+        const oct = Math.floor(n / 12) - 1;
+        const name = NOTES[((n % 12) + 12) % 12];
+        return name + oct;
+    },
+
+    transposeToken(token, semitones) {
+        const cell = this.parseCell(token);
+        if (!cell || !cell.note || cell.note === 'OFF') return token;
+        const midi = this.noteToMidi(cell.note);
+        if (midi == null || midi === 'OFF') return token;
+        const next = this.midiToNote(midi + (Number(semitones) || 0));
+        if (!next) return token;
+        let out = next + ':' + (cell.inst || 1);
+        if (cell.vol != null) out += ':' + cell.vol;
+        return out;
+    },
+
+    transposeChannelString(str, semitones) {
+        if (!semitones) return str;
+        return String(str || '').trim().split(/\s+/).filter(Boolean)
+            .map((tok) => this.transposeToken(tok, semitones)).join(' ');
+    },
+
+    parseCell(raw) {
+        if (raw == null || raw === '' || raw === '.' || raw === '---' || raw === '...') {
+            return null;
+        }
+        if (typeof raw === 'string') {
+            const t = raw.trim();
+            if (!t || t === '.' || t === '---') return null;
+            if (t.toUpperCase() === 'OFF' || t === '===') return { note: 'OFF' };
+            const parts = t.split(':');
+            const note = parts[0];
+            const inst = parts[1] != null && parts[1] !== '' ? Number(parts[1]) : 1;
+            const vol = parts[2] != null && parts[2] !== '' ? Number(parts[2]) : null;
+            return {
+                note,
+                inst: Number.isFinite(inst) ? inst : 1,
+                vol: Number.isFinite(vol) ? vol : null
+            };
+        }
+        if (Array.isArray(raw)) {
+            return {
+                note: raw[0] != null ? String(raw[0]) : null,
+                inst: raw[1] != null ? Number(raw[1]) : 1,
+                vol: raw[2] != null ? Number(raw[2]) : null
+            };
+        }
+        if (typeof raw === 'object') {
+            return {
+                note: raw.note != null ? String(raw.note) : null,
+                inst: raw.inst != null ? Number(raw.inst) : (raw.instrument != null ? Number(raw.instrument) : 1),
+                vol: raw.vol != null ? Number(raw.vol) : (raw.volume != null ? Number(raw.volume) : null)
+            };
+        }
+        return null;
+    },
+
+    padChannelString(str, rows) {
+        const n = Math.max(1, Number(rows) || 16);
+        const tokens = String(str || '').trim().split(/\s+/).filter(Boolean);
+        while (tokens.length < n) tokens.push('.');
+        return tokens.slice(0, n).join(' ');
+    },
+
+    expandChannelString(str, rows) {
+        const tokens = String(str || '').trim().split(/\s+/).filter(Boolean);
+        const out = [];
+        for (let i = 0; i < rows; i++) {
+            out.push(this.parseCell(tokens[i] != null ? tokens[i] : '.'));
+        }
+        return out;
+    },
+
+    normalizeInstrument(raw, index) {
+        const r = raw || {};
+        const id = r.id != null ? Number(r.id) : (index + 1);
+        const wave = String(r.wave || r.type || 'square').toLowerCase();
+        const allowed = { sine: 1, square: 1, sawtooth: 1, triangle: 1, noise: 1 };
+        return {
+            id,
+            name: String(r.name || ('inst' + id)),
+            wave: allowed[wave] ? wave : 'square',
+            volume: Math.max(0, Math.min(1, r.volume != null ? Number(r.volume) : 0.5)),
+            attack: Math.max(0.001, Number(r.attack != null ? r.attack : 0.01)),
+            decay: Math.max(0.001, Number(r.decay != null ? r.decay : 0.08)),
+            sustain: Math.max(0, Math.min(1, r.sustain != null ? Number(r.sustain) : 0.45)),
+            release: Math.max(0.001, Number(r.release != null ? r.release : 0.12)),
+            filter: r.filter != null ? Number(r.filter) : null
+        };
+    },
+
+    normalizePattern(raw, channels, rowsPerPattern) {
+        const rowsN = Math.max(1, Number(raw.rowsPerPattern || raw.length || rowsPerPattern) || 16);
+        const chN = Math.max(1, channels | 0);
+        const grid = [];
+        for (let r = 0; r < rowsN; r++) {
+            const row = [];
+            for (let c = 0; c < chN; c++) row.push(null);
+            grid.push(row);
+        }
+
+        if (Array.isArray(raw.rows)) {
+            raw.rows.forEach((row, ri) => {
+                if (ri >= rowsN || !Array.isArray(row)) return;
+                row.forEach((cell, ci) => {
+                    if (ci < chN) grid[ri][ci] = this.parseCell(cell);
+                });
+            });
+        } else if (Array.isArray(raw.channels)) {
+            raw.channels.forEach((chStr, ci) => {
+                if (ci >= chN) return;
+                const cells = this.expandChannelString(chStr, rowsN);
+                for (let ri = 0; ri < rowsN; ri++) grid[ri][ci] = cells[ri];
+            });
+        } else if (Array.isArray(raw)) {
+            // bare rows array
+            raw.forEach((row, ri) => {
+                if (ri >= rowsN || !Array.isArray(row)) return;
+                row.forEach((cell, ci) => {
+                    if (ci < chN) grid[ri][ci] = this.parseCell(cell);
+                });
+            });
+        }
+
+        return {
+            id: raw.id != null ? Number(raw.id) : 0,
+            rows: grid
+        };
+    },
+
+    /**
+     * Accepts a full track object or a JSON string. Returns a playable track
+     * or throws with a short reason.
+     */
+    normalize(input) {
+        let data = input;
+        if (typeof input === 'string') {
+            const trimmed = input.trim();
+            if (!trimmed) throw new Error('empty track');
+            data = JSON.parse(trimmed);
+        }
+        if (!data || typeof data !== 'object') throw new Error('track must be an object');
+
+        const bpm = Math.max(60, Math.min(240, Number(data.bpm) || 120));
+        const rowsPerBeat = Math.max(1, Math.min(8, Number(data.rowsPerBeat) || 1));
+        const rowsPerPattern = Math.max(4, Math.min(128, Number(data.rowsPerPattern) || 16));
+        const channels = Math.max(1, Math.min(8, Number(data.channels) || 4));
+
+        const instruments = (Array.isArray(data.instruments) ? data.instruments : [])
+            .map((inst, i) => this.normalizeInstrument(inst, i));
+        if (!instruments.length) {
+            instruments.push(this.normalizeInstrument({ id: 1, name: 'lead', wave: 'square' }, 0));
+        }
+        const byId = {};
+        instruments.forEach((inst) => { byId[inst.id] = inst; });
+
+        const patternsIn = Array.isArray(data.patterns) ? data.patterns : [];
+        const patterns = patternsIn.map((p, i) => {
+            const n = this.normalizePattern(p, channels, rowsPerPattern);
+            if (p && p.id == null) n.id = i;
+            return n;
+        });
+        if (!patterns.length) throw new Error('track needs at least one pattern');
+
+        const patternById = {};
+        patterns.forEach((p) => { patternById[p.id] = p; });
+
+        let order = Array.isArray(data.order) ? data.order.map(Number) : patterns.map((p) => p.id);
+        if (!order.length) order = [patterns[0].id];
+        order = order.filter((id) => patternById[id]);
+        if (!order.length) throw new Error('order references no valid patterns');
+
+        const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
+        return {
+            format: 'vftrack',
+            version: Number(data.version) || 1,
+            meta: {
+                title: String(meta.title || data.title || 'Untitled'),
+                author: String(meta.author || ''),
+                planet: meta.planet != null ? String(meta.planet) : '',
+                notes: String(meta.notes || '')
+            },
+            bpm,
+            rowsPerBeat,
+            rowsPerPattern,
+            channels,
+            instruments,
+            instrumentById: byId,
+            patterns,
+            patternById,
+            order,
+            loop: data.loop !== false
+        };
+    },
+
+    /**
+     * Compact export (channel strings) — best for LLM round-trips.
+     */
+    toCompact(track) {
+        const t = this.normalize(track);
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: t.meta,
+            bpm: t.bpm,
+            rowsPerBeat: t.rowsPerBeat,
+            rowsPerPattern: t.rowsPerPattern,
+            channels: t.channels,
+            instruments: t.instruments.map((i) => ({
+                id: i.id,
+                name: i.name,
+                wave: i.wave,
+                volume: i.volume,
+                attack: i.attack,
+                decay: i.decay,
+                sustain: i.sustain,
+                release: i.release,
+                filter: i.filter
+            })),
+            patterns: t.patterns.map((p) => {
+                const chans = [];
+                for (let c = 0; c < t.channels; c++) {
+                    const toks = p.rows.map((row) => {
+                        const cell = row[c];
+                        if (!cell || !cell.note) return '.';
+                        if (cell.note === 'OFF') return 'OFF';
+                        let s = cell.note + ':' + (cell.inst || 1);
+                        if (cell.vol != null) s += ':' + cell.vol;
+                        return s;
+                    });
+                    chans.push(toks.join(' '));
+                }
+                return { id: p.id, channels: chans };
+            }),
+            order: t.order,
+            loop: t.loop
+        };
+    },
+
+    isTrack(data) {
+        try {
+            this.normalize(data);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+};
+
+
+/* --- js/game/tracker/player.js --- */
+"use strict";
+
+/**
+ * Schedules a normalized vftrack on a Web Audio context (lookahead sequencer).
+ */
+var VFTrackerPlayer = class VFTrackerPlayer {
+    constructor() {
+        this.ctx = null;
+        this.track = null;
+        this.playing = false;
+        this.masterGain = null;
+        this.volume = 0.2;
+        this._timer = null;
+        this._nextRowTime = 0;
+        this._orderIndex = 0;
+        this._rowIndex = 0;
+        this._channels = [];
+        this._noiseBuffer = null;
+        this.lookahead = 0.08;
+        this.scheduleAhead = 0.25;
+        /** Playback speed vs authored BPM (>1 = faster). */
+        this.tempoScale = 3.5;
+        /**
+         * Per-channel mix (bass / lead / arp / drums).
+         * Lead (ch1) is ducked so square pulse doesn't bury the rest.
+         */
+        this.channelMix = [1.1, 0.42, 1.45, 1.25];
+        this._onEnded = null;
+        this._endedFired = false;
+    }
+
+    ensureContext(externalCtx) {
+        if (externalCtx) {
+            this.ctx = externalCtx;
+        } else if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+        if (!this.masterGain) {
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = Math.max(0.0001, this.volume);
+            this.masterGain.connect(this.ctx.destination);
+        }
+        if (!this._noiseBuffer) this._noiseBuffer = this._makeNoiseBuffer();
+        return this.ctx;
+    }
+
+    _makeNoiseBuffer() {
+        const len = this.ctx.sampleRate * 1;
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        return buf;
+    }
+
+    setVolume(v) {
+        this.volume = Math.max(0, Math.min(1, Number(v) || 0));
+        if (this.masterGain && this.ctx) {
+            const now = this.ctx.currentTime;
+            this.masterGain.gain.cancelScheduledValues(now);
+            this.masterGain.gain.linearRampToValueAtTime(Math.max(0.0001, this.volume), now + 0.05);
+        }
+    }
+
+    effectiveBpm() {
+        if (!this.track) return 0;
+        const scale = Number(this.tempoScale);
+        const mul = Number.isFinite(scale) && scale > 0 ? scale : 1;
+        return Math.max(60, Math.min(960, Number(this.track.bpm) * mul));
+    }
+
+    rowDuration() {
+        const bpm = this.effectiveBpm();
+        const rpb = this.track.rowsPerBeat;
+        return (60 / bpm) / rpb;
+    }
+
+    play(track, opts) {
+        const normalized = VFTrackerParse.normalize(track);
+        // Soft stop channels/timer but keep the master bus; hard-mute made
+        // immediate restarts come back silent when setVolume raced the ramp.
+        this.stop(false);
+        const ctx = this.ensureContext(opts && opts.context);
+        if (!this.masterGain) {
+            this.masterGain = ctx.createGain();
+            this.masterGain.connect(ctx.destination);
+        }
+        this.track = normalized;
+        this.playing = true;
+        this._endedFired = false;
+        this._onEnded = (opts && typeof opts.onEnded === 'function') ? opts.onEnded : null;
+        this._orderIndex = 0;
+        this._rowIndex = 0;
+        this._channels = [];
+        for (let i = 0; i < normalized.channels; i++) {
+            this._channels.push({ gain: null, source: null, release: 0.1 });
+        }
+        const vol = opts && opts.volume != null ? opts.volume : this.volume;
+        this.volume = Math.max(0.0001, Math.min(1, Number(vol) || 0.2));
+        try {
+            this.masterGain.gain.cancelScheduledValues(ctx.currentTime);
+            this.masterGain.gain.setValueAtTime(this.volume, ctx.currentTime);
+        } catch (e) { /* ignore */ }
+        this._nextRowTime = ctx.currentTime + 0.02;
+        this._timer = setInterval(() => this._tick(), this.lookahead * 1000);
+        this._tick();
+        return normalized;
+    }
+
+    _stopChannel(ch, when) {
+        const slot = this._channels[ch];
+        if (!slot) return;
+        try {
+            if (slot.gain) {
+                const t = when;
+                const rel = slot.release || 0.08;
+                slot.gain.gain.cancelScheduledValues(t);
+                slot.gain.gain.setValueAtTime(Math.max(0.0001, slot.gain.gain.value), t);
+                slot.gain.gain.exponentialRampToValueAtTime(0.0001, t + rel);
+                if (slot.source) {
+                    try { slot.source.stop(t + rel + 0.02); } catch (e) { /* already stopped */ }
+                }
+            }
+        } catch (e) { /* ignore */ }
+        slot.gain = null;
+        slot.source = null;
+    }
+
+    _trigger(ch, cell, when) {
+        const track = this.track;
+        if (!cell || !cell.note) return;
+        if (cell.note === 'OFF') {
+            this._stopChannel(ch, when);
+            return;
+        }
+        const freq = VFTrackerParse.noteToFreq(cell.note);
+        if (!freq || freq === 'OFF') return;
+
+        const inst = track.instrumentById[cell.inst] || track.instruments[0];
+        if (!inst) return;
+
+        this._stopChannel(ch, when);
+
+        const ctx = this.ctx;
+        const gain = ctx.createGain();
+        let filter = null;
+        if (inst.filter && inst.wave !== 'noise') {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(inst.filter, when);
+            filter.Q.setValueAtTime(0.7, when);
+        }
+
+        let source;
+        if (inst.wave === 'noise') {
+            source = ctx.createBufferSource();
+            source.buffer = this._noiseBuffer;
+            source.loop = true;
+        } else {
+            source = ctx.createOscillator();
+            source.type = inst.wave;
+            source.frequency.setValueAtTime(Math.max(20, freq), when);
+        }
+
+        const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
+        const mix = (this.channelMix && this.channelMix[ch] != null) ? Number(this.channelMix[ch]) : 1;
+        const chMul = Number.isFinite(mix) && mix > 0 ? mix : 1;
+        const peak = Math.max(0.0001, inst.volume * vol64 * chMul);
+        const a = inst.attack;
+        const d = inst.decay;
+        const s = Math.max(0.0001, peak * inst.sustain);
+        const r = inst.release;
+
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.exponentialRampToValueAtTime(peak, when + a);
+        gain.gain.exponentialRampToValueAtTime(s, when + a + d);
+
+        if (filter) {
+            source.connect(filter);
+            filter.connect(gain);
+        } else {
+            source.connect(gain);
+        }
+        gain.connect(this.masterGain);
+        source.start(when);
+
+        this._channels[ch] = { gain, source, release: r, filter };
+    }
+
+    _scheduleRow(when) {
+        const track = this.track;
+        const patId = track.order[this._orderIndex];
+        const pat = track.patternById[patId];
+        if (!pat) return;
+        const row = pat.rows[this._rowIndex];
+        if (row) {
+            for (let c = 0; c < track.channels; c++) {
+                if (row[c]) this._trigger(c, row[c], when);
+            }
+        }
+        this._rowIndex += 1;
+        if (this._rowIndex >= pat.rows.length) {
+            this._rowIndex = 0;
+            this._orderIndex += 1;
+            if (this._orderIndex >= track.order.length) {
+                if (track.loop) this._orderIndex = 0;
+                else {
+                    this.playing = false;
+                    this._finishNonLoop();
+                    return;
+                }
+            }
+        }
+    }
+
+    _finishNonLoop() {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+        if (this._endedFired) return;
+        this._endedFired = true;
+        const cb = this._onEnded;
+        this._onEnded = null;
+        if (cb) {
+            try { cb(); } catch (e) { /* ignore listener errors */ }
+        }
+    }
+
+    _tick() {
+        if (!this.playing || !this.track || !this.ctx) return;
+        const rowDur = this.rowDuration();
+        const horizon = this.ctx.currentTime + this.scheduleAhead;
+        while (this.playing && this._nextRowTime < horizon) {
+            this._scheduleRow(this._nextRowTime);
+            this._nextRowTime += rowDur;
+        }
+    }
+
+    stop(immediate) {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+        this.playing = false;
+        this._onEnded = null;
+        const when = this.ctx ? this.ctx.currentTime : 0;
+        for (let i = 0; i < this._channels.length; i++) {
+            this._stopChannel(i, when);
+        }
+        this._channels = [];
+        this.track = null;
+        // Never hard-mute the bus on stop — a following play() would race the
+        // mute and leave planet music silent. Channels are already silenced.
+        if (immediate && this.masterGain && this.ctx) {
+            try {
+                this.masterGain.gain.cancelScheduledValues(when);
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    get bpm() {
+        return this.effectiveBpm();
+    }
+
+    isPlaying() {
+        return !!this.playing;
+    }
+}
+
+
+/* --- js/game/tracker/defaults.js --- */
+"use strict";
+
+/**
+ * Built-in vftracks — oriented on Volley Fire (GB, 1990 / Akihiko Mori):
+ * clear pulse hooks, wave bass ostinato, sparse harmony, noise hats.
+ * Original melodies inspired by that era's Toei GB shooter feel (not a rip).
+ * Role map ≈ GB OST: Title→intro, Planet Select→menu, Main BGM 1–3→planets,
+ * Boss / Final Boss→boss keys.
+ */
+var VFTrackerDefaults = {
+    /** Game Boy-ish voices: wave bass, two pulses, noise. */
+    _baseInstruments() {
+        return [
+            { id: 1, name: 'wave', wave: 'triangle', volume: 0.7, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
+            { id: 2, name: 'pulse1', wave: 'square', volume: 0.28, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
+            { id: 3, name: 'pulse2', wave: 'square', volume: 0.4, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05 },
+            { id: 4, name: 'noise', wave: 'noise', volume: 0.32, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+            { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
+        ];
+    },
+
+    _track(meta, bpm, patterns, order, loop) {
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: Object.assign({ author: 'VF Tracker · GB-style' }, meta),
+            bpm,
+            rowsPerBeat: 1,
+            rowsPerPattern: 16,
+            channels: 4,
+            instruments: this._baseInstruments(),
+            patterns,
+            order,
+            loop: loop !== false
+        };
+    },
+
+    _pat(id, bass, lead, arp, drums) {
+        const pad = (s) => (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.padChannelString
+            ? VFTrackerParse.padChannelString(s, 16)
+            : s);
+        return { id: id, channels: [pad(bass), pad(lead), pad(arp), pad(drums)] };
+    },
+
+    /**
+     * Motivic writing rules (all planet tracks):
+     *   P0 = state the head motif (lead) over a locked bass ostinato
+     *   P1 = same rhythm, motif sequenced to the relative / IV area
+     *   P2 = motif climax (octave / extension) then cadence home
+     * Lead answers itself — never random walks.
+     */
+
+    // Motif: A C E D | C A G A  (A minor head)
+    mars() {
+        return this._track(
+            { title: 'Main Orbit 1', planet: 'mars', notes: 'motif A-C-E-D · develop · return' },
+            132,
+            [
+                this._pat(0,
+                    'A-2:1:56 . A-2:1:40 . A-2:1:56 . E-2:1:44 . A-2:1:56 . A-2:1:40 . E-2:1:48 . E-2:1:36',
+                    'A-4:2:48 . C-5:2:40 . E-5:2:52 . D-5:2:44 . C-5:2:46 . A-4:2:38 . G-4:2:40 . A-4:2:44',
+                    'E-4:3:16 . . . A-4:3:14 . . . E-4:3:16 . . . A-4:3:14 . . .',
+                    'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .'
+                ),
+                this._pat(1,
+                    'F-2:1:52 . F-2:1:36 . F-2:1:52 . C-2:1:40 . G-2:1:52 . G-2:1:36 . E-2:1:46 . G-2:1:34',
+                    'F-4:2:44 . A-4:2:36 . C-5:2:48 . B-4:2:40 . A-4:2:42 . G-4:2:34 . E-4:2:36 . F-4:2:40',
+                    'C-4:3:14 . . . F-4:3:12 . . . D-4:3:14 . . . G-4:3:12 . . .',
+                    'F-2:5:58 . A-4:4:14 . F-2:5:46 . A-4:4:10 G-2:5:58 . A-4:4:14 . G-2:5:44 A-4:4:08 . .'
+                ),
+                this._pat(2,
+                    'A-2:1:60 . A-2:1:42 . C-3:1:50 . E-2:1:46 . A-2:1:60 . A-2:1:42 . G-2:1:52 . E-2:1:40',
+                    'A-5:2:52 . C-6:2:44 . E-6:2:56 . D-6:2:48 . C-6:2:50 . A-5:2:42 . G-5:2:44 . A-5:2:48',
+                    'A-4:3:18 . E-4:3:12 . E-4:3:12 A-4:3:18 . C-5:3:20 . E-4:3:12 A-4:3:16 . G-4:3:12 . E-4:3:10 .',
+                    'A-2:5:70 A-4:4:18 . A-4:4:12 A-2:5:54 . A-4:4:14 . A-2:5:66 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Motif: E G B A | G E D E  (E minor head)
+    jupiter() {
+        return this._track(
+            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'motif E-G-B-A · develop · return' },
+            124,
+            [
+                this._pat(0,
+                    'E-2:1:54 . E-2:1:38 . E-2:1:54 . B-1:1:42 . E-2:1:54 . E-2:1:38 . B-1:1:46 . B-1:1:34',
+                    'E-4:2:46 . G-4:2:38 . B-4:2:50 . A-4:2:42 . G-4:2:44 . E-4:2:36 . D-4:2:38 . E-4:2:42',
+                    'B-3:3:14 . . . E-4:3:12 . . . B-3:3:14 . . . E-4:3:12 . . .',
+                    'E-2:5:60 . A-4:4:14 . E-2:5:48 . A-4:4:10 E-2:5:60 . A-4:4:14 . E-2:5:44 A-4:4:08 . .'
+                ),
+                this._pat(1,
+                    'C-3:1:50 . C-3:1:34 . C-3:1:50 . G-2:1:38 . D-3:1:50 . D-3:1:34 . B-1:1:44 . D-2:1:32',
+                    'C-5:2:42 . E-5:2:34 . G-5:2:46 . F#5:2:38 . E-5:2:40 . D-5:2:32 . B-4:2:34 . C-5:2:38',
+                    'G-4:3:12 . . . C-5:3:10 . . . A-4:3:12 . . . D-5:3:10 . . .',
+                    'C-3:5:56 . A-4:4:12 . C-3:5:44 . A-4:4:08 D-3:5:56 . A-4:4:12 . D-3:5:40 A-4:4:06 . .'
+                ),
+                this._pat(2,
+                    'E-2:1:58 . E-2:1:40 . G-2:1:48 . B-1:1:44 . E-2:1:58 . E-2:1:40 . D-2:1:50 . B-1:1:38',
+                    'E-5:2:50 . G-5:2:42 . B-5:2:54 . A-5:2:46 . G-5:2:48 . E-5:2:40 . D-5:2:42 . E-5:2:46',
+                    'E-4:3:16 . B-3:3:10 . B-3:3:10 E-4:3:16 . G-4:3:18 . B-3:3:10 E-4:3:14 . D-4:3:10 . B-3:3:08 .',
+                    'E-2:5:66 A-4:4:16 . A-4:4:10 E-2:5:52 . A-4:4:12 . E-2:5:62 A-4:4:14 . A-4:4:08 E-2:5:46 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 0, 1, 0]
+        );
+    },
+
+    // Motif: D F A G | F D C D  (D minor head, faster)
+    saturn() {
+        return this._track(
+            { title: 'Main Orbit 3', planet: 'saturn', notes: 'motif D-F-A-G · develop · return' },
+            140,
+            [
+                this._pat(0,
+                    'D-2:1:56 D-2:1:36 . D-2:1:56 . A-1:1:42 . D-2:1:56 D-2:1:36 . A-1:1:46 . A-1:1:34',
+                    'D-4:2:48 . F-4:2:40 . A-4:2:52 . G-4:2:44 . F-4:2:46 . D-4:2:38 . C-4:2:40 . D-4:2:44',
+                    'A-3:3:16 . . . D-4:3:14 . . . A-3:3:16 . . . D-4:3:14 . . .',
+                    'D-2:5:64 A-4:4:16 D-2:5:40 A-4:4:10 D-2:5:58 A-4:4:14 . D-2:5:64 A-4:4:16 D-2:5:38 A-4:4:10 D-2:5:50 A-4:4:12 .'
+                ),
+                this._pat(1,
+                    'G-1:1:52 G-1:1:32 . G-1:1:52 . D-1:1:38 . A-1:1:52 A-1:1:32 . E-2:1:44 . A-1:1:30',
+                    'G-3:2:44 . Bb3:2:36 . D-4:2:48 . C-4:2:40 . Bb3:2:42 . A-3:2:34 . G-3:2:36 . A-3:2:40',
+                    'D-3:3:14 . . . G-3:3:12 . . . E-3:3:14 . . . A-3:3:12 . . .',
+                    'G-1:5:60 A-4:4:14 G-1:5:38 A-4:4:08 A-1:5:56 A-4:4:12 . A-1:5:60 A-4:4:14 A-1:5:36 A-4:4:08 A-1:5:48 A-4:4:10 .'
+                ),
+                this._pat(2,
+                    'D-2:1:60 . D-2:1:40 . F-2:1:50 . A-1:1:44 . D-2:1:60 . D-2:1:40 . C-2:1:52 . A-1:1:38',
+                    'D-5:2:52 . F-5:2:44 . A-5:2:56 . G-5:2:48 . F-5:2:50 . D-5:2:42 . C-5:2:44 . D-5:2:48',
+                    'D-4:3:18 . A-3:3:12 . A-3:3:12 D-4:3:18 . F-4:3:20 . A-3:3:12 D-4:3:16 . C-4:3:12 . A-3:3:10 .',
+                    'D-2:5:70 A-4:4:18 . A-4:4:10 D-2:5:54 A-4:4:14 A-4:4:08 . D-2:5:66 A-4:4:16 . A-4:4:08 D-2:5:48 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Motif: B D F# E | D B A B  (B minor, colder spacing)
+    neptune() {
+        return this._track(
+            { title: 'Ice Lane', planet: 'neptune', notes: 'motif B-D-F#-E · develop · return' },
+            118,
+            [
+                this._pat(0,
+                    'B-1:1:50 . . B-1:1:36 . F#1:1:44 . . F#1:1:32 . B-1:1:50 . . F#1:1:40 . F#1:1:30 .',
+                    'B-3:2:42 . D-4:2:34 . F#4:2:46 . E-4:2:38 . D-4:2:40 . B-3:2:32 . A-3:2:34 . B-3:2:38',
+                    'F#3:3:12 . . . B-3:3:10 . . . F#3:3:12 . . . B-3:3:10 . . .',
+                    '. A-4:4:12 . . B-1:5:48 . A-4:4:08 . . A-4:4:12 . B-1:5:42 . A-4:4:06 . .'
+                ),
+                this._pat(1,
+                    'G-1:1:46 . . G-1:1:32 . D-1:1:40 . . D-1:1:28 . A-1:1:46 . . E-1:1:36 . E-1:1:26 .',
+                    'G-3:2:38 . B-3:2:30 . D-4:2:42 . C#4:2:34 . B-3:2:36 . A-3:2:28 . G-3:2:30 . A-3:2:34',
+                    'D-3:3:10 . . . G-3:3:08 . . . E-3:3:10 . . . A-3:3:08 . . .',
+                    '. A-4:4:10 . . G-1:5:44 . A-4:4:06 . . A-4:4:10 . A-1:5:40 . A-4:4:05 . .'
+                ),
+                this._pat(2,
+                    'B-1:1:54 . . B-1:1:38 . F#1:1:46 . . A-1:1:42 . B-1:1:54 . . F#1:1:40 . E-1:1:34 .',
+                    'B-4:2:46 . D-5:2:38 . F#5:2:50 . E-5:2:42 . D-5:2:44 . B-4:2:36 . A-4:2:38 . B-4:2:42',
+                    'B-3:3:14 . F#3:3:08 . F#3:3:08 B-3:3:14 . D-4:3:16 . F#3:3:08 B-3:3:12 . A-3:3:08 . F#3:3:06 .',
+                    'B-1:5:54 . A-4:4:12 . B-1:5:42 . A-4:4:08 . B-1:5:50 A-4:4:10 . A-4:4:06 . . . .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Motif: C Eb G F | Eb C Bb C  (C minor, urgent)
+    pluto() {
+        return this._track(
+            { title: 'Kuiper Rush', planet: 'pluto', notes: 'motif C-Eb-G-F · develop · return' },
+            148,
+            [
+                this._pat(0,
+                    'C-2:1:56 C-2:1:34 . C-2:1:56 . G-1:1:42 . C-2:1:56 C-2:1:34 . G-1:1:46 . G-1:1:32',
+                    'C-4:2:48 . Eb4:2:40 . G-4:2:52 . F-4:2:44 . Eb4:2:46 . C-4:2:38 . Bb3:2:40 . C-4:2:44',
+                    'G-3:3:16 . . . C-4:3:14 . . . G-3:3:16 . . . C-4:3:14 . . .',
+                    'C-2:5:68 A-4:4:16 C-2:5:40 A-4:4:10 C-2:5:60 A-4:4:14 . C-2:5:68 A-4:4:16 C-2:5:38 A-4:4:10 C-2:5:52 A-4:4:12 .'
+                ),
+                this._pat(1,
+                    'Ab1:1:52 Ab1:1:30 . Ab1:1:52 . Eb1:1:38 . Bb1:1:52 Bb1:1:30 . F-2:1:44 . Bb1:1:28',
+                    'Ab3:2:44 . C-4:2:36 . Eb4:2:48 . D-4:2:40 . C-4:2:42 . Bb3:2:34 . Ab3:2:36 . Bb3:2:40',
+                    'Eb3:3:14 . . . Ab3:3:12 . . . F-3:3:14 . . . Bb3:3:12 . . .',
+                    'Ab1:5:62 A-4:4:14 Ab1:5:38 A-4:4:08 Bb1:5:58 A-4:4:12 . Bb1:5:62 A-4:4:14 Bb1:5:36 A-4:4:08 Bb1:5:48 A-4:4:10 .'
+                ),
+                this._pat(2,
+                    'C-2:1:60 . C-2:1:38 . Eb2:1:50 . G-1:1:44 . C-2:1:60 . C-2:1:38 . Bb1:1:52 . G-1:1:36',
+                    'C-5:2:52 . Eb5:2:44 . G-5:2:56 . F-5:2:48 . Eb5:2:50 . C-5:2:42 . Bb4:2:44 . C-5:2:48',
+                    'C-4:3:18 . G-3:3:12 . G-3:3:12 C-4:3:18 . Eb4:3:20 . G-3:3:12 C-4:3:16 . Bb3:3:12 . G-3:3:10 .',
+                    'C-2:5:74 A-4:4:18 . A-4:4:10 C-2:5:56 A-4:4:14 A-4:4:08 . C-2:5:70 A-4:4:16 . A-4:4:08 C-2:5:50 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    /**
+     * Title fanfare = planet head motif once, then cadence. Same DNA as combat.
+     */
+    intro(planetId) {
+        const id = this.normalizePlanetKey
+            ? this.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        if (this.isHandcraftedPlanet && !this.isHandcraftedPlanet(id)) {
+            return this.remixPlanet(id, { intro: true });
+        }
+        // Combat track → take P0 lead motif as fanfare body.
+        const combat = typeof this[id] === 'function' ? this[id]() : this.mars();
+        const p0 = (combat.patterns && combat.patterns[0]) || { channels: [] };
+        const ch = p0.channels || [];
+        const bass = ch[0] || 'A-2:1:56 . A-2:1:40 . A-2:1:56 . E-2:1:44 . A-2:1:56 . A-2:1:40 . E-2:1:48 . E-2:1:36';
+        const lead = ch[1] || 'A-4:2:48 . C-5:2:40 . E-5:2:52 . D-5:2:44 . C-5:2:46 . A-4:2:38 . G-4:2:40 . A-4:2:44';
+        const arp = ch[2] || 'E-4:3:16 . . . A-4:3:14 . . . E-4:3:16 . . . A-4:3:14 . . .';
+        const drums = ch[3] || 'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .';
+        // Cadence: hold tonic, resolve lead to root.
+        const cadenceBass = {
+            mars: 'A-2:1:60 . . A-2:1:44 . E-2:1:48 . . A-2:1:52 . . E-2:1:40 . A-2:1:56 . OFF .',
+            jupiter: 'E-2:1:58 . . E-2:1:42 . B-1:1:46 . . E-2:1:50 . . B-1:1:38 . E-2:1:54 . OFF .',
+            saturn: 'D-2:1:60 . . D-2:1:44 . A-1:1:48 . . D-2:1:52 . . A-1:1:40 . D-2:1:56 . OFF .',
+            neptune: 'B-1:1:54 . . B-1:1:40 . F#1:1:44 . . B-1:1:48 . . F#1:1:36 . B-1:1:52 . OFF .',
+            pluto: 'C-2:1:60 . . C-2:1:44 . G-1:1:48 . . C-2:1:52 . . G-1:1:40 . C-2:1:56 . OFF .'
+        };
+        const cadenceLead = {
+            mars: 'A-5:2:52 . . E-5:2:44 . C-5:2:46 . . A-4:2:50 . . E-4:2:40 . A-4:2:54 . OFF .',
+            jupiter: 'E-5:2:50 . . B-4:2:42 . G-4:2:44 . . E-4:2:48 . . B-3:2:38 . E-4:2:52 . OFF .',
+            saturn: 'D-5:2:52 . . A-4:2:44 . F-4:2:46 . . D-4:2:50 . . A-3:2:40 . D-4:2:54 . OFF .',
+            neptune: 'B-4:2:48 . . F#4:2:40 . D-4:2:42 . . B-3:2:46 . . F#3:2:36 . B-3:2:50 . OFF .',
+            pluto: 'C-5:2:52 . . G-4:2:44 . Eb4:2:46 . . C-4:2:50 . . G-3:2:40 . C-4:2:54 . OFF .'
+        };
+        const cBass = cadenceBass[id] || cadenceBass.mars;
+        const cLead = cadenceLead[id] || cadenceLead.mars;
+        return this._track(
+            { title: 'Title · ' + id, planet: id, notes: 'fanfare = combat motif + cadence' },
+            Math.min(156, (combat.bpm || 132) + 12),
+            [
+                this._pat(0, bass, lead, arp, drums),
+                this._pat(1, cBass, cLead, arp, drums)
+            ],
+            [0, 1],
+            false
+        );
+    },
+
+    /** Planet Select — motif G B D E | D B A G, then sequenced. */
+    menu() {
+        return this._track(
+            { title: 'Planet Select', planet: 'menu', notes: 'motif G-B-D-E · develop · return' },
+            112,
+            [
+                this._pat(0,
+                    'G-2:1:50 . G-2:1:36 . G-2:1:50 . D-2:1:40 . G-2:1:50 . G-2:1:36 . D-2:1:44 . D-2:1:32',
+                    'G-4:2:44 . B-4:2:36 . D-5:2:48 . E-5:2:40 . D-5:2:42 . B-4:2:34 . A-4:2:36 . G-4:2:40',
+                    'D-4:3:14 . . . G-4:3:12 . . . D-4:3:14 . . . G-4:3:12 . . .',
+                    'G-2:5:56 . A-4:4:12 . G-2:5:44 . A-4:4:08 G-2:5:56 . A-4:4:12 . G-2:5:40 A-4:4:06 . .'
+                ),
+                this._pat(1,
+                    'E-2:1:46 . E-2:1:32 . E-2:1:46 . B-1:1:36 . E-2:1:46 . E-2:1:32 . B-1:1:40 . B-1:1:28',
+                    'E-4:2:40 . G-4:2:32 . B-4:2:44 . C-5:2:36 . B-4:2:38 . G-4:2:30 . F#4:2:32 . E-4:2:36',
+                    'B-3:3:12 . . . E-4:3:10 . . . B-3:3:12 . . . E-4:3:10 . . .',
+                    'E-2:5:52 . A-4:4:10 . E-2:5:40 . A-4:4:06 E-2:5:52 . A-4:4:10 . E-2:5:36 A-4:4:05 . .'
+                ),
+                this._pat(2,
+                    'G-2:1:54 . G-2:1:38 . B-2:1:46 . D-2:1:42 . G-2:1:54 . G-2:1:38 . D-3:1:48 . B-2:1:36',
+                    'G-5:2:48 . B-5:2:40 . D-6:2:52 . E-6:2:44 . D-6:2:46 . B-5:2:38 . A-5:2:40 . G-5:2:44',
+                    'G-4:3:16 . D-4:3:10 . D-4:3:10 G-4:3:16 . B-4:3:18 . D-4:3:10 G-4:3:14 . E-4:3:10 . D-4:3:08 .',
+                    'G-2:5:60 A-4:4:14 . A-4:4:08 G-2:5:48 . A-4:4:10 . G-2:5:56 A-4:4:12 . A-4:4:06 G-2:5:42 A-4:4:08 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    /** Boss = planet motif doubled + denser drums (same head DNA). */
+    _bossFor(planetId, bpm) {
+        const id = String(planetId || 'mars').toLowerCase();
+        const base = typeof this[id] === 'function' ? this[id]() : this.mars();
+        const compact = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.toCompact)
+            ? VFTrackerParse.toCompact(base)
+            : base;
+        const patterns = (compact.patterns || []).slice(0, 2).map((p, pi) => {
+            const ch = (p.channels || []).slice();
+            while (ch.length < 4) ch.push('.');
+            // Keep lead motif; thicken drums.
+            const drums = pi === 0
+                ? ch[3]
+                : String(ch[3]).replace(/:4:(\d+)/g, (m, v) => ':4:' + Math.min(28, Number(v) + 4));
+            return this._pat(pi, ch[0], ch[1], ch[2], drums);
+        });
+        // Append a pressure variant: motif up a fifth if parse available, else repeat P0.
+        let pressureLead = patterns[0].channels[1];
+        if (typeof VFTrackerParse !== 'undefined') {
+            pressureLead = VFTrackerParse.transposeChannelString(patterns[0].channels[1], 7);
+        }
+        patterns.push(this._pat(2,
+            patterns[0].channels[0],
+            pressureLead,
+            patterns[0].channels[2],
+            patterns[0].channels[3]
+        ));
+        return this._track(
+            { title: id.toUpperCase() + ' Boss', planet: id, notes: 'boss = planet motif × pressure' },
+            bpm || Math.min(156, (compact.bpm || 132) + 8),
+            patterns,
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    'mars-boss'() { return this._bossFor('mars', 128); },
+    'jupiter-boss'() { return this._bossFor('jupiter', 120); },
+    'saturn-boss'() { return this._bossFor('saturn', 134); },
+    'neptune-boss'() { return this._bossFor('neptune', 126); },
+    'pluto-boss'() { return this._bossFor('pluto', 142); },
+
+    PLANETS: ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'],
+
+    /**
+     * Strip only stage suffixes (mars-2, pluto-boss). Keep explored / ambush ids.
+     */
+    normalizePlanetKey(planetId) {
+        const raw = String(planetId || 'mars').toLowerCase().trim();
+        if (!raw) return 'mars';
+        const m = /^(.*)-(?:\d+|boss|b)$/.exec(raw);
+        if (m && m[1]) return m[1];
+        return raw.split(':')[0];
+    },
+
+    isHandcraftedPlanet(planetId) {
+        const id = this.normalizePlanetKey(planetId);
+        return this.PLANETS.indexOf(id) !== -1;
+    },
+
+    _hash32(str) {
+        let h = 2166136261;
+        const s = String(str || '');
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    },
+
+    _rng(seed) {
+        let s = (seed >>> 0) || 1;
+        return () => {
+            s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+            return s / 4294967296;
+        };
+    },
+
+    /** Stable primary + secondary handcrafted donors for any planet slug. */
+    _donorPair(planetId) {
+        const id = this.normalizePlanetKey(planetId);
+        const h = this._hash32(id);
+        const primary = this.PLANETS[h % this.PLANETS.length];
+        let secondary = this.PLANETS[(h >>> 8) % this.PLANETS.length];
+        if (secondary === primary) {
+            secondary = this.PLANETS[(h + 2) % this.PLANETS.length];
+        }
+        return { primary, secondary, hash: h };
+    },
+
+    _handcraftedRaw(planetKey, opts) {
+        const boss = !!(opts && opts.boss);
+        const intro = !!(opts && opts.intro);
+        if (intro) return this.intro(planetKey);
+        if (boss) {
+            const key = planetKey + '-boss';
+            if (typeof this[key] === 'function') return this[key]();
+            return this._bossFor(planetKey, 128);
+        }
+        if (typeof this[planetKey] === 'function') return this[planetKey]();
+        return this.mars();
+    },
+
+    _thinChannel(str, keepEvery) {
+        const step = Math.max(1, keepEvery | 0);
+        return String(str || '').trim().split(/\s+/).filter(Boolean)
+            .map((tok, i) => (i % step === 0 ? tok : '.')).join(' ');
+    },
+
+    _shiftOctaveChannel(str, octaves) {
+        if (!octaves || typeof VFTrackerParse === 'undefined') return str;
+        return VFTrackerParse.transposeChannelString(str, octaves * 12);
+    },
+
+    /**
+     * Explored planets: one donor motif track, musical key + small BPM nudge.
+     * Never splice channels from two songs — that kills motif continuity.
+     */
+    remixPlanet(planetId, opts) {
+        const id = this.normalizePlanetKey(planetId);
+        const boss = !!(opts && opts.boss);
+        const intro = !!(opts && opts.intro);
+        const { primary, hash } = this._donorPair(id);
+        const a = VFTrackerParse.toCompact(this._handcraftedRaw(primary, { boss, intro }));
+        const keyPool = [0, 2, -2, 3, -3, 5, -5, 7];
+        const key = keyPool[hash % keyPool.length];
+        const bpm = Math.max(110, Math.min(152, Number(a.bpm) + ((hash % 5) - 2)));
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const tx = (s, semi) => (semi ? VFTrackerParse.transposeChannelString(s, semi) : s);
+
+        const patterns = (a.patterns || []).map((p, pi) => {
+            const ch = (p.channels || []).slice();
+            while (ch.length < 4) ch.push('.');
+            return {
+                id: pi,
+                channels: [
+                    pad(tx(ch[0], key)),
+                    pad(tx(ch[1], key)),
+                    pad(tx(ch[2], key)),
+                    pad(ch[3])
+                ]
+            };
+        });
+        let order = (a.order || []).slice();
+        if (!order.length) order = intro ? [0, 1] : [0, 0, 1, 0, 2, 1, 0, 0];
+        // Rotate form only — keep relative motif order (P0→P1→P2 development).
+        if (order.length > 2) {
+            const rot = (hash % 2) * 2; // 0 or 2 — stay on phrase boundaries
+            order = order.slice(rot).concat(order.slice(0, rot));
+            order = order.map((idx) => idx % Math.max(patterns.length, 1));
+        }
+
+        const labels = { mars: 'Dust', jupiter: 'Giant', saturn: 'Ring', neptune: 'Ice', pluto: 'Kuiper' };
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: {
+                title: (intro ? 'Launch' : boss ? 'Siege' : 'Orbit')
+                    + ' ' + (labels[primary] || primary) + ' · ' + id.slice(0, 12).toUpperCase(),
+                author: 'VF Tracker · GB-style',
+                planet: id,
+                notes: 'keyed remix of ' + primary + ' motif' + (intro ? ' intro' : boss ? ' boss' : '')
+            },
+            bpm: bpm,
+            rowsPerBeat: a.rowsPerBeat || 1,
+            rowsPerPattern: a.rowsPerPattern || 16,
+            channels: 4,
+            instruments: (a.instruments || this._baseInstruments()).map((inst) => Object.assign({}, inst)),
+            patterns: patterns,
+            order: order,
+            loop: !intro
+        };
+    },
+
+    forPlanet(planetId) {
+        const raw = String(planetId || 'mars').toLowerCase();
+        if (raw === 'intro' || raw.indexOf('intro:') === 0) {
+            return this.intro(raw.split(':')[1] || 'mars');
+        }
+        if (typeof this[raw] === 'function') return this[raw]();
+        const id = this.normalizePlanetKey(raw);
+        const wantBoss = raw.indexOf('boss') !== -1 || /-(?:boss|b)$/.test(raw);
+        if (this.isHandcraftedPlanet(id)) {
+            if (wantBoss) {
+                const key = id + '-boss';
+                if (typeof this[key] === 'function') return this[key]();
+                return this._bossFor(id, 128);
+            }
+            if (typeof this[id] === 'function') return this[id]();
+        }
+        return this.remixPlanet(id, { boss: wantBoss });
+    },
+
+    allKeys() {
+        return [
+            'menu', 'intro',
+            'mars', 'jupiter', 'saturn', 'neptune', 'pluto',
+            'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'
+        ];
+    }
+};
+
+
+/* --- js/game/tracker/faction-compose.js --- */
+"use strict";
+
+/**
+ * Faction skins on top of VF-GB-style planet tracks.
+ * Voices stay in the Game Boy palette (wave/pulse/noise) — no modern synth sludge.
+ */
+var VFTrackerFactionCompose = {
+    FACTIONS: ['terran', 'kronax', 'voidborn', 'pirate', 'machine'],
+
+    styles: {
+        terran: {
+            label: 'Terran',
+            bpmDelta: 2,
+            transpose: 2,
+            drums: [
+                'C-2:5:64 . A-4:4:16 . C-2:5:50 . A-4:4:12 C-2:5:60 . A-4:4:16 . C-2:5:44 A-4:4:10 . .',
+                'C-2:5:60 . A-4:4:14 C-2:5:38 . C-2:5:54 . A-4:4:14 . C-2:5:58 A-4:4:12 . A-4:4:08 C-2:5:42 A-4:4:10 .',
+                'C-2:5:68 A-4:4:18 . A-4:4:10 C-2:5:54 A-4:4:14 A-4:4:08 . C-2:5:64 A-4:4:16 . A-4:4:08 C-2:5:46 A-4:4:10 .',
+                'C-2:5:44 . . A-4:4:10 . . C-2:5:34 . . . A-4:4:08 . . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.68, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.26, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.38, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.3, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.76, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
+            ]
+        },
+        kronax: {
+            label: 'Kronax',
+            bpmDelta: 8,
+            transpose: -2,
+            drums: [
+                'A-2:5:72 A-4:4:20 A-2:5:42 A-4:4:12 A-2:5:64 A-4:4:18 A-4:4:10 . A-2:5:70 A-4:4:18 A-2:5:40 A-4:4:12 A-2:5:58 A-4:4:14 .',
+                'A-2:5:68 . A-4:4:16 A-2:5:46 . A-2:5:62 A-4:4:18 . A-4:4:10 A-2:5:66 A-4:4:16 . A-4:4:08 A-2:5:52 A-4:4:12 .',
+                'A-2:5:76 A-4:4:22 A-2:5:48 A-4:4:14 A-2:5:68 A-4:4:18 A-4:4:10 A-4:4:06 A-2:5:72 A-4:4:20 A-2:5:44 A-4:4:12 A-2:5:60 A-4:4:14 A-4:4:08 .',
+                'A-2:5:50 A-4:4:12 . . A-2:5:38 . A-4:4:08 . A-2:5:44 . . A-4:4:08 . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.74, attack: 0.001, decay: 0.03, sustain: 0.62, release: 0.05, filter: 2200 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.28, attack: 0.001, decay: 0.04, sustain: 0.32, release: 0.06, filter: 2400 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.4, attack: 0.001, decay: 0.025, sustain: 0.28, release: 0.04 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.36, attack: 0.001, decay: 0.02, sustain: 0.01, release: 0.02 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.8, attack: 0.001, decay: 0.06, sustain: 0.04, release: 0.04, filter: 350 }
+            ]
+        },
+        voidborn: {
+            label: 'Voidborn',
+            bpmDelta: -4,
+            transpose: 3,
+            drums: [
+                '. A-4:4:12 . . . A-4:4:08 . . . A-4:4:12 . . . A-4:4:06 . .',
+                '. . A-4:4:10 . . . A-4:4:06 . . A-4:4:10 . . . . A-4:4:05 .',
+                'B-1:5:44 . A-4:4:12 . . A-4:4:08 . B-1:5:36 . A-4:4:12 . . A-4:4:06 . . .',
+                '. . . A-4:4:06 . . . . . . . A-4:4:05 . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.58, attack: 0.004, decay: 0.08, sustain: 0.55, release: 0.12, filter: 900 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.22, attack: 0.003, decay: 0.08, sustain: 0.3, release: 0.12, filter: 1800 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.34, attack: 0.002, decay: 0.06, sustain: 0.3, release: 0.1 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.2, attack: 0.002, decay: 0.05, sustain: 0.01, release: 0.04 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.62, attack: 0.002, decay: 0.1, sustain: 0.08, release: 0.08, filter: 500 }
+            ]
+        },
+        pirate: {
+            label: 'Pirate',
+            bpmDelta: 4,
+            transpose: -1,
+            drums: [
+                'C-2:5:66 A-4:4:18 . A-4:4:10 C-2:5:52 . A-4:4:14 A-4:4:08 C-2:5:64 A-4:4:16 . A-4:4:08 C-2:5:46 A-4:4:12 . .',
+                'C-2:5:60 . A-4:4:14 . C-2:5:46 A-4:4:12 . A-4:4:08 C-2:5:58 . A-4:4:14 C-2:5:40 . A-4:4:10 A-4:4:06 .',
+                'C-2:5:70 A-4:4:20 C-2:5:44 A-4:4:12 C-2:5:58 A-4:4:16 A-4:4:08 A-4:4:05 C-2:5:66 A-4:4:18 C-2:5:42 A-4:4:10 C-2:5:52 A-4:4:12 A-4:4:08 .',
+                'C-2:5:46 . A-4:4:10 . . A-4:4:06 . C-2:5:36 . . A-4:4:08 . . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.66, attack: 0.001, decay: 0.04, sustain: 0.55, release: 0.06, filter: 1600 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.26, attack: 0.001, decay: 0.04, sustain: 0.28, release: 0.07, filter: 2400 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.38, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.34, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 380 }
+            ]
+        },
+        machine: {
+            label: 'Machine',
+            bpmDelta: 6,
+            transpose: 0,
+            drums: [
+                'C-2:5:62 A-4:4:14 C-2:5:34 A-4:4:10 C-2:5:62 A-4:4:14 C-2:5:34 A-4:4:10 C-2:5:62 A-4:4:14 C-2:5:34 A-4:4:10 C-2:5:54 A-4:4:12 A-4:4:08 .',
+                'C-2:5:58 A-4:4:12 . A-4:4:08 C-2:5:58 A-4:4:12 . A-4:4:08 C-2:5:58 A-4:4:12 C-2:5:34 A-4:4:08 C-2:5:50 A-4:4:10 A-4:4:06 .',
+                'C-2:5:68 A-4:4:18 C-2:5:40 A-4:4:12 C-2:5:62 A-4:4:14 A-4:4:08 A-4:4:05 C-2:5:66 A-4:4:16 C-2:5:38 A-4:4:10 C-2:5:56 A-4:4:12 A-4:4:08 .',
+                'C-2:5:42 A-4:4:10 . . C-2:5:32 A-4:4:06 . . C-2:5:36 . A-4:4:08 . . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'square', volume: 0.62, attack: 0.001, decay: 0.03, sustain: 0.58, release: 0.04, filter: 1200 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.24, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.04, filter: 2200 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.38, attack: 0.001, decay: 0.025, sustain: 0.28, release: 0.03 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.32, attack: 0.001, decay: 0.018, sustain: 0.01, release: 0.015 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.05, sustain: 0.04, release: 0.03, filter: 400 }
+            ]
+        }
+    },
+
+    normalizeFaction(id) {
+        const f = String(id || '').toLowerCase();
+        return this.FACTIONS.indexOf(f) !== -1 ? f : '';
+    },
+
+    styleOf(factionId) {
+        const f = this.normalizeFaction(factionId) || 'pirate';
+        return this.styles[f] || this.styles.pirate;
+    },
+
+    /**
+     * Planet arrangement (handcrafted or remix) + faction instruments.
+     * Melodies stay planet-owned. Faction drums only on fill patterns so the
+     * planet groove survives; light transpose for faction colour.
+     */
+    composeCombat(planetId, factionId, opts) {
+        const planet = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const boss = !!(opts && opts.boss);
+        const faction = this.normalizeFaction(factionId) || 'pirate';
+        const style = this.styleOf(faction);
+        const baseRaw = VFTrackerDefaults.forPlanet(boss ? (planet + '-boss') : planet);
+        const compact = VFTrackerParse.toCompact(baseRaw);
+        compact.bpm = Math.max(70, Math.min(160, Number(compact.bpm) + Math.round(style.bpmDelta * 0.35)));
+        compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+        compact.meta = {
+            title: ((compact.meta && compact.meta.title) || planet) + ' / ' + style.label + (boss ? ' BOSS' : ''),
+            author: 'VF Tracker',
+            planet: planet,
+            faction: faction,
+            notes: (boss ? 'boss ' : '') + 'combat vs ' + faction
+        };
+        const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const transpose = Math.max(-2, Math.min(2, Math.round(style.transpose / 2)));
+        compact.patterns = (compact.patterns || []).map((p, pi) => ({
+            id: p.id,
+            channels: (p.channels || []).map((ch, i) => {
+                // Keep planet drums on A/B; faction drums on chorus/fill only.
+                if (i === 3 && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3)) {
+                    return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                }
+                const melodic = transpose
+                    ? VFTrackerParse.transposeChannelString(ch, transpose)
+                    : ch;
+                if (i === 2 && (pi % 4) === 3) {
+                    return pad(String(melodic).split(/\s+/).map((tok, ti) => (ti % 2 ? '.' : tok)).join(' '));
+                }
+                return pad(melodic);
+            })
+        }));
+        return compact;
+    },
+
+    factionTheme(factionId) {
+        const faction = this.normalizeFaction(factionId) || 'pirate';
+        const style = this.styleOf(faction);
+        const roots = {
+            terran: { bass: 'G-1', lead: 'G-3', arp: 'G-4' },
+            kronax: { bass: 'E-1', lead: 'E-3', arp: 'E-4' },
+            voidborn: { bass: 'B-1', lead: 'B-3', arp: 'F#4' },
+            pirate: { bass: 'D-1', lead: 'D-3', arp: 'A-3' },
+            machine: { bass: 'C-2', lead: 'C-4', arp: 'G-4' }
+        }[faction];
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const drums0 = Array.isArray(style.drums) ? style.drums[0] : style.drums;
+        const drums1 = Array.isArray(style.drums) ? (style.drums[1] || style.drums[0]) : style.drums;
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: {
+                title: style.label + ' Doctrine',
+                author: 'VF Tracker',
+                planet: '',
+                faction: faction,
+                notes: 'faction combat theme'
+            },
+            bpm: Math.max(80, Math.min(140, 100 + style.bpmDelta)),
+            rowsPerBeat: 1,
+            rowsPerPattern: 16,
+            channels: 4,
+            instruments: style.instruments.map((i) => Object.assign({}, i)),
+            patterns: [{
+                id: 0,
+                channels: [
+                    pad(roots.bass + ':1:64 . . . ' + roots.bass + ':1:48 . . . ' + roots.bass + ':1:56 . . . ' + roots.bass + ':1:40 . . .'),
+                    pad(roots.lead + ':2:44 . . ' + roots.lead + ':2:36 . . ' + roots.lead + ':2:40 . . ' + roots.lead + ':2:32 . . .'),
+                    pad(roots.arp + ':3:26 . ' + roots.arp + ':3:18 . ' + roots.arp + ':3:22 . ' + roots.arp + ':3:16 . ' + roots.arp + ':3:26 . ' + roots.arp + ':3:18 . ' + roots.arp + ':3:20 . .'),
+                    pad(drums0)
+                ]
+            }, {
+                id: 1,
+                channels: [
+                    pad(roots.bass + ':1:56 . ' + roots.bass + ':1:36 . ' + roots.bass + ':1:48 . . . ' + roots.bass + ':1:40 . ' + roots.bass + ':1:32 . . .'),
+                    pad(roots.lead + ':2:40 . . ' + roots.lead + ':2:32 . . ' + roots.lead + ':2:36 . . ' + roots.lead + ':2:28 OFF . .'),
+                    pad(roots.arp + ':3:20 . . ' + roots.arp + ':3:14 . ' + roots.arp + ':3:18 . . ' + roots.arp + ':3:12 . . ' + roots.arp + ':3:16 . .'),
+                    pad(drums1)
+                ]
+            }, {
+                id: 2,
+                channels: [
+                    pad(roots.bass + ':1:70 ' + roots.bass + ':1:40 . ' + roots.bass + ':1:52 ' + roots.bass + ':1:60 . . ' + roots.bass + ':1:48 . ' + roots.bass + ':1:36 . ' + roots.bass + ':1:44 . .'),
+                    pad(roots.lead + ':2:52 . ' + roots.lead + ':2:40 . ' + roots.lead + ':2:48 . ' + roots.lead + ':2:36 ' + roots.lead + ':2:44 . ' + roots.lead + ':2:32 . OFF .'),
+                    pad(roots.arp + ':3:28 ' + roots.arp + ':3:16 . ' + roots.arp + ':3:22 . ' + roots.arp + ':3:18 ' + roots.arp + ':3:26 . ' + roots.arp + ':3:14 . ' + roots.arp + ':3:20 .'),
+                    pad(Array.isArray(style.drums) ? (style.drums[2] || drums0) : drums0)
+                ]
+            }],
+            order: [0, 0, 1, 0, 2, 1, 0, 1],
+            loop: true
+        };
+    },
+
+    _endingTrack(kind, factionId, planetId) {
+        const faction = this.normalizeFaction(factionId) || 'pirate';
+        const style = this.styleOf(faction);
+        const planet = planetId ? String(planetId).toLowerCase().split('-')[0] : '';
+        const win = kind === 'victory';
+        const bpm = win
+            ? Math.max(90, Math.min(140, 112 + Math.floor(style.bpmDelta / 2)))
+            : Math.max(70, Math.min(110, 84 + Math.floor(style.bpmDelta / 3)));
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const a = (win ? this._victoryPattern(faction) : this._losePattern(faction)).map(pad);
+        const b = (win ? this._victoryBridge(faction) : this._loseBridge(faction)).map(pad);
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: {
+                title: (win ? 'Victory' : 'Defeat') + ' — ' + style.label + (planet ? ' @ ' + planet : ''),
+                author: 'VF Tracker',
+                planet: planet,
+                faction: faction,
+                notes: kind + ' screen'
+            },
+            bpm,
+            rowsPerBeat: 1,
+            rowsPerPattern: 16,
+            channels: 4,
+            instruments: style.instruments.map((i) => Object.assign({}, i)),
+            patterns: [
+                { id: 0, channels: a },
+                { id: 1, channels: b }
+            ],
+            order: win ? [0, 0, 1, 0] : [0, 1, 0, 0],
+            loop: true
+        };
+    },
+
+    _victoryPattern(faction) {
+        const table = {
+            terran: [
+                'C-2:1:60 . E-2:1:48 . G-2:1:56 . . . C-3:1:52 . . . G-2:1:44 . . .',
+                'E-4:2:48 . G-4:2:40 . C-5:2:52 . G-4:2:36 E-4:2:44 . D-4:2:36 . C-4:2:40 . . . .',
+                'C-5:3:24 G-4:3:16 E-4:3:16 G-4:3:16 C-5:3:24 G-4:3:16 E-4:3:16 G-4:3:16 E-5:3:26 C-5:3:18 G-4:3:18 C-5:3:18 E-5:3:26 C-5:3:16 G-4:3:14 E-4:3:14',
+                'C-2:5:68 . A-4:4:22 . C-2:5:52 . A-4:4:20 . C-2:5:68 . A-4:4:22 . C-2:5:48 A-4:4:16 . .'
+            ],
+            kronax: [
+                'E-1:1:70 E-1:1:40 . G-1:1:56 B-1:1:64 . . E-2:1:60 . B-1:1:48 . G-1:1:44 . . . .',
+                'E-3:2:52 . G-3:2:44 . B-3:2:56 . D-4:2:48 E-4:2:60 . B-3:2:44 . G-3:2:40 . . . .',
+                'E-4:3:28 B-3:3:20 G-3:3:20 B-3:3:20 E-4:3:28 B-3:3:20 G-3:3:20 B-3:3:20 G-4:3:30 D-4:3:22 B-3:3:22 D-4:3:22 G-4:3:30 E-4:3:20 B-3:3:18 G-3:3:18',
+                'E-1:5:82 A-4:4:34 E-1:5:50 A-4:4:24 E-1:5:74 A-4:4:30 A-4:4:18 . E-1:5:82 A-4:4:34 E-1:5:50 A-4:4:24 E-1:5:70 A-4:4:28 A-4:4:20 A-4:4:14'
+            ],
+            voidborn: [
+                'B-1:1:48 . . . F#1:1:36 . . . A-1:1:44 . . . E-1:1:32 . . .',
+                'B-3:2:36 . D#4:2:30 . F#4:2:40 . . A-3:2:32 . C#4:2:28 . E-4:2:36 . . . .',
+                'B-4:3:20 F#4:3:12 D#4:3:12 F#4:3:12 B-4:3:22 F#4:3:12 D#4:3:12 F#4:3:12 A-4:3:18 E-4:3:12 C#4:3:12 E-4:3:12 A-4:3:18 F#4:3:10 D#4:3:10 B-3:3:10',
+                '. A-4:4:14 . . . A-4:4:12 . . . A-4:4:16 . . . A-4:4:10 . .'
+            ],
+            pirate: [
+                'D-1:1:64 . F-1:1:48 . A-1:1:56 . . . D-2:1:52 . C-2:1:44 . A-1:1:40 . . .',
+                'D-4:2:46 . F-4:2:38 . A-4:2:50 . F-4:2:34 D-4:2:42 . C-4:2:36 . A-3:2:40 . . . .',
+                'D-5:3:24 A-4:3:16 F-4:3:16 A-4:3:16 D-5:3:24 A-4:3:16 F-4:3:16 A-4:3:16 C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 C-5:3:22 A-4:3:14 F-4:3:12 D-4:3:12',
+                'D-1:5:74 A-4:4:30 . A-4:4:20 D-1:5:58 . A-4:4:26 . D-1:5:74 A-4:4:30 . A-4:4:20 D-1:5:52 A-4:4:22 A-4:4:16 .'
+            ],
+            machine: [
+                'C-2:1:64 C-2:1:36 G-1:1:48 G-1:1:28 C-2:1:64 C-2:1:36 G-1:1:48 G-1:1:28 C-2:1:64 C-2:1:36 E-2:1:52 E-2:1:32 G-2:1:56 G-2:1:36 C-3:1:60 .',
+                'C-4:2:40 E-4:2:34 G-4:2:40 E-4:2:30 C-4:2:40 E-4:2:34 G-4:2:40 E-4:2:30 C-4:2:42 E-4:2:36 G-4:2:44 B-4:2:38 C-5:2:48 . G-4:2:36 .',
+                'C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 E-5:3:24 C-5:3:16 G-4:3:16 C-5:3:16 E-5:3:24 C-5:3:14 G-4:3:12 E-4:3:12',
+                'C-2:5:70 A-4:4:26 C-2:5:40 A-4:4:20 C-2:5:70 A-4:4:26 C-2:5:40 A-4:4:20 C-2:5:70 A-4:4:26 C-2:5:40 A-4:4:20 C-2:5:70 A-4:4:26 A-4:4:18 A-4:4:12'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    _losePattern(faction) {
+        const table = {
+            terran: [
+                'A-1:1:50 . . . E-1:1:36 . . . F-1:1:40 . . . E-1:1:30 . . .',
+                'A-3:2:32 . . C-4:2:26 . . E-3:2:28 . . . C-3:2:22 . . . . .',
+                'A-4:3:16 E-4:3:10 C-4:3:10 E-4:3:10 A-4:3:14 E-4:3:10 C-4:3:10 E-4:3:08 G-4:3:12 D-4:3:08 B-3:3:08 D-4:3:08 E-4:3:12 C-4:3:08 A-3:3:08 E-3:3:08',
+                'A-1:5:48 . . A-4:4:12 . . A-1:5:36 . . . A-4:4:10 . . . . .'
+            ],
+            kronax: [
+                'E-1:1:58 . E-1:1:30 . . G-1:1:40 . . B-0:1:36 . . . E-1:1:28 . . .',
+                'E-3:2:36 . . G-3:2:28 . . B-2:2:30 . . . G-2:2:24 . . . . .',
+                'E-4:3:18 B-3:3:12 G-3:3:12 B-3:3:12 E-4:3:16 B-3:3:10 G-3:3:10 B-3:3:08 D-4:3:14 A-3:3:08 F#3:3:08 A-3:3:08 B-3:3:12 G-3:3:08 E-3:3:08 B-2:3:08',
+                'E-1:5:60 A-4:4:18 . . E-1:5:40 . A-4:4:14 . E-1:5:48 . . A-4:4:12 . . . .'
+            ],
+            voidborn: [
+                'B-0:1:40 . . . . . F#0:1:28 . . . . . E-0:1:24 . . .',
+                'B-2:2:24 . . . D#3:2:18 . . . F#3:2:20 . . . . . . .',
+                'B-3:3:12 F#3:3:08 . F#3:3:08 B-3:3:10 . D#3:3:08 . A-3:3:10 E-3:3:08 . E-3:3:08 A-3:3:08 . C#3:3:06 .',
+                '. . A-4:4:08 . . . . . . . A-4:4:06 . . . . .'
+            ],
+            pirate: [
+                'D-1:1:52 . . F-1:1:34 . . A-0:1:30 . . . D-1:1:26 . . . . .',
+                'D-3:2:30 . . F-3:2:24 . . A-2:2:26 . . . F-2:2:20 . . . . .',
+                'D-4:3:16 A-3:3:10 F-3:3:10 A-3:3:10 D-4:3:14 A-3:3:08 F-3:3:08 A-3:3:08 C-4:3:12 G-3:3:08 E-3:3:08 G-3:3:08 A-3:3:10 F-3:3:06 D-3:3:06 A-2:3:06',
+                'D-1:5:55 . A-4:4:16 . D-1:5:38 . A-4:4:12 . D-1:5:44 . . A-4:4:10 . . . .'
+            ],
+            machine: [
+                'C-1:1:48 C-1:1:24 . . G-0:1:32 G-0:1:18 . . C-1:1:40 C-1:1:20 . . E-0:1:28 . . .',
+                'C-3:2:28 . E-3:2:22 . G-3:2:26 . . . C-3:2:22 . . . G-2:2:18 . . .',
+                'C-4:3:14 G-3:3:08 E-3:3:08 G-3:3:08 C-4:3:12 G-3:3:08 E-3:3:08 G-3:3:06 B-3:3:12 F#3:3:06 D#3:3:06 F#3:3:06 G-3:3:10 E-3:3:06 C-3:3:06 G-2:3:06',
+                'C-1:5:52 A-4:4:16 C-1:5:28 A-4:4:12 C-1:5:44 A-4:4:14 . . C-1:5:40 A-4:4:12 . . C-1:5:32 . . .'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    _victoryBridge(faction) {
+        const table = {
+            terran: [
+                'G-1:1:52 . . B-1:1:40 . . C-2:1:48 . . . E-2:1:44 . . G-2:1:50 . .',
+                'G-4:2:42 . B-4:2:36 . C-5:2:46 . . D-5:2:40 . C-5:2:36 . B-4:2:32 . . . .',
+                'G-4:3:18 D-4:3:12 . D-4:3:12 G-4:3:18 . B-4:3:22 . D-4:3:12 G-4:3:16 . E-4:3:12 . D-4:3:10 . .',
+                'C-2:5:60 . A-4:4:18 . C-2:5:44 . A-4:4:14 . C-2:5:56 . A-4:4:16 . A-4:4:12 . . .'
+            ],
+            kronax: [
+                'G-1:1:60 . B-1:1:48 . D-2:1:56 . . E-2:1:52 . . B-1:1:40 . G-1:1:36 . . .',
+                'G-3:2:48 . B-3:2:40 . D-4:2:52 . E-4:2:46 G-4:2:54 . D-4:2:40 . B-3:2:36 . . . .',
+                'G-4:3:24 D-4:3:16 . D-4:3:16 G-4:3:24 . B-4:3:28 . D-4:3:16 G-4:3:20 . E-4:3:14 . D-4:3:12 . .',
+                'E-1:5:70 A-4:4:26 . A-4:4:16 E-1:5:52 . A-4:4:20 . E-1:5:64 A-4:4:22 A-4:4:12 . . . . .'
+            ],
+            voidborn: [
+                'F#1:1:40 . . . A-1:1:34 . . . C#2:1:38 . . . B-1:1:30 . . .',
+                'F#3:2:30 . A-3:2:26 . C#4:2:34 . . E-4:2:28 . C#4:2:24 . A-3:2:22 . . . .',
+                'F#4:3:16 C#4:3:10 . C#4:3:10 F#4:3:16 . A-4:3:18 . C#4:3:10 F#4:3:14 . E-4:3:10 . C#4:3:08 . .',
+                '. A-4:4:12 . . . A-4:4:08 . . . A-4:4:10 . . . A-4:4:06 . .'
+            ],
+            pirate: [
+                'A-1:1:56 . C-2:1:44 . E-2:1:52 . . F-2:1:48 . D-2:1:40 . A-1:1:36 . . . .',
+                'A-3:2:42 . C-4:2:36 . E-4:2:46 . F-4:2:40 A-4:2:48 . E-4:2:36 . C-4:2:32 . . . .',
+                'A-4:3:20 E-4:3:12 . E-4:3:12 A-4:3:20 . C-5:3:24 . E-4:3:12 A-4:3:16 . G-4:3:12 . E-4:3:10 . .',
+                'D-1:5:64 A-4:4:24 . A-4:4:14 D-1:5:48 . A-4:4:18 . D-1:5:58 A-4:4:20 A-4:4:12 . . . . .'
+            ],
+            machine: [
+                'E-2:1:56 E-2:1:30 G-2:1:44 G-2:1:26 E-2:1:56 E-2:1:30 G-2:1:44 G-2:1:26 C-3:1:60 C-3:1:34 E-3:1:48 E-3:1:30 G-3:1:54 . C-4:1:58 .',
+                'E-4:2:38 G-4:2:32 B-4:2:40 G-4:2:28 E-4:2:38 G-4:2:32 B-4:2:40 G-4:2:28 C-5:2:44 E-5:2:36 G-5:2:42 . E-5:2:34 . C-5:2:30 .',
+                'E-5:3:20 B-4:3:12 G-4:3:12 B-4:3:12 E-5:3:20 B-4:3:12 G-4:3:12 B-4:3:12 G-5:3:22 E-5:3:14 C-5:3:14 E-5:3:14 G-5:3:22 E-5:3:12 C-5:3:10 G-4:3:10',
+                'C-2:5:66 A-4:4:22 C-2:5:36 A-4:4:16 C-2:5:66 A-4:4:22 C-2:5:36 A-4:4:16 C-2:5:62 A-4:4:20 A-4:4:12 . A-4:4:10 . . .'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    _loseBridge(faction) {
+        const table = {
+            terran: [
+                'F-1:1:40 . . . C-1:1:28 . . . D-1:1:32 . . . C-1:1:24 . . .',
+                'F-3:2:26 . . A-3:2:20 . . C-3:2:22 . . . A-2:2:18 . . . . .',
+                'F-4:3:12 C-4:3:08 . C-4:3:08 F-4:3:10 . A-3:3:08 . E-4:3:10 C-4:3:06 . C-4:3:06 E-4:3:08 . A-3:3:06 .',
+                'A-1:5:36 . . A-4:4:08 . . A-1:5:28 . . . A-4:4:06 . . . . .'
+            ],
+            kronax: [
+                'D-1:1:44 . . E-1:1:32 . . G-0:1:28 . . . D-1:1:24 . . . . .',
+                'D-3:2:28 . . E-3:2:22 . . G-2:2:24 . . . E-2:2:18 . . . . .',
+                'D-4:3:14 A-3:3:08 . A-3:3:08 D-4:3:12 . F#3:3:08 . B-3:3:10 G-3:3:06 . G-3:3:06 B-3:3:08 . E-3:3:06 .',
+                'E-1:5:44 A-4:4:12 . . E-1:5:30 . A-4:4:08 . E-1:5:36 . . A-4:4:08 . . . .'
+            ],
+            voidborn: [
+                'A-0:1:30 . . . . . E-0:1:22 . . . . . F#0:1:18 . . .',
+                'A-2:2:18 . . . C#3:2:14 . . . E-3:2:16 . . . . . . .',
+                'A-3:3:10 E-3:3:06 . E-3:3:06 A-3:3:08 . C#3:3:06 . G-3:3:08 E-3:3:06 . E-3:3:06 G-3:3:06 . B-2:3:04 .',
+                '. . A-4:4:06 . . . . . . . A-4:4:04 . . . . .'
+            ],
+            pirate: [
+                'C-1:1:40 . . D-1:1:28 . . F-0:1:24 . . . C-1:1:20 . . . . .',
+                'C-3:2:24 . . D-3:2:18 . . F-2:2:20 . . . D-2:2:16 . . . . .',
+                'C-4:3:12 G-3:3:06 . G-3:3:06 C-4:3:10 . E-3:3:06 . A-3:3:08 F-3:3:06 . F-3:3:06 A-3:3:06 . D-3:3:04 .',
+                'D-1:5:40 . A-4:4:10 . D-1:5:28 . A-4:4:08 . D-1:5:32 . . A-4:4:06 . . . .'
+            ],
+            machine: [
+                'G-0:1:36 G-0:1:18 . . E-0:1:28 E-0:1:14 . . G-0:1:32 G-0:1:16 . . C-0:1:24 . . .',
+                'G-2:2:22 . B-2:2:16 . D-3:2:20 . . . G-2:2:18 . . . D-2:2:14 . . .',
+                'G-3:3:12 D-3:3:06 . D-3:3:06 G-3:3:10 . B-2:3:06 . F#3:3:10 D-3:3:06 . D-3:3:06 F#3:3:08 . B-2:3:04 .',
+                'C-1:5:40 A-4:4:12 C-1:5:22 A-4:4:08 C-1:5:34 A-4:4:10 . . C-1:5:30 A-4:4:08 . . . . . .'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    victory(factionId, planetId) {
+        return this._endingTrack('victory', factionId, planetId);
+    },
+
+    lose(factionId, planetId) {
+        return this._endingTrack('lose', factionId, planetId);
+    },
+
+    /**
+     * Resolve a library / playback key to a raw track object, or null.
+     * Keys: victory[:faction][:planet], lose..., planet[:faction], planet-boss[:faction], faction:id
+     */
+    /**
+     * Planet intro fanfare skinned with faction instruments/drums/transpose.
+     */
+    composeIntro(planetId, factionId) {
+        const planet = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const faction = this.normalizeFaction(factionId);
+        const base = VFTrackerDefaults.intro(planet);
+        if (!faction) {
+            return Object.assign({}, base, { loop: false });
+        }
+        const style = this.styleOf(faction);
+        const compact = VFTrackerParse.toCompact(base);
+        compact.loop = false;
+        compact.bpm = Math.max(90, Math.min(150, Number(compact.bpm) + Math.floor(style.bpmDelta / 2)));
+        compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+        compact.meta = Object.assign({}, compact.meta, {
+            title: (compact.meta.title || 'Intro') + ' / ' + style.label,
+            faction: faction,
+            notes: 'mission intro vs ' + faction
+        });
+        const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        compact.patterns = (compact.patterns || []).map((p, pi) => ({
+            id: p.id,
+            channels: (p.channels || []).map((ch, i) => {
+                if (i === 3 && drumBank.length) {
+                    return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                }
+                return pad(VFTrackerParse.transposeChannelString(ch, style.transpose));
+            })
+        }));
+        return compact;
+    },
+
+    resolveKey(key) {
+        const k = String(key || '').toLowerCase().trim();
+        if (!k) return null;
+
+        let         m = /^intro(?::([a-z0-9_-]+))?(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const a = m[1] || '';
+            const b = m[2] || '';
+            const planets = (VFTrackerDefaults && VFTrackerDefaults.PLANETS) ||
+                ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
+            let planet = 'mars';
+            let faction = '';
+            if (a && planets.indexOf(a) !== -1) {
+                planet = a;
+                faction = this.normalizeFaction(b);
+            } else if (a && this.normalizeFaction(a)) {
+                faction = a;
+                planet = (b && planets.indexOf(b) !== -1) ? b : 'mars';
+            } else if (a) {
+                planet = (VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(a)
+                    : a.split('-')[0];
+            }
+            return this.composeIntro(planet, faction);
+        }
+
+        m = /^(victory|lose)(?::([a-z0-9_-]+))?(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const kind = m[1];
+            const a = m[2] || '';
+            const b = m[3] || '';
+            let faction = this.normalizeFaction(a);
+            let planet = '';
+            if (faction && b) {
+                planet = (VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(b)
+                    : b.split('-')[0];
+            } else if (!faction && a) {
+                // victory:mars or victory:pirate
+                if (this.normalizeFaction(a)) faction = a;
+                else {
+                    planet = (VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                        ? VFTrackerDefaults.normalizePlanetKey(a)
+                        : a.split('-')[0];
+                }
+            }
+            return kind === 'victory' ? this.victory(faction, planet) : this.lose(faction, planet);
+        }
+
+        m = /^faction:([a-z]+)$/.exec(k);
+        if (m) return this.factionTheme(m[1]);
+
+        // Any planet slug (mars, ambush_x, mil_pir_x1_ab12) ± boss ± faction.
+        m = /^([a-z][a-z0-9_]*)(-boss)?(?::([a-z]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1];
+            const boss = !!m[2];
+            const faction = this.normalizeFaction(m[3]);
+            if (planet === 'menu' || planet === 'intro' || planet === 'victory' || planet === 'lose'
+                || planet === 'faction' || planet === 'station' || planet === 'hub') {
+                return null;
+            }
+            if (faction) return this.composeCombat(planet, faction, { boss: boss });
+            return null; // plain planet / boss handled by VFTrackerDefaults
+        }
+        return null;
+    }
+};
+
+
+/* --- js/game/tracker/manager.js --- */
+"use strict";
+
+/**
+ * Library + playback facade for vftrack soundtracks.
+ * Storage: vf_tracker_library_v1 (per-key JSON tracks).
+ * Keys include planet, planet:faction, planet-boss:faction, victory[:faction], lose[:faction].
+ */
+var VFTrackerManager = class VFTrackerManager {
+    constructor() {
+        this.storageKey = 'vf_tracker_library_v1';
+        this.player = new VFTrackerPlayer();
+        this.library = {};
+        this.currentKey = null;
+        this.enabled = true;
+        this.volume = 0.2;
+        this.loadLibrary();
+        // Pick up persisted AUDIO → MUSIC SPEED (volumeControls may load earlier).
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicSpeed) {
+            this.setTempoScale(volumeControlsManager.getMusicSpeed());
+        } else {
+            try {
+                const saved = localStorage.getItem('vf_musicSpeed');
+                if (saved != null) this.setTempoScale(parseFloat(saved));
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    loadLibrary() {
+        try {
+            const raw = localStorage.getItem(this.storageKey);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (data && typeof data === 'object') this.library = data;
+        } catch (e) {
+            this.library = {};
+        }
+    }
+
+    saveLibrary() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.library));
+        } catch (e) {
+            // quota — skip
+        }
+    }
+
+    _builtInRaw(key) {
+        const k = String(key || '');
+        if (!k) return null;
+        if (this.library[k]) return this.library[k];
+
+        if (k === 'menu' || k === 'station' || k === 'hub') {
+            return VFTrackerDefaults.menu();
+        }
+        if (k === 'intro' || k.indexOf('intro:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.intro(planet);
+        }
+        if (typeof VFTrackerFactionCompose !== 'undefined') {
+            const composed = VFTrackerFactionCompose.resolveKey(k);
+            if (composed) return composed;
+        }
+        if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.allKeys().indexOf(k) !== -1) {
+            return VFTrackerDefaults.forPlanet(k);
+        }
+        // Bare planet id — including explored / ambush / editor slugs.
+        if (k.indexOf(':') === -1 && /^[a-z][a-z0-9_]*(-boss)?$/.test(k)
+            && k !== 'menu' && k !== 'intro' && k !== 'victory' && k !== 'lose'
+            && k !== 'faction' && k !== 'station' && k !== 'hub') {
+            return VFTrackerDefaults.forPlanet(k);
+        }
+        return null;
+    }
+
+    getTrack(key) {
+        const raw = this._builtInRaw(key);
+        if (!raw) return null;
+        try { return VFTrackerParse.normalize(raw); } catch (e) { return null; }
+    }
+
+    hasTrack(key) {
+        return !!this._builtInRaw(key);
+    }
+
+    setTrack(key, data) {
+        const k = String(key || '').trim();
+        if (!k) return false;
+        if (!data) {
+            delete this.library[k];
+            this.saveLibrary();
+            return true;
+        }
+        const normalized = VFTrackerParse.normalize(data);
+        this.library[k] = VFTrackerParse.toCompact(normalized);
+        this.saveLibrary();
+        return true;
+    }
+
+    importJson(key, jsonText) {
+        const data = typeof jsonText === 'string' ? JSON.parse(jsonText) : jsonText;
+        return this.setTrack(key, data);
+    }
+
+    exportJson(key) {
+        const track = this.getTrack(key);
+        if (!track) return null;
+        return JSON.stringify(VFTrackerParse.toCompact(track), null, 2);
+    }
+
+    listKeys() {
+        const keys = new Set(VFTrackerDefaults.allKeys());
+        keys.add('menu');
+        keys.add('intro');
+        keys.add('victory');
+        keys.add('lose');
+        ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => keys.add('intro:' + p));
+        if (typeof VFTrackerFactionCompose !== 'undefined') {
+            VFTrackerFactionCompose.FACTIONS.forEach((f) => {
+                keys.add('faction:' + f);
+                keys.add('victory:' + f);
+                keys.add('lose:' + f);
+                keys.add('intro:' + f);
+                ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => {
+                    keys.add(p + ':' + f);
+                    keys.add(p + '-boss:' + f);
+                    keys.add('intro:' + p + ':' + f);
+                });
+            });
+        }
+        Object.keys(this.library).forEach((k) => keys.add(k));
+        return [...keys].sort();
+    }
+
+    setVolume(v) {
+        this.volume = Math.max(0, Math.min(1, Number(v) || 0));
+        this.player.setVolume(this.volume);
+    }
+
+    getTempoScale() {
+        const s = Number(this.player && this.player.tempoScale);
+        return Number.isFinite(s) && s > 0 ? s : 1;
+    }
+
+    setTempoScale(scale) {
+        const s = Math.max(0.5, Math.min(4, Number(scale) || 1));
+        if (this.player) this.player.tempoScale = s;
+        if (this.player && this.player.isPlaying()
+            && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
+            beatSyncManager.setBpm(this.player.bpm);
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
+            localAudioManager.setPlaybackRate(s);
+        }
+        return s;
+    }
+
+    setEnabled(on) {
+        this.enabled = !!on;
+        if (!this.enabled) this.stop();
+    }
+
+    play(key, trackOverride, opts) {
+        if (!this.enabled) return false;
+        const k = String(key || 'mars');
+        let track = trackOverride || this.getTrack(k);
+        if (!track) return false;
+        const ctx = (opts && opts.context)
+            || (typeof soundManager !== 'undefined' && soundManager.ensureContext
+                ? soundManager.ensureContext() : null);
+        if (!ctx) return false;
+        this.currentKey = k;
+        this.player.play(track, {
+            context: ctx,
+            volume: this.volume,
+            onEnded: opts && opts.onEnded
+        });
+        if (typeof beatSyncManager !== 'undefined' && beatSyncManager.start) {
+            const planetHint = (track.meta && track.meta.planet) || k.split(':')[0].split('-')[0];
+            beatSyncManager.start(
+                planetHint === 'menu' || planetHint === 'intro' ? 'mars' : planetHint,
+                this.player.bpm || track.bpm
+            );
+        }
+        return true;
+    }
+
+    /**
+     * Play a one-shot intro, then invoke onEnded (combat loop, etc.).
+     */
+    playIntro(key, opts) {
+        const k = String(key || 'intro');
+        const track = (opts && opts.track) || this.getTrack(k);
+        if (!track) return false;
+        // Force non-loop even if a library override set loop:true.
+        const oneShot = Object.assign({}, VFTrackerParse.toCompact(track), { loop: false });
+        return this.play(k, oneShot, { onEnded: opts && opts.onEnded });
+    }
+
+    playPlanet(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play(id);
+    }
+
+    playMenu() {
+        return this.play('menu');
+    }
+
+    /**
+     * Try keys in order; first playable wins.
+     */
+    playFirst(keys) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        for (let i = 0; i < list.length; i++) {
+            const k = list[i];
+            if (!k || !this.hasTrack(k)) continue;
+            if (this.play(k)) return k;
+        }
+        return null;
+    }
+
+    stop() {
+        this.player.stop(true);
+        this.currentKey = null;
+    }
+
+    isPlaying(key) {
+        if (key != null) return this.currentKey === key && this.player.isPlaying();
+        return this.player.isPlaying();
+    }
+
+    downloadTrack(key, filename) {
+        const json = this.exportJson(key);
+        if (!json) return false;
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename || ((key || 'track').replace(/:/g, '_') + '.vftrack.json');
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            URL.revokeObjectURL(a.href);
+            a.remove();
+        }, 500);
+        return true;
+    }
+}
+
+var vfTrackerManager = new VFTrackerManager();
+
+
 /* --- js/game/sounds/soundtrack-override.js --- */
 "use strict";
 
-// Resolves soundtrack overrides on top of startPlanetAmbient()'s planet
-// track / procedural drone: active enemy type > current stage > planet.
-// Set by levelManager.buildStageLevel (stage context) and by game-loop.js
-// (active enemy types), both best-effort / optional at the call sites.
+// Resolves soundtrack overrides on top of startPlanetAmbient()'s planet×faction
+// vftrack / YouTube / drone. Priority: enemy type > stage > planet:faction track.
+// setStageContext also resolves the hostile faction for composition.
 extendClass(SoundManager, {
     setStageContext(planetId, stageId) {
         this._musicContextActive = true;
         this._currentPlanetId = planetId;
         this._currentStageId = stageId || null;
+        this._currentHostileFaction = this._resolveHostileFaction(planetId);
+        // Always re-bind combat music when a stage boots (don't trust stale keys).
+        this._activeOverrideKey = null;
+        // Fresh stage boot → play one-shot intro before the combat loop.
+        this._pendingMissionIntro = true;
+        this._introPlaying = false;
         this._reevaluateMusic();
+        this._ensureCombatMusicPlaying();
+    },
+
+    introTrackKeys(planetId, factionId) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const faction = String(factionId || this._currentHostileFaction || '').toLowerCase();
+        const keys = [];
+        if (faction) keys.push('intro:' + id + ':' + faction);
+        keys.push('intro:' + id);
+        if (faction) keys.push('intro:' + faction);
+        keys.push('intro');
+        return keys;
+    },
+
+    _startMissionIntroThenCombat(planetId) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.playIntro) {
+            this._pendingMissionIntro = false;
+            this._introPlaying = false;
+            return false;
+        }
+        if (!this.ensureContext()) return false;
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly();
+        const keys = this.introTrackKeys(id, this._currentHostileFaction);
+        vfTrackerManager.setEnabled(true);
+        vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+        let started = false;
+        for (let i = 0; i < keys.length; i++) {
+            const k = keys[i];
+            if (!vfTrackerManager.hasTrack(k)) continue;
+            const ok = vfTrackerManager.playIntro(k, {
+                onEnded: () => {
+                    if (!this._introPlaying) return;
+                    this._introPlaying = false;
+                    this._pendingMissionIntro = false;
+                    // Resume combat / override loop after the fanfare.
+                    this._activeOverrideKey = null;
+                    this.startPlanetAmbient(this._currentPlanetId || id);
+                }
+            });
+            if (ok) {
+                started = true;
+                this._introPlaying = true;
+                this._pendingMissionIntro = false;
+                this.clearPendingMusic && this.clearPendingMusic();
+                break;
+            }
+        }
+        if (!started) {
+            this._pendingMissionIntro = false;
+            this._introPlaying = false;
+        }
+        return started;
+    },
+
+    _resolveHostileFaction(planetId) {
+        const pid = String(planetId || '').toLowerCase().split('-')[0];
+        if (!pid) return '';
+        try {
+            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getHostileFactions) {
+                const list = planetConfigManager.getHostileFactions(pid) || [];
+                if (list.length) return String(list[0]).toLowerCase();
+            }
+            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetFactions) {
+                const list = planetConfigManager.getPlanetFactions(pid) || [];
+                if (list.length) return String(list[0]).toLowerCase();
+            }
+        } catch (e) { /* ignore */ }
+        return '';
     },
 
     setActiveEnemyTypes(types) {
@@ -28627,6 +31390,7 @@ extendClass(SoundManager, {
         this._activeEnemyTypesKey = key;
         this._activeEnemyTypes = list;
         this._reevaluateMusic();
+        this._ensureCombatMusicPlaying();
     },
 
     _resolveSoundtrackOverride() {
@@ -28647,15 +31411,70 @@ extendClass(SoundManager, {
         return null;
     },
 
+    /** Candidate vftrack keys for current planet / stage / hostile faction. */
+    combatTrackKeys(planetId, stageId, factionId) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const stage = String(stageId || this._currentStageId || '').toLowerCase();
+        const boss = stage === 'boss' || stage === 'b';
+        const faction = String(factionId || this._currentHostileFaction || '').toLowerCase();
+        const keys = [];
+        // Prefer planet×faction (works for explored/ambush ids via motif mapping).
+        // Do NOT fall back to bare faction:theme — that made every planet share
+        // one loop whenever the planet slug wasn't mars..pluto.
+        if (boss && faction) keys.push(id + '-boss:' + faction);
+        if (faction) keys.push(id + ':' + faction);
+        if (boss) keys.push(id + '-boss');
+        keys.push(id);
+        return keys;
+    },
+
+    _musicActuallyPlaying() {
+        if (this._introPlaying) return true;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()) {
+            return true;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.el && !localAudioManager.el.paused) {
+            return true;
+        }
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.mode
+            && youtubeSoundtrackManager.enabled) {
+            return true;
+        }
+        if (this.ambientNodes) return true;
+        return false;
+    },
+
+    _ensureCombatMusicPlaying() {
+        if (!this._musicContextActive || !this.musicEnabled) return;
+        if (this._musicActuallyPlaying()) return;
+        this._activeOverrideKey = null;
+        this.startPlanetAmbient(this._currentPlanetId || this.ambientPlanetId || 'mars');
+    },
+
     _reevaluateMusic() {
         if (!this._musicContextActive) return;
+        // Never interrupt the launch fanfare for enemy/stage override swaps.
+        if (this._introPlaying || this._pendingMissionIntro) {
+            if (this._pendingMissionIntro && this.musicEnabled) {
+                this._startMissionIntroThenCombat(this._currentPlanetId || 'mars');
+            }
+            return;
+        }
         const resolved = this._resolveSoundtrackOverride();
         const overrideKey = resolved ? resolved.key : null;
-        if (overrideKey && overrideKey === this._activeOverrideKey) return;
-        this._activeOverrideKey = overrideKey;
+        const ambientKey = overrideKey || ('ambient:' + (this._currentPlanetId || 'mars')
+            + ':' + (this._currentStageId || '')
+            + ':' + (this._currentHostileFaction || ''));
+
+        // Skip only when the same key is already audibly playing.
+        if (ambientKey === this._activeOverrideKey && this._musicActuallyPlaying()) return;
+        this._activeOverrideKey = ambientKey;
 
         if (!resolved) {
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            // Don't pre-stop here — startPlanetAmbient stops/restarts cleanly.
             this.startPlanetAmbient(this._currentPlanetId || 'mars');
             return;
         }
@@ -28664,22 +31483,33 @@ extendClass(SoundManager, {
         if (!this.musicEnabled) {
             if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             this.stopPlanetAmbientNodesOnly();
             return;
         }
 
         this.stopPlanetAmbientNodesOnly();
+        const bus = this.musicBusVolume ? this.musicBusVolume() : (this.masterVolume * this.musicVolume);
         if (track.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (typeof localAudioManager !== 'undefined') {
-                localAudioManager.setVolume(this.masterVolume * this.musicVolume);
+                localAudioManager.setVolume(bus);
                 localAudioManager.play(overrideKey, track.localAudioData);
+            }
+        } else if (track.trackerData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                vfTrackerManager.setVolume(bus);
+                vfTrackerManager.play(overrideKey, track.trackerData);
             }
         } else if (track.youtubeUrl) {
             if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.setEnabled(true);
-                youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+                youtubeSoundtrackManager.setVolume(bus);
                 youtubeSoundtrackManager.playUrl(overrideKey, track.youtubeUrl);
             }
         }
@@ -28689,10 +31519,14 @@ extendClass(SoundManager, {
         this._musicContextActive = false;
         this._currentPlanetId = null;
         this._currentStageId = null;
+        this._currentHostileFaction = null;
         this._activeEnemyTypes = [];
         this._activeEnemyTypesKey = null;
         this._activeOverrideKey = null;
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
     }
 });
 
@@ -29141,7 +31975,7 @@ var BeatSyncManager = class BeatSyncManager {
     start(planetId, bpm) {
         const id = String(planetId || 'mars').toLowerCase().split('-')[0];
         this.planetId = id;
-        this.bpm = Math.max(60, Math.min(220, Number(bpm) || this.resolveBpm(id)));
+        this.bpm = Math.max(60, Math.min(960, Number(bpm) || this.resolveBpm(id)));
         this.startMs = performance.now();
         this.offsetMs = 0;
         this.active = true;
@@ -29169,7 +32003,7 @@ var BeatSyncManager = class BeatSyncManager {
     setBpm(bpm) {
         const n = Number(bpm);
         if (!Number.isFinite(n)) return;
-        this.bpm = Math.max(60, Math.min(220, n));
+        this.bpm = Math.max(60, Math.min(960, n));
     }
 
     beatDurationMs() {
@@ -29613,6 +32447,9 @@ var PlayerManager = class PlayerManager {
         const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul * perkMul;
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
+        // Sluice / warp fly-in owns the ship's position — ignore stick input so it cannot steer into a wall.
+        const gateEnter = typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
 
         if (typeof game !== 'undefined') {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
@@ -29628,10 +32465,12 @@ var PlayerManager = class PlayerManager {
             // VOXEL: Game-Boy raster — accumulate into whole lattice steps.
             let dx = 0;
             let dy = 0;
-            if (keys['ArrowLeft']) dx -= moveSpeed;
-            if (keys['ArrowRight']) dx += moveSpeed;
-            if (keys['ArrowUp']) dy -= moveSpeed;
-            if (keys['ArrowDown']) dy += moveSpeed;
+            if (!gateEnter) {
+                if (keys['ArrowLeft']) dx -= moveSpeed;
+                if (keys['ArrowRight']) dx += moveSpeed;
+                if (keys['ArrowUp']) dy -= moveSpeed;
+                if (keys['ArrowDown']) dy += moveSpeed;
+            }
             if (voxelMove) {
                 cv.stepMove(this.player, dx, dy);
             } else {
@@ -29642,15 +32481,17 @@ var PlayerManager = class PlayerManager {
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
             // Pressing on against the bottom edge = fly back down the corridor (transit runs read this).
             // Lattice snapping can park the ship a few px above maxY, so allow a small band.
-            this.player.backtrack = !!keys['ArrowDown'] && this.player.y >= this.player.maxY - 6;
+            this.player.backtrack = !gateEnter && !!keys['ArrowDown'] && this.player.y >= this.player.maxY - 6;
             if (voxelMove && cv.snapEntity) cv.snapEntity(this.player);
         } else {
             let dx = 0;
             let dy = 0;
-            if (keys['ArrowLeft']) dx -= moveSpeed;
-            if (keys['ArrowRight']) dx += moveSpeed;
-            if (keys['ArrowUp']) dy -= moveSpeed;
-            if (keys['ArrowDown']) dy += moveSpeed;
+            if (!gateEnter) {
+                if (keys['ArrowLeft']) dx -= moveSpeed;
+                if (keys['ArrowRight']) dx += moveSpeed;
+                if (keys['ArrowUp']) dy -= moveSpeed;
+                if (keys['ArrowDown']) dy += moveSpeed;
+            }
             if (voxelMove) cv.stepMove(this.player, dx, dy);
             else {
                 this.player.x += dx;
@@ -30223,7 +33064,9 @@ var BulletManager = class BulletManager {
             // Get canvas width from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
             if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
-                this.bullets.splice(i, 1);
+                const last = this.bullets.length - 1;
+                if (i !== last) this.bullets[i] = this.bullets[last];
+                this.bullets.pop();
             }
         }
 
@@ -30255,7 +33098,9 @@ var BulletManager = class BulletManager {
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
             const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
             if (bullet.y > canvasHeight || bullet.x < 0 || bullet.x > canvasWidth) {
-                this.enemyBullets.splice(i, 1);
+                const last = this.enemyBullets.length - 1;
+                if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
+                this.enemyBullets.pop();
             }
         }
     }
@@ -31621,6 +34466,7 @@ extendClass(BulletManager, {
         const W = (typeof game !== 'undefined' && (game.internalWidth || game.width)) || 240;
         const H = (typeof game !== 'undefined' && (game.internalHeight || game.height)) || 300;
         if (enemy.entering
+            || (typeof objectiveManager !== 'undefined' && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace())
             || (typeof objectiveManager !== 'undefined' && objectiveManager.isArrivalGrace && objectiveManager.isArrivalGrace())
             || enemy.x + (enemy.width || 0) < 0 || enemy.x > W
             || enemy.y + (enemy.height || 0) < 0 || enemy.y > H) {
@@ -31868,11 +34714,19 @@ extendClass(BulletManager, {
     },
 
     removeBullet(index) {
-        this.bullets.splice(index, 1);
+        const list = this.bullets;
+        if (index < 0 || index >= list.length) return;
+        const last = list.length - 1;
+        if (index !== last) list[index] = list[last];
+        list.pop();
     },
 
     removeEnemyBullet(index) {
-        this.enemyBullets.splice(index, 1);
+        const list = this.enemyBullets;
+        if (index < 0 || index >= list.length) return;
+        const last = list.length - 1;
+        if (index !== last) list[index] = list[last];
+        list.pop();
     },
 
     switchShotType() {
@@ -31930,9 +34784,6 @@ window.bulletManager = bulletManager;
 
 /* --- js/game/enemies/core.js?v=role-diff-1 --- */
 "use strict";
-
-// TEMP DEBUG: tracing why side/escort enemies aren't spawning. Remove once fixed.
-if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS == null) window.DEBUG_SIDE_SPAWNS = false; // opt in from the console: window.DEBUG_SIDE_SPAWNS = true
 
 // Enemy management
 var EnemyManager = class EnemyManager {
@@ -32594,9 +35445,6 @@ extendClass(EnemyManager, {
             delete this.pendingCombatAnnounces[pid];
             if (!ev) continue;
             if (ev.once && this.firedCombatEventIds[ev.id]) continue;
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] combat event firing', ev.id, 'action=', ev.action, 'role=', ev.role);
-            }
             if (ev.action === 'summon') {
                 this.spawnEventSide(ev, state);
             }
@@ -32629,9 +35477,6 @@ extendClass(EnemyManager, {
             if (!fire) continue;
 
             const warnMs = this.announceCombatEvent(ev);
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] combat event announced', ev.id, 'warnMs=', warnMs);
-            }
             this.pendingCombatAnnounces[ev.id] = {
                 ev: ev,
                 fireAt: now + (warnMs != null ? warnMs : 1800)
@@ -32797,19 +35642,16 @@ extendClass(EnemyManager, {
     spawnScheduledNormal(entry, gameState) {
         if (!entry || !gameState) return null;
         if (this.sideEnemies.length >= this.sideEnemyCap) {
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] spawnScheduledNormal blocked by cap', entry.id, this.sideEnemies.length, this.sideEnemyCap);
-            }
             return null;
         }
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);
-        let baseHp = 40;
+        let baseHp = 18;
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
-            // ~2s side TTK vs REF laser (balance-config); was 0.4.
-            if (cfg && cfg.maxHealth) baseHp = Math.max(15, Math.round(cfg.maxHealth * 0.55));
+            // Reduced TTK vs REF laser (balance-config); was 0.4.
+            if (cfg && cfg.maxHealth) baseHp = Math.max(8, Math.round(cfg.maxHealth * 0.28));
         }
         const role = entry.role || 'assault';
         if (role === 'repair' || role === 'shieldBattery') {
@@ -32929,13 +35771,7 @@ extendClass(EnemyManager, {
         });
         // Only enter through empty rim openings — never through solid rock.
         if (!this.placeSideEntryFromGap(side, canvasWidth, canvasHeight)) {
-            if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                console.log('[sideDebug] spawnScheduledNormal blocked: no rim gap', entry.id);
-            }
             return null; // no open edge this frame; try again later
-        }
-        if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-            console.log('[sideDebug] spawned side', entry.id, side.type, side.x, side.y);
         }
         if (isEscort && this.enemy && form) {
             // After the rim entry, settle toward the formation slot.
@@ -33092,7 +35928,7 @@ extendClass(EnemyManager, {
             const waveAt = clusterWaveAt[entry.cluster || 'alpha'];
             const dueAt = Math.min(entry.spawnAt, waveAt != null ? waveAt : entry.spawnAt);
             if (elapsedSec < dueAt) continue;
-            if (entry.champion && (this.enemy || this.exploding)) {
+            if (entry.champion && (this.enemy || this.exploding || this.championSpawning)) {
                 continue;
             }
             if (!entry.champion && holdNormals) {
@@ -33102,9 +35938,6 @@ extendClass(EnemyManager, {
             if (entry.champion) {
                 this.spawnChampionFromEntry(entry);
             } else {
-                if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-                    console.log('[sideDebug] updateSchedule attempting', entry.id, 'at', elapsedSec.toFixed(1) + 's');
-                }
                 if (!this.spawnScheduledNormal(entry, gameState)) {
                     // Side slots full: keep it queued instead of dropping it.
                     entry.spawned = false;
@@ -33114,6 +35947,7 @@ extendClass(EnemyManager, {
     },
 
     async spawnChampionFromEntry(entry) {
+        this.championSpawning = true;
         this.pendingChampionEntry = entry;
         this.beginChampionCombatEvents(entry);
         await this.setShipType(entry.type);
@@ -33121,6 +35955,7 @@ extendClass(EnemyManager, {
             graphicsManager.setEnemyShipType(entry.type);
         }
         this.spawnEnemy(entry);
+        this.championSpawning = false;
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.onEnemySpawned(entry);
         }
@@ -33185,6 +36020,9 @@ extendClass(EnemyManager, {
 
         for (let i = this.sideEnemies.length - 1; i >= 0; i--) {
             const e = this.sideEnemies[i];
+            if (e && e.hitFlashMs > 0) {
+                e.hitFlashMs = Math.max(0, e.hitFlashMs - deltaTime);
+            }
             // Mission start: still gliding in on the intro path, so neither moved nor culled off screen.
             if (e.introEntry) continue;
             const eCluster = e.cluster || 'alpha';
@@ -33482,10 +36320,13 @@ extendClass(EnemyManager, {
         if (this.enemy || this.exploding) return false;
         if (this.sideEnemies && this.sideEnemies.length > 0) return false;
         // Entries parked at 999999 never spawn, and once the objective is done
-        // updateSchedule holds back all normals — neither may block the win.
-        const objectiveDone = typeof objectiveManager !== 'undefined' && (objectiveManager.completed || objectiveManager.exitGate);
-        if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999
-            && (e.champion || !objectiveDone))) return false;
+        // (or the goal gate is already on screen, freezing updateSchedule)
+        // any remaining normals/champions can no longer spawn — none may
+        // block the win.
+        const scheduleFrozen = typeof objectiveManager !== 'undefined'
+            && (objectiveManager.completed || objectiveManager.exitGate
+                || (objectiveManager.isLevelEnding && objectiveManager.isLevelEnding()));
+        if (this.schedule && this.schedule.some((e) => !e.spawned && e.spawnAt < 999999 && !scheduleFrozen)) return false;
         return true;
     },
 
@@ -33520,12 +36361,6 @@ extendClass(EnemyManager, {
                 if (levelInfoManager.updateElement) {
                     levelInfoManager.updateElement('currentScore', game.score);
                 }
-            }
-        }
-        if (typeof profileManager !== 'undefined' && profileManager.tryBlueprintDrop) {
-            const dropped = profileManager.tryBlueprintDrop(info);
-            if (dropped && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                levelInfoManager.showLootNotice('BLUEPRINT: ' + profileManager.getBlueprintName(dropped));
             }
         }
         if (!(info && info.pickupsSpawned) && typeof pickupManager !== 'undefined' && pickupManager.spawnFromKill) {
@@ -33754,6 +36589,10 @@ extendClass(EnemyManager, {
         let effectiveDeltaTime = deltaTime;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.slowMotion) {
             effectiveDeltaTime = deltaTime * 0.3; // Slow down to 30% speed
+        }
+
+        if (this.enemy && this.enemy.hitFlashMs > 0) {
+            this.enemy.hitFlashMs = Math.max(0, this.enemy.hitFlashMs - effectiveDeltaTime);
         }
 
         if (!this.exploding && this.shieldMax > 0 && this.shield < this.shieldMax && this.shieldRegen > 0
@@ -34289,6 +37128,11 @@ extendClass(EnemyManager, {
         const remaining = this.applyDefenseToDamage(target, Number(damage) * playerDamageMul);
         this.shield = target.shield;
         this.shieldHitAt = target.shieldHitAt;
+        // Hull flash even when shields soak the hit — otherwise shots look like they do nothing.
+        if (this.enemy) {
+            this.enemy.hitFlashMs = Math.max(this.enemy.hitFlashMs || 0, remaining > 0 ? 170 : 110);
+            this.enemy.hitSpark = remaining > 0 ? 'hull' : 'shield';
+        }
         this.health -= remaining;
         if (this.health <= 0) {
             this.health = 0;
@@ -34305,6 +37149,8 @@ extendClass(EnemyManager, {
             ? difficultyConfigManager.getProfile().playerDamageMul : 1;
         const remaining = this.applyDefenseToDamage(side, Number(damage) * playerDamageMul);
         side.health -= remaining;
+        side.hitFlashMs = Math.max(side.hitFlashMs || 0, remaining > 0 ? 160 : 100);
+        side.hitSpark = remaining > 0 ? 'hull' : 'shield';
         return side.health <= 0;
     },
 
@@ -35282,12 +38128,6 @@ extendClass(EnemyManager, {
             ? obstacleManager.getObstacles().filter((o) => !o.isFog).length : 0;
         const room = this.sideEnemyCap - this.sideEnemies.length;
 
-        if (typeof window !== 'undefined' && window.DEBUG_SIDE_SPAWNS) {
-            console.log('[sideDebug] cap=%d sides=%d room=%d pool=%d schedule=%d champAlive=%s fleeing=%s eventRunning=%s obstacles=%d playerHp=%s',
-                this.sideEnemyCap, this.sideEnemies.length, room, this.sideEnemyPool.length, this.schedule.length,
-                champAlive, this.sideFleeing, eventRunning, obstacles, playerHp.toFixed(2));
-        }
-
         // --- Hold back when the player is struggling or the screen is busy ---
         if (!champAlive || this.sideFleeing || eventRunning || room < 1) return;
         if (playerHp < 0.3 || d.recentDamage > 0.25 || obstacles > 30) return;
@@ -35550,6 +38390,18 @@ var ObstacleManager = class ObstacleManager {
         return (ov.width == null && this.maybeBoulder) ? this.maybeBoulder(o) : o;
     }
 
+    /**
+     * Ram damage tracks footprint: pebbles sting lightly, big rocks keep full weight.
+     * Reference span ≈ 12px (medium rock) = 1× base.
+     */
+    scaleCollisionDamage(base, width, height) {
+        const b = Math.max(0, Number(base) || 0);
+        if (b <= 0) return 0;
+        const span = Math.max(1, Math.min(Number(width) || 1, Number(height) || 1));
+        const mul = Math.max(0.25, Math.min(1.15, Math.pow(span / 12, 1.4)));
+        return Math.max(1, Math.round(b * mul));
+    }
+
     buildObstacleFromDef(def, overrides) {
         const d = def || {};
         const ov = overrides || {};
@@ -35565,7 +38417,8 @@ var ObstacleManager = class ObstacleManager {
         const isFog = d.kind === 'fog';
         const kind = d.kind || 'asteroid';
         const opticalMode = isFog ? 'none' : (d.opticalMode || (kind === 'crystal' || kind === 'prism' ? 'prism' : 'none'));
-        const collisionDamage = isFog ? 0 : Math.max(1, d.collisionDamage != null ? d.collisionDamage : 15);
+        const rawDmg = isFog ? 0 : Math.max(1, d.collisionDamage != null ? d.collisionDamage : 15);
+        const collisionDamage = isFog ? 0 : this.scaleCollisionDamage(rawDmg, width, height);
         return {
             x: ov.x != null ? ov.x : 0,
             y: ov.y != null ? ov.y : 0,
@@ -35641,14 +38494,16 @@ var ObstacleManager = class ObstacleManager {
         // Update lighting bullets from bullet manager
         this.updateLightingBullets();
 
-        if (frozen) {
+        if (frozen || levelEnding) {
+            // Field clear / sluice: no new obstacles; existing ones only drain off-screen.
             gameState.obstacleSpawnTimer = 0;
+            if (this.isScrollStage()) {
+                this.updateScrollLayers(deltaTime, gameState);
+            }
         } else if (this.isScrollStage()) {
             // Regular stages scroll towards the ship: obstacles arrive from
             // the top in airy layers spaced by scrolled distance.
             this.updateScrollLayers(deltaTime, gameState);
-        } else if (levelEnding) {
-            gameState.obstacleSpawnTimer = 0;
         } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
             if (this.hasDefs()) {
                 // Mostly shaped pattern waves; the authored cluster waves stay
@@ -35847,12 +38702,15 @@ extendClass(ObstacleManager, {
             fragmentDamage: 8,
             fragmentHealth: 1,
             childFragmentChance: 0,
-            collisionDamage: 15,
+            collisionDamage: this.scaleCollisionDamage
+                ? this.scaleCollisionDamage(15, size.width, size.height) : 15,
             opticalMode: 'none',
             prismSplitCount: 3,
             prismAngleDeg: 25,
             explosionId: obstacleType.includes('shield') ? 'small_pop' : 'asteroid_burst',
             fragmentGeneration: 0,
+            pushVx: 0,
+            pushVy: 0,
             sprite: this.doesObstacleReflect(obstacleType) ? 'shield' : 'obstacle',
             opacity: 1,
             wallDepth: this.pickWallDepth
@@ -36101,11 +38959,11 @@ var OBSTACLE_PATTERNS = [
     { id: 'belt', weight: 3 },
     { id: 'gapWall', weight: 2 },
     { id: 'arc', weight: 2 },
-    { id: 'swarm', weight: 2 },
+    { id: 'swarm', weight: 1 },
     { id: 'boulder', weight: 2 },
     { id: 'stream', weight: 2 }
 ];
-var OBSTACLE_MAX_ALIVE = 70;
+var OBSTACLE_MAX_ALIVE = 48;
 var OBSTACLE_RAMP_MS = 90000; // density ramps up over the first 90 s
 var OBSTACLE_SCROLL_SPEED = 0.55; // px/frame the level scrolls in regular stages
 var TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel', 'terraces', 'bulges', 'zigzag', 'gorge',
@@ -36211,7 +39069,7 @@ extendClass(ObstacleManager, {
         pts.slice(0, budget).forEach((pt) => {
             const def = pt.big ? (palette.slice().sort((a, b) => (b.width || 10) - (a.width || 10))[0])
                 : this.pickWeightedDef(palette);
-            const scale = pt.scale || (0.7 + Math.random() * 0.6);
+            const scale = pt.scale || (0.9 + Math.random() * 0.45);
             const w = (def.width || 10) * scale;
             const h = (def.height || 10) * scale;
             const x = ex - vx * pt.u + px * pt.w - w / 2;
@@ -36287,8 +39145,8 @@ extendClass(ObstacleManager, {
                     const w = -half + (across * (i + Math.random() * 0.6)) / n;
                     if (Math.abs(w - gapW) < gapSize / 2) continue;
                     pts.push({ u: (w + half) * Math.abs(slope) + rand(0, 10), w: w, scale: rand(0.8, 1.3) });
-                    if (Math.random() < 0.35 + intensity * 0.3) {
-                        pts.push({ u: (w + half) * Math.abs(slope) + rand(12, 22), w: w + rand(-6, 6), scale: rand(0.5, 0.9) });
+                    if (Math.random() < 0.12 + intensity * 0.15) {
+                        pts.push({ u: (w + half) * Math.abs(slope) + rand(12, 22), w: w + rand(-6, 6), scale: rand(0.75, 1.05) });
                     }
                 }
                 break;
@@ -36320,24 +39178,24 @@ extendClass(ObstacleManager, {
                 break;
             }
             case 'swarm': {
-                // Many small, slightly faster pebbles in a loose cloud.
-                const n = count(12, 26);
+                // Compact mid-size pack — used to flood the lane with dust pebbles.
+                const n = count(5, 10);
                 const centerW = rand(-half * 0.5, half * 0.5);
-                const spread = rand(half * 0.35, half * 0.7);
+                const spread = rand(half * 0.25, half * 0.5);
                 for (let i = 0; i < n; i++) {
-                    pts.push({ u: rand(0, 50), w: centerW + rand(-spread, spread), scale: rand(0.45, 0.75), speedMul: rand(1.1, 1.4) });
+                    pts.push({ u: rand(0, 50), w: centerW + rand(-spread, spread), scale: rand(0.75, 1.05), speedMul: rand(1.05, 1.25) });
                 }
                 break;
             }
             case 'boulder': {
-                // One big rock with a halo of debris.
+                // One big rock with a thin halo of readable chunks (not dust).
                 const centerW = rand(-half * 0.6, half * 0.6);
                 pts.push({ u: 34, w: centerW, scale: 2, big: true });
-                const n = count(5, 10);
+                const n = count(2, 5);
                 for (let i = 0; i < n; i++) {
                     const a = (Math.PI * 2 * i) / n + rand(-0.3, 0.3);
                     const r = rand(18, 30);
-                    pts.push({ u: 34 + Math.cos(a) * r, w: centerW + Math.sin(a) * r, scale: rand(0.4, 0.7) });
+                    pts.push({ u: 34 + Math.cos(a) * r, w: centerW + Math.sin(a) * r, scale: rand(0.7, 1.0) });
                 }
                 break;
             }
@@ -36354,11 +39212,11 @@ extendClass(ObstacleManager, {
             case 'field':
             default: {
                 // Scattered field across the whole width, rocks kept apart.
-                const n = count(8, 18);
+                const n = count(6, 12);
                 let tries = 0;
                 while (pts.length < n && tries++ < n * 8) {
-                    const p = { u: rand(0, 70), w: rand(-half + 4, half - 4), scale: rand(0.6, 1.4) };
-                    if (pts.every((q) => Math.hypot(q.u - p.u, q.w - p.w) > 12)) pts.push(p);
+                    const p = { u: rand(0, 70), w: rand(-half + 4, half - 4), scale: rand(0.85, 1.35) };
+                    if (pts.every((q) => Math.hypot(q.u - p.u, q.w - p.w) > 14)) pts.push(p);
                 }
                 break;
             }
@@ -36380,6 +39238,7 @@ extendClass(ObstacleManager, {
         let frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
         // Transit stages: the level eases to a stop as the sluice / warp ring slides in, and stays stopped.
         const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        const ending = !!(om && om.isLevelEnding && om.isLevelEnding());
         if (om && om.goal) {
             const g = om.goal;
             frameScale *= Math.max(0, Math.min(1, (g.restY - g.y) / (g.restY + 30)));
@@ -36394,7 +39253,9 @@ extendClass(ObstacleManager, {
         this.scrollDistance = (this.scrollDistance || 0) + this.scrollSpeed() * frameScale;
         // Side terrain scrolls with the level (render/draw-environment.js).
         this.terrainOffset = (this.terrainOffset || 0) + this.scrollSpeed() * frameScale;
-        const spacing = OBSTACLE_LAYER_SPACING - this.patternIntensity() * 30;
+        // Exit gate / sluice: keep terrain scrolling, but never queue another obstacle layer.
+        if (ending) return;
+        const spacing = OBSTACLE_LAYER_SPACING - this.patternIntensity() * 18;
         if (this.scrollDistance < spacing) return;
         this.scrollDistance = 0;
         this.spawnScrollLayer(gameState);
@@ -36427,12 +39288,12 @@ extendClass(ObstacleManager, {
             : lane.top + Math.random() * (lane.bottom - lane.top);
 
         // Walk along the train: group, hole, group, hole ...
-        const trainLen = W * (1.0 + Math.random() * 0.4);
-        const minHole = Math.max(56, 80 - intensity * 20);
+        const trainLen = W * (0.85 + Math.random() * 0.35);
+        const minHole = Math.max(72, 96 - intensity * 18);
         let cursor = Math.random() * 20;
         let spawned = 0;
         while (cursor < trainLen && alive + spawned < OBSTACLE_MAX_ALIVE) {
-            const groupSize = 1 + Math.floor(Math.random() * (1.6 + intensity * 1.2));
+            const groupSize = 1 + Math.floor(Math.random() * (1.2 + intensity * 0.8));
             // A minority of groups also drift down/up slightly while flying across.
             const vSpeed = Math.random() < 0.25
                 ? this.scrollSpeed() * (0.25 + Math.random() * 0.35) * (Math.random() < 0.5 ? -1 : 1)
@@ -36441,11 +39302,11 @@ extendClass(ObstacleManager, {
             let groupEnd = cursor;
             for (let g = 0; g < groupSize; g++) {
                 const useFog = fog.length && Math.random() < 0.06;
-                // Mostly mid-sized, some pebbles, the odd big chunk.
+                // Mid-sized rocks dominate; rare small (readable) and rare big.
                 const roll = Math.random();
-                const scale = roll < 0.25 ? 0.55 + Math.random() * 0.25
-                    : roll > 0.88 ? 1.7 + Math.random() * 0.6
-                        : 0.85 + Math.random() * 0.6;
+                const scale = roll < 0.08 ? 0.75 + Math.random() * 0.15
+                    : roll > 0.9 ? 1.55 + Math.random() * 0.45
+                        : 0.95 + Math.random() * 0.35;
                 let obs;
                 if (defs && (solid.length || useFog)) {
                     const def = this.pickWeightedDef(useFog ? fog : solid);
@@ -36978,6 +39839,12 @@ extendClass(ObstacleManager, {
                 broken += cur - target;
             }
         }
+        if (broken > 0 && typeof soundManager !== 'undefined' && soundManager.playWallChip) {
+            soundManager.playWallChip();
+        } else if (broken === 0 && typeof soundManager !== 'undefined' && soundManager.playRockHit) {
+            // Crack-only chip (no cell removed).
+            soundManager.playRockHit(0.6);
+        }
         // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
         if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {
@@ -37300,8 +40167,8 @@ extendClass(ObstacleManager, {
 "use strict";
 
 // ObstacleManager methods, split from obstacles.js.
-var FRAGMENT_MIN_PARENT = 16; // px: smaller rocks only burst into debris
-var FRAGMENT_MIN_SIZE = 10;   // px: smallest collidable chunk
+var FRAGMENT_MIN_PARENT = 18; // px: smaller rocks only burst into debris
+var FRAGMENT_MIN_SIZE = 12;   // px: smallest collidable chunk (no dust pebbles)
 var DEBRIS_MAX = 260;
 
 extendClass(ObstacleManager, {
@@ -37483,6 +40350,13 @@ extendClass(ObstacleManager, {
             return;
         }
         if (obstacle && !obstacle.isFog) {
+            const ox = obstacle.x + obstacle.width / 2;
+            const oy = obstacle.y + obstacle.height / 2;
+            const span = Math.max(obstacle.width, obstacle.height);
+            // Breaking rock flings nearby pebbles before it's removed from the list.
+            if (this.blastSteerObstacles) {
+                this.blastSteerObstacles(ox, oy, Math.max(22, span * 1.6), Math.max(0.85, span / 14), obstacle);
+            }
             this.spawnDebris(obstacle);
             // Only big rocks split into real (collidable) chunks; small ones
             // just burst into debris instead of littering the field.
@@ -37545,7 +40419,10 @@ extendClass(ObstacleManager, {
                 fragmentDamage: Math.max(1, Math.round((parent.fragmentDamage || 8) * 0.7)),
                 fragmentHealth: 1,
                 childFragmentChance: Math.max(0, (parent.childFragmentChance || 0) * 0.7),
-                collisionDamage: Math.max(1, parent.fragmentDamage != null ? parent.fragmentDamage : 8),
+                collisionDamage: this.scaleCollisionDamage
+                    ? this.scaleCollisionDamage(
+                        Math.max(1, parent.fragmentDamage != null ? parent.fragmentDamage : 8), fw, fh)
+                    : Math.max(1, parent.fragmentDamage != null ? parent.fragmentDamage : 8),
                 opticalMode: isCrystal
                     ? (parent.opticalMode === 'kaleidoscope' ? 'prism' : (parent.opticalMode || 'none'))
                     : 'none',
@@ -37553,6 +40430,8 @@ extendClass(ObstacleManager, {
                 prismAngleDeg: parent.prismAngleDeg || 25,
                 explosionId: parent.explosionId || (isCrystal ? 'crystal_shatter' : 'asteroid_burst'),
                 fragmentGeneration: generation,
+                pushVx: 0,
+                pushVy: 0,
                 sprite: isCrystal ? 'crystal' : 'obstacleSmall',
                 opacity: 1,
                 lightIntensity: isCrystal ? 0.3 : 0,
@@ -37666,7 +40545,7 @@ extendClass(ObstacleManager, {
 // that shed destructible chunks as they're worn down.
 var BOULDER_CHANCE = 0.35;
 var BOULDER_MIN = 26;       // px: rocks this big shed chunks when hit
-var CHUNK_SIZE = 10;
+var CHUNK_SIZE = 12;
 
 extendClass(ObstacleManager, {
     /** Rock damage from a bullet: stronger weapons chew through faster. */
@@ -37696,8 +40575,14 @@ extendClass(ObstacleManager, {
         const before = o.health;
         o.health -= Math.max(1, amount);
         if (o.health <= 0) {
+            if (typeof soundManager !== 'undefined' && soundManager.playObstacleBreak) {
+                soundManager.playObstacleBreak(o);
+            }
             this.removeObstacle(index);
             return true;
+        }
+        if (typeof soundManager !== 'undefined' && soundManager.playObstacleHit) {
+            soundManager.playObstacleHit(o);
         }
         if (o.isBoulder && o.maxHealth > 0) {
             const step = o.maxHealth / (o.shedSteps || 4);
@@ -37731,6 +40616,44 @@ extendClass(ObstacleManager, {
             const j = this.obstacles.indexOf(o);
             if (j < 0) continue;
             this.damageObstacle(j, Math.max(1, Math.round(amount * falloff)), x, y);
+        }
+        this.blastSteerObstacles(x, y, radius * 1.35, Math.max(0.9, (amount || 4) * 0.12), skip);
+    },
+
+    /**
+     * Explosions shove / steer lighter rocks outward. Big boulders barely move;
+     * pebbles get a lasting course change plus a short push impulse.
+     */
+    blastSteerObstacles(x, y, radius, force, skip) {
+        if (!(radius > 0) || !(force > 0) || !this.obstacles || !this.obstacles.length) return;
+        const r = Number(radius) || 0;
+        const f = Number(force) || 0;
+        for (let i = 0; i < this.obstacles.length; i++) {
+            const o = this.obstacles[i];
+            if (!o || o === skip || o.isFog || o.wallAnchor != null) continue;
+            const span = Math.min(o.width || 1, o.height || 1);
+            // Only smaller rocks are redirected; heavies stay put.
+            if (span > 16) continue;
+            const ox = o.x + (o.width || 0) / 2;
+            const oy = o.y + (o.height || 0) / 2;
+            const dx = ox - x;
+            const dy = oy - y;
+            const d = Math.hypot(dx, dy);
+            if (d > r || d < 0.01) continue;
+            const nx = dx / d;
+            const ny = dy / d;
+            const falloff = 1 - d / r;
+            const massMul = Math.pow(12 / Math.max(4, span), 1.25);
+            const kick = f * falloff * massMul;
+            if (!(kick > 0.02)) continue;
+            o.pushVx = (o.pushVx || 0) + nx * kick * 1.6;
+            o.pushVy = (o.pushVy || 0) + ny * kick * 1.6;
+            // Lasting steer: blast changes their travel heading.
+            o.horizontalSpeed = (o.horizontalSpeed || 0) + nx * kick * 0.55;
+            o.verticalSpeed = (o.verticalSpeed || 0) + ny * kick * 0.55;
+            if (o.rotationSpeed != null) {
+                o.rotationSpeed += (Math.random() - 0.5) * kick * 0.08;
+            }
         }
     },
 
@@ -37777,9 +40700,13 @@ extendClass(ObstacleManager, {
             fragmentOnDestroy: false,
             fragmentCount: 0,
             fragmentGeneration: (o.fragmentGeneration || 0) + 1,
-            collisionDamage: Math.max(1, Math.round((o.collisionDamage || 15) * 0.4)),
+            collisionDamage: this.scaleCollisionDamage
+                ? this.scaleCollisionDamage(Math.max(1, Math.round((o.collisionDamage || 15) * 0.4)), cw, ch)
+                : Math.max(1, Math.round((o.collisionDamage || 15) * 0.4)),
             opticalMode: 'none',
             explosionId: o.explosionId || 'asteroid_burst',
+            pushVx: Math.cos(a) * sp * 0.8,
+            pushVy: Math.sin(a) * sp * 0.8,
             sprite: 'obstacleSmall',
             opacity: 1,
             wallDepth: o.wallDepth || (Math.random() < 0.55 ? 'under' : 'over'),
@@ -37998,6 +40925,93 @@ var PickupManager = class PickupManager {
         return fallback[id] || 'resScrap';
     }
 
+    pickupLootKind(p) {
+        if (!p) return 'resource';
+        if (p.lootKind) return p.lootKind;
+        if (p.powerUp) return 'powerUp';
+        return 'resource';
+    }
+
+    pickupRunKey(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint') return 'blueprint:' + p.id;
+        if (kind === 'part') return 'part:' + (p.partKind || 'weapon') + ':' + p.id;
+        return p.id;
+    }
+
+    pickupLabel(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint' && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return 'BP ' + profileManager.getBlueprintName(p.id);
+        }
+        if (kind === 'part' && typeof profileManager !== 'undefined' && profileManager.getBlueprintName) {
+            return profileManager.getBlueprintName((p.partKind || 'weapon') + ':' + p.id);
+        }
+        if (typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel) {
+            return economyConfig.getResourceLabel(p.id);
+        }
+        return String(p.id || '').toUpperCase();
+    }
+
+    pickupIconKey(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint') return 'hsBlueprint';
+        if (kind === 'part') {
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleIcon) {
+                const key = shipLoadoutManager.resolveModuleIcon({ kind: p.partKind || 'weapon', id: p.id });
+                if (key) return key;
+            }
+            return 'hsCraft';
+        }
+        return this.resourceIconKey(p.id);
+    }
+
+    pickupTint(p) {
+        const kind = this.pickupLootKind(p);
+        if (kind === 'blueprint') return '#ffd24a';
+        if (kind === 'part') {
+            const pk = p.partKind || 'weapon';
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) {
+                return iconRenderer.getModuleKindColor(pk) || '#c08cff';
+            }
+            const fallback = { weapon: '#ff6a4a', defense: '#4ac8ff', energy: '#ffd24a', ability: '#c08cff' };
+            return fallback[pk] || '#c08cff';
+        }
+        return this.resourceColor(p.id);
+    }
+
+    pushPickup(base) {
+        this.pickups.push(base);
+    }
+
+    spawnSalvageFromKill(info, baseX, baseY) {
+        if (!info || typeof profileManager === 'undefined') return;
+        const life = this.lootPhase ? 22000 : 18000;
+        const scatter = (lootKind, extra) => {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 6 + Math.random() * 12;
+            this.pushPickup(Object.assign({
+                lootKind: lootKind,
+                amount: 1,
+                x: baseX + Math.cos(angle) * dist,
+                y: baseY + Math.sin(angle) * dist,
+                vx: Math.cos(angle) * (0.45 + Math.random() * 0.7),
+                vy: Math.sin(angle) * (0.45 + Math.random() * 0.7) - 0.35,
+                age: 0,
+                life: life,
+                size: lootKind === 'blueprint' ? 12 : 11
+            }, extra));
+        };
+        if (profileManager.tryBlueprintDrop) {
+            const bpKey = profileManager.tryBlueprintDrop(info);
+            if (bpKey) scatter('blueprint', { id: bpKey });
+        }
+        if (profileManager.tryPartDrop) {
+            const part = profileManager.tryPartDrop(info);
+            if (part) scatter('part', { id: part.id, partKind: part.kind });
+        }
+    }
+
     reset(clearCollected) {
         this.pickups.length = 0;
         this.popups = [];
@@ -38070,29 +41084,32 @@ var PickupManager = class PickupManager {
             if (ss > 0) yieldMul *= Math.max(0.75, Math.min(1.6, 0.85 + ss * 0.2));
         } catch (e) { /* ignore */ }
         const drops = economyConfig.rollEnemyKillDrops(info, planetId, yieldMul);
-        if (!drops || !drops.length) return;
 
         const cx = Number(info.x);
         const cy = Number(info.y);
         const baseX = isFinite(cx) ? cx : 120;
         const baseY = isFinite(cy) ? cy : 80;
 
-        drops.forEach((drop, i) => {
-            const angle = (Math.PI * 2 * i) / Math.max(1, drops.length) + Math.random() * 0.6;
-            const dist = 4 + Math.random() * 10;
-            const life = this.lootPhase ? 22000 : 18000;
-            this.pickups.push({
-                id: drop.id,
-                amount: drop.amount,
-                x: baseX + Math.cos(angle) * dist,
-                y: baseY + Math.sin(angle) * dist,
-                vx: Math.cos(angle) * (0.4 + Math.random() * 0.6),
-                vy: Math.sin(angle) * (0.4 + Math.random() * 0.6) - 0.3,
-                age: 0,
-                life: life,
-                size: 9 + Math.min(5, drop.amount)
+        if (drops && drops.length) {
+            drops.forEach((drop, i) => {
+                const angle = (Math.PI * 2 * i) / Math.max(1, drops.length) + Math.random() * 0.6;
+                const dist = 4 + Math.random() * 10;
+                const life = this.lootPhase ? 22000 : 18000;
+                this.pushPickup({
+                    lootKind: 'resource',
+                    id: drop.id,
+                    amount: drop.amount,
+                    x: baseX + Math.cos(angle) * dist,
+                    y: baseY + Math.sin(angle) * dist,
+                    vx: Math.cos(angle) * (0.4 + Math.random() * 0.6),
+                    vy: Math.sin(angle) * (0.4 + Math.random() * 0.6) - 0.3,
+                    age: 0,
+                    life: life,
+                    size: 9 + Math.min(5, drop.amount)
+                });
             });
-        });
+        }
+        this.spawnSalvageFromKill(info, baseX, baseY);
     }
 
     /**
@@ -38162,15 +41179,33 @@ var PickupManager = class PickupManager {
         });
         this.pickups.forEach((p) => {
             if (p.powerUp) return;
-            lost[p.id] = (lost[p.id] || 0) + (p.amount || 0);
+            const key = this.pickupRunKey(p);
+            lost[key] = (lost[key] || 0) + (p.amount || 0);
         });
         const profile = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
             ? profileManager.getActiveProfile()
             : null;
-        if (profile && profile.cargo && profile.cargo.resources) {
+        if (profile && profile.cargo) {
             Object.keys(this.collectedThisRun).forEach((id) => {
-                const have = profile.cargo.resources[id] || 0;
-                profile.cargo.resources[id] = Math.max(0, have - (this.collectedThisRun[id] || 0));
+                const n = this.collectedThisRun[id] || 0;
+                if (n <= 0) return;
+                if (id.indexOf('blueprint:') === 0) {
+                    const key = id.slice(10);
+                    if (profile.cargo.blueprints) {
+                        profile.cargo.blueprints[key] = Math.max(0, (profile.cargo.blueprints[key] || 0) - n);
+                        if (profile.cargo.blueprints[key] <= 0) delete profile.cargo.blueprints[key];
+                    }
+                } else if (id.indexOf('part:') === 0) {
+                    const key = id.slice(5);
+                    if (profile.cargo.parts) {
+                        profile.cargo.parts[key] = Math.max(0, (profile.cargo.parts[key] || 0) - n);
+                        if (profile.cargo.parts[key] <= 0) delete profile.cargo.parts[key];
+                    }
+                } else if (profile.cargo.resources) {
+                    const have = profile.cargo.resources[id] || 0;
+                    profile.cargo.resources[id] = Math.max(0, have - n);
+                    if (profile.cargo.resources[id] <= 0) delete profile.cargo.resources[id];
+                }
             });
             if (profileManager.save) profileManager.save();
         }
@@ -38273,26 +41308,42 @@ var PickupManager = class PickupManager {
             if (this.collectPowerUp) this.collectPowerUp(pickup);
             return;
         }
-        let granted = pickup.amount;
-        if (typeof profileManager !== 'undefined' && profileManager.addCargoResource) {
-            const result = profileManager.addCargoResource(pickup.id, pickup.amount, { skipSave: true });
-            granted = typeof result === 'number' ? result : (result ? pickup.amount : 0);
+        const lootKind = this.pickupLootKind(pickup);
+        const runKey = this.pickupRunKey(pickup);
+        let granted = 0;
+        if (typeof profileManager !== 'undefined') {
+            if (lootKind === 'blueprint' && profileManager.addCargoBlueprint) {
+                const result = profileManager.addCargoBlueprint(pickup.id, pickup.amount || 1, { skipSave: true });
+                granted = typeof result === 'number' ? result : (result ? 1 : 0);
+            } else if (lootKind === 'part' && profileManager.addCargoPart) {
+                const result = profileManager.addCargoPart(
+                    pickup.partKind || 'weapon',
+                    pickup.id,
+                    pickup.amount || 1,
+                    { skipSave: true }
+                );
+                granted = typeof result === 'number' ? result : (result ? 1 : 0);
+            } else if (profileManager.addCargoResource) {
+                const result = profileManager.addCargoResource(pickup.id, pickup.amount, { skipSave: true });
+                granted = typeof result === 'number' ? result : (result ? pickup.amount : 0);
+            }
         }
+        const tint = this.pickupTint(pickup);
         if (granted > 0) {
-            this.collectedThisRun[pickup.id] = (this.collectedThisRun[pickup.id] || 0) + granted;
+            this.collectedThisRun[runKey] = (this.collectedThisRun[runKey] || 0) + granted;
             this._saveDirty = true;
+            if (typeof soundManager !== 'undefined' && soundManager.playPickupCollect) {
+                soundManager.playPickupCollect(lootKind === 'resource' ? pickup.id : 'crystal');
+            }
             if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                const label = (typeof economyConfig !== 'undefined')
-                    ? economyConfig.getResourceLabel(pickup.id)
-                    : String(pickup.id).toUpperCase();
-                levelInfoManager.showLootNotice('+' + granted + ' ' + label);
+                levelInfoManager.showLootNotice('+' + granted + ' ' + this.pickupLabel(pickup));
             }
             if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
-                graphicsManager.createHitEffect(pickup.x, pickup.y, 4, this.resourceColor(pickup.id));
+                graphicsManager.createHitEffect(pickup.x, pickup.y, 4, tint);
             }
         }
         // Always confirm the pickup over the ship; 0 granted = cargo full for this resource.
-        this.addPopup(pickup.id, Math.max(0, granted || 0));
+        this.addPopup(runKey, Math.max(0, granted || 0), pickup);
     }
 
     /** Vacuum remaining pickups into cargo (victory / end of run). */
@@ -38313,7 +41364,7 @@ var PickupManager = class PickupManager {
     }
 
     /** "+N" above the player on pickup; a fresh popup of the same resource sums up instead of stacking. */
-    addPopup(id, amount) {
+    addPopup(id, amount, source) {
         if (this.lootPhase) return;
         const recent = this.popups.find((p) => p.id === id && p.age < 250);
         if (recent) {
@@ -38321,7 +41372,14 @@ var PickupManager = class PickupManager {
             recent.age = 0;
             return;
         }
-        this.popups.push({ id: id, amount: amount, age: 0, life: 1100 });
+        this.popups.push({
+            id: id,
+            amount: amount,
+            age: 0,
+            life: 1100,
+            iconKey: source ? this.pickupIconKey(source) : this.resourceIconKey(id),
+            tint: source ? this.pickupTint(source) : this.resourceColor(id)
+        });
     }
 
     updatePopups(dt) {
@@ -38355,8 +41413,10 @@ var PickupManager = class PickupManager {
             const x = Math.round(player.x + player.width / 2 - w / 2);
             const y = Math.round(player.y - 12 - i * (fontPx + 2) - rise * 28);
             ctx.globalAlpha = k < 0.6 ? 1 : Math.max(0, 1 - (k - 0.6) / 0.4);
+            const iconKey = p.iconKey || this.resourceIconKey(p.id);
+            const tint = p.tint || this.resourceColor(p.id);
             if (typeof iconRenderer !== 'undefined' && iconRenderer.drawKey) {
-                iconRenderer.drawKey(ctx, this.resourceIconKey(p.id), x, y - icon / 2, icon, this.resourceColor(p.id));
+                iconRenderer.drawKey(ctx, iconKey, x, y - icon / 2, icon, tint);
             }
             const tx = x + icon + 3;
             ctx.fillStyle = '#05060a';
@@ -38364,7 +41424,7 @@ var PickupManager = class PickupManager {
             ctx.fillText(text, tx + o, y);
             ctx.fillText(text, tx, y - o);
             ctx.fillText(text, tx, y + o);
-            ctx.fillStyle = this.resourceColor(p.id);
+            ctx.fillStyle = tint;
             ctx.fillText(text, tx, y);
         });
         ctx.restore();
@@ -38395,8 +41455,8 @@ var PickupManager = class PickupManager {
                 ctx.restore();
                 return;
             }
-            const key = this.resourceIconKey(p.id);
-            const tint = this.resourceColor(p.id);
+            const key = this.pickupIconKey(p);
+            const tint = this.pickupTint(p);
             const fade = p.age > p.life - 2000 ? Math.max(0.25, (p.life - p.age) / 2000) : 1;
             ctx.save();
             ctx.imageSmoothingEnabled = false;
@@ -38666,7 +41726,10 @@ extendClass(PickupManager, {
         if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
             graphicsManager.createHitEffect(p.x, p.y, 6, def.color);
         }
-        if (typeof soundManager !== 'undefined' && soundManager.playReflect) soundManager.playReflect();
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.playPowerUp) soundManager.playPowerUp();
+            else if (soundManager.playReflect) soundManager.playReflect();
+        }
         return true;
     },
 
@@ -38921,7 +41984,7 @@ var CollisionManager = class CollisionManager {
                     remove(i);
                     this.createDetailedHitEffect(cx, cy, 'impact');
                     if (byPlayer) objectiveManager.hitGateDome(b.damage != null ? b.damage : 10, cx, cy);
-                    if (typeof soundManager !== 'undefined') soundManager.playHit();
+                    // hitGateDome already plays coded gate SFX; skip generic hit.
                     continue;
                 }
                 const inOpening = Math.abs(cx - g.cx) <= g.open / 2;
@@ -38948,8 +42011,11 @@ var CollisionManager = class CollisionManager {
             || (gameState && gameState.width)
             || 240;
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
+        const gateEnter = typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
         const player = playerManager.getPosition();
-        if (player) {
+        // During sluice enter the ship is pulled into the tube — wall scrapes must not kill it.
+        if (player && !gateEnter) {
             const walls = obstacleManager.terrainWallsOver(player.y + 2, player.y + player.height - 2, W);
             if (walls) {
                 let hitX = null;
@@ -38978,7 +42044,10 @@ var CollisionManager = class CollisionManager {
                     if (thick > 0) {
                         const dmg = thick <= 1 ? 3 : 8;
                         this.createDetailedHitEffect(hitX, hy, 'impact');
-                        if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                        if (typeof soundManager !== 'undefined') {
+                            if (soundManager.playWallScrape) soundManager.playWallScrape();
+                            soundManager.playHurt();
+                        }
                         if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
                         // Scraping the wall also chips it so you can grind an escape.
                         if (obstacleManager.damageTerrain) {
@@ -39050,6 +42119,10 @@ var CollisionManager = class CollisionManager {
     checkBomberPlayerCollisions(gameState) {
         if (!enemyManager.getSideEnemies || !playerManager.getPosition) return;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) return;
+        if (typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            return;
+        }
         const player = playerManager.getPosition();
         if (!player) return;
         const sides = enemyManager.getSideEnemies();
@@ -39094,20 +42167,23 @@ var CollisionManager = class CollisionManager {
                 // Still sliding in through the hangar gap: not a fair target yet.
                 if (sides[j].entering) continue;
                 if (this.isColliding(bullets[i], sides[j])) {
+                    const bullet = bullets[i];
+                    const hitX = bullet.x + (bullet.width || 0) / 2;
+                    const hitY = bullet.y + (bullet.height || 0) / 2;
                     const sx = sides[j].x + sides[j].width / 2;
                     const sy = sides[j].y + sides[j].height / 2;
+                    let damage = 10;
+                    if (bullet && bullet.damage !== undefined) damage = bullet.damage;
                     bulletManager.removeBullet(i);
                     const killedByHit = enemyManager.damageSideEnemy
-                        ? enemyManager.damageSideEnemy(sides[j], 10)
-                        : ((sides[j].health -= 10), sides[j].health <= 0);
+                        ? enemyManager.damageSideEnemy(sides[j], damage)
+                        : ((sides[j].health -= damage), sides[j].health <= 0);
                     if (typeof soundManager !== 'undefined') {
                         if (killedByHit) soundManager.playKill();
                         else soundManager.playHit();
                     }
-                    if (typeof graphicsManager !== 'undefined') {
-                        graphicsManager.createHitEffect(sx, sy, 4);
-                    }
                     if (killedByHit) this.destroySideEnemy(sides, j);
+                    else this.spawnEnemyHitFx(hitX, hitY, sides[j]);
                     return;
                 }
             }
@@ -39200,14 +42276,16 @@ var CollisionManager = class CollisionManager {
 
         for (let i = bullets.length - 1; i >= 0; i--) {
             if (this.isColliding(bullets[i], enemy)) {
-                // Store enemy position before damage
+                const bullet = bullets[i];
+                const hitX = bullet.x + (bullet.width || 0) / 2;
+                const hitY = bullet.y + (bullet.height || 0) / 2;
                 const enemyX = enemy.x + enemy.width / 2;
                 const enemyY = enemy.y + enemy.height / 2;
 
                 // Damage enemy (use bullet damage or instant kill cheat)
                 let damage = 10; // Default damage
-                if (bullets[i] && bullets[i].damage !== undefined) {
-                    damage = bullets[i].damage;
+                if (bullet && bullet.damage !== undefined) {
+                    damage = bullet.damage;
                 }
                 if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.instantKill) {
                     damage = 999; // Instant kill
@@ -39230,12 +42308,10 @@ var CollisionManager = class CollisionManager {
                     const cfg = enemyConfigManager.getConfig(typeId);
                     if (cfg && cfg.explosionId) enemyExplosionId = cfg.explosionId;
                 }
-                this.createExplosion(enemyX, enemyY, enemyDefeated ? enemyExplosionId : 'small_pop',
-                    enemyDefeated ? null : { scale: 0.45 });
-
-                // Create hit particles
-                if (typeof graphicsManager !== 'undefined' && !enemyDefeated) {
-                    graphicsManager.createHitEffect(enemyX, enemyY, 5);
+                if (enemyDefeated) {
+                    this.createExplosion(enemyX, enemyY, enemyExplosionId);
+                } else {
+                    this.spawnEnemyHitFx(hitX, hitY, enemy);
                 }
 
                 // Enemy will start exploding, victory will be shown after explosion
@@ -39245,7 +42321,37 @@ var CollisionManager = class CollisionManager {
         }
     }
 
+    /** Impact sparks + ring at the shot contact on an enemy hull. */
+    spawnEnemyHitFx(x, y, enemy) {
+        const shieldHit = !!(enemy && enemy.hitSpark === 'shield');
+        const span = enemy ? Math.max(enemy.width || 12, enemy.height || 12) : 14;
+        this.createExplosion(x, y, 'small_pop', {
+            scale: Math.min(1.15, 0.75 + span / 60),
+            width: Math.max(12, span * 0.45),
+            height: Math.max(12, span * 0.45),
+            silent: true
+        });
+        if (typeof graphicsManager === 'undefined') return;
+        const hot = shieldHit ? '#9fdcff' : 'var(--color-explosion)';
+        const core = shieldHit ? '#e8f8ff' : '#ffffff';
+        graphicsManager.createHitEffect(x, y, 16, hot);
+        graphicsManager.createHitEffect(x, y, 10, core);
+        if (graphicsManager.particleSystem && graphicsManager.particleSystem.createHitParticles) {
+            graphicsManager.particleSystem.createHitParticles(x, y, 12, {
+                speed: 2.4,
+                life: 28,
+                size: 2.2,
+                colors: shieldHit ? ['#9fdcff', '#ffffff', '#6ec8e8'] : ['#ffe566', '#ff8844', '#ffffff'],
+                drag: 0.84
+            });
+        }
+    }
+
     checkEnemyBulletPlayerCollisions(gameState) {
+        if (typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            return;
+        }
         const enemyBullets = bulletManager.getEnemyBullets();
         const player = playerManager.getPosition();
 
@@ -39460,6 +42566,10 @@ extendClass(CollisionManager, {
     },
 
     checkObstaclePlayerCollisions(gameState) {
+        if (typeof objectiveManager !== 'undefined'
+            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            return;
+        }
         const obstacles = obstacleManager.getObstacles();
         const player = playerManager.getPosition();
 
@@ -40270,8 +43380,9 @@ var ParticleSystem = class ParticleSystem {
     }
 
     update() {
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const particle = this.particles[i];
+        const list = this.particles;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const particle = list[i];
 
             particle.x += particle.vx;
             particle.y += particle.vy;
@@ -40286,7 +43397,9 @@ var ParticleSystem = class ParticleSystem {
             particle.life--;
 
             if (particle.life <= 0) {
-                this.particles.splice(i, 1);
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                list.pop();
             }
         }
     }
@@ -40451,6 +43564,16 @@ var ExplosionSystem = class ExplosionSystem {
             else if (soundManager.playExplosion) soundManager.playExplosion(0.85);
         }
 
+        // Small obstacles get steered / flung by the blast wave.
+        if (typeof obstacleManager !== 'undefined' && obstacleManager.blastSteerObstacles) {
+            const bw = opts.width != null ? Number(opts.width) : 14;
+            const bh = opts.height != null ? Number(opts.height) : 14;
+            const size = Math.max(bw, bh, 10);
+            const radius = Math.max(26, size * 1.85 * Math.max(0.55, scale));
+            const force = Math.max(0.7, 1.15 * Math.max(0.55, scale) * (size >= 20 ? 1.25 : 1));
+            obstacleManager.blastSteerObstacles(x, y, radius, force, opts.sourceObstacle || null);
+        }
+
         // screenShake reserved — no shake system yet
         return preset;
     }
@@ -40598,30 +43721,38 @@ var ExplosionSystem = class ExplosionSystem {
 
     update(deltaTime) {
         const dt = deltaTime || 16;
-        for (let i = this.active.length - 1; i >= 0; i--) {
-            this.active[i].timer += dt;
-            if (this.active[i].timer >= this.active[i].duration) {
-                this.active.splice(i, 1);
+        const rings = this.active;
+        for (let i = rings.length - 1; i >= 0; i--) {
+            rings[i].timer += dt;
+            if (rings[i].timer >= rings[i].duration) {
+                const last = rings.length - 1;
+                if (i !== last) rings[i] = rings[last];
+                rings.pop();
             }
         }
 
         const f = Math.min(3, dt / 16.67);
+        // One drag factor per frame (same as Math.pow per particle; identical motion).
+        const dragV = f === 1 ? 0.95 : Math.pow(0.95, f);
+        const dragS = f === 1 ? 0.98 : Math.pow(0.98, f);
         const list = this.voxels;
         for (let i = list.length - 1; i >= 0; i--) {
             const p = list[i];
             p.life += dt;
             if (p.life < (p.delay || 0)) continue;
             if (p.life >= p.ttl) {
-                list.splice(i, 1);
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                list.pop();
                 continue;
             }
             p.vy += (p.g || 0) * f;
             p.x += p.vx * f;
             p.y += p.vy * f;
-            p.vx *= Math.pow(0.95, f);
-            p.vy *= Math.pow(0.95, f);
+            p.vx *= dragV;
+            p.vy *= dragV;
             p.rot += (p.spin || 0) * f;
-            p.spin *= Math.pow(0.98, f);
+            p.spin *= dragS;
         }
     }
 
@@ -40690,6 +43821,23 @@ var ExplosionSystem = class ExplosionSystem {
         return fallback;
     }
 
+    /** Relative ring pixel offsets for a given radius/step — same points every burst. */
+    ringOffsets(ringRadius, angleStep, pixelSize) {
+        if (!this._ringOff) this._ringOff = Object.create(null);
+        const key = ringRadius + ':' + angleStep + ':' + pixelSize;
+        let pts = this._ringOff[key];
+        if (pts) return pts;
+        pts = [];
+        for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+            pts.push(
+                Math.cos(angle) * ringRadius * pixelSize,
+                Math.sin(angle) * ringRadius * pixelSize
+            );
+        }
+        this._ringOff[key] = pts;
+        return pts;
+    }
+
     drawBurst(ctx, burst) {
         const progress = Math.min(1, burst.timer / Math.max(1, burst.duration));
         // Capped so big ships don't fill half the playfield; the ring grows
@@ -40712,33 +43860,43 @@ var ExplosionSystem = class ExplosionSystem {
         const explosionRadius = Math.floor(explosionSize / pixelSize);
         const angleStep = fine ? 0.12 : 0.2;
 
-        const fallbacks = [
-            this.themeColor(['--color-highlight', '--color-text'], '#ffffff'),
-            this.themeColor(['--color-explosion', '--color-particle'], '#ff8844'),
-            this.themeColor(['--color-secondary', '--color-accent'], '#ffaa66')
-        ];
+        // Theme colours once per burst frame, not per ring pixel.
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        if (!this._burstColorAt || (now - this._burstColorAt) > 32) {
+            this._burstFallbacks = [
+                this.themeColor(['--color-highlight', '--color-text'], '#ffffff'),
+                this.themeColor(['--color-explosion', '--color-particle'], '#ff8844'),
+                this.themeColor(['--color-secondary', '--color-accent'], '#ffaa66')
+            ];
+            this._burstColorAt = now;
+        }
+        const fallbacks = this._burstFallbacks;
         const colors = (burst.colors || []).map((c, i) => this.resolveColor(c, fallbacks[i % fallbacks.length]));
         while (colors.length < 3) colors.push(fallbacks[colors.length]);
 
         ctx.save();
         const ringCount = Math.max(1, burst.rings || 1);
+        const doSnap = !!(cell || fine);
         for (let ring = 0; ring < ringCount; ring++) {
             const ringRadius = Math.floor(explosionRadius * (0.3 + ring * 0.3));
             const alpha = fade * (1 - ring * 0.25);
             if (alpha <= 0.02) continue;
-            ctx.globalAlpha = Math.min(1, alpha);
-            ctx.fillStyle = colors[ring % colors.length];
-            for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
-                let pixelX = centerX + Math.cos(angle) * ringRadius * pixelSize;
-                let pixelY = centerY + Math.sin(angle) * ringRadius * pixelSize;
-                if (cell || fine) {
+            const a = Math.min(1, alpha);
+            const col = colors[ring % colors.length];
+            ctx.globalAlpha = a;
+            ctx.fillStyle = col;
+            const pts = this.ringOffsets(ringRadius, angleStep, pixelSize);
+            for (let i = 0; i < pts.length; i += 2) {
+                let pixelX = centerX + pts[i];
+                let pixelY = centerY + pts[i + 1];
+                if (doSnap) {
                     pixelX = Math.round(pixelX / snap) * snap;
                     pixelY = Math.round(pixelY / snap) * snap;
                 } else {
                     pixelX = Math.floor(pixelX);
                     pixelY = Math.floor(pixelY);
                 }
-                if (cv && cv.fill) cv.fill(ctx, pixelX, pixelY, pixelSize, pixelSize, colors[ring % colors.length], Math.min(1, alpha));
+                if (cv && cv.fill) cv.fill(ctx, pixelX, pixelY, pixelSize, pixelSize, col, a);
                 else ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
             }
         }
@@ -41345,40 +44503,42 @@ Object.assign(IconSprites, {
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ],
+    /* Hard 0/15 only — soft grey ramps read as mush under glass transform:scale. */
     statArmor: [
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,6,8,10,10,10,10,8,6,0,0,0,0],
-        [0,0,0,8,12,15,15,15,15,15,15,12,8,0,0,0],
-        [0,0,6,12,15,8,8,8,8,8,8,15,12,6,0,0],
-        [0,0,8,15,8,0,0,0,0,0,0,8,15,8,0,0],
-        [0,6,12,15,8,0,8,15,15,8,0,8,15,12,6,0],
-        [0,8,15,12,8,0,8,15,15,8,0,8,12,15,8,0],
-        [0,8,15,12,8,0,8,15,15,8,0,8,12,15,8,0],
-        [0,8,15,12,8,0,8,15,15,8,0,8,12,15,8,0],
-        [0,6,12,15,8,0,8,15,15,8,0,8,15,12,6,0],
-        [0,0,8,15,8,0,0,0,0,0,0,8,15,8,0,0],
-        [0,0,6,12,15,8,8,8,8,8,8,15,12,6,0,0],
-        [0,0,0,8,12,15,15,15,15,15,15,12,8,0,0,0],
-        [0,0,0,0,6,8,10,10,10,10,8,6,0,0,0,0],
+        [0,0,0,0,15,15,15,15,15,15,15,15,0,0,0,0],
+        [0,0,0,15,15,0,0,0,0,0,0,15,15,0,0,0],
+        [0,0,15,15,0,0,0,0,0,0,0,0,15,15,0,0],
+        [0,0,15,15,0,0,0,15,15,0,0,0,15,15,0,0],
+        [0,15,15,0,0,0,0,15,15,0,0,0,0,15,15,0],
+        [0,15,15,0,0,0,0,15,15,0,0,0,0,15,15,0],
+        [0,15,15,0,0,0,0,15,15,0,0,0,0,15,15,0],
+        [0,15,15,0,0,0,0,15,15,0,0,0,0,15,15,0],
+        [0,15,15,0,0,0,0,15,15,0,0,0,0,15,15,0],
+        [0,0,15,15,0,0,0,15,15,0,0,0,15,15,0,0],
+        [0,0,15,15,0,0,0,0,0,0,0,0,15,15,0,0],
+        [0,0,0,15,15,0,0,0,0,0,0,15,15,0,0,0],
+        [0,0,0,0,15,15,15,15,15,15,15,15,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ],
+    /* Bolt bbox centred in the 16×16 cell (was left-biased → HUD looked off-bar). */
     statEnergy: [
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,8,15,12,0,0,0,0,0,0],
-        [0,0,0,0,0,0,8,15,15,8,0,0,0,0,0,0],
-        [0,0,0,0,0,8,15,15,8,0,0,0,0,0,0,0],
-        [0,0,0,0,8,15,15,8,0,0,0,0,0,0,0,0],
-        [0,0,0,8,15,15,8,0,0,0,0,0,0,0,0,0],
-        [0,0,8,15,15,15,15,15,15,12,8,0,0,0,0],
-        [0,0,0,8,12,15,15,15,15,15,15,8,0,0,0,0],
-        [0,0,0,0,0,0,0,8,15,15,8,0,0,0,0,0],
-        [0,0,0,0,0,0,0,8,15,15,8,0,0,0,0,0],
-        [0,0,0,0,0,0,8,15,15,8,0,0,0,0,0,0],
-        [0,0,0,0,0,8,15,15,8,0,0,0,0,0,0,0],
-        [0,0,0,0,8,15,15,8,0,0,0,0,0,0,0,0],
-        [0,0,0,8,15,12,8,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,8,8,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,15,15,15,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,15,0,0,0,0,0,0],
+        [0,0,0,0,0,0,15,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,15,15,15,0,0,0,0,0,0,0,0],
+        [0,0,0,0,15,15,15,0,0,0,0,0,0,0,0,0],
+        [0,0,0,15,15,15,15,15,15,15,0,0,0,0,0],
+        [0,0,0,0,15,15,15,15,15,15,15,0,0,0,0],
+        [0,0,0,0,0,0,0,0,15,15,15,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,15,0,0,0,0,0,0],
+        [0,0,0,0,0,0,15,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,15,15,15,0,0,0,0,0,0,0,0],
+        [0,0,0,0,15,15,15,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,15,15,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ],
     statShield: [
@@ -41437,39 +44597,39 @@ Object.assign(IconSprites, {
     ],
     statWeapon: [
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,8,8,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,8,12,12,8,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,15,15,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,6,12,12,6,0,0,0,0,0,0],
-        [0,0,0,0,0,0,8,10,10,8,0,0,0,0,0,0],
-        [0,0,0,0,0,6,10,12,12,10,6,0,0,0,0,0],
-        [0,0,0,0,8,12,15,8,8,15,12,8,0,0,0,0],
-        [0,0,0,0,0,8,10,0,0,10,8,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,15,15,15,15,0,0,0,0,0,0],
+        [0,0,0,0,0,15,15,0,0,15,15,0,0,0,0,0],
+        [0,0,0,0,0,15,0,0,0,0,15,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ],
     statAbilities: [
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,8,8,0,0,0,0,0,0,0],
-        [0,0,0,0,0,0,8,15,15,8,0,0,0,0,0,0],
-        [0,0,0,0,0,8,15,12,12,15,8,0,0,0,0,0],
-        [0,0,0,0,8,15,12,0,0,12,15,8,0,0,0,0],
-        [0,0,0,8,15,12,0,0,0,0,12,15,8,0,0,0],
-        [0,0,8,15,12,0,0,8,8,0,0,12,15,8,0,0],
-        [0,8,15,12,0,0,8,15,15,8,0,0,12,15,8,0],
-        [8,15,12,0,0,8,15,15,15,15,8,0,0,12,15,8],
-        [0,8,15,12,0,0,8,15,15,8,0,0,12,15,8,0],
-        [0,0,8,15,12,0,0,8,8,0,0,12,15,8,0,0],
-        [0,0,0,8,15,12,0,0,0,0,12,15,8,0,0,0],
-        [0,0,0,0,8,15,12,0,0,12,15,8,0,0,0,0],
-        [0,0,0,0,0,8,15,12,12,15,8,0,0,0,0,0],
-        [0,0,0,0,0,0,8,15,15,8,0,0,0,0,0,0],
-        [0,0,0,0,0,0,0,8,8,0,0,0,0,0,0,0]
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,15,15,15,15,0,0,0,0,0,0],
+        [0,0,0,0,0,15,15,0,0,15,15,0,0,0,0,0],
+        [0,0,0,0,15,15,0,0,0,0,15,15,0,0,0,0],
+        [0,0,0,15,15,0,0,15,15,0,0,15,15,0,0,0],
+        [0,0,15,15,0,0,15,15,15,15,0,0,15,15,0,0],
+        [0,15,15,0,0,15,15,15,15,15,15,0,0,15,15,0],
+        [0,15,15,0,0,15,15,15,15,15,15,0,0,15,15,0],
+        [0,0,15,15,0,0,15,15,15,15,0,0,15,15,0,0],
+        [0,0,0,15,15,0,0,15,15,0,0,15,15,0,0,0],
+        [0,0,0,0,15,15,0,0,0,0,15,15,0,0,0,0],
+        [0,0,0,0,0,15,15,0,0,15,15,0,0,0,0,0],
+        [0,0,0,0,0,0,15,15,15,15,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,15,15,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ],
 });
 
@@ -44676,22 +47836,20 @@ extendClass(IconRenderer, {
         if (!Number.isFinite(dpr) || dpr < 1) dpr = 1;
         const scale = Math.max(2, Math.ceil(dpr));
         const canvasSize = logical * scale;
-        // Faction emblems' CSS forces a responsive, often-fractional display size
-        // (--pfc-crest-size, a clamp() against viewport height) that overrides whatever cssSize
-        // this call asked for — the SVG path below has no equivalent to a bitmap's nearest-neighbor
-        // snap, so scaling its many individually-positioned <rect> cells to that fractional size
-        // leaves visible sub-pixel seams across the hand-drawn art, reported as "matschig". Routing
-        // these through the canvas/PNG rasterization path instead (same technique already used for
-        // PNG overrides below) and letting CSS image-rendering:pixelated scale THAT bitmap keeps it
-        // crisp; no other icon is sized this way, so this is scoped to just the emblem keys.
+        // Faction emblems + any upscale past the authored grid: SVG-as-<img> often
+        // bilinear-filters when stretched (reported as "matschig"), even with
+        // image-rendering:pixelated. Bake a nearest-neighbor PNG via canvas instead
+        // (drawSprite paints whole cells; imageSmoothingEnabled stays false).
         const isFactionEmblem = /^faction[A-Z]/.test(key.replace(/@[24]x$/, ''));
-        if (!png && !isFactionEmblem) {
-            // Procedural sprites: emit SVG so the browser rasterizes at the final size (no blur).
+        const spriteForGate = (!png && !isFactionEmblem) ? this.getSprite(key) : null;
+        const spriteDim = (spriteForGate && spriteForGate[0]) ? spriteForGate[0].length : 0;
+        const needsNnRaster = isFactionEmblem || (spriteDim > 0 && logical > spriteDim);
+        if (!png && !needsNnRaster) {
+            // 1:1 procedural sprites: SVG is fine (browser paints crispEdges cells).
             const svgKey = key + '|svg|' + (tint || '') + (raw ? '|raw' : ('|ic' + Math.round(ic) + '|ib' + Math.round(ib) + '|is' + Math.round(is)));
             if (this._cache[svgKey]) return { url: this._cache[svgKey], cssSize: logical };
-            const sprite = this.getSprite(key);
-            if (!sprite) return { url: '', cssSize: logical };
-            const svgUrl = this.spriteToSvgUrl(sprite, tint, raw ? false : ic, raw ? false : ib, raw ? false : is);
+            if (!spriteForGate) return { url: '', cssSize: logical };
+            const svgUrl = this.spriteToSvgUrl(spriteForGate, tint, raw ? false : ic, raw ? false : ib, raw ? false : is);
             this._cache[svgKey] = svgUrl;
             return { url: svgUrl, cssSize: logical };
         }
@@ -45023,11 +48181,16 @@ var UiTooltipManager = class UiTooltipManager {
             this.reveal(anchor, text);
             return;
         }
+        const delay = anchor.hasAttribute('data-ui-tip-instant')
+            ? 0
+            : (anchor.hasAttribute('data-ui-tip-compact')
+                ? UiTooltipManager.COMPACT_DELAY_MS
+                : UiTooltipManager.SHOW_DELAY_MS);
         this._delayTimer = setTimeout(() => {
             this._delayTimer = 0;
             if (this._active !== anchor || !anchor.isConnected) return;
             this.reveal(anchor, text);
-        }, anchor.hasAttribute('data-ui-tip-instant') ? 0 : UiTooltipManager.SHOW_DELAY_MS);
+        }, delay);
     }
 
     reveal(anchor, text) {
@@ -45042,15 +48205,24 @@ var UiTooltipManager = class UiTooltipManager {
             const h = document.createElement('div');
             h.className = 'ui-tooltip-head';
             // Inventory cells: physical item left, name to its right (full footprint, not cropped).
+            const compact = !!(anchor && anchor.hasAttribute && anchor.hasAttribute('data-ui-tip-compact'));
             const itemBody = anchor.querySelector && anchor.querySelector('.hs-item-body');
             const itemBg = itemBody && (itemBody.style.backgroundImage || (getComputedStyle(itemBody).backgroundImage || ''));
+            // Captured here so the SIZE_FIT schematic below (same anchor, same hover) can draw
+            // the actual part icon instead of a plain filled square.
+            this._lastTipIconCss = (itemBg && itemBg !== 'none') ? itemBg : null;
+            if (!this._lastTipIconCss) {
+                const icoEl = anchor.querySelector && anchor.querySelector('.hs-pick-ico img, .hs-slotview-part img');
+                if (icoEl && icoEl.src) this._lastTipIconCss = 'url("' + icoEl.src + '")';
+            }
             if (itemBg && itemBg !== 'none') {
                 const srcW = Math.max(1, itemBody.offsetWidth || itemBody.clientWidth || 48);
                 const srcH = Math.max(1, itemBody.offsetHeight || itemBody.clientHeight || 48);
-                const max = 88;
-                const scale = Math.min(max / srcW, max / srcH);
-                const pw = Math.max(48, Math.round(srcW * scale));
-                const ph = Math.max(48, Math.round(srcH * scale));
+                const max = compact ? 32 : 88;
+                const floor = compact ? 24 : 48;
+                const scale = Math.min(max / srcW, max / srcH, 1);
+                const pw = Math.max(floor, Math.round(srcW * scale));
+                const ph = Math.max(floor, Math.round(srcH * scale));
                 const preview = document.createElement('span');
                 preview.className = 'ui-tooltip-item';
                 preview.setAttribute('aria-hidden', 'true');
@@ -45090,6 +48262,36 @@ var UiTooltipManager = class UiTooltipManager {
                 tip.appendChild(wrap);
             } else
             String(text).split('\n').forEach((line) => {
+                // SIZE_FIT:<slot letter>:<part letter> — a little schematic of the slot's
+                // footprint with the part's footprint nested inside it (both S/M/L), instead of
+                // two "SLOT SIZE: S" / "PART SIZE: S" text rows: this is the actual visual used
+                // for slot/part size everywhere else (hs-hangar-slot pins, hs-pick-cell spans),
+                // so the tooltip shows the same shape instead of restating it as letters.
+                const fit = line.match(/^SIZE_FIT:([SML]):([SML])$/);
+                if (fit) {
+                    const [, slotL, partL] = fit;
+                    const row = document.createElement('div');
+                    row.className = 'ui-tooltip-row ui-tooltip-sizefit';
+                    const schema = document.createElement('span');
+                    schema.className = 'ui-tooltip-sizefit-schema is-slot-' + slotL + ' is-part-' + partL;
+                    schema.setAttribute('aria-hidden', 'true');
+                    const slotBox = document.createElement('span');
+                    slotBox.className = 'ui-tooltip-sizefit-slot';
+                    const partBox = document.createElement('span');
+                    partBox.className = 'ui-tooltip-sizefit-part';
+                    if (this._lastTipIconCss) {
+                        partBox.classList.add('has-icon');
+                        partBox.style.backgroundImage = this._lastTipIconCss;
+                    }
+                    slotBox.appendChild(partBox);
+                    schema.appendChild(slotBox);
+                    const label = document.createElement('span');
+                    label.className = 'ui-tooltip-sizefit-label';
+                    label.textContent = slotL === partL ? ('SLOT & PART ' + slotL) : ('SLOT ' + slotL + ' · PART ' + partL);
+                    row.append(schema, label);
+                    tip.appendChild(row);
+                    return;
+                }
                 const m = line.match(/^([^:]{1,24}):\s*(.+)$/);
                 const row = document.createElement('div');
                 row.className = m ? 'ui-tooltip-row' : 'ui-tooltip-note';
@@ -45157,20 +48359,31 @@ var UiTooltipManager = class UiTooltipManager {
                             return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a']];
                         }
                         // Ability/defense/energy "TYPE · TIER n" (tier optional) -> type + tier icons.
-                        const tm = line.match(/^([A-Z][A-Z /]*?)(?: · TIER (\d+))?$/);
+                        // Single keyword only — never match meta lines (EQUIPPED, MOVE TO …).
+                        const tm = line.match(/^(PASSIVE|ACTIVE|TOGGLE|CHANNEL|INSTANT|AURA|BUFF|SHIELD|DRIVE|SYSTEM)(?: · TIER (\d+))?$/);
                         if (tm) {
                             const out = [['statAbilities', tm[1], '#c08cff']];
                             if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a']);
                             return out;
                         }
+                        // Ability stat-mod line(s), e.g. "+0.3 SPEED" or "+1 DAMAGE · +2 ARMOR"
+                        // (render-shop-tab.js hangarModuleTip, concrete numbers computed from
+                        // this ship's own base stats) -> same icon as the matching ship stat
+                        // elsewhere instead of plain text.
+                        const statIcon = { SPEED: 'statSpeed', DAMAGE: 'statDamage', ARMOR: 'statArmor', 'FIRE RATE': 'shotRapid' };
+                        const statCol = { SPEED: '#4ad8ff', DAMAGE: '#ff6a4a', ARMOR: '#5ce1ff', 'FIRE RATE': '#ffa04a' };
+                        const statParts = line.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
+                        if (statParts.length && statParts.every(Boolean)) {
+                            return statParts.map((pm) => [statIcon[pm[2]], pm[1] + ' ' + pm[2], statCol[pm[2]]]);
+                        }
                         return null;
                     })();
                     if (chips && ir) {
                         row.className = 'ui-tooltip-stats';
-                        row.style.cssText = 'display:flex;gap:14px;align-items:center';
+                        row.style.cssText = 'display:flex;gap:' + (compact ? '8px' : '14px') + ';align-items:center;flex-wrap:nowrap';
                         chips.forEach(([key, val, col]) => {
                             const s = document.createElement('span');
-                            s.style.cssText = 'display:inline-flex;gap:6px;align-items:center';
+                            s.style.cssText = 'display:inline-flex;gap:4px;align-items:center;white-space:nowrap';
                             s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
                             row.appendChild(s);
                         });
@@ -45225,13 +48438,12 @@ var UiTooltipManager = class UiTooltipManager {
             tip.style.top = Math.round(toCss(st, 'y')) + 'px';
             return;
         }
-        // Inventory items: open beside the inventory panel with a wide gap, never over the cells or the cursor.
-        // (Start setup inventory sits in a right sidebar: its tips open left, toward the middle.)
+        // Bay inventory: tuck beside the hovered cell (near the cursor), not the whole panel edge.
         const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
         if (invPanel) {
-            const b = invPanel.getBoundingClientRect();
-            let sl = b.right + 20;
-            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, b.left - tw - 20);
+            const gap = 8;
+            let sl = r.right + gap;
+            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, r.left - tw - gap);
             const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
             tip.classList.add('side-right');
             tip.style.left = Math.round(toCss(sl, 'x')) + 'px';
@@ -45288,6 +48500,7 @@ var UiTooltipManager = class UiTooltipManager {
 }
 
 UiTooltipManager.SHOW_DELAY_MS = 450;
+UiTooltipManager.COMPACT_DELAY_MS = 650;
 
 var uiTooltip = new UiTooltipManager();
 window.uiTooltip = uiTooltip;
@@ -48347,6 +51560,17 @@ var AssetGenClient = class AssetGenClient {
         this.baseUrl = "http://127.0.0.1:8787";
     }
 
+    /** Dev bridge only — never write against hosted origins (itch.io CDN is read-only). */
+    _bridgeAllowed() {
+        try {
+            const u = new URL(this.baseUrl, location.href);
+            const h = u.hostname || "";
+            return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
+        } catch (e) {
+            return false;
+        }
+    }
+
     setBaseUrl(url) {
         if (!url) return;
         const next = String(url).replace(/\/$/, "");
@@ -48390,6 +51614,7 @@ var AssetGenClient = class AssetGenClient {
     }
 
     async startComfy() {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/start", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -48403,6 +51628,7 @@ var AssetGenClient = class AssetGenClient {
     }
 
     async stopComfy() {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/stop", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -48416,6 +51642,7 @@ var AssetGenClient = class AssetGenClient {
     }
 
     async setComfyConfig(cfg) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/config", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -48455,6 +51682,7 @@ var AssetGenClient = class AssetGenClient {
         if (opts.bgColor) body.bgColor = String(opts.bgColor);
         const seedVal = opts.seed != null ? opts.seed : seed;
         if (seedVal != null && seedVal !== "") body.seed = Number(seedVal);
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/generate", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -48468,6 +51696,7 @@ var AssetGenClient = class AssetGenClient {
     }
 
     async accept(stagingId, targetPath) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/accept", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -48486,6 +51715,7 @@ var AssetGenClient = class AssetGenClient {
      * @param {object} data
      */
     async writeJson(targetPath, data) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/write-json", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -48504,6 +51734,7 @@ var AssetGenClient = class AssetGenClient {
      * @param {string} dataUrl data:image/png;base64,...
      */
     async writePng(targetPath, dataUrl) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/write-png", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -49097,12 +52328,13 @@ var LightingSystem = class LightingSystem {
 
     // Lighting system for bullets
     renderLighting(ctx, bullets, obstacles, player, enemy) {
-        // Create lighting effects for each bullet
-        bullets.forEach(bullet => {
-            if (bullet.lightRadius && bullet.lightIntensity) {
+        if (!bullets || !bullets.length) return;
+        for (let i = 0; i < bullets.length; i++) {
+            const bullet = bullets[i];
+            if (bullet && bullet.lightRadius && bullet.lightIntensity) {
                 this.renderBulletLight(ctx, bullet, obstacles, player, enemy);
             }
-        });
+        }
     }
 
     renderBulletLight(ctx, bullet, obstacles, player, enemy) {
@@ -49111,6 +52343,7 @@ var LightingSystem = class LightingSystem {
         
         // Soft point light — keep radius small so shots don't look like slabs
         const radius = Math.min(24, bullet.lightRadius || 14);
+        const radius2 = radius * radius;
         const gradient = ctx.createRadialGradient(
             bulletCenterX, bulletCenterY, 0,
             bulletCenterX, bulletCenterY, radius
@@ -49133,35 +52366,35 @@ var LightingSystem = class LightingSystem {
             radius * 2
         );
         ctx.restore();
+
+        const near = (ox, oy) => {
+            const dx = bulletCenterX - ox;
+            const dy = bulletCenterY - oy;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= radius2) return -1;
+            return Math.sqrt(d2);
+        };
         
-        // Illuminate nearby obstacles
-        obstacles.forEach(obstacle => {
-            const distance = this.getDistance(bulletCenterX, bulletCenterY, 
-                obstacle.x + obstacle.width / 2, obstacle.y + obstacle.height / 2);
-            
-            if (distance < radius) {
-                this.illuminateObject(ctx, obstacle, bullet, distance, radius);
-            }
-        });
-        
-        // Illuminate player if nearby
-        if (player) {
-            const distance = this.getDistance(bulletCenterX, bulletCenterY,
-                player.x + player.width / 2, player.y + player.height / 2);
-            
-            if (distance < radius) {
-                this.illuminateObject(ctx, player, bullet, distance, radius);
+        if (obstacles && obstacles.length) {
+            for (let i = 0; i < obstacles.length; i++) {
+                const obstacle = obstacles[i];
+                if (!obstacle) continue;
+                const distance = near(
+                    obstacle.x + obstacle.width / 2,
+                    obstacle.y + obstacle.height / 2
+                );
+                if (distance >= 0) this.illuminateObject(ctx, obstacle, bullet, distance, radius);
             }
         }
         
-        // Illuminate enemy if nearby
+        if (player) {
+            const distance = near(player.x + player.width / 2, player.y + player.height / 2);
+            if (distance >= 0) this.illuminateObject(ctx, player, bullet, distance, radius);
+        }
+        
         if (enemy) {
-            const distance = this.getDistance(bulletCenterX, bulletCenterY,
-                enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
-            
-            if (distance < radius) {
-                this.illuminateObject(ctx, enemy, bullet, distance, radius);
-            }
+            const distance = near(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
+            if (distance >= 0) this.illuminateObject(ctx, enemy, bullet, distance, radius);
         }
     }
 
@@ -49458,6 +52691,27 @@ var GraphicsManager = class GraphicsManager {
             this.shipAssetLoader.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
         } else if (this.shipModels) {
             this.shipModels.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
+        }
+        // Brief impact flash so hits read even when particles are sparse.
+        const flash = enemy.hitFlashMs || 0;
+        if (flash > 0) {
+            const a = Math.min(0.8, flash / 110);
+            const shieldHit = enemy.hitSpark === 'shield';
+            ctx.save();
+            ctx.globalAlpha = a * (shieldHit ? 0.45 : 0.55);
+            ctx.fillStyle = shieldHit ? '#9fdcff' : '#ffffff';
+            ctx.fillRect(Math.floor(enemy.x), Math.floor(enemy.y), Math.ceil(enemy.width), Math.ceil(enemy.height));
+            ctx.globalAlpha = a;
+            ctx.fillStyle = shieldHit ? '#c8f0ff' : '#ffe566';
+            const ix = Math.floor(enemy.x) + 1;
+            const iy = Math.floor(enemy.y) + 1;
+            const iw = Math.max(1, Math.ceil(enemy.width) - 2);
+            const ih = Math.max(1, Math.ceil(enemy.height) - 2);
+            ctx.fillRect(ix, iy, iw, 2);
+            ctx.fillRect(ix, iy + ih - 2, iw, 2);
+            ctx.fillRect(ix, iy, 2, ih);
+            ctx.fillRect(ix + iw - 2, iy, 2, ih);
+            ctx.restore();
         }
         this.drawEnemyGun(ctx, enemy);
         if (enemy.renegade && this.drawRenegadeBeacon) this.drawRenegadeBeacon(ctx, enemy);
@@ -51808,7 +55062,9 @@ var UIAppearanceManager = class UIAppearanceManager {
         // Shipped default sizes in px (Settings → Enemies); a player's own saved values override them in load().
         this.sizePx = { player: 17, 'enemy:scout': 38, 'enemy:assault': 37, 'enemy:heavy': 37, 'enemy:elite': 42, 'enemy:capital': 36,
             // Boss / side craft are derived from the class footprint (boss x1.6, side x0.68-0.78); these scale that in % (SIZES tab).
-            'boss:pct': 80, 'side:pct': 80 };
+            'boss:pct': 80, 'side:pct': 80,
+            // Shot widths in px (Settings → Shots / SIZES overlay).
+            'shot:player': 10, 'shot:enemy': 7, 'shot:boss': 7 };
         // Shot speed per shooter, in percent of the weapon's own speed (SIZES overlay).
         this.shotSpeeds = { player: 100, enemy: 100, boss: 100 };
         this.shotSpeedRange = { min: 20, max: 300 };
@@ -52404,25 +55660,64 @@ extendClass(UIAppearanceManager, {
     applyFxArea() {
         const ov = document.getElementById('vfFxOverlay');
         if (!ov) return;
-        // Clip each layer, not the container: a clip-path on the container becomes a
+        // Clip / size each layer, not the container: a clip-path on the container becomes a
         // backdrop root and the layers' backdrop-filters (chroma/bloom/HDR/CRT) would see nothing.
         const layers = ov.children;
-        const setClip = (v) => {
-            for (let i = 0; i < layers.length; i++) layers[i].style.clipPath = v;
+        const resetLayerBox = (el) => {
+            el.style.clipPath = '';
+            el.style.top = '';
+            el.style.left = '';
+            el.style.right = '';
+            el.style.bottom = '';
+            el.style.width = '';
+            el.style.height = '';
+            el.style.borderRadius = '';
+            el.style.overflow = '';
+        };
+        const forFxLayers = (fn) => {
+            for (let i = 0; i < layers.length; i++) {
+                const el = layers[i];
+                // Inline <svg> elements keep a lowercase tagName (unlike HTML elements), so this
+                // must compare case-insensitively or the filter-def SVGs get sized to the screen
+                // opening too — invisible but still pointer-events:auto, swallowing clicks on the UI above.
+                if (!el || el.tagName.toUpperCase() === 'SVG') continue;
+                fn(el);
+            }
         };
         ov.style.clipPath = '';
         const r = this.measureScreenOpening();
         const rad = r ? r.radius : 0;
         if (this.fxArea === 'ALL' || !r || !r.width) {
-            setClip('');
+            forFxLayers(resetLayerBox);
             return;
         }
         const W = window.innerWidth, H = window.innerHeight;
         const x1 = Math.round(r.left), y1 = Math.round(r.top);
         const x2 = Math.round(r.right), y2 = Math.round(r.bottom);
-        setClip(this.fxArea === 'SCREEN'
-            ? `inset(${y1}px ${W - x2}px ${H - y2}px ${x1}px round ${rad}px)`
-            : `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`);
+        if (this.fxArea === 'SCREEN') {
+            // Size layers to the opening. Backdrop-filter cost tracks element size;
+            // clip-path alone still filters the full fixed inset:0 box in some engines.
+            // Scanlines keep +12px for the seamless drift loop (see vf-fx-scan-drift).
+            const scanPad = Math.ceil(12 * (Number(this.fxScale) || 100) / 100
+                * (Number(this.scanSize) || 100) / 100);
+            forFxLayers((el) => {
+                const pad = el.classList.contains('vf-fx-scanlines') ? scanPad : 0;
+                el.style.clipPath = '';
+                el.style.top = y1 + 'px';
+                el.style.left = x1 + 'px';
+                el.style.right = 'auto';
+                el.style.bottom = 'auto';
+                el.style.width = (x2 - x1) + 'px';
+                el.style.height = (y2 - y1 + pad) + 'px';
+                el.style.borderRadius = rad > 0 ? rad + 'px' : '';
+                el.style.overflow = 'hidden';
+            });
+            return;
+        }
+        forFxLayers((el) => {
+            resetLayerBox(el);
+            el.style.clipPath = `polygon(evenodd, 0 0, ${W}px 0, ${W}px ${H}px, 0 ${H}px, 0 0, ${x1}px ${y1}px, ${x1}px ${y2}px, ${x2}px ${y2}px, ${x2}px ${y1}px, ${x1}px ${y1}px)`;
+        });
     },
     setFx(fxKey, value) {
         const key = String(fxKey || '');
@@ -58490,8 +61785,6 @@ extendClass(ComponentEditorUI, {
         const entry = this.currentEntry();
         if (!entry) return;
 
-        console.log(`Component property changed: ${property} = ${value}`, entry);
-
         // Update the entry with the new value
         if (property === "weapon") {
             entry.weaponId = value;
@@ -58504,8 +61797,6 @@ extendClass(ComponentEditorUI, {
             entry.modId = value;
             entry.id = value;  // Also update id
         }
-
-        console.log("After update:", entry);
 
         // Persist the changes
         if (typeof assetGenRegistry !== "undefined" && assetGenRegistry.update) {
@@ -59207,8 +62498,6 @@ extendClass(SpriteLoader, {
         ctx.globalAlpha = 1.0;
         ctx.imageSmoothingEnabled = false;
 
-        // Debug: Log sprite rendering
-
         // Apply color overlay only to non-transparent areas
         if (colorOverlay && overlayIntensity > 0 && /^#[0-9a-fA-F]{6}$/.test(colorOverlay)) {
             // Create a temporary canvas to apply color overlay with alpha masking
@@ -59404,9 +62693,12 @@ var RenderManager = class RenderManager {
      * voxelised finer than one logical pixel.
      */
     getRenderScale() {
-        // Sticky within ~one frame so fillCombatRect / voxel helpers do not recompute.
-        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-        if (this._scaleFrameValue != null && this._scaleStickyAt && (now - this._scaleStickyAt) < 12) {
+        // Sticky for the whole combat frame — avoid getBoundingClientRect / voxel probes
+        // on every fillCombatRect / particle call.
+        const frame = (typeof game !== 'undefined' && game && game.gameState)
+            ? game.gameState.frameCount
+            : ((typeof performance !== 'undefined') ? (performance.now() | 0) : Date.now());
+        if (this._scaleStickyFrame === frame && this._scaleFrameValue != null) {
             return this._scaleFrameValue;
         }
         // Global Pixel Size: one buffer pixel == P screen px, so every art pixel is equal.
@@ -59424,8 +62716,17 @@ var RenderManager = class RenderManager {
             // so measure the on-screen width to make one art pixel == gp real screen px.
             let shown = cv && cv.clientWidth ? cv.clientWidth : lw;
             if (cv && cv.clientWidth) {
-                const bw = cv.getBoundingClientRect().width;
-                if (bw > 1) shown = bw;
+                // Reuse last measured width within ~250ms — layout thrash from bezel/FX
+                // must not force a rect read on every new frameCount tick.
+                const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
+                if (this._shownWSticky != null && this._shownWAt && (now - this._shownWAt) < 250) {
+                    shown = this._shownWSticky;
+                } else {
+                    const bw = cv.getBoundingClientRect().width;
+                    if (bw > 1) shown = bw;
+                    this._shownWSticky = shown;
+                    this._shownWAt = now;
+                }
             }
             // Keep fractional — rounding would make combat pixels ≠ Pixel Size.
             scale = Math.max(0.05, shown / (gp * lw));
@@ -59454,7 +62755,7 @@ var RenderManager = class RenderManager {
                 scale = Math.sqrt(maxPx / Math.max(1, lw * lh));
             }
         }
-        this._scaleStickyAt = now;
+        this._scaleStickyFrame = frame;
         this._scaleFrameValue = scale;
         return scale;
     }
@@ -59474,10 +62775,11 @@ var RenderManager = class RenderManager {
      * Returns null in FLAT mode so per-object sizing stays as before.
      */
     getCombatVoxelCell() {
-        // Sticky within ~one frame, same pattern as getRenderScale() — this is called
-        // many times per frame (once per bullet/particle/debris cell fill).
-        const now = (typeof performance !== 'undefined') ? performance.now() : Date.now();
-        if (this._voxelCellStickyAt && (now - this._voxelCellStickyAt) < 12) {
+        // Sticky for the whole frame — called once per bullet/particle/debris cell fill.
+        const frame = (typeof game !== 'undefined' && game && game.gameState)
+            ? game.gameState.frameCount
+            : ((typeof performance !== 'undefined') ? (performance.now() | 0) : Date.now());
+        if (this._voxelCellStickyFrame === frame && this._voxelCellFrameValue !== undefined) {
             return this._voxelCellFrameValue;
         }
         let result;
@@ -59501,7 +62803,7 @@ var RenderManager = class RenderManager {
                 result = Number.isFinite(c) && c > 0 ? c : 1;
             }
         }
-        this._voxelCellStickyAt = now;
+        this._voxelCellStickyFrame = frame;
         this._voxelCellFrameValue = result;
         return result;
     }
@@ -59818,15 +63120,17 @@ var RenderManager = class RenderManager {
         }
 
         // Enemy bullets (occluded); player bullets always visible
-        bulletManager.getEnemyBullets().forEach(bullet => {
-            if (this.isOccludedByFog(player, bullet, fogList)) return;
-            const lighting = this.calculateBulletLighting(bullet);
-            this.drawBullet(ctx, bullet, lighting);
-        });
-        bulletManager.getBullets().forEach(bullet => {
-            const lighting = this.calculateBulletLighting(bullet);
-            this.drawBullet(ctx, bullet, lighting);
-        });
+        const enemyShots = bulletManager.getEnemyBullets();
+        for (let bi = 0; bi < enemyShots.length; bi++) {
+            const bullet = enemyShots[bi];
+            if (this.isOccludedByFog(player, bullet, fogList)) continue;
+            this.drawBullet(ctx, bullet, this.calculateBulletLighting(bullet));
+        }
+        const playerShots = bulletManager.getBullets();
+        for (let bi = 0; bi < playerShots.length; bi++) {
+            const bullet = playerShots[bi];
+            this.drawBullet(ctx, bullet, this.calculateBulletLighting(bullet));
+        }
 
         // Player + HUD on top (always visible)
         if (player) {
@@ -60278,45 +63582,41 @@ extendClass(RenderManager, {
     // Calculate bullet lighting based on proximity to elements
     calculateBulletLighting(bullet) {
         let maxIntensity = 0;
-        let lightingColor = 'var(--current-text)';
+        // Same overlay colour for every bullet this frame — resolve once.
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        if (this._lightColorSticky == null || (now - (this._lightColorAt || 0)) > 32) {
+            this._lightColorSticky = this.getCurrentColorProfile();
+            this._lightColorAt = now;
+        }
+        const lightingColor = this._lightColorSticky || 'var(--current-text)';
+        const bx = bullet.x + bullet.width * 0.5;
+        const by = bullet.y + bullet.height * 0.5;
 
-        // Check proximity to enemy
+        const consider = (obj, radius, strength) => {
+            if (!obj || maxIntensity >= strength) return;
+            const dx = bx - (obj.x + obj.width * 0.5);
+            const dy = by - (obj.y + obj.height * 0.5);
+            const r2 = radius * radius;
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= r2) return;
+            const distance = Math.sqrt(d2);
+            const intensity = ((radius - distance) / radius) * strength;
+            if (intensity > maxIntensity) maxIntensity = intensity;
+        };
+
         const enemy = enemyManager.getEnemy();
-        if (enemy) {
-            const distance = this.calculateDistance(bullet, enemy);
-            if (distance < 40) { // Within 40 pixels
-                const intensity = Math.max(0, (40 - distance) / 40) * 0.8;
-                if (intensity > maxIntensity) {
-                    maxIntensity = intensity;
-                    lightingColor = this.getCurrentColorProfile();
-                }
+        if (enemy) consider(enemy, 40, 0.8);
+
+        const obstacles = obstacleManager.getObstacles ? obstacleManager.getObstacles() : null;
+        if (obstacles && obstacles.length) {
+            for (let i = 0; i < obstacles.length; i++) {
+                consider(obstacles[i], 30, 0.6);
+                if (maxIntensity >= 0.8) break;
             }
         }
 
-        // Check proximity to obstacles
-        obstacleManager.getObstacles().forEach(obstacle => {
-            const distance = this.calculateDistance(bullet, obstacle);
-            if (distance < 30) { // Within 30 pixels
-                const intensity = Math.max(0, (30 - distance) / 30) * 0.6;
-                if (intensity > maxIntensity) {
-                    maxIntensity = intensity;
-                    lightingColor = this.getCurrentColorProfile();
-                }
-            }
-        });
-
-        // Check proximity to player
         const player = playerManager.getPosition();
-        if (player) {
-            const distance = this.calculateDistance(bullet, player);
-            if (distance < 35) { // Within 35 pixels
-                const intensity = Math.max(0, (35 - distance) / 35) * 0.7;
-                if (intensity > maxIntensity) {
-                    maxIntensity = intensity;
-                    lightingColor = this.getCurrentColorProfile();
-                }
-            }
-        }
+        if (player) consider(player, 35, 0.7);
 
         return {
             intensity: maxIntensity,
@@ -60342,45 +63642,51 @@ extendClass(RenderManager, {
         const radius = opts.radius != null ? opts.radius : 72;
         const mode = opts.mode || 'player';
         let best = 0;
+        const r2 = radius * radius;
+        const ex = entity.x + entity.width * 0.5;
+        const ey = entity.y + entity.height * 0.5;
         const consider = (obj) => {
-            if (!obj) return;
-            const d = this.calculateDistance(entity, obj);
-            if (d >= radius) return;
+            if (!obj || best >= 0.999) return;
+            const dx = ex - (obj.x + obj.width * 0.5);
+            const dy = ey - (obj.y + obj.height * 0.5);
+            const d2 = dx * dx + dy * dy;
+            if (d2 >= r2) return;
+            const d = Math.sqrt(d2);
             const t = 1 - (d / radius);
             // Smoothstep ease-in for a soft fade
             const fade = t * t * (3 - 2 * t);
             if (fade > best) best = fade;
         };
+        const scanList = (list, reflectedOnly) => {
+            if (!list) return;
+            for (let i = 0; i < list.length; i++) {
+                const b = list[i];
+                if (reflectedOnly && !(b && b.reflected)) continue;
+                consider(b);
+                if (best >= 0.999) return;
+            }
+        };
 
         if (typeof bulletManager !== 'undefined') {
             if (mode === 'player') {
-                if (bulletManager.getEnemyBullets) {
-                    bulletManager.getEnemyBullets().forEach(consider);
-                }
-                if (bulletManager.getBullets) {
-                    bulletManager.getBullets().forEach((b) => {
-                        if (b && b.reflected) consider(b);
-                    });
-                }
+                if (bulletManager.getEnemyBullets) scanList(bulletManager.getEnemyBullets(), false);
+                if (bulletManager.getBullets) scanList(bulletManager.getBullets(), true);
             } else if (mode === 'enemy') {
-                if (bulletManager.getBullets) {
-                    bulletManager.getBullets().forEach(consider);
-                }
-                if (bulletManager.getEnemyBullets) {
-                    bulletManager.getEnemyBullets().forEach((b) => {
-                        if (b && b.reflected) consider(b);
-                    });
-                }
+                if (bulletManager.getBullets) scanList(bulletManager.getBullets(), false);
+                if (bulletManager.getEnemyBullets) scanList(bulletManager.getEnemyBullets(), true);
             }
         }
 
         if (opts.obstacles !== false
             && typeof obstacleManager !== 'undefined'
             && obstacleManager.getObstacles) {
-            obstacleManager.getObstacles().forEach((o) => {
-                if (o && o.isFog) return;
+            const obstacles = obstacleManager.getObstacles();
+            for (let i = 0; i < obstacles.length; i++) {
+                const o = obstacles[i];
+                if (o && o.isFog) continue;
                 consider(o);
-            });
+                if (best >= 0.999) break;
+            }
         }
         return best;
     },
@@ -61944,14 +65250,8 @@ window.combatVoxels = {
             const drops = pickupManager.pickups;
             for (let i = 0; i < drops.length; i++) snap(drops[i]);
         }
-        if (typeof particleSystem !== 'undefined' && particleSystem.particles) {
-            const ps = particleSystem.particles;
-            for (let i = 0; i < ps.length; i++) snap(ps[i]);
-        }
-        if (typeof explosionSystem !== 'undefined' && explosionSystem.voxels) {
-            const vx = explosionSystem.voxels;
-            for (let i = 0; i < vx.length; i++) snap(vx[i]);
-        }
+        // Particles / explosion voxels already lattice-snap in their render paths —
+        // snapping them here doubles O(n) work with no on-screen difference.
     },
     fill(ctx, x, y, w, h, color, alpha) {
         if (typeof renderManager !== 'undefined' && renderManager.fillCombatRect) {
@@ -62146,26 +65446,70 @@ var ParallaxManager = class ParallaxManager {
         // Fill base background with theme color
         const backgroundColor = this.envVar('--env-background');
         ctx.fillStyle = backgroundColor || '#0a0a0a';
-        const cw = (ctx.canvas && ctx.canvas.width) || 240;
-        const ch = (ctx.canvas && ctx.canvas.height) || 300;
-        // Flying stars are spawned/culled against this, not the 400x600 the
-        // tiled layer patterns assume — the actual canvas is usually smaller
-        // (backing-store scale), so sampling across 400x600 scattered most
-        // stars outside the visible area.
-        this._starFieldW = cw;
-        this._starFieldH = ch;
+        // Logical playfield (transform already supersamples). Using backing width
+        // here filled k² more user-space pixels that the clip immediately discarded.
+        const cw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const ch = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
+        // Stars keep the prior spawn box (backing px as user units) so density on
+        // screen matches the pre-bake look.
+        const starW = (ctx.canvas && ctx.canvas.width) || cw;
+        const starH = (ctx.canvas && ctx.canvas.height) || ch;
+        this._starFieldW = starW;
+        this._starFieldH = starH;
         ctx.fillRect(0, 0, cw, ch);
 
-        // Render parallax background layers (respect visibility + opacity)
-        this.layers.forEach((layer, index) => {
-            if (layer.visible === false) return;
-            const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
-            if (opacity <= 0) return;
-            ctx.save();
-            ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
-            this.drawLayerPattern(ctx, layer, index);
-            ctx.restore();
-        });
+        // When the stage is frozen (boss / non-scroll), reuse a baked layer plate.
+        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
+            || obstacleManager.isScrollStage();
+        let layerKey = backgroundColor + '|' + (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
+        for (let i = 0; i < this.layers.length; i++) {
+            const L = this.layers[i];
+            layerKey += '|' + (L.pattern || '') + ':' + (L.y || 0) + ':' + (L.color || '') + ':' + (L.visible === false ? 0 : 1);
+        }
+        layerKey += '|h' + (this.horizontalOffset || 0);
+
+        const drawLayers = (target) => {
+            for (let index = 0; index < this.layers.length; index++) {
+                const layer = this.layers[index];
+                if (layer.visible === false) continue;
+                const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
+                if (opacity <= 0) continue;
+                target.save();
+                target.globalAlpha = Math.max(0, Math.min(1, opacity));
+                this.drawLayerPattern(target, layer, index);
+                target.restore();
+            }
+        };
+
+        if (!scrolling && this._frozenLayerKey === layerKey && this._frozenLayerCanvas) {
+            ctx.drawImage(this._frozenLayerCanvas, 0, 0);
+        } else {
+            if (!scrolling) {
+                if (!this._frozenLayerCanvas
+                    || this._frozenLayerCanvas.width !== cw
+                    || this._frozenLayerCanvas.height !== ch) {
+                    this._frozenLayerCanvas = document.createElement('canvas');
+                    this._frozenLayerCanvas.width = cw;
+                    this._frozenLayerCanvas.height = ch;
+                }
+                const fx = this._frozenLayerCanvas.getContext('2d');
+                if (fx) {
+                    fx.setTransform(1, 0, 0, 1, 0, 0);
+                    fx.imageSmoothingEnabled = false;
+                    fx.clearRect(0, 0, cw, ch);
+                    fx.fillStyle = backgroundColor || '#0a0a0a';
+                    fx.fillRect(0, 0, cw, ch);
+                    drawLayers(fx);
+                    this._frozenLayerKey = layerKey;
+                    ctx.drawImage(this._frozenLayerCanvas, 0, 0);
+                } else {
+                    drawLayers(ctx);
+                }
+            } else {
+                this._frozenLayerKey = '';
+                drawLayers(ctx);
+            }
+        }
 
         // Draw flying stars
         if (this.starsEnabled !== false) {
@@ -62190,11 +65534,21 @@ var ParallaxManager = class ParallaxManager {
         const baseAlpha = 0.08 + phase * 0.06;
         const alpha = baseAlpha + pulse * 0.04;
         ctx.save();
-        const grad = ctx.createRadialGradient(cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2, cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75);
-        grad.addColorStop(0, 'rgba(0,0,0,0)');
-        grad.addColorStop(1, col);
+        // Same radial falloff every frame for a given size/phase — rebuild only on change.
+        if (!this._bossGrad || this._bossGradW !== cw || this._bossGradH !== ch || this._bossGradPhase !== phase) {
+            const grad = ctx.createRadialGradient(
+                cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2,
+                cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75
+            );
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(1, col);
+            this._bossGrad = grad;
+            this._bossGradW = cw;
+            this._bossGradH = ch;
+            this._bossGradPhase = phase;
+        }
         ctx.globalAlpha = Math.max(0, Math.min(0.55, alpha));
-        ctx.fillStyle = grad;
+        ctx.fillStyle = this._bossGrad;
         ctx.fillRect(0, 0, cw, ch);
         ctx.restore();
     }
@@ -62300,6 +65654,35 @@ var ParallaxManager = class ParallaxManager {
 
 // ParallaxManager methods, split from parallax.js.
 extendClass(ParallaxManager, {
+    /** One offscreen tile blit — same pixels as nested fillRect loops. */
+    bakePatternTile(key, tw, th, paint) {
+        if (!this._patternBake) this._patternBake = Object.create(null);
+        let entry = this._patternBake[key];
+        if (entry && entry.w === tw && entry.h === th) return entry;
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, tw);
+        c.height = Math.max(1, th);
+        const x = c.getContext('2d');
+        if (!x) return null;
+        x.imageSmoothingEnabled = false;
+        paint(x);
+        entry = { canvas: c, w: tw, h: th };
+        this._patternBake[key] = entry;
+        return entry;
+    },
+
+    /** Draw baked tile across the field. `scrollX/Y` are subtracted (custom-tile convention). */
+    blitTiled(ctx, tile, scrollX, scrollY, fieldW, fieldH) {
+        if (!tile) return;
+        const tw = tile.w;
+        const th = tile.h;
+        for (let ty = -th; ty < fieldH + th; ty += th) {
+            for (let tx = -tw; tx < fieldW + tw; tx += tw) {
+                ctx.drawImage(tile.canvas, Math.floor(tx - scrollX), Math.floor(ty - scrollY));
+            }
+        }
+    },
+
     drawCustomTile(ctx, layer, def) {
         if (!def || !def.cells) return;
         const tw = def.width;
@@ -62309,22 +65692,20 @@ extendClass(ParallaxManager, {
         const tilePxH = th * cell;
         const ox = ((this.horizontalOffset * 0.1) % tilePxW + tilePxW) % tilePxW;
         const oy = ((layer.y || 0) % tilePxH + tilePxH) % tilePxH;
-
-        for (let ty = -tilePxH; ty < 600 + tilePxH; ty += tilePxH) {
-            for (let tx = -tilePxW; tx < 400 + tilePxW; tx += tilePxW) {
-                for (let cy = 0; cy < th; cy++) {
-                    for (let cx = 0; cx < tw; cx++) {
-                        if (!def.cells[cy * tw + cx]) continue;
-                        ctx.fillRect(
-                            Math.floor(tx + cx * cell - ox),
-                            Math.floor(ty + cy * cell - oy),
-                            cell,
-                            cell
-                        );
-                    }
+        const color = ctx.fillStyle || layer.color || '#808080';
+        const key = 'ct:' + (def.id || layer.pattern || 'x') + ':' + tilePxW + 'x' + tilePxH + ':' + color + ':' + cell;
+        const bake = this.bakePatternTile(key, tilePxW, tilePxH, (x) => {
+            x.fillStyle = color;
+            for (let cy = 0; cy < th; cy++) {
+                for (let cx = 0; cx < tw; cx++) {
+                    if (!def.cells[cy * tw + cx]) continue;
+                    x.fillRect(cx * cell, cy * cell, cell, cell);
                 }
             }
-        }
+        });
+        const fieldW = (ctx.canvas && ctx.canvas.width) || 400;
+        const fieldH = (ctx.canvas && ctx.canvas.height) || 600;
+        this.blitTiled(ctx, bake, ox, oy, fieldW, fieldH);
     },
 
     drawGrid(ctx, layer, index) {
@@ -62343,14 +65724,20 @@ extendClass(ParallaxManager, {
         const h = (ctx.canvas && ctx.canvas.height) || 600;
         const ox = (((this.horizontalOffset * 0.1) % period) + period) % period;
         const oy = (((layer.y || 0) % period) + period) % period;
-        const cols = Math.ceil(w / gridSize) + 2;
-        const rows = Math.ceil(h / gridSize) + 2;
-        for (let i = -2; i < cols; i++) {
-            for (let j = -2; j < rows; j++) {
-                if (((i + j) & 1) !== 0) continue;
-                ctx.fillRect(Math.round(i * gridSize + ox), Math.round(j * gridSize + oy), dot, dot);
+        const color = ctx.fillStyle || layer.color || '#808080';
+        const key = 'grid:' + gridSize + ':' + dot + ':' + color;
+        const bake = this.bakePatternTile(key, period, period, (x) => {
+            x.fillStyle = color;
+            const cols = Math.ceil(period / gridSize) + 1;
+            const rows = Math.ceil(period / gridSize) + 1;
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    if (((i + j) & 1) !== 0) continue;
+                    x.fillRect(i * gridSize, j * gridSize, dot, dot);
+                }
             }
-        }
+        });
+        this.blitTiled(ctx, bake, -ox, -oy, w, h);
     },
 
     drawDots(ctx, layer) {
@@ -62431,16 +65818,17 @@ extendClass(ParallaxManager, {
         }
 
         // Update existing stars
-        for (let i = this.flyingStars.length - 1; i >= 0; i--) {
-            const star = this.flyingStars[i];
+        const list = this.flyingStars;
+        const fw = this._starFieldW || 400;
+        const fh = this._starFieldH || 600;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const star = list[i];
             star.x += star.speedX;
             star.y += star.speedY;
-
-            // Remove stars that are off screen
-            const fw = this._starFieldW || 400;
-            const fh = this._starFieldH || 600;
             if (star.x < -10 || star.x > fw + 10 || star.y < -10 || star.y > fh + 10) {
-                this.flyingStars.splice(i, 1);
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                list.pop();
             }
         }
     },
@@ -62464,46 +65852,67 @@ extendClass(ParallaxManager, {
     },
 
     drawFlyingStars(ctx) {
+        const stars = this.flyingStars;
+        if (!stars || !stars.length) return;
         ctx.save();
         const baseOpacity = this.starsOpacity != null ? this.starsOpacity : 0.35;
-        const starColor = this.envVar('--env-primary') || '#808080';
-        ctx.fillStyle = starColor;
-        this.flyingStars.forEach(star => {
+        ctx.fillStyle = this.envVar('--env-primary') || '#808080';
+        for (let i = 0; i < stars.length; i++) {
+            const star = stars[i];
             ctx.globalAlpha = Math.max(0, Math.min(1, baseOpacity * (star.alpha != null ? star.alpha : 1)));
-            ctx.fillRect(Math.floor(star.x), Math.floor(star.y), Math.floor(star.size), Math.floor(star.size));
-        });
+            ctx.fillRect(star.x | 0, star.y | 0, star.size | 0, star.size | 0);
+        }
         ctx.restore();
+    },
+
+    /**
+     * Bake a 400×600 planet plate once; scroll with the same wrap as
+     * `fillRect(..., (y + layer.y) % 600)` — identical pixels, one blit.
+     */
+    drawWrappedYField(ctx, layer, bakeKey, paint) {
+        const color = String(ctx.fillStyle || layer.color || '#808080');
+        const bake = this.bakePatternTile(bakeKey + ':' + color, 400, 600, (x) => {
+            x.fillStyle = color;
+            paint(x);
+        });
+        if (!bake) return;
+        const oy = ((layer.y || 0) % 600 + 600) % 600;
+        // Shift plate down by oy (wrap): matches (y + layer.y) % 600 placement.
+        ctx.drawImage(bake.canvas, 0, oy);
+        if (oy) ctx.drawImage(bake.canvas, 0, oy - 600);
     },
 
     // Planet-specific drawing methods
     drawMarsSurface(ctx, layer) {
-        for (let x = 0; x < 400; x += 8) {
-            for (let y = 0; y < 600; y += 8) {
-                if ((Math.floor(x / 8) + Math.floor(y / 8)) % 3 === 0) {
-                    ctx.fillRect(Math.floor(x), Math.floor(y + layer.y) % 600, 6, 6);
+        this.drawWrappedYField(ctx, layer, 'mars_surface', (x) => {
+            for (let px = 0; px < 400; px += 8) {
+                for (let py = 0; py < 600; py += 8) {
+                    if (((px / 8) + (py / 8)) % 3 === 0) x.fillRect(px, py, 6, 6);
                 }
             }
-        }
+        });
     },
 
     drawMarsDust(ctx, layer) {
-        for (let x = 0; x < 400; x += 12) {
-            for (let y = 0; y < 600; y += 12) {
-                if ((Math.floor(x / 12) + Math.floor(y / 12)) % 4 === 0) {
-                    ctx.fillRect(Math.floor(x), Math.floor(y + layer.y) % 600, 4, 4);
+        this.drawWrappedYField(ctx, layer, 'mars_dust', (x) => {
+            for (let px = 0; px < 400; px += 12) {
+                for (let py = 0; py < 600; py += 12) {
+                    if (((px / 12) + (py / 12)) % 4 === 0) x.fillRect(px, py, 4, 4);
                 }
             }
-        }
+        });
     },
 
     drawMarsSky(ctx, layer) {
-        for (let x = 0; x < 400; x += 16) {
-            const y = Math.floor((x * 0.1 + layer.y) % 600);
-            ctx.fillRect(x, y, 4, 4);
-        }
+        this.drawWrappedYField(ctx, layer, 'mars_sky', (x) => {
+            for (let px = 0; px < 400; px += 16) {
+                x.fillRect(px, Math.floor((px * 0.1) % 600), 4, 4);
+            }
+        });
     },
 
     drawJupiterBands(ctx, layer) {
+        // x and y both phase with layer.y — keep the light O(30) loop (not a Y-only wrap).
         for (let y = 0; y < 600; y += 20) {
             const x = Math.floor((y * 0.05 + layer.y) % 400);
             ctx.fillRect(x, Math.floor(y + layer.y) % 600, 6, 4);
@@ -62511,20 +65920,21 @@ extendClass(ParallaxManager, {
     },
 
     drawJupiterStorms(ctx, layer) {
-        for (let x = 0; x < 400; x += 16) {
-            for (let y = 0; y < 600; y += 16) {
-                if ((Math.floor(x / 16) + Math.floor(y / 16)) % 5 === 0) {
-                    ctx.fillRect(Math.floor(x), Math.floor(y + layer.y) % 600, 8, 8);
+        this.drawWrappedYField(ctx, layer, 'jupiter_storms', (x) => {
+            for (let px = 0; px < 400; px += 16) {
+                for (let py = 0; py < 600; py += 16) {
+                    if (((px / 16) + (py / 16)) % 5 === 0) x.fillRect(px, py, 8, 8);
                 }
             }
-        }
+        });
     },
 
     drawJupiterAtmosphere(ctx, layer) {
-        for (let x = 0; x < 400; x += 12) {
-            const y = Math.floor((x * 0.2 + layer.y) % 600);
-            ctx.fillRect(x, y, 4, 4);
-        }
+        this.drawWrappedYField(ctx, layer, 'jupiter_atmosphere', (x) => {
+            for (let px = 0; px < 400; px += 12) {
+                x.fillRect(px, Math.floor((px * 0.2) % 600), 4, 4);
+            }
+        });
     },
 
     drawSaturnRings(ctx, layer) {
@@ -62535,47 +65945,49 @@ extendClass(ParallaxManager, {
     },
 
     drawSaturnClouds(ctx, layer) {
-        for (let x = 0; x < 400; x += 14) {
-            for (let y = 0; y < 600; y += 14) {
-                if ((Math.floor(x / 14) + Math.floor(y / 14)) % 6 === 0) {
-                    ctx.fillRect(Math.floor(x), Math.floor(y + layer.y) % 600, 6, 6);
+        this.drawWrappedYField(ctx, layer, 'saturn_clouds', (x) => {
+            for (let px = 0; px < 400; px += 14) {
+                for (let py = 0; py < 600; py += 14) {
+                    if (((px / 14) + (py / 14)) % 6 === 0) x.fillRect(px, py, 6, 6);
                 }
             }
-        }
+        });
     },
 
     drawSaturnSky(ctx, layer) {
-        for (let x = 0; x < 400; x += 8) {
-            const y = Math.floor((x * 0.15 + layer.y) % 600);
-            ctx.fillRect(x, y, 4, 4);
-        }
+        this.drawWrappedYField(ctx, layer, 'saturn_sky', (x) => {
+            for (let px = 0; px < 400; px += 8) {
+                x.fillRect(px, Math.floor((px * 0.15) % 600), 4, 4);
+            }
+        });
     },
 
     drawNeptuneDeep(ctx, layer) {
-        for (let x = 0; x < 400; x += 6) {
-            for (let y = 0; y < 600; y += 6) {
-                if ((Math.floor(x / 6) + Math.floor(y / 6)) % 7 === 0) {
-                    ctx.fillRect(Math.floor(x), Math.floor(y + layer.y) % 600, 4, 4);
+        this.drawWrappedYField(ctx, layer, 'neptune_deep', (x) => {
+            for (let px = 0; px < 400; px += 6) {
+                for (let py = 0; py < 600; py += 6) {
+                    if (((px / 6) + (py / 6)) % 7 === 0) x.fillRect(px, py, 4, 4);
                 }
             }
-        }
+        });
     },
 
     drawNeptuneStorms(ctx, layer) {
-        for (let x = 0; x < 400; x += 18) {
-            for (let y = 0; y < 600; y += 18) {
-                if ((Math.floor(x / 18) + Math.floor(y / 18)) % 8 === 0) {
-                    ctx.fillRect(Math.floor(x), Math.floor(y + layer.y) % 600, 6, 6);
+        this.drawWrappedYField(ctx, layer, 'neptune_storms', (x) => {
+            for (let px = 0; px < 400; px += 18) {
+                for (let py = 0; py < 600; py += 18) {
+                    if (((px / 18) + (py / 18)) % 8 === 0) x.fillRect(px, py, 6, 6);
                 }
             }
-        }
+        });
     },
 
     drawNeptuneIce(ctx, layer) {
-        for (let x = 0; x < 400; x += 10) {
-            const y = Math.floor((x * 0.3 + layer.y) % 600);
-            ctx.fillRect(x, y, 4, 4);
-        }
+        this.drawWrappedYField(ctx, layer, 'neptune_ice', (x) => {
+            for (let px = 0; px < 400; px += 10) {
+                x.fillRect(px, Math.floor((px * 0.3) % 600), 4, 4);
+            }
+        });
     },
 
     reset() {
@@ -67173,6 +70585,10 @@ extendClass(AbilityViewerUI, {
                 <div class="stat-row"><span class="stat-label">Tier</span><span class="stat-value">${a.tier}</span></div>
                 <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${a.id}</span></div>
                 <div class="stat-row"><span class="stat-label">Summary</span><span class="stat-value">${a.uiDescription || '—'}</span></div>
+                ${contentViewerUpgradeRangeRowsHtml(
+                    (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.isEnergyId(a.id)) ? 'energy'
+                        : (a.cluster === 'defense' ? 'defenses' : 'abilities')
+                )}
             </div>
         `;
         this.updateDeleteButton();
@@ -67897,6 +71313,13 @@ extendClass(WeaponViewerUI, {
                     <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${w.id}</span></div>
                     <div class="stat-row"><span class="stat-label">Type</span><span class="stat-value">${w.bulletType || '—'}</span></div>
                 </div>
+                <div class="cv-stat-cluster">
+                    <div class="cv-stat-cluster-title">Upgrades</div>
+                    <!-- Damage/Speed/Cooldown above are this weapon's base values — MODULES and
+                         the per-item EQUIPMENT tab both scale them further, so they're a range,
+                         not a fixed number. -->
+                    ${contentViewerUpgradeRangeRowsHtml('weapons')}
+                </div>
             </div>
         `;
         if (this._devToggles) this._devToggles.refresh();
@@ -68586,6 +72009,33 @@ extendClass(DefenseViewerUI, {
 
 // DefenseViewerUI methods, split from defense-viewer.js.
 extendClass(DefenseViewerUI, {
+    /** Concrete SHIELD / REGEN / harden numbers for the selected defense module. */
+    defenseStatRowsHtml(item) {
+        if (!item || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.computeDefenseStats) {
+            return '';
+        }
+        const d = shipLoadoutManager.computeDefenseStats([item.id]);
+        const rows = [];
+        if (d.shieldMax) {
+            rows.push(`<div class="stat-row"><span class="stat-label">Shield</span>` +
+                `<span class="stat-value">+${d.shieldMax}</span></div>`);
+        }
+        if (d.shieldMax || d.shieldRegen) {
+            const r = Math.round((Number(d.shieldRegen) || 0) * 10) / 10;
+            rows.push(`<div class="stat-row"><span class="stat-label">Regen</span>` +
+                `<span class="stat-value">+${r}/s</span></div>`);
+        }
+        if (d.damageReduction) {
+            rows.push(`<div class="stat-row"><span class="stat-label">Dmg reduction</span>` +
+                `<span class="stat-value">+${d.damageReduction}</span></div>`);
+        }
+        if (d.reflectChance) {
+            rows.push(`<div class="stat-row"><span class="stat-label">Reflect</span>` +
+                `<span class="stat-value">${d.reflectChance}%</span></div>`);
+        }
+        return rows.join('');
+    },
+
     renderDetail() {
         const root = this.overlay && this.overlay.querySelector('#dvDetail');
         const a = this.items[this.selectedIndex];
@@ -68604,6 +72054,8 @@ extendClass(DefenseViewerUI, {
                 <div class="stat-row"><span class="stat-label">Tier</span><span class="stat-value">${a.tier}</span></div>
                 <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${a.id}</span></div>
                 <div class="stat-row"><span class="stat-label">Summary</span><span class="stat-value">${a.uiDescription || '—'}</span></div>
+                ${this.defenseStatRowsHtml(a)}
+                ${contentViewerUpgradeRangeRowsHtml('defenses')}
             </div>
         `;
         if (this._devToggles) this._devToggles.refresh();
@@ -86945,7 +90397,7 @@ extendClass(ProfileSelectionManager, {
         if (!reuse) {
             if (this.overlay) this.overlay.remove();
             this.overlay = document.createElement('div');
-            this.overlay.className = 'profile-selection-overlay' + (this.host ? ' is-inline' : '');
+            this.overlay.className = 'profile-selection-overlay' + (this.host ? ' is-inline' : ' vf-glass');
         } else if (this._keyHandler) {
             document.removeEventListener('keydown', this._keyHandler);
             this._keyHandler = null;
@@ -93261,6 +96713,13 @@ var HomeStationUI = class HomeStationUI {
         try {
             { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships' || v === 'slots') this._hangarLeftView = v; }
         } catch (e) { /* ignore */ }
+        // Last sub-tab per top-bar area (HANGAR→SHIPYARD/UPGRADE/…), across area switches + reloads.
+        this._areaLastTab = {};
+        try {
+            const raw = localStorage.getItem('vf_hs_area_last_tab');
+            const parsed = raw ? JSON.parse(raw) : null;
+            if (parsed && typeof parsed === 'object') this._areaLastTab = parsed;
+        } catch (e) { /* ignore */ }
         try {
             const raw = localStorage.getItem('vf_hs_hangar_sidebar_prefs_v1');
             const prefs = raw ? JSON.parse(raw) : null;
@@ -93278,6 +96737,11 @@ var HomeStationUI = class HomeStationUI {
         this._upgTipRaf = 0;
         this._resBuyModal = null;
         this._navLevel = 'tabs'; // tabs | sub | content
+        // When cycling the top area row (←/→), soft remount must not drop
+        // focus onto the sub-nav via focusActiveTab()'s subnav preference.
+        this._navPreferRow = null; // 'area' | 'subnav' | null
+        // Exact area button to refocus after soft remount (station/profiles/…).
+        this._navPreferAreaKey = null;
         this._upgradeSubMeta = {
             station: { label: 'STATION', icon: 'hsStation' },
             ships: { label: 'SHIPS', icon: 'hsShip' },
@@ -93356,6 +96820,7 @@ var HomeStationUI = class HomeStationUI {
                     { id: 'WEAPONS', icon: 'menuWeapons', open: 'weapons' },
                     { id: 'ABILITIES', icon: 'menuAbilities', open: 'abilities' },
                     { id: 'DEFENSE SYSTEMS', icon: 'menuDefense', open: 'defenses' },
+                    { id: 'ENERGY SYSTEMS', icon: 'statEnergy', open: 'energy' },
                     { id: 'EXPLOSIONS', icon: 'menuAbilities', open: 'explosions' },
                     { id: 'COMPONENTS', icon: 'hsComponents', open: 'components' }
                 ]
@@ -93761,6 +97226,28 @@ extendClass(HomeStationUI, {
         return MENU_AREAS.find((area) => area.tabs.indexOf(tabId) !== -1) || null;
     },
 
+    /** Remember the last sub-tab visited inside an area (SHIPYARD, UPGRADE, …). */
+    rememberAreaTab(tabId) {
+        const area = this.getTabArea(tabId);
+        if (!area || tabId === 'play') return;
+        if (!this._areaLastTab || typeof this._areaLastTab !== 'object') this._areaLastTab = {};
+        if (this._areaLastTab[area.id] === tabId) return;
+        this._areaLastTab[area.id] = tabId;
+        try {
+            localStorage.setItem('vf_hs_area_last_tab', JSON.stringify(this._areaLastTab));
+        } catch (e) { /* ignore */ }
+    },
+
+    /** Where a click on an area button should land: last section, else ★ default. */
+    getAreaLandingTab(area, pages) {
+        const list = pages && pages.length ? pages : (area && area.tabs) || [];
+        if (!list.length) return null;
+        const remembered = this._areaLastTab && this._areaLastTab[area.id];
+        if (remembered && list.indexOf(remembered) !== -1) return remembered;
+        if (area.defaultTab && list.indexOf(area.defaultTab) !== -1) return area.defaultTab;
+        return list[0];
+    },
+
     renderTabs() {
         if (typeof MENU_AREAS !== 'undefined') return this.renderAreaTabs();
         return this.renderOrderedTabs();
@@ -93807,11 +97294,11 @@ extendClass(HomeStationUI, {
             const tabs = area.tabs.filter((id) => mainTabs.indexOf(id) !== -1);
             if (!tabs.length) return '';
             const active = activeArea === area;
-            // A click on the area always lands on its ★ default tab — except
-            // PLAY (the map is never entered just by switching areas).
+            // Land on the last section visited in this area (cached), else ★ default.
+            // PLAY stays out of the landing set so area clicks never open the map.
             const modal = (id) => id === 'play';
             const pages = tabs.filter((id) => !modal(id));
-            const target = area.defaultTab && pages.indexOf(area.defaultTab) !== -1 ? area.defaultTab : (pages[0] || tabs[0]);
+            const target = this.getAreaLandingTab(area, pages) || pages[0] || tabs[0];
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
             return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item>` +
@@ -94026,7 +97513,8 @@ extendClass(HomeStationUI, {
         };
         document.addEventListener('mousemove', this._mouseMoveHandler);
         const opts = options || {};
-        // No stage cleared yet on the start planet: always land on PLAY, ignore any persisted tab.
+        // No stage cleared yet: default new sessions to PLAY, but never clobber a
+        // section the pilot already opened (hangar/station/…) — that was wiping the cache.
         if (typeof profileManager !== 'undefined' && typeof planetConfigManager !== 'undefined' && profileManager.getPlanetStageState) {
             const tutorialProfile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
             if (tutorialProfile) {
@@ -94035,7 +97523,10 @@ extendClass(HomeStationUI, {
                 const tutorialPlanetId = tutorialMap.startPlanetId || (tutorialMap.nodes && tutorialMap.nodes[0] && tutorialMap.nodes[0].planetId);
                 if (tutorialPlanetId) {
                     const st = profileManager.getPlanetStageState(tutorialGalaxyId, tutorialPlanetId);
-                    if (!(st && st.highestStage >= 1)) opts.tab = 'play';
+                    if (!(st && st.highestStage >= 1)) {
+                        const preferred = opts.tab || (typeof menuStateManager !== 'undefined' && menuStateManager.get().tab);
+                        if (!preferred || preferred === 'play') opts.tab = 'play';
+                    }
                 }
             }
         }
@@ -94084,6 +97575,7 @@ extendClass(HomeStationUI, {
         const tab = this.tab === 'menu'
             ? ((this._prevTab && this._prevTab !== 'menu') ? this._prevTab : 'station')
             : this.tab;
+        this.rememberAreaTab(tab);
         this.captureShopPrefs();
         const extra = {
             tab: tab,
@@ -95172,7 +98664,7 @@ extendClass(HomeStationUI, {
         if (!profile) {
             this.overlay.dataset.hsTab = 'station';
             this.setOverlayHtml(`
-                <div class="profile-selection-content home-station-content">
+                <div class="profile-selection-content home-station-content vf-glass">
                     <div class="hs-header">
                         <div class="hs-topbar">
                             <span class="hs-home-label">HOME STATION</span>
@@ -95208,7 +98700,7 @@ extendClass(HomeStationUI, {
         const undimmedTabs = ['hangar', 'shop', 'upgrade', 'missions', 'craft', 'travel', 'explorations', 'factions', 'ffleet', 'ftrade', 'fcontracts'];
         const modeClass = undimmedTabs.indexOf(this.tab) !== -1 ? ` hs-mode-${this.tab}` : '';
         this.setOverlayHtml(`
-            <div class="vf-browser-shell">
+            <div class="vf-browser-shell vf-glass">
               <div class="profile-selection-content home-station-content hs-nav-tabs${this.tab === 'station' ? ' hs-mode-station' : ''}${isPlay ? ' hs-mode-play' : ''}${isMenu || this.isMenuRowTab() ? ' hs-mode-menu' : ''}${isComp ? ' hs-mode-components' : ''}${modeClass}">
                 <div class="hs-header hs-header-split">
                     <div class="hs-pilot-card">
@@ -95286,6 +98778,11 @@ extendClass(HomeStationUI, {
                 const el = wrap.firstElementChild;
                 if (el) {
                     header.insertBefore(el, headerMain);
+                    el.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.launchPlay();
+                    });
                     playBtn = el;
                 }
             }
@@ -95422,13 +98919,13 @@ extendClass(HomeStationUI, {
                     </div>
                     <div class="hs-panel hs-panel-stack hs-panel-parts hs-panel-ships hs-panel-storage${this.stationLayoutSideBySide() ? ' is-side-by-side' : ''}">
                         <button type="button" class="hs-panel-layout-toggle" data-station-layout-toggle aria-pressed="${this.stationLayoutSideBySide()}" aria-label="Switch layout" data-ui-tip="SWITCH LAYOUT">⇄</button>
-                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
-                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
-                            <div class="hs-row hs-ship-row">${ownedHtml}</div>
-                        </section>
                         <section class="hs-station-section${this.stationCollapsedSections().storage ? ' is-collapsed' : ''}" data-station-section="storage">
                             ${this.stationSectionHeaderHtml('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile), 'storage', !!this.stationCollapsedSections().storage)}
                             <div class="hs-row hs-station-storage-row">${this.renderStationStorage(profile)}</div>
+                        </section>
+                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
+                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
+                            <div class="hs-row hs-ship-row">${ownedHtml}</div>
                         </section>
                     </div>
                     <div class="hs-panel hs-panel-chambers">
@@ -95573,13 +99070,34 @@ extendClass(HomeStationUI, {
     _syncSoftNavChrome(content, bodyEl, hideTabsForTutorial) {
         if (hideTabsForTutorial) return false;
         const activeArea = this.getTabArea(this.tab);
+        const onProfiles = this.tab === 'menu' && typeof startScreenManager !== 'undefined'
+            && startScreenManager.embeddedMenuTab === 'profiles';
+        const onMenu = this.isMenuRowTab() && !onProfiles;
         const areaId = activeArea ? activeArea.id
-            : (this.isMenuRowTab() ? 'menu' : (this.tab === 'play' ? 'play' : null));
+            : (onProfiles ? 'profiles' : (onMenu ? 'menu' : (this.tab === 'play' ? 'play' : null)));
 
-        content.querySelectorAll('.hs-area-btn[data-area]').forEach((btn) => {
-            const on = !!(activeArea && btn.getAttribute('data-area') === activeArea.id);
+        content.querySelectorAll('.hs-area-btn').forEach((btn) => {
+            let on = false;
+            if (btn.hasAttribute('data-menu-open-tab')) {
+                on = onProfiles && btn.getAttribute('data-menu-open-tab') === 'profiles';
+            } else if (btn.hasAttribute('data-open-menu')) {
+                on = onMenu;
+            } else if (btn.hasAttribute('data-area')) {
+                on = !!(activeArea && btn.getAttribute('data-area') === activeArea.id);
+            }
             btn.classList.toggle('active', on);
             btn.classList.remove('hs-anim-activate', 'holo-on', 'hs-anim-from-left', 'hs-anim-from-right');
+            // Keep area → landing-tab cache hot across soft switches (stale data-tab
+            // was sending clicks back to the area's ★ default, or worse).
+            if (btn.hasAttribute('data-area') && typeof MENU_AREAS !== 'undefined'
+                && typeof this.getAreaLandingTab === 'function') {
+                const area = MENU_AREAS.find((a) => a.id === btn.getAttribute('data-area'));
+                if (area && area.tabs && area.tabs.length) {
+                    const pages = area.tabs.filter((id) => id !== 'play');
+                    const land = this.getAreaLandingTab(area, pages) || pages[0] || area.tabs[0];
+                    if (land) btn.setAttribute('data-tab', land);
+                }
+            }
         });
         content.querySelectorAll('.hs-home-btn[data-tab="station"]').forEach((btn) => {
             btn.classList.toggle('active', this.tab === 'station');
@@ -95692,7 +99210,7 @@ extendClass(HomeStationUI, {
                 if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
                 // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
                 if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
-                if (t === 'hangar') this.bindHangarTabEvents();
+                if (t === 'hangar') { this.bindHangarTabEvents(); this.bindStorageDragAndDrop(); }
                 // Storage grid is rebuilt on soft switch — reattach the 2-column resize grip.
                 if (t === 'station') {
                     this.bindStationColumnResize();
@@ -96310,6 +99828,20 @@ extendClass(HomeStationUI, {
             }
         }
         this._navLevel = 'tabs';
+        const prefer = this._navPreferRow;
+        const preferKey = this._navPreferAreaKey;
+        if (prefer === 'area' && this.focusNavRow && this.focusNavRow('area', preferKey)) {
+            this._navPreferRow = null;
+            this._navPreferAreaKey = null;
+            return;
+        }
+        if (prefer === 'subnav' && this.focusNavRow && this.focusNavRow('subnav')) {
+            this._navPreferRow = null;
+            this._navPreferAreaKey = null;
+            return;
+        }
+        this._navPreferRow = null;
+        this._navPreferAreaKey = null;
         this.focusActiveTab();
     },
 
@@ -98783,7 +102315,10 @@ var factionPacks = (() => {
         const out = {}, ids = (typeof factionShipStyles !== 'undefined' && factionShipStyles.factions) || ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
         await Promise.all(ids.map(async (f) => { const m = await getJson(BASE + f + '/manifest.json'); if (Array.isArray(m)) out[f] = m; }));
         if (Object.keys(out).length) return out;
-        return (await getJson('/__factions')) || out;
+        // /__factions is local-dev only — hosted builds (itch.io) stay on static manifests.
+        const host = (typeof location !== 'undefined' && location.hostname) || '';
+        const localDev = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+        return localDev ? ((await getJson('/__factions')) || out) : out;
     }
     function applyStyle(f, style) {
         if (typeof factionShipStyles === 'undefined' || !style || !factionShipStyles.styles[f]) return;
@@ -99033,7 +102568,7 @@ extendClass(HomeStationUI, {
         const cats = {
             SHIPS: ['ships'], PLANETS: ['planets'], ENEMIES: ['enemies'], FACTIONS: ['factions'],
             EVENTS: ['events'], WEAPONS: ['weapons'], ABILITIES: ['abilities'],
-            'DEFENSE SYSTEMS': ['defenses'], COMPONENTS: ['weapons', 'abilities', 'defenses']
+            'DEFENSE SYSTEMS': ['defenses'], 'ENERGY SYSTEMS': ['energy'], COMPONENTS: ['weapons', 'abilities', 'defenses']
         }[itemId];
         return cats ? cats.reduce((sum, cat) => sum + count(cat), 0) : null;
     },
@@ -99091,6 +102626,7 @@ extendClass(HomeStationUI, {
             weapons: () => typeof weaponViewerUI !== 'undefined' && weaponViewerUI.show({ onClose: returnToExplorations }),
             abilities: () => typeof abilityViewerUI !== 'undefined' && abilityViewerUI.show({ onClose: returnToExplorations }),
             defenses: () => typeof defenseViewerUI !== 'undefined' && defenseViewerUI.show({ onClose: returnToExplorations }),
+            energy: () => typeof energyViewerUI !== 'undefined' && energyViewerUI.show({ onClose: returnToExplorations }),
             explosions: () => typeof explosionViewerUI !== 'undefined' && explosionViewerUI.show({ onClose: returnToExplorations })
         };
         const open = openers[kind];
@@ -99112,6 +102648,7 @@ extendClass(HomeStationUI, {
             weapons: () => typeof weaponViewerUI !== 'undefined' ? weaponViewerUI : null,
             abilities: () => typeof abilityViewerUI !== 'undefined' ? abilityViewerUI : null,
             defenses: () => typeof defenseViewerUI !== 'undefined' ? defenseViewerUI : null,
+            energy: () => typeof energyViewerUI !== 'undefined' ? energyViewerUI : null,
             explosions: () => typeof explosionViewerUI !== 'undefined' ? explosionViewerUI : null
         }[kind];
         return pick ? pick() : null;
@@ -99302,19 +102839,58 @@ extendClass(HomeStationUI, {
         const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : {};
         const cls = this.shipClassLabel(this.shipModelClass(id, cfg));
         const val = (v) => (v != null ? v : '—');
-        const stat = (icon, label, v, col) => {
+        // tip: a multi-line per-part breakdown (e.g. each weapon's own damage) shown as a proper
+        // hover tooltip instead of the plain native `title`, for stats that sum several equipped
+        // parts into one number — so hovering the total explains what it's made of.
+        const stat = (icon, label, v, col, tip) => {
             const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
             const img = ir && ir.imgHtml ? ir.imgHtml(icon, 14, 'hs-pixel hs-pixel-12', col, false) : this.iconHtml(icon, 14, 'hs-pixel hs-pixel-12', false);
-            return `<span class="hs-ship-stat" style="--stat:${col}" title="${label}"><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
+            const tipAttrs = tip
+                ? `data-ui-tip-instant data-ui-tip-head="${label}" data-ui-tip="${String(tip).replace(/"/g, '&quot;')}"`
+                : `title="${label}"`;
+            return `<span class="hs-ship-stat" style="--stat:${col}" ${tipAttrs}><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
         };
-        const tipText = [['TIER', cfg.tier], ['HP', cfg.maxHealth], ['ARMOR', cfg.armor], ['DAMAGE', cfg.damage], ['SPEED', cfg.speed]]
-            .map((x) => x[0] + ' ' + val(x[1])).join(' · ');
+        // HP/Armor/Speed/Damage: live, not the static hull config — getMergedModel() runs the
+        // same base-hull → frame-hull-bonus → equipped-ability-stat-mod → weapon-upgrade-bonus
+        // pipeline the ship actually flies with (shipLoadoutManager.applyLayoutToModel, called
+        // from here regardless of which ship is active), so these numbers move when a part is
+        // equipped/unequipped instead of only ever showing the hull's fixed base stats.
+        const merged = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+            ? shipConfigManager.getMergedModel(id) : cfg;
+        // Damage: every actually-equipped weapon's own damage added up, not just the first/
+        // default one — a ship with several weapon slots filled under-reported its firepower
+        // otherwise. An unarmed ship shows 0, not the hull's unrelated base cfg.damage (that
+        // number used to appear even with nothing equipped — an unarmed ship can't deal that
+        // damage, it only happens to match the laser's fallback shot fired in combat).
+        const equippedWeapons = (merged.loadout && merged.loadout.weapons) || [];
+        const liveDamage = merged.weaponConfig
+            ? equippedWeapons.reduce((sum, w) => {
+                const d = merged.weaponConfig[w] && merged.weaponConfig[w].damage;
+                return sum + (d != null ? Number(d) : 0);
+            }, 0)
+            : cfg.damage;
+        // Per-weapon breakdown: only worth a tooltip when there's more than one separate weapon
+        // contributing to the total — a single weapon's damage already IS the shown number.
+        const damageTip = (merged.weaponConfig && equippedWeapons.length > 1)
+            ? equippedWeapons.map((w) => {
+                const d = merged.weaponConfig[w] && merged.weaponConfig[w].damage;
+                return this.hangarModuleLabel(w) + ': ' + (d != null ? d : '—');
+            }).join('\n')
+            : null;
+        // Armor: the flat armor stat (hull + ability bonuses) plus the damage-reduction % from
+        // equipped defense modules (massive/heavy armor plating) — both are "how much less
+        // damage gets through", so a defense part now actually moves this number too.
+        const liveArmor = (Number(merged.armor) || 0) + (Number(merged.damageReduction) || 0);
+        const tipText = [['TIER', cfg.tier], ['HP', merged.maxHealth], ['ARMOR', liveArmor], ['DAMAGE', liveDamage], ['SPEED', merged.speed], ['ENERGY', merged.maxEnergy]]
+            .map((x) => x[0] + ' ' + val(x[1])).join(' · ')
+            + (merged.shieldMax ? ' · SHIELD ' + merged.shieldMax : '');
         const statsHtml = `<div class="hs-ship-stats">` +
             stat('navStar', 'Tier', cfg.tier, '#ffe14a') +
-            stat('statHealth', 'Health', cfg.maxHealth, '#5cff7a') +
-            stat('statArmor', 'Armor', cfg.armor, '#5ce1ff') +
-            stat('statDamage', 'Damage', cfg.damage, '#ff5a3c') +
-            stat('statSpeed', 'Speed', cfg.speed, '#c58bff') +
+            stat('statHealth', 'Health', merged.maxHealth, '#5cff7a') +
+            stat('statArmor', 'Armor', liveArmor, '#5ce1ff') +
+            stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip) +
+            stat('statSpeed', 'Speed', merged.speed, '#c58bff') +
+            stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a') +
             `</div>`;
         return `<tr>` +
             `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
@@ -99326,7 +102902,12 @@ extendClass(HomeStationUI, {
             `<td class="hs-ship-table-name" data-ui-tip="${tipText}">` +
             statsHtml +
             `<strong>${this.shipName(id)}</strong>` +
-            `<span>${cls}${note ? ' · ' + note : ''}</span></td>` +
+            // Skip the class line when it would just repeat the ship's own name in full
+            // (e.g. an "Assault" hull simply named "Assault") — nothing new to show twice.
+            (this.shipName(id).trim().toUpperCase() === cls.trim().toUpperCase() && !note
+                ? ''
+                : `<span>${cls}${note ? ' · ' + note : ''}</span>`) +
+            `</td>` +
             (actionHtml != null
                 ? `<td class="hs-ship-table-action">${actionHtml}</td>`
                 : '') +
@@ -99354,29 +102935,64 @@ extendClass(HomeStationUI, {
         return g(kind, fallback);
     },
 
+    /**
+     * Parts never stack in the grid: each owned unit is `defId#unit` so it can sit
+     * in its own cell and keep its own EQUIPMENT upgrades. Blueprints stay stacked.
+     */
+    _partInstanceParts(id) {
+        const raw = String(id || '');
+        const m = raw.match(/^(.*)#(\d+)$/);
+        if (m) {
+            return {
+                defId: m[1],
+                unit: Math.max(0, parseInt(m[2], 10) || 0),
+                instanceId: raw
+            };
+        }
+        return { defId: raw, unit: null, instanceId: raw };
+    },
+
+    _storageDefId(id) {
+        return this._partInstanceParts(id).defId;
+    },
+
+    /** Expand a positive qty into one storage entry per unit (no ×N stacks). */
+    _expandPartUnits(bucket, defId, qty) {
+        const n = Math.max(0, Math.round(Number(qty) || 0));
+        const out = [];
+        for (let i = 0; i < n; i++) {
+            out.push({ bucket: bucket, id: defId + '#' + i, defId: defId, unit: i });
+        }
+        return out;
+    },
+
     /** Display name + icon + label prefix for one storage-bucket item (weapons/defenses/abilities/energy/blueprints).
      *  kind/physId identify the underlying part for the physical-item casing (physical-item.js). */
     _storageItemMeta(bucket, id) {
+        const defId = this._storageDefId(id);
         if (bucket === 'blueprints') {
-            const name = (typeof profileManager !== 'undefined') ? profileManager.getBlueprintName(id) : id;
-            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
+            const name = (typeof profileManager !== 'undefined') ? profileManager.getBlueprintName(defId) : defId;
+            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(defId) : null;
             const kind = (bp && bp.kind) || 'weapon';
-            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || id, 32, 'hs-pixel'), label: name, color: this._storageBucketColor('abilities'), kind, physId: (bp && bp.id) || id };
+            // Color by what the blueprint actually crafts (weapon/defense/ability/energy), not a
+            // flat ability-purple for every blueprint regardless of its real type.
+            const colorBucket = kind === 'weapon' ? 'weapons' : kind === 'defense' ? 'defenses' : kind === 'energy' ? 'energy' : 'abilities';
+            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || defId, 32, 'hs-pixel'), label: name, color: this._storageBucketColor(colorBucket), kind, physId: (bp && bp.id) || defId };
         }
         if (bucket === 'weapons') {
-            const name = (typeof weaponConfigManager !== 'undefined')
-                ? String(weaponConfigManager.getWeapon(id).name || id).toUpperCase() : id.toUpperCase();
-            return { icon: this.iconHtml('statWeapon', 32, 'hs-pixel'), label: 'WPN ' + name, color: this._storageBucketColor(bucket), kind: 'weapon', physId: id };
+            const w = (typeof weaponConfigManager !== 'undefined') ? weaponConfigManager.getWeapon(defId) : null;
+            const name = String((w && w.name) || defId).toUpperCase();
+            return { icon: this.iconHtml('statWeapon', 32, 'hs-pixel'), label: 'WPN ' + name, color: this._storageBucketColor(bucket), kind: 'weapon', physId: defId };
         }
         if (bucket === 'defenses') {
             const name = (typeof abilityConfigManager !== 'undefined')
-                ? String(abilityConfigManager.getDisplayName(id) || id).toUpperCase() : id.toUpperCase();
-            return { icon: this.iconHtml('statArmor', 32, 'hs-pixel'), label: 'DEF ' + name, color: this._storageBucketColor(bucket), kind: 'defense', physId: id };
+                ? String(abilityConfigManager.getDisplayName(defId) || defId).toUpperCase() : defId.toUpperCase();
+            return { icon: this.iconHtml('statArmor', 32, 'hs-pixel'), label: 'DEF ' + name, color: this._storageBucketColor(bucket), kind: 'defense', physId: defId };
         }
         // abilities / energy
         const name = (typeof abilityConfigManager !== 'undefined')
-            ? String(abilityConfigManager.getDisplayName(id) || id).toUpperCase() : id.toUpperCase();
-        return { icon: this.iconHtml('statAbilities', 32, 'hs-pixel'), label: (bucket === 'energy' ? 'PWR ' : 'ABL ') + name, color: this._storageBucketColor(bucket), kind: bucket === 'energy' ? 'energy' : 'ability', physId: id };
+            ? String(abilityConfigManager.getDisplayName(defId) || defId).toUpperCase() : defId.toUpperCase();
+        return { icon: this.iconHtml('statAbilities', 32, 'hs-pixel'), label: (bucket === 'energy' ? 'PWR ' : 'ABL ') + name, color: this._storageBucketColor(bucket), kind: bucket === 'energy' ? 'energy' : 'ability', physId: defId };
     },
 
     /** Cost + affordability lines for a blueprint, for its storage-tile tooltip. */
@@ -99387,16 +103003,6 @@ extendClass(HomeStationUI, {
         const afford = this.canAffordCost(profile.resources, cost, profile);
         const costText = Object.keys(cost).map((k) => cost[k] + ' ' + k.toUpperCase()).join(' · ');
         return costText ? ['COST ' + costText, afford ? 'READY TO CRAFT' : 'NOT ENOUGH RESOURCES'] : [];
-    },
-
-    /** Dimmed placeholder cell for a bucket with no owned items in this view — shows the category icon, greyed out. */
-    _storageCategoryPlaceholder(bucket) {
-        const color = this._storageBucketColor(bucket);
-        const kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
-        // Reuse the physical-item generative casing (physical-item.js) for a detailed silhouette, darkened heavily via CSS.
-        const body = (typeof physicalItem !== 'undefined') ? physicalItem.wrap(kind, 'placeholder', 40, 40, color, '') : '';
-        const html = `<span class="hs-storage-cell is-empty" style="__SPAN__--pk-c:${color}" aria-hidden="true">${body}</span>`;
-        return { html, span: [1, 1] };
     },
 
     /** Station resources as vertical fill-level chambers (replaces the flat chip row).
@@ -99434,6 +103040,17 @@ extendClass(HomeStationUI, {
         return `<div class="hs-res-chambers">${cells.join('')}</div>`;
     },
 
+    /** Apply the player's manually-arranged drag order (ProfileManager.getStorageOrderList) to a
+     *  bucket/id entry list for one storage grid — never auto-sorts, just replays past drags. */
+    _orderStorageEntries(profile, scope, shipId, rawEntries) {
+        if (typeof profileManager === 'undefined' || !profileManager.getStorageOrderList) return rawEntries;
+        const byKey = {};
+        rawEntries.forEach((e) => { byKey[e.bucket + ':' + e.id] = e; });
+        const keys = rawEntries.map((e) => e.bucket + ':' + e.id);
+        const order = profileManager.getStorageOrderList(profile, scope, shipId, keys);
+        return order.map((k) => byKey[k]).filter(Boolean);
+    },
+
     /** Every owned bucket/id pair with a positive count (profile.parts + profile.blueprints). */
     _allStorageEntries(profile) {
         const entries = [];
@@ -99459,15 +103076,16 @@ extendClass(HomeStationUI, {
     _storageItemSpan(bucket, id) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         if (!slm || !slm.getPartSizeLevel) return [1, 1];
+        const defId = this._storageDefId(id);
         let kind, partId;
         if (bucket === 'blueprints') {
-            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(id) : null;
+            const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(defId) : null;
             if (!bp) return [1, 1];
             kind = bp.kind;
             partId = bp.id;
         } else {
             kind = bucket === 'weapons' ? 'weapon' : bucket === 'defenses' ? 'defense' : bucket === 'energy' ? 'energy' : 'ability';
-            partId = id;
+            partId = defId;
         }
         const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel(kind, partId) | 0));
         return [[1, 1], [1, 2], [2, 2]][lv];
@@ -99491,13 +103109,15 @@ extendClass(HomeStationUI, {
         return Math.max(8, Math.round(n) || 12);
     },
 
-    /** How many bay cells station-filed items currently occupy. */
+    /** How many bay cells station-filed items currently occupy (one cell set per part copy). */
     _stationStorageUsed(profile) {
         if (!profile || typeof profileManager === 'undefined') return 0;
         return this._allStorageEntries(profile).reduce((n, e) => {
-            if (profileManager.getStationStorageQty(profile, e.bucket, e.id) <= 0) return n;
+            const qty = profileManager.getStationStorageQty(profile, e.bucket, e.id);
+            if (qty <= 0) return n;
             const span = this._storageItemSpan(e.bucket, e.id);
-            return n + span[0] * span[1];
+            const cells = span[0] * span[1];
+            return n + (e.bucket === 'blueprints' ? cells : cells * qty);
         }, 0);
     },
 
@@ -99509,7 +103129,7 @@ extendClass(HomeStationUI, {
     },
 
     /** Turn a slot budget into a compact cols×rows bay (grows wider first, then taller). */
-    _stationStorageGrid(profile, usedCells) {
+    _stationStorageGrid(profile, usedCells, opts) {
         const budget = Math.max(this._stationStorageSlots(profile), usedCells | 0);
         let cols;
         let rows;
@@ -99522,70 +103142,181 @@ extendClass(HomeStationUI, {
             cols = this.STATION_STORAGE_COLS;
             rows = Math.max(4, Math.ceil(budget / cols));
         }
+        const maxCols = opts && opts.maxCols != null ? Math.max(1, opts.maxCols | 0) : 0;
+        if (maxCols && cols > maxCols) {
+            cols = maxCols;
+            rows = Math.max(rows, Math.ceil(budget / cols));
+        }
         // If items overfill the budget, grow rows so nothing is clipped.
         if (usedCells > cols * rows) rows = Math.ceil(usedCells / cols);
         return { cols, rows, slots: budget };
     },
 
-    /** Shared square slot size for every station/ship storage bay (px). */
-    STORAGE_CELL_PX: 48,
+    /** Shared square slot size for every station/ship storage bay (px, target before snap). */
+    STORAGE_CELL_PX: 56,
+    /** Slot divider target (px) — snapped with the cell so lines stay even under glass scale. */
+    STORAGE_GAP_PX: 2,
 
-    /** Item cells padded out to fill cols x rows. Slot size is a fixed shared px value so
-     *  ship storage and station storage always match (no per-column container shrink). */
-    _storageGridHtml(cellSpecs, grid) {
+    /** Effective glass zoom (home-station host uses transform:scale(z)). */
+    _glassZoom() {
+        try {
+            const cs = getComputedStyle(document.documentElement);
+            return parseFloat(cs.getPropertyValue('--gui-zoom-eff'))
+                || parseFloat(cs.getPropertyValue('--gui-zoom'))
+                || 0.75;
+        } catch (e) {
+            return 0.75;
+        }
+    },
+
+    /**
+     * Integer cell + gap near STORAGE_* targets such that gap·z and (cell+gap)·z land on
+     * whole device pixels. Fractional scale otherwise makes every other divider 1px vs 2–3px.
+     */
+    _storageLayoutPx() {
+        const z = this._glassZoom();
+        const targetCell = this.STORAGE_CELL_PX;
+        const targetGap = this.STORAGE_GAP_PX;
+        let best = { cell: targetCell, gap: Math.max(2, targetGap), err: Infinity };
+        for (let gap = 2; gap <= 6; gap++) {
+            for (let cell = targetCell - 8; cell <= targetCell + 8; cell++) {
+                if (cell < 40) continue;
+                const step = cell + gap;
+                const gapErr = Math.abs(gap * z - Math.round(gap * z));
+                const stepErr = Math.abs(step * z - Math.round(step * z));
+                // Step snap first: a half-pixel stride makes every other divider 1px vs 2–3px.
+                const err = stepErr * 10 + gapErr * 5
+                    + Math.abs(cell - targetCell) * 0.01
+                    + Math.abs(gap - targetGap) * 0.05;
+                if (err < best.err) best = { cell, gap, err };
+            }
+        }
+        return { cell: best.cell, gap: best.gap };
+    },
+
+    /** Item cells padded out to fill cols x rows. Slot size is snapped for the current glass
+     *  zoom so ship + station dividers stay equal under transform:scale.
+     *  cellSpecs entries carry an optional `pos: [col, row]` (1-based) — the player's pinned
+     *  tile for that item (bind-station-events.js _storageDragDrop). Pinned cells get an
+     *  explicit grid-column/row so they stay exactly where dropped; everything else still
+     *  auto-packs into the first free gap via `grid-auto-flow: dense`. A pin that collides
+     *  with another pin (stale data after an item's footprint changed) is ignored for this
+     *  render so the layout never overlaps — the item just falls back to auto-placement. */
+    _storageGridHtml(cellSpecs, grid, targetAttrs, extraClass) {
         const capacity = grid.cols * grid.rows;
         const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
         const pad = Math.max(0, capacity - used);
-        const cells = cellSpecs.map((c) => c.html.replace('__SPAN__', `grid-column: span ${c.span[0]}; grid-row: span ${c.span[1]};`));
-        const cs = this.STORAGE_CELL_PX;
-        return `<div class="hs-storage-grid" style="--cs:${cs}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * 4px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * 4px)">` +
+        const claimed = new Set();
+        const claim = (col, row, w, h) => {
+            const cells = [];
+            for (let r = row; r < row + h; r++) for (let c = col; c < col + w; c++) cells.push(c + ',' + r);
+            if (col < 1 || row < 1 || col + w - 1 > grid.cols || row + h - 1 > grid.rows || cells.some((k) => claimed.has(k))) return false;
+            cells.forEach((k) => claimed.add(k));
+            return true;
+        };
+        const cells = cellSpecs.map((c) => {
+            const [w, h] = c.span;
+            const pinned = c.pos && claim(c.pos[0], c.pos[1], w, h);
+            const place = pinned
+                ? `grid-column: ${c.pos[0]} / span ${w}; grid-row: ${c.pos[1]} / span ${h};`
+                : `grid-column: span ${w}; grid-row: span ${h};`;
+            return c.html.replace('__SPAN__', place);
+        });
+        const layout = this._storageLayoutPx();
+        const cs = layout.cell;
+        const gap = layout.gap;
+        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
     /** Items not currently filed into any ship's storage or equipped — still sitting at the station, as a grid of icon tiles.
-     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving. */
+     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving.
+     *  Parts expand to one cell per owned unit (no stacks); blueprints stay qty-stacked. */
     renderStationStorage(profile, opts) {
         opts = opts || {};
         const selectMode = opts.selectKey !== undefined;
         const selectKey = opts.selectKey || null;
-        const entries = this._allStorageEntries(profile).filter((e) => profileManager.getStationStorageQty(profile, e.bucket, e.id) > 0);
-        const activeShipId = profile.activeShipId;
-        const cells = entries.map((e) => {
+        const rawEntries = [];
+        this._allStorageEntries(profile).forEach((e) => {
             const qty = profileManager.getStationStorageQty(profile, e.bucket, e.id);
-            const meta = this._storageItemMeta(e.bucket, e.id);
-            const span = this._storageItemSpan(e.bucket, e.id);
+            if (qty <= 0) return;
+            if (e.bucket === 'blueprints') {
+                rawEntries.push(e);
+                return;
+            }
+            const layout = (profileManager.getPartInstanceLayout)
+                ? profileManager.getPartInstanceLayout(profile, e.bucket, e.id)
+                : null;
+            const units = (layout && layout.station) || null;
+            if (units && units.length) {
+                units.forEach((unit) => {
+                    rawEntries.push({ bucket: e.bucket, id: e.id + '#' + unit, defId: e.id, unit });
+                });
+                return;
+            }
+            this._expandPartUnits(e.bucket, e.id, qty).forEach((u) => rawEntries.push(u));
+        });
+        const entries = this._orderStorageEntries(profile, 'station', null, rawEntries);
+        const posMap = profileManager.getStoragePosMap(profile, 'station', null);
+        const activeShipId = profile.activeShipId;
+        const compact = !!opts.compactSpans;
+        const cells = entries.map((e) => {
+            const defId = e.defId || this._storageDefId(e.id);
+            const isBp = e.bucket === 'blueprints';
+            const qty = isBp ? profileManager.getStationStorageQty(profile, e.bucket, defId) : 1;
+            const meta = this._storageItemMeta(e.bucket, defId);
+            const span = compact ? [1, 1] : this._storageItemSpan(e.bucket, defId);
+            const cs = this._storageLayoutPx().cell;
             const body = (typeof physicalItem !== 'undefined')
-                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * 48 - 8, span[1] * 48 - 8, meta.color, '') : '';
+                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '') : '';
             const stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
             if (e.bucket === 'weapons' && typeof shipLoadoutManager !== 'undefined' && activeShipId) {
                 const L2 = shipLoadoutManager.getLoadout(activeShipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
-            const isBp = e.bucket === 'blueprints';
+            if (!isBp && e.unit != null) {
+                const lv = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeLevel)
+                    ? profileManager.getItemUpgradeLevel(e.bucket, e.id, profile) : 0;
+                if (lv > 0) stats.push('UPGRADE L' + lv);
+            }
             const key = e.bucket + ':' + e.id;
+            const moveKey = e.bucket + ':' + defId;
             const selected = selectMode && selectKey === key;
-            const action = isBp ? `data-craft="${e.id}"`
+            const action = isBp ? `data-craft="${defId}"`
                 : (selectMode
                     ? `data-equip-select="${key}"`
-                    : `data-move-to-ship="${key}" data-ship="${activeShipId}"`);
-            const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
-                : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO SHIP STORAGE'])).join('\n').replace(/"/g, '&quot;');
+                    : `data-move-to-ship="${moveKey}" data-ship="${activeShipId}"`);
+            const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, defId)).concat(qty > 1 ? ['×' + qty] : [])
+                : stats.concat([selectMode ? 'SELECT' : '→ SHIP'].filter(Boolean))).join('\n').replace(/"/g, '&quot;');
             const ariaLabel = isBp ? `Craft ${meta.label}`
                 : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to ship storage`);
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
-                `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
+            const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="station"`;
+            // data-part-kind/-id: used by the hangar bay-inventory grid (physical-item.js, which
+            // reuses this exact markup) to match a dragged cell against a ship slot's
+            // data-slot-kind for equip-by-drag, and by its category filter buttons. "blueprint"
+            // (not the real weapon/defense/... kind) specifically so a blueprint — not an
+            // equippable part — can never register as a slot match and get equipped by accident.
+            // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
+            const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
+                `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
-                `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
+                `${isBp && qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
                 `</button>`;
-            return { html, span };
+            return { html, span, pos: pinnedPos };
         });
         const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
-        return this._storageGridHtml(cells, this._stationStorageGrid(profile, used));
+        return this._storageGridHtml(
+            cells,
+            this._stationStorageGrid(profile, used, { maxCols: opts.maxCols }),
+            'data-storage-target="station"'
+        );
     },
 
     /** Items filed into the given ship's storage, plus anything currently equipped on it, as a grid of icon tiles.
-     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving. */
+     *  opts.selectKey: when set (EQUIPMENT tab), cells select for the detail panel instead of moving.
+     *  Parts expand to one cell per owned unit on this ship (no stacks); blueprints stay qty-stacked. */
     renderShipStorage(profile, shipId, opts) {
         opts = opts || {};
         const selectMode = opts.selectKey !== undefined;
@@ -99593,61 +103324,122 @@ extendClass(HomeStationUI, {
         const grid = this._storageGrid(shipId);
         if (!shipId) return this._storageGridHtml([], grid);
         const entry = profileManager.getShipStorageEntry(profile, shipId);
-        const entries = [];
-        const seen = {};
-        const addEntry = (bucket, id) => {
-            const key = bucket + ':' + id;
-            if (seen[key]) return;
-            seen[key] = true;
-            entries.push({ bucket, id });
+        const rawEntries = [];
+        const seenDef = {};
+        const addDef = (bucket, defId) => {
+            if (!defId) return;
+            const dk = bucket + ':' + defId;
+            if (seenDef[dk]) return;
+            seenDef[dk] = true;
+            if (bucket === 'blueprints') {
+                rawEntries.push({ bucket, id: defId, defId });
+                return;
+            }
+            const layout = (profileManager.getPartInstanceLayout)
+                ? profileManager.getPartInstanceLayout(profile, bucket, defId)
+                : null;
+            const units = (layout && layout.ships && layout.ships[shipId]) || null;
+            if (units && units.length) {
+                units.forEach((unit) => {
+                    rawEntries.push({ bucket, id: defId + '#' + unit, defId, unit });
+                });
+                return;
+            }
+            const qty = profileManager.getShipStorageQty(profile, shipId, bucket, defId);
+            if (qty > 0) {
+                this._expandPartUnits(bucket, defId, qty).forEach((u) => rawEntries.push(u));
+            }
         };
         this.profileManagerShipStorageBuckets().forEach((bucket) => {
             Object.keys(entry[bucket] || {}).forEach((id) => {
-                if ((entry[bucket][id] || 0) > 0) addEntry(bucket, id);
+                if ((entry[bucket][id] || 0) > 0) addDef(bucket, id);
             });
         });
         const L = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager.getLoadout(shipId) : null;
+        const equippedOcc = {};
         if (L) {
-            (L.weaponSlots || []).forEach((id) => { if (id) addEntry('weapons', id); });
+            (L.weaponSlots || []).forEach((id) => {
+                if (!id) return;
+                addDef('weapons', id);
+                equippedOcc['weapons:' + id] = (equippedOcc['weapons:' + id] || 0) + 1;
+            });
             ['defenses', 'abilities', 'energy'].forEach((bucket) => {
-                (L[bucket] || []).forEach((id) => addEntry(bucket, id));
+                (L[bucket] || []).forEach((id) => {
+                    if (!id) return;
+                    addDef(bucket, id);
+                    equippedOcc[bucket + ':' + id] = (equippedOcc[bucket + ':' + id] || 0) + 1;
+                });
             });
         }
-        const present = new Set(entries.map((e) => e.bucket));
-        const cells = entries.map((e) => {
-            const qty = profileManager.getShipStorageQty(profile, shipId, e.bucket, e.id);
-            const meta = this._storageItemMeta(e.bucket, e.id);
-            const span = this._storageItemSpan(e.bucket, e.id);
+        const equippedUnits = {};
+        Object.keys(equippedOcc).forEach((dk) => {
+            const sep = dk.indexOf(':');
+            const bucket = dk.slice(0, sep);
+            const defId = dk.slice(sep + 1);
+            const layout = (profileManager.getPartInstanceLayout)
+                ? profileManager.getPartInstanceLayout(profile, bucket, defId)
+                : null;
+            const shipUnits = (layout && layout.ships && layout.ships[shipId]) || [];
+            const n = equippedOcc[dk];
+            for (let i = 0; i < n && i < shipUnits.length; i++) {
+                equippedUnits[bucket + ':' + defId + '#' + shipUnits[i]] = true;
+            }
+            if (!shipUnits.length) equippedUnits[dk] = true;
+        });
+        const orderedEntries = this._orderStorageEntries(profile, 'ship', shipId, rawEntries);
+        const posMap = profileManager.getStoragePosMap(profile, 'ship', shipId);
+        const compact = !!opts.compactSpans;
+        const cells = orderedEntries.map((e) => {
+            const defId = e.defId || this._storageDefId(e.id);
+            const isBp = e.bucket === 'blueprints';
+            const qty = isBp ? profileManager.getShipStorageQty(profile, shipId, e.bucket, defId) : 1;
+            const meta = this._storageItemMeta(e.bucket, defId);
+            const span = compact ? [1, 1] : this._storageItemSpan(e.bucket, defId);
+            const cs = this._storageLayoutPx().cell;
             const body = (typeof physicalItem !== 'undefined')
-                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * 48 - 8, span[1] * 48 - 8, meta.color, '') : '';
+                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '') : '';
             const stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
             if (e.bucket === 'weapons' && typeof shipLoadoutManager !== 'undefined') {
                 const L2 = shipLoadoutManager.getLoadout(shipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
-            const isBp = e.bucket === 'blueprints';
+            if (!isBp && e.unit != null) {
+                const lv = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeLevel)
+                    ? profileManager.getItemUpgradeLevel(e.bucket, e.id, profile) : 0;
+                if (lv > 0) stats.push('UPGRADE L' + lv);
+            }
             const key = e.bucket + ':' + e.id;
+            const moveKey = e.bucket + ':' + defId;
             const selected = selectMode && selectKey === key;
-            const action = isBp ? `data-craft="${e.id}"`
+            const equipped = !!(equippedUnits[key] || equippedUnits[moveKey]);
+            const action = isBp ? `data-craft="${defId}"`
                 : (selectMode
                     ? `data-equip-select="${key}"`
                     : `data-move-to-station="${key}" data-ship="${shipId}"`);
-            const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, e.id)).concat(['×' + qty])
-                : stats.concat(['×' + qty, selectMode ? 'SELECT' : 'MOVE TO STATION STORAGE'])).join('\n').replace(/"/g, '&quot;');
+            // tipAction:false (hangar bay) drops the station-move hint — click toggles equip there.
+            const tipAction = selectMode ? 'SELECT'
+                : (opts.tipAction === false ? null : '→ STATION');
+            const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, defId)).concat(qty > 1 ? ['×' + qty] : [])
+                : stats.concat([equipped ? 'EQUIPPED' : null, tipAction].filter(Boolean))).join('\n').replace(/"/g, '&quot;');
             const ariaLabel = isBp ? `Craft ${meta.label}`
                 : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to station storage`);
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} style="__SPAN__--pk-c:${meta.color}" ` +
-                `data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
+            const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
+            // data-part-kind/-id: see renderStationStorage above — same reason, needed here too
+            // since this is the function the hangar bay-inventory grid actually calls.
+            const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
+                `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
-                `${qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
+                `${isBp && qty > 1 ? `<span class="hs-storage-cell-qty">×${qty}</span>` : ''}` +
                 `</button>`;
-            return { html, span };
+            return { html, span, pos: pinnedPos };
         });
-        ['weapons', 'defenses', 'abilities', 'energy'].forEach((bucket) => {
-            if (!present.has(bucket)) cells.push(this._storageCategoryPlaceholder(bucket));
-        });
-        return this._storageGridHtml(cells, grid);
+        // opts.extraGridClass: the hangar bay-inventory grid (physical-item.js bayInventoryHtml)
+        // calls this same function for its item set/positions/grid size — one source of truth —
+        // and tags the result with its own class for CSS/selector hooks (.hs-pick-grid) that
+        // don't apply to this function's own Station-tab callers.
+        return this._storageGridHtml(cells, grid, `data-storage-target="ship" data-ship="${shipId}"`, opts.extraGridClass);
     },
 
     profileManagerShipStorageBuckets() {
@@ -100300,7 +104092,49 @@ extendClass(HomeStationUI, {
                 ? abilityConfigManager.configs[key] : null;
             if (cfg) {
                 if (cfg.description) lines.push(String(cfg.description));
-                if (cfg.uiDescription && cfg.uiDescription !== cfg.description) lines.push(String(cfg.uiDescription));
+                // Concrete numbers for this specific ship, not the ability's flat %: a +8% SPEED
+                // ability reads differently on a fast ship than a slow one, so compute the actual
+                // delta from this ship's own base speed (ability-stats.js's ABILITY_STAT_EFFECTS).
+                const eff = typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getAbilityStatEffect
+                    ? shipLoadoutManager.getAbilityStatEffect(key) : null;
+                const baseCfg = (eff && typeof shipConfigManager !== 'undefined')
+                    ? shipConfigManager.getConfig(this.hangarShipId) : null;
+                let statLine = null;
+                if (eff && eff.speedMul && baseCfg) {
+                    const base = Number(baseCfg.speed) || 0;
+                    const delta = Math.round((base * eff.speedMul - base) * 10) / 10;
+                    statLine = (delta >= 0 ? '+' : '') + delta + ' SPEED';
+                } else if (eff && eff.damageMul && baseCfg) {
+                    const base = Number(baseCfg.damage) || 0;
+                    const delta = Math.round(base * eff.damageMul - base);
+                    statLine = (delta >= 0 ? '+' : '') + delta + ' DAMAGE';
+                }
+                if (eff && eff.armor) {
+                    statLine = (statLine ? statLine + ' · ' : '') + (eff.armor >= 0 ? '+' : '') + eff.armor + ' ARMOR';
+                }
+                // Defense and energy items don't go through ABILITY_STAT_EFFECTS at all — their
+                // numbers come from computeDefenseStats/computeEnergyStats (resolve-module-icon.js),
+                // the same functions applyLayoutToModel uses, run here for just this one item so
+                // its own contribution shows instead of nothing.
+                if (!statLine && kind === 'defense' && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeDefenseStats) {
+                    const d = shipLoadoutManager.computeDefenseStats([key]);
+                    const parts = [];
+                    if (d.shieldMax) parts.push('SHIELD +' + d.shieldMax);
+                    // Always surface REGEN for shield modules — they self-recharge.
+                    if (d.shieldMax || d.shieldRegen) {
+                        const r = Math.round((Number(d.shieldRegen) || 0) * 10) / 10;
+                        parts.push('REGEN +' + r + '/s');
+                    }
+                    if (d.damageReduction) parts.push('DMG REDUCTION +' + d.damageReduction);
+                    if (d.reflectChance) parts.push('REFLECT ' + d.reflectChance);
+                    statLine = parts.join(' · ') || null;
+                }
+                if (!statLine && kind === 'energy' && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeEnergyStats) {
+                    const e = shipLoadoutManager.computeEnergyStats({ energy: [key] });
+                    if (e.hasCore) statLine = 'MAX ENERGY ' + e.maxEnergy + ' · REGEN ' + e.regen;
+                }
+                if (statLine) lines.push(statLine);
+                else if (cfg.uiDescription && cfg.uiDescription !== cfg.description) lines.push(String(cfg.uiDescription));
                 const type = cfg.type ? String(cfg.type).toUpperCase() : '';
                 if (type) lines.push(type + (cfg.tier ? ' · TIER ' + cfg.tier : ''));
             }
@@ -102098,7 +105932,7 @@ extendClass(HomeStationUI, {
             if (!canvas.isConnected) { this._fleetPreviewAnim = null; return; }
             this._fleetPreviewAnim = requestAnimationFrame(loop);
             if (typeof document !== 'undefined' && document.hidden) return;
-            if (this.tab && this.tab !== 'factions') return;
+            if (this.tab && this.tab !== 'ffleet') return;
             if (!last) last = ts;
             const elapsed = ts - last;
             if (elapsed < frameInterval) return;
@@ -105725,6 +109559,10 @@ extendClass(HomeStationUI, {
 
     applyHangarSlotChoice(kind, slotIndex, moduleId, sourceEl) {
         if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.setSlotModule) return;
+        // Captured before setSlotModule mutates the loadout.
+        const prevId = this.hangarSlotModuleId(kind, slotIndex);
+        const clearedId = !moduleId ? prevId : null;
+        const replacedId = (moduleId && prevId && prevId !== moduleId) ? prevId : null;
         const res = shipLoadoutManager.setSlotModule(this.hangarShipId, kind, slotIndex, moduleId);
         if (!res.ok) {
             let msg = 'SLOT UPDATE FAILED';
@@ -105757,6 +109595,21 @@ extendClass(HomeStationUI, {
                 : this.hangarShipId;
             if (active === this.hangarShipId) {
                 shipConfigManager.applyToRuntime(this.hangarShipId);
+            }
+        }
+        if (typeof profileManager !== 'undefined') {
+            const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+            const bucket = shipLoadoutManager.kindToLoadoutKey(kind);
+            if (profile) {
+                // Unequip / replace: old part returns to ship cargo.
+                const backId = clearedId || replacedId;
+                if (backId && profileManager.fileUnequippedPart) {
+                    profileManager.fileUnequippedPart(profile, this.hangarShipId, bucket, backId);
+                }
+                // Equip: leave cargo so filed+equipped stays 1 for a single instance.
+                if (moduleId && profileManager.consumeFiledPart) {
+                    profileManager.consumeFiledPart(profile, this.hangarShipId, bucket, moduleId);
+                }
             }
         }
         this._hangarOpenSlot = null;
@@ -106237,7 +110090,8 @@ extendClass(HomeStationUI, {
             const name = sl.id ? this.hangarModuleLabel(sl.id) : 'EMPTY ' + String(sl.kind).toUpperCase() + ' SLOT';
             const img = ir ? String((sl.kind === 'weapon' && sl.id && ir.weaponImgHtml ? ir.weaponImgHtml(sl.id, 32, 'hs-pixel', false) : ir.imgHtml(key, 32, 'hs-pixel', color[sl.kind], false)) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
             const partSz = sl.id && slm && slm.partSizeLabel ? slm.partSizeLabel(sl.kind, sl.id) : null;
-            const tip = ((sl.id ? this.hangarModuleTip(sl.kind, sl.id) : 'NO PART INSTALLED') + '\nSLOT SIZE: ' + 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(this.hangarShipId, sl.kind, sl.index) | 0))] + (partSz ? '\nPART SIZE: ' + partSz : '')).replace(/"/g, '&quot;');
+            const slotSz = 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(this.hangarShipId, sl.kind, sl.index) | 0))];
+            const tip = ((sl.id ? this.hangarModuleTip(sl.kind, sl.id) : 'NO PART INSTALLED') + '\nSIZE_FIT:' + slotSz + ':' + (partSz || slotSz)).replace(/"/g, '&quot;');
             // The installed part sits inside its slot at its own footprint (never bigger than the slot).
             const partLv = sl.id && slm.getPartSizeLevel ? Math.max(0, Math.min(lvl, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : lvl;
             const inner = sl.id
@@ -106245,61 +110099,27 @@ extendClass(HomeStationUI, {
                 : img;
             return `<span class="hs-slotview-cell${sl.id ? ' is-filled' : ''}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${tip}" style="--pk-c:${color[sl.kind]};--svw:${dims[lvl][0]}px;--svh:${dims[lvl][1]}px" role="button" tabindex="0" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" aria-label="${name}">${inner}<span class="hs-slotview-size">${'SML'[partLv]}</span></span>`;
         };
-        // Every row keeps the height of the biggest slot its area currently offers, filled or not.
-        const toggleable = slm && slm.getToggleableAreas ? slm.getToggleableAreas() : [];
-        const areaToggle = (area) => {
-            if (toggleable.indexOf(area) === -1) return '';
-            const on = !slm.isAreaEnabled || slm.isAreaEnabled(this.hangarShipId, area);
-            const areaLabel = this.areaLabel ? this.areaLabel(area) : area.toUpperCase();
-            return `<button type="button" class="hs-slotview-toggle" title="${on ? 'Switch off' : 'Switch on'}" data-slot-area-toggle-button="${this.hangarShipId}|${area}" aria-pressed="${on}" aria-label="${areaLabel} on/off"><span class="hs-slotview-switch${on ? ' is-on' : ''}" aria-hidden="true"></span><span>${on ? 'ON' : 'OFF'}</span></button>`;
-        };
-        const row = (label, items, lvl, ico, area) => `<div class="hs-slotview-row" style="--sv:${Math.max(...[dims[Math.min(2, Math.max(0, lvl | 0))][1]].concat(items.map((sl) => dims[sl.split && sl.kind === 'weapon' ? Math.max(0, slotLv(sl) - 1) : slotLv(sl)][1])))}px"><span class="hs-slotview-name">${ico || ''}<span>${label}</span>${areaToggle(area)}</span>` +
-            `<span class="hs-slotview-slots">${items.length ? items.map((sl) => (sl.split && sl.kind === 'weapon' ? cell(sl, 0) + cell(sl, 1) : cell(sl))).join('') : '<em>NO SLOT</em>'}</span></div>`;
-        const AREA_SHAPES = { front: '<path d="M8 1 L10.5 6 H5.5Z"/>', center: '<rect x="5.5" y="6.5" width="5" height="4"/>', back: '<path d="M5.5 11 H10.5 L11 15 H5Z"/>', wing: '<path d="M5 7 L0.5 13 L5 12Z M11 7 L15.5 13 L11 12Z"/>' };
-        const areaIco = (id) => `<svg class="hs-slotview-ico" viewBox="0 0 16 16" shape-rendering="crispEdges" aria-hidden="true">` +
-            Object.keys(AREA_SHAPES).map((k) => `<g class="${k === id ? 'on' : ''}">${AREA_SHAPES[k]}</g>`).join('') + '</svg>';
-        const kindIco = (kind) => (ir ? String(ir.imgHtml(kindIcon[kind], 16, 'hs-pixel hs-slotview-ico', color[kind], false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
-        // Weapons sit in their hull area; every other slot type gets its own category row.
-        const rows = groups.map((g) => row(g.label, list.filter((sl) => sl.kind === 'weapon' && g.areas.indexOf(sl.area) !== -1), levels[g.lv], areaIco(g.lv), g.lv));
-        const strayWeapons = list.filter((sl) => sl.kind === 'weapon' && known.indexOf(sl.area) === -1);
-        if (strayWeapons.length) rows.push(row('WEAPONS', strayWeapons, 0, kindIco('weapon')));
-        [['defense', 'DEFENSE'], ['energy', 'ENERGY'], ['ability', 'ABILITIES']].forEach(([kind, label]) => {
-            const items = list.filter((sl) => sl.kind === kind);
-            if (items.length) rows.push(row(label, items, 0, kindIco(kind)));
-        });
-        return `<div class="hs-slotview">${rows.join('')}</div>`;
+        // Just the slots, side by side — no hull-area grouping/labels/toggles here any more
+        // (area on/off still lives in the AREAS/LAYOUT sub-tab, area-upgrades.js).
+        const cells = list.map((sl) => (sl.split && sl.kind === 'weapon' ? cell(sl, 0) + cell(sl, 1) : cell(sl))).join('');
+        return `<div class="hs-slotview"><div class="hs-slotview-row"><span class="hs-slotview-slots">${cells || '<em>NO SLOT</em>'}</span></div></div>`;
     },
-    /** Click on a slot in the SLOTS list: modal with the parts that can go in it, as a sortable grid inventory. */
+    /** Click on a slot in the SLOTS list: modal with the ship's real storage grid (same as bay / station). */
     openHangarSlotPicker(kind, index) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
-        if (!slm || !this.overlay) return;
+        const profile = typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+            ? profileManager.getActiveProfile() : null;
+        if (!slm || !this.overlay || !profile || !this.renderShipStorage) return;
         this.closeHangarSlotPicker();
         const shipId = this.hangarShipId;
         const poolKey = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[kind];
-        const inv = slm.getInventory(shipId) || {};
         const L = slm.getLoadout(shipId);
         const curList = (kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[poolKey]) || [];
         const current = curList[index] || '';
-        const equipped = {};
-        ((kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[poolKey]) || []).forEach((id) => { if (id) equipped[id] = true; });
-        // Every owned part of every type is shown; those that can't go into this slot are dimmed.
-        const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
-        const items = [];
-        pools.forEach(([k, key]) => (inv[key] || []).forEach((id) => items.push({ kind: k, id: id })));
-        const sizeOf = (it) => (slm.getPartSizeLevel ? slm.getPartSizeLevel(it.kind, it.id) : 0);
-        const labelOf = (it) => this.hangarModuleLabel(it.id);
-        const stat = (it, k) => {
-            const w = it.kind === 'weapon' && typeof weaponConfigManager !== 'undefined' ? weaponConfigManager.getWeapon(it.id) : null;
-            if (!w) return 0;
-            return k === 'damage' ? Number(w.damage) || 0 : (w.cooldown ? 1000 / w.cooldown : 0);
-        };
-        const sorts = [['name', 'NAME'], ['size', 'SIZE'], ['equipped', 'EQUIPPED']].concat(kind === 'weapon' ? [['damage', 'DAMAGE'], ['rate', 'FIRE RATE']] : []);
-        let sort = this._pickSort && sorts.some((x) => x[0] === this._pickSort) ? this._pickSort : 'name';
+        const pickSlotSz = 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(shipId, kind, index) | 0))];
         const kindColors = (() => { const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d; return { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') }; })();
-        const color = kindColors[kind];
-        const blockedOf = (it) => {
-            const id = it.id;
-            if (it.kind !== kind) return 'WRONG SLOT TYPE';
+        const blockedOf = (partKind, id) => {
+            if (partKind !== kind) return 'WRONG SLOT TYPE';
             if (id === current) return null;
             const fit = slm.partFitsSlot ? slm.partFitsSlot(shipId, kind, id, index) : { ok: true };
             if (!fit.ok) return 'NEEDS ' + slm.slotSizeLabel(fit.need) + ' SLOT';
@@ -106307,8 +110127,14 @@ extendClass(HomeStationUI, {
             if (chk.ok || chk.removing || chk.reason === 'FULL' || chk.reason === 'TOO_BIG') return null;
             return String(chk.reason || 'BLOCKED').replace(/_/g, ' ');
         };
-        const invPos = typeof physicalItem !== 'undefined' && physicalItem.invPositions ? physicalItem.invPositions(shipId) : {};
-        const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(shipId) : { cols: 4, rows: 2 };
+        const cs = (this.STORAGE_CELL_PX | 0) || 56;
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const ico = (key, col) => (ir ? String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
+        const filter = kind; // default: this slot's type (same filter chips as bay inventory)
+        const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', kindColors.weapon], ['defense', 'DEFENSE', 'statArmor', kindColors.defense], ['ability', 'ABILITIES', 'statAbilities', kindColors.ability], ['energy', 'ENERGY', 'statEnergy', kindColors.energy]]
+            .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
+        // Exact same ship-storage markup as bay inventory / station SHIP STORAGE — one grid, one footprint layout.
+        const gridHtml = this.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
         const modal = document.createElement('div');
         modal.className = 'hs-res-buy-modal hs-slot-picker';
         modal.setAttribute('role', 'dialog');
@@ -106316,68 +110142,83 @@ extendClass(HomeStationUI, {
         modal.innerHTML = `<div class="hs-res-buy-dialog hs-pick-dialog">` +
             `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT ${index + 1}</h3>` +
             `<p class="hs-res-buy-sub">${this.shipName ? this.shipName(shipId) : ''} · SLOT SIZE ${slm.slotSizeLabel(slm.getSlotSizeLevel(shipId, kind, index))}</p></div>` +
-            `<div class="hs-pick-sort" role="group" aria-label="Sort"></div>` +
             `<div class="hs-pick-body">` +
-            // Same cols × rows as the ship's inventory (bay inventory / start profile).
-            `<div class="hs-pick-grid" style="--pk-c:${color}; grid-template-columns: repeat(${invGrid.cols}, 64px); grid-template-rows: repeat(${invGrid.rows}, 64px); width: calc(${invGrid.cols} * 64px + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * 64px + ${invGrid.rows - 1} * 4px); min-height: 0; max-height: none; overflow: hidden"></div>` +
+            `<div class="hs-slot-picker hs-bay-inv hs-pick-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div></div>${gridHtml}</div>` +
             (kind === 'weapon' ? `<div class="hs-pick-keys" role="group" aria-label="Shortcut"></div>` : '') +
             `</div>` +
             `<div class="hs-res-buy-actions">${current ? '<button type="button" class="action-button" data-pick-set="">EMPTY SLOT</button>' : ''}<button type="button" class="action-button hs-res-buy-close" data-pick-close>CLOSE</button></div></div>`;
-        const grid = modal.querySelector('.hs-pick-grid');
-        const bar = modal.querySelector('.hs-pick-sort');
-        // Shortcut of this weapon slot: every key that fires it (SPACE / A / S / D), any combination.
+        const inv = modal.querySelector('.hs-pick-inv');
+        const grid = modal.querySelector('.hs-storage-grid.hs-pick-grid');
         const keysBar = modal.querySelector('.hs-pick-keys');
+        const decorate = () => {
+            if (!grid) return;
+            grid.querySelectorAll('[data-part-id]').forEach((cell) => {
+                const partKind = cell.getAttribute('data-part-kind');
+                const id = cell.getAttribute('data-part-id');
+                if (!id || partKind === 'blueprint') return;
+                const blocked = blockedOf(partKind, id);
+                cell.setAttribute('data-pick-set', id);
+                cell.classList.toggle('is-current', partKind === kind && id === current);
+                cell.classList.toggle('is-blocked', !!blocked);
+                if (blocked) cell.setAttribute('disabled', '');
+                else cell.removeAttribute('disabled');
+                // Keep size-fit tip (same SIZE_FIT token the hangar tooltips parse).
+                const tip = (String(this.hangarModuleTip(partKind, id) || '') + '\nSIZE_FIT:' + pickSlotSz + ':' + (slm.partSizeLabel ? slm.partSizeLabel(partKind, id) : 'S') + (blocked ? '\n' + blocked : '')).replace(/"/g, '&quot;');
+                cell.setAttribute('data-ui-tip', tip);
+                cell.setAttribute('data-ui-tip-instant', '');
+            });
+        };
+        decorate();
         const drawKeys = () => {
             if (!keysBar) return;
-            const L = slm.getLoadout(shipId);
-            const set = slm.getWeaponKeySet(L, index);
-            const allKey = slm.getAllFireKey ? slm.getAllFireKey(L) : 'space';
+            const loadout = slm.getLoadout(shipId);
+            const set = slm.getWeaponKeySet(loadout, index);
+            const allKey = slm.getAllFireKey ? slm.getAllFireKey(loadout) : 'space';
             keysBar.innerHTML = '<span class="hs-pick-keys-label">SHORTCUT</span>' + ['space', 'a', 's', 'd'].map((k) => {
-                const taken = k === allKey && k !== 'space';   // that key already fires every weapon
+                const taken = k === allKey && k !== 'space';
                 const on = set.indexOf(k) !== -1;
                 return `<button type="button" role="checkbox" aria-checked="${on}" class="hs-pick-keyopt${on ? ' is-on' : ''}${taken ? ' is-off' : ''}" data-pick-key="${k}"${taken ? ' disabled data-ui-tip="ALREADY FIRES ALL WEAPONS"' : ''}><span class="hs-pick-keybox"></span><span class="hs-pick-keyname">${k.toUpperCase()}</span></button>`;
             }).join('');
         };
-        const draw = () => {
-            bar.innerHTML = sorts.map(([k, l]) => `<button type="button" class="hs-pick-sortbtn${k === sort ? ' is-active' : ''}" data-pick-sort="${k}">${l}</button>`).join('');
-            const sorted = items.slice().sort((a, b) => {
-                const bySlot = (blockedOf(a) ? 1 : 0) - (blockedOf(b) ? 1 : 0);   // placeable parts first
-                if (bySlot) return bySlot;
-                if (sort === 'size') return sizeOf(a) - sizeOf(b) || labelOf(a).localeCompare(labelOf(b));
-                if (sort === 'equipped') return ((b.kind === kind && equipped[b.id]) ? 1 : 0) - ((a.kind === kind && equipped[a.id]) ? 1 : 0) || labelOf(a).localeCompare(labelOf(b));
-                if (sort === 'damage') return stat(b, 'damage') - stat(a, 'damage');
-                if (sort === 'rate') return stat(b, 'rate') - stat(a, 'rate');
-                return labelOf(a).localeCompare(labelOf(b));
-            });
-            grid.innerHTML = sorted.map((it) => {
-                const id = it.id;
-                const blocked = blockedOf(it);
-                const tip = (String(this.hangarModuleTip(it.kind, id)) + '\nPART SIZE ' + slm.partSizeLabel(it.kind, id) + (blocked ? '\n' + blocked : '')).replace(/"/g, '&quot;');
-                // Diablo-style footprint: S = 1x1, M = 1 wide x 2 tall, L = 2x2 cells.
-                const lv = Math.max(0, Math.min(2, sizeOf(it)));
-                const span = [[1, 1], [1, 2], [2, 2]][lv];
-                // Same tile as in the ship's inventory (bay inventory positions).
-                const pp = invPos[it.kind + ':' + id];
-                const here = it.kind === kind;
-                const usedElsewhere = here && equipped[id] && id !== current;
-                const assignedBadge = usedElsewhere
-                    ? `<span class="hs-pick-assigned" data-ui-tip="ALREADY ASSIGNED TO ANOTHER SLOT"><svg viewBox="0 0 10 10" width="10" height="10" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" d="M1 5l2 2 5-5-1-1-4 4-1-1z"/></svg></span>`
-                    : '';
-                return `<button type="button" style="grid-column: ${pp ? pp[0] + ' / ' : ''}span ${span[0]}; grid-row: ${pp ? pp[1] + ' / ' : ''}span ${span[1]}; --pk-c:${kindColors[it.kind]}" class="hs-pick-cell${here && id === current ? ' is-current' : ''}${usedElsewhere ? ' is-used' : ''}${blocked ? ' is-blocked' : ''}" data-pick-set="${id}"${blocked ? ' disabled' : ''} data-ui-tip-instant data-ui-tip-head="${this.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">` +
-                    `${typeof physicalItem !== 'undefined' ? physicalItem.wrap(it.kind, id, span[0] * 64 + (span[0] - 1) * 4 - 8, span[1] * 64 + (span[1] - 1) * 4 - 8, kindColors[it.kind], '') : ''}<span class="hs-pick-ico">${this.moduleIconHtml(it.kind, id, 32, 'hs-pixel', false)}</span>` +
-                    assignedBadge +
-                    `<span class="hs-pick-size">${slm.partSizeLabel(it.kind, id)}</span></button>`;
-            }).join('');
-        };
-        draw();
         drawKeys();
         const close = () => this.closeHangarSlotPicker();
+        // Drag a cell onto a ship slot to install it there; a plain click installs into THIS slot.
+        // Capture on the modal so the bay-inv document click (toggle any free slot) never steals it.
+        let dragged = false;
+        inv.addEventListener('pointerdown', (e) => {
+            const cell = e.target.closest('[data-pick-set]');
+            if (!cell || cell.disabled || e.button !== 0) return;
+            e.stopPropagation();
+            const sx = e.clientX, sy = e.clientY;
+            const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
+            const mv = (m) => {
+                if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return;
+                off();
+                dragged = true;
+                this.startHangarPartDrag(cell, e);
+                const closeOnce = () => { window.removeEventListener('pointerup', closeOnce, true); window.removeEventListener('pointercancel', closeOnce, true); close(); };
+                window.addEventListener('pointerup', closeOnce, true);
+                window.addEventListener('pointercancel', closeOnce, true);
+            };
+            window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
+        }, true);
+        inv.addEventListener('click', (e) => {
+            const cell = e.target.closest('[data-pick-set]');
+            if (!cell) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (cell.disabled) return;
+            if (dragged) { dragged = false; return; }
+            close();
+            this.applyHangarSlotChoice(kind, index, cell.getAttribute('data-pick-set'), null);
+        }, true);
         modal.addEventListener('click', (e) => {
             if (e.target === modal || e.target.closest('[data-pick-close]')) { close(); return; }
-            const sb = e.target.closest('[data-pick-sort]');
-            if (sb) { sort = this._pickSort = sb.getAttribute('data-pick-sort'); draw(); return; }
-            const cell = e.target.closest('[data-pick-set]');
-            if (cell && !cell.disabled) { close(); this.applyHangarSlotChoice(kind, index, cell.getAttribute('data-pick-set'), null); }
+            const empty = e.target.closest('[data-pick-set=""]');
+            if (empty && empty.closest('.hs-res-buy-actions')) {
+                close();
+                this.applyHangarSlotChoice(kind, index, '', null);
+            }
         });
         if (keysBar) {
             keysBar.addEventListener('click', (e) => {
@@ -106392,7 +110233,6 @@ extendClass(HomeStationUI, {
         }
         this._pickKeys = (e) => { if (e.key === 'Escape' || e.key === 'Backspace') { close(); e.preventDefault(); e.stopImmediatePropagation(); } };
         document.addEventListener('keydown', this._pickKeys, true);
-        // The slot being edited stays highlighted in the SLOTS list while the picker is open.
         const slotEl = this.overlay.querySelector(`[data-slot-pick="${kind}"][data-slot-index="${index}"]`);
         if (slotEl) slotEl.classList.add('is-picking');
         this.overlay.appendChild(modal);
@@ -106623,7 +110463,7 @@ extendClass(HomeStationUI, {
         for (let i = 0; i < cap; i++) {
             const id = equipped[i];
             boxes += id
-                ? `<span class="hs-section-slot is-filled" data-section-slot="${sec.kind}|${i}" data-ui-tip="${this.hangarModuleLabel(id)} — CLICK TO UNEQUIP">` +
+                ? `<span class="hs-section-slot is-filled" data-section-slot="${sec.kind}|${i}" data-ui-tip="${this.hangarModuleLabel(id)} — DRAG OFF TO UNEQUIP">` +
                   `${this.moduleIconHtml(sec.kind, id, 24, 'hs-pixel', false)}</span>`
                 : `<span class="hs-section-slot" data-ui-tip="FREE ${sec.label.replace(/S$/, '')} SLOT"></span>`;
         }
@@ -106705,12 +110545,14 @@ extendClass(HomeStationUI, {
                 if (caret) caret.textContent = c ? '▼' : '▲';
             };
             head.addEventListener('click', (e) => {
+                // A plain click on a filled slot box in the section header used to unequip that
+                // part — too easy to trigger by accident while just opening/closing the section,
+                // right next to the collapse caret. Dragging a filled box off the ship still
+                // unequips it (below); a click here only toggles the section now.
                 const box = e.target.closest('[data-section-slot]');
                 if (box) {
-                    // Filled slot box: unequip that part.
                     e.stopPropagation();
-                    const [kind, idx] = box.getAttribute('data-section-slot').split('|');
-                    this.applyHangarSlotChoice(kind, Number(idx), '', null);
+                    if (box._vfDragged) { box._vfDragged = false; } // tail end of a drag, already handled
                     return;
                 }
                 toggle();
@@ -106719,6 +110561,21 @@ extendClass(HomeStationUI, {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 e.preventDefault();
                 toggle();
+            });
+        });
+        // Drag a filled section-slot box onto a ship slot to move the part there, or off the ship to unequip it.
+        this.overlay.querySelectorAll('.hs-section-slot.is-filled[data-section-slot]').forEach((box) => {
+            box.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                const sx = e.clientX, sy = e.clientY;
+                const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
+                const mv = (m) => {
+                    if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return;
+                    off();
+                    box._vfDragged = true;
+                    this.startHangarSectionSlotPull(box, e);
+                };
+                window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
             });
         });
         this.overlay.querySelectorAll('.hs-hangar-part').forEach((cell) => {
@@ -106752,7 +110609,10 @@ extendClass(HomeStationUI, {
             });
         });
     },
-    /** Non-weapon part: switch it on (first free slot, else the first) or off. */
+    /** Non-weapon part: switch it on (first free slot, else the first). A click while it's
+     *  already on no longer switches it off directly — same change as the weapon rows and the
+     *  section-header slot strip: too easy to unequip by accident with a plain click. It opens
+     *  the details panel (explicit UNEQUIP button there) instead. */
     toggleHangarPart(cell) {
         const kind = cell.getAttribute('data-part-kind');
         const id = cell.getAttribute('data-part-id');
@@ -106760,7 +110620,7 @@ extendClass(HomeStationUI, {
         const list = shipLoadoutManager.getLoadout(this.hangarShipId)[key] || [];
         const at = list.indexOf(id);
         if (at !== -1) {
-            this.applyHangarSlotChoice(kind, at, '', null);
+            this.toggleHangarPartDetails(cell);
             return;
         }
         const caps = shipLoadoutManager.getSlotCaps(this.hangarShipId, shipLoadoutManager.resolveModelClass(this.hangarShipId));
@@ -106830,6 +110690,22 @@ extendClass(HomeStationUI, {
             ? L.weaponSlots
             : (L[shipLoadoutManager.kindToLoadoutKey(kind)] || []);
         return list[Number(index) || 0] || null;
+    },
+    /** Drag out of a section header's filled slot box (sidebar list), same pull as dragging off the ship itself. */
+    startHangarSectionSlotPull(box, downEvent) {
+        const [kind, idxStr] = box.getAttribute('data-section-slot').split('|');
+        const index = Number(idxStr) || 0;
+        const id = this.hangarSlotModuleId(kind, index);
+        if (!id) return;
+        const holder = document.createElement('span');
+        holder.innerHTML = this.moduleIconHtml(kind, id, 32, 'hs-pixel', false);
+        this.startHangarPartDrag(null, downEvent, {
+            kind: kind,
+            id: id,
+            iconEl: holder.querySelector('img'),
+            sourceSlot: box,
+            sourceIndex: index
+        });
     },
     startHangarSlotPull(slotEl, downEvent) {
         const kind = slotEl.getAttribute('data-slot-kind');
@@ -107119,9 +110995,15 @@ extendClass(HomeStationUI, {
                     // Physical inventory item: lift the bare object, held where it was grabbed.
                     const r = cell.getBoundingClientRect();
                     const s = r.width / Math.max(1, cell.offsetWidth);
+                    // The 0.88 factor is the "picked up" shrink — a held item reads a touch
+                    // smaller than its resting tile, gone the instant it's dropped. It lives
+                    // here (composed into this wrap's own zoom-compensation scale, centered)
+                    // rather than as a transform on `ghost` itself: `ghost`'s own un-scaled box
+                    // is what the zoom calibration above measured, and scaling that directly
+                    // would throw the measurement off and drift the item away from the cursor.
                     const wrap = document.createElement('div');
                     wrap.className = 'hs-slot-picker hs-bay-inv';
-                    wrap.style.cssText = `position:absolute;left:0;top:0;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px;transform-origin:0 0;transform:scale(${s / k});margin:0;padding:0;border:0;outline:0;background:none;box-shadow:none;clip-path:none;filter:none;`;
+                    wrap.style.cssText = `position:absolute;left:0;top:0;width:${cell.offsetWidth}px;height:${cell.offsetHeight}px;transform-origin:center;transform:scale(${s / k * 0.88});margin:0;padding:0;border:0;outline:0;background:none;box-shadow:none;clip-path:none;filter:none;`;
                     const clone = cell.cloneNode(true);
                     clone.classList.remove('is-dragging');
                     clone.style.width = '100%';
@@ -107984,8 +111866,8 @@ extendClass(HomeStationUI, {
             storageKey: 'hsHangarPanelWidths',
             leftVar: '--hs-hangar-left-w',
             rightVar: '--hs-hangar-right-w',
-            defaults: { left: 210, right: 220 },
-            mins: { left: 110, right: 160, center: 140 },
+            defaults: { left: 320, right: 220 },
+            mins: { left: 240, right: 160, center: 140 },
             isRightHidden: () => !!this._hangarRightCollapsed,
             hiddenRightW: 44
         });
@@ -109277,12 +113159,42 @@ extendClass(HomeStationUI, {
         if (el.classList.contains('hs-area-btn')) return 'area';
         return null;
     },
-    /** Focus the active (or first) button of a nav row. */
-    focusNavRow(row) {
+    /** Resolve an area-row button after remount (DOM nodes may be replaced). */
+    resolveAreaNavButton(keyOrEl) {
+        if (!this.overlay) return null;
+        if (keyOrEl && keyOrEl.nodeType === 1 && this.overlay.contains(keyOrEl)
+            && keyOrEl.classList.contains('hs-area-btn')) {
+            return keyOrEl;
+        }
+        const key = typeof keyOrEl === 'string' ? keyOrEl : this.areaNavKeyFor(keyOrEl);
+        if (!key) return null;
+        if (key === 'profiles') {
+            return this.overlay.querySelector('.hs-area-btn[data-menu-open-tab="profiles"]');
+        }
+        if (key === 'menu') {
+            return this.overlay.querySelector('.hs-area-btn[data-open-menu]:not([data-menu-open-tab])');
+        }
+        return this.overlay.querySelector('.hs-area-btn[data-area="' + key + '"]');
+    },
+    /** Stable id for an area-row button (station / hangar / profiles / menu / …). */
+    areaNavKeyFor(el) {
+        if (!el || !el.getAttribute) return null;
+        if (el.hasAttribute('data-menu-open-tab')) return el.getAttribute('data-menu-open-tab') || 'profiles';
+        if (el.hasAttribute('data-open-menu')) return 'menu';
+        return el.getAttribute('data-area') || null;
+    },
+    /** Focus a specific area button (by key or element), else the active/first one. */
+    focusNavRow(row, preferEl) {
         if (!this.overlay) return false;
         const sel = row === 'subnav' ? '.hs-subnav-tab' : '.hs-area-btn';
         const els = Array.from(this.overlay.querySelectorAll(sel));
-        const target = els.find((el) => el.classList.contains('active')) || els[0];
+        let target = null;
+        if (row === 'area') {
+            const pinned = this._navPreferAreaKey;
+            target = this.resolveAreaNavButton(preferEl)
+                || (pinned ? this.resolveAreaNavButton(pinned) : null);
+        }
+        if (!target) target = els.find((el) => el.classList.contains('active')) || els[0];
         const list = this.getFocusables();
         const i = target ? list.indexOf(target) : -1;
         if (i < 0) return false;
@@ -109375,17 +113287,24 @@ extendClass(HomeStationUI, {
                 }
                 const next = btns[(cur + (key === 'ArrowLeft' ? -1 : 1) + btns.length) % btns.length];
                 if (!next) return true;
+                // Soft remount restores via focusActiveTab(), which prefers
+                // .hs-subnav-tab — pin the exact area button so ←/→ never
+                // drops into sub-nav or snaps back to STATION (PROFILES/MENU
+                // used to lose .active across soft chrome sync).
+                const nextKey = this.areaNavKeyFor(next);
+                this._navPreferRow = 'area';
+                this._navPreferAreaKey = nextKey;
                 if (next.hasAttribute('data-tab')) {
                     next.click();
-                    this.focusNavRow('area');
+                    this.focusNavRow('area', nextKey);
                 } else if (next.hasAttribute('data-open-menu')) {
-                    // MENU is an area like the others: switching to it opens
-                    // the menu, its tabs appear in the second row.
+                    // MENU/PROFILES: switching opens that menu page; focus stays
+                    // on the area button (not the menu sub-nav row).
                     if (!this.isMenuRowTab() || next.hasAttribute('data-menu-open-tab')) {
                         if (!this.isMenuRowTab()) this._lastGameTab = this.tab;
                         this.openMainMenuOverlay(this.menuButtonOpts(next));
                     }
-                    this.focusNavRow('area');
+                    this.focusNavRow('area', nextKey);
                 }
                 return true;
             }
@@ -110129,6 +114048,10 @@ extendClass(HomeStationUI, {
      * reorder them. Main row only: drag a divider out of the row to remove it.
      */
     bindTabOrderEditing() {
+        // Disabled: top-bar reordering is no longer available, even in dev
+        // mode. Use the MENU LAYOUT settings screen instead.
+        return;
+        // eslint-disable-next-line no-unreachable
         if (typeof MENU_ORDER === 'undefined' || typeof startScreenManager === 'undefined' ||
             !startScreenManager.devMode) return;
         const row = this.overlay.querySelector('.hs-tabs');
@@ -110607,7 +114530,13 @@ extendClass(HomeStationUI, {
         });
 
         this.overlay.querySelectorAll('[data-move-to-ship]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+            if (btn.closest('.hs-bay-inv')) return; // hangar bay inventory: physical-item.js owns its clicks/drag
+            btn.addEventListener('click', (e) => {
+                // A right-click on a <button> still fires a trailing 'click' (button 2) as the
+                // browser's own activation behavior, after contextmenu resolves — not just the
+                // pointerdown/contextmenu pair bindStorageEquipContextMenu reacts to, so this
+                // button-2 click must be rejected here too, or it runs this move instead.
+                if (e.button !== 0) return;
                 const raw = btn.getAttribute('data-move-to-ship') || '';
                 const sep = raw.indexOf(':');
                 const bucket = sep === -1 ? '' : raw.slice(0, sep);
@@ -110618,23 +114547,564 @@ extendClass(HomeStationUI, {
                     return;
                 }
                 const profile = this.getProfile();
-                const res = profileManager.moveToShipStorage(profile, shipId, bucket, id, 1);
+                const res = this._transferStorageItemPreservingLayout(profile, 'station', null, 'ship', shipId, bucket, id);
                 this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO SHIP STORAGE' : (res.reason || 'FAILED'));
+                if (res.ok) this.createUI();
             });
         });
 
         this.overlay.querySelectorAll('[data-move-to-station]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+            if (btn.closest('.hs-bay-inv')) return; // hangar bay inventory: physical-item.js owns its clicks/drag
+            btn.addEventListener('click', (e) => {
+                if (e.button !== 0) return; // see the data-move-to-ship handler above
                 const raw = btn.getAttribute('data-move-to-station') || '';
                 const sep = raw.indexOf(':');
                 const bucket = sep === -1 ? '' : raw.slice(0, sep);
                 const id = sep === -1 ? raw : raw.slice(sep + 1);
                 const shipId = btn.getAttribute('data-ship');
                 const profile = this.getProfile();
-                const res = profileManager.moveToStationStorage(profile, shipId, bucket, id, 1);
+                const res = this._transferStorageItemPreservingLayout(profile, 'ship', shipId, 'station', null, bucket, id);
                 this.playButtonResult(btn, !!res.ok, res.ok ? 'MOVED TO STATION STORAGE' : (res.reason || 'FAILED'));
+                if (res.ok) this.createUI();
             });
         });
+
+        this.bindStorageDragAndDrop();
+        this.bindStorageEquipContextMenu();
+    },
+
+    /** Right-click a part cell in a ship's OWN storage grid (station tab, not the hangar page):
+     *  equips it into a free, fitting slot, or unequips it if it's already installed. Never
+     *  swaps into an occupied slot and never moves the part between storages. The hangar's own
+     *  bay-inventory grid has a similar gesture in physical-item.js, but goes through DOM hangar
+     *  slot elements that only exist while the hangar page is open; this grid has none, so it
+     *  drives shipLoadoutManager directly from the cell's own data-ship/data-part-kind/-id.
+     *  Bound on 'pointerdown' (button 2), not 'contextmenu'/'click': a <button>'s right-click can
+     *  fire a trailing synthetic 'click' as its platform default action, which would run the
+     *  data-move-to-ship/-station handler bound on this same cell and move it between storages
+     *  instead — acting immediately on pointerdown and stopping it there never gives that a chance to fire. */
+    bindStorageEquipContextMenu() {
+        // Scoped to [data-storage-target="ship"], not just [data-ship]: STATION storage cells
+        // carry a data-ship attribute too (the ship a data-move-to-ship click would file it to),
+        // which is a different ship than "the ship this part is stored/equipped on" — matching
+        // on data-ship alone equipped station items onto the active ship by mistake, making them
+        // vanish from the station grid (now equipped elsewhere) with no visible slot to land on.
+        this.overlay.querySelectorAll('.hs-storage-grid[data-storage-target="ship"] .hs-storage-cell[data-part-id][data-ship]').forEach((cell) => {
+            if (cell.closest('.hs-bay-inv')) return; // physical-item.js already binds these
+            cell.addEventListener('contextmenu', (e) => e.preventDefault());
+            cell.addEventListener('pointerdown', (e) => {
+                if (e.button !== 2) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this._equipFromStorageCell(cell);
+            });
+        });
+    },
+
+    _equipFromStorageCell(cell) {
+        if (typeof shipLoadoutManager === 'undefined') return;
+        const kind = cell.getAttribute('data-part-kind');
+        const id = cell.getAttribute('data-part-id');
+        const shipId = cell.getAttribute('data-ship');
+        if (!kind || kind === 'blueprint' || !id || !shipId) return;
+        const slm = shipLoadoutManager;
+        const key = slm.kindToLoadoutKey(kind);
+        const caps = slm.getSlotCaps(shipId, slm.resolveModelClass(shipId));
+        const cap = key === 'weapons' ? slm.weaponMountSlots(caps.weapons) : Math.max(0, Number(caps[key]) || 0);
+        const L = slm.getLoadout(shipId);
+        const list = key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || []);
+        const at = list.indexOf(id);
+        if (at !== -1) { this._applyStorageSlotChoice(shipId, kind, at, '', cell, id); return; } // installed: right-click unequips
+        const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(shipId, kind, id, i).ok;
+        let target = -1;
+        for (let i = 0; i < cap; i++) { if (!(list[i] || null) && fits(i)) { target = i; break; } }
+        if (target === -1) { this.playButtonResult(cell, false, 'NO FREE ' + kind.toUpperCase() + ' SLOT'); return; }
+        this._applyStorageSlotChoice(shipId, kind, target, id, cell);
+    },
+
+    _applyStorageSlotChoice(shipId, kind, slotIndex, moduleId, sourceEl, clearedId) {
+        const L = shipLoadoutManager.getLoadout(shipId);
+        const key = shipLoadoutManager.kindToLoadoutKey(kind);
+        const list = key === 'weapons' ? ((L && (L.weaponSlots || L.weapons)) || []) : ((L && L[key]) || []);
+        const prevId = list[slotIndex] || null;
+        const replacedId = (moduleId && prevId && prevId !== moduleId) ? prevId : null;
+        const res = shipLoadoutManager.setSlotModule(shipId, kind, slotIndex, moduleId);
+        if (!res.ok) {
+            let msg = 'SLOT UPDATE FAILED';
+            if (res.reason === 'NEED_WEAPON') msg = 'NEED AT LEAST ONE WEAPON';
+            if (res.reason === 'NEED_ENERGY') msg = 'NEED AN ENERGY CORE';
+            if (res.reason === 'NEED_CHARGE_SHOT') msg = 'NEED CHARGE SHOT FIRST';
+            if (res.reason === 'NEED_CHARGE_DRIVE') msg = 'NEED CHARGE DRIVE FIRST';
+            if (res.reason === 'NO_SLOT') msg = 'NO SLOT';
+            if (res.reason === 'TOO_BIG') msg = this.hangarModuleLabel(moduleId) + ' DOESN\'T FIT · UPGRADE THE SLOT';
+            if (res.reason === 'AREA_OFF') msg = 'THAT AREA IS OFF';
+            this.playButtonResult(sourceEl, false, msg);
+            return;
+        }
+        const profile = this.getProfile ? this.getProfile() : null;
+        if (typeof shipConfigManager !== 'undefined' && profile && profile.activeShipId === shipId) {
+            shipConfigManager.applyToRuntime(shipId);
+        }
+        if (profile && typeof profileManager !== 'undefined') {
+            const bucket = shipLoadoutManager.kindToLoadoutKey(kind);
+            const backId = (!moduleId && clearedId) ? clearedId : replacedId;
+            if (backId && profileManager.fileUnequippedPart) {
+                profileManager.fileUnequippedPart(profile, shipId, bucket, backId);
+            }
+            if (moduleId && profileManager.consumeFiledPart) {
+                profileManager.consumeFiledPart(profile, shipId, bucket, moduleId);
+            }
+        }
+        const label = moduleId ? (this.hangarModuleLabel(moduleId) + ' EQUIPPED') : 'SLOT CLEARED';
+        this.playButtonResult(sourceEl, true, label);
+        this.createUI();
+    },
+
+    /** Drag-and-drop for the station/ship storage grids: drag an item cell onto the other
+     *  storage's grid to move it there (same transfer the move-to-ship/move-to-station buttons do).
+     *  Pointer-based, not native HTML5 DnD (same reasoning as the hangar PARTS list: native drag
+     *  doesn't reliably fire dragover/drop in this app shell — only the icon follows the cursor). */
+    bindStorageDragAndDrop() {
+        // The hangar bay-inventory grid (physical-item.js bayInventoryHtml) renders this exact
+        // same renderShipStorage() markup for its own item set/positions, but its cells need
+        // the hangar's own drag engine (startHangarPartDrag — equips onto a ship slot when
+        // dropped on one, falls back to physicalItem.dropInGrid otherwise), not this one.
+        // Binding both here would double-attach a pointerdown handler to the same cell.
+        this.overlay.querySelectorAll('.hs-storage-cell[data-drag-key]').forEach((cell) => {
+            if (cell.closest('.hs-bay-inv')) return;
+            cell.setAttribute('draggable', 'false');
+            cell.addEventListener('dragstart', (e) => e.preventDefault());
+            cell.addEventListener('pointerdown', (ev) => this._storageDragStart(ev, cell));
+        });
+    },
+
+    _storageDragStart(downEv, cell) {
+        if (downEv.button !== undefined && downEv.button !== 0) return;
+        const key = cell.getAttribute('data-drag-key') || '';
+        const source = cell.getAttribute('data-drag-source') || '';
+        const shipId = cell.getAttribute('data-drag-ship') || '';
+        if (!key) return;
+        const startX = downEv.clientX, startY = downEv.clientY;
+        const THRESH = 6;
+        let dragging = false;
+        let ghost = null;
+        const clearDropMarks = () => this.overlay.querySelectorAll('.hs-storage-grid.is-drag-over')
+            .forEach((g) => g.classList.remove('is-drag-over'));
+        const gridAt = (x, y) => {
+            const el = document.elementFromPoint(x, y);
+            return el && el.closest ? el.closest('.hs-storage-grid[data-storage-target]') : null;
+        };
+        // Dragged item's own footprint in grid cells (read off its own "grid-column: span W;
+        // grid-row: span H;" inline style — see _storageGridHtml), so the drop preview covers
+        // its real size, not just a single cell, for 1x2 / 2x2 items.
+        const spanMatch = (css) => {
+            const m = (css || '').match(/span\s+(\d+)/);
+            return m ? Math.max(1, parseInt(m[1], 10)) : 1;
+        };
+        const spanW = spanMatch(cell.style.gridColumn);
+        const spanH = spanMatch(cell.style.gridRow);
+        let hoverCell = null;
+        let previewBox = null;
+        let previewGrid = null; // the .hs-storage-grid previewBox is currently appended into
+        const clearCellMark = () => {
+            hoverCell = null;
+            if (previewBox) previewBox.style.display = 'none';
+        };
+        // Preview the drop position: a box the full size of the dragged item's footprint,
+        // anchored at the hovered cell's top-left. It's appended as a normal child of the
+        // hovered grid itself (not position:fixed) so CSS Grid's own layout places it
+        // correctly without any manual zoom/transform math — the station is rendered inside a
+        // scaled stage (body carries transform: scale(--stage-scale)), and a fixed-position
+        // element's offsetLeft/top don't line up 1:1 with that scaled coordinate space.
+        const markDropCell = (x, y) => {
+            const el = document.elementFromPoint(x, y);
+            // Any storage cell, including the dashed empty placeholders — hovering empty
+            // space still previews a valid drop (append to the end of this grid's order).
+            const c = el && el.closest ? el.closest('.hs-storage-cell') : null;
+            const target = (c && c !== cell) ? c : null;
+            if (target === hoverCell) return;
+            hoverCell = target;
+            if (!target || !previewBox) {
+                if (previewBox) previewBox.style.display = 'none';
+                return;
+            }
+            const parentGrid = target.closest('.hs-storage-grid');
+            if (parentGrid && parentGrid !== previewGrid) {
+                previewGrid = parentGrid;
+                previewGrid.appendChild(previewBox);
+            }
+            if (previewGrid) {
+                // offsetLeft/Top are relative to .hs-storage-grid (position:relative) — same
+                // coordinate space as this absolute preview, including the grid's own padding.
+                previewBox.style.left = target.offsetLeft + 'px';
+                previewBox.style.top = target.offsetTop + 'px';
+                previewBox.style.display = 'block';
+            }
+        };
+        let place = null; // (x, y) => position the ghost at viewport coords (x, y)
+        const startDrag = () => {
+            dragging = true;
+            cell.classList.add('is-dragging');
+            // Reuse the hangar part-grab flag: ui-tooltip.js skips showing a NEW tooltip
+            // while this is set. Without it, hovering another slot mid-drag pops a tooltip
+            // box right at the cursor, which then eats the elementFromPoint hit-test below
+            // — the other slot never "sees" the drag.
+            document.body.classList.add('hs-part-grabbing');
+            if (typeof uiTooltip !== 'undefined' && uiTooltip && uiTooltip.hide) uiTooltip.hide();
+            // The ghost itself is a plain positioning frame, unscaled: its own box is what
+            // the zoom-calibration measurement right below reads, so anything that visually
+            // shrinks the held item (the .hs-storage-drag-ghost-inner scale()) has to live on
+            // a child instead — scaling the measured element corrupts that calibration and the
+            // item drifts away from the cursor while dragging.
+            ghost = document.createElement('div');
+            ghost.className = 'hs-storage-drag-ghost';
+            const ghostInner = cell.cloneNode(true);
+            ghostInner.classList.add('hs-storage-drag-ghost-inner');
+            ghost.appendChild(ghostInner);
+            // Inline, not left to CSS: the dev server hot-rebuilds the JS bundle but not
+            // the stylesheet, so a stale/missing .hs-storage-drag-ghost rule must not be
+            // able to leave this sitting in normal flow (wrong spot) or eating hit-tests
+            // (elementFromPoint would hit the ghost itself instead of the drop target).
+            ghost.style.cssText = 'position:fixed;left:0;top:0;margin:0;pointer-events:none;z-index:10050;';
+            document.body.appendChild(ghost);
+            // The station is rendered inside a scaled stage (body carries
+            // transform: scale(--stage-scale), possibly combined with a CSS zoom), so
+            // a position:fixed element's own box isn't 1 viewport-px per 1 CSS-px.
+            // Measure the real ratio instead of assuming it (same trick as the hangar
+            // part-grab ghost in hangar-parts-grid-part2.js).
+            const o = ghost.getBoundingClientRect();
+            ghost.style.left = '100px';
+            const k = (ghost.getBoundingClientRect().left - o.left) / 100 || 1;
+            place = (x, y) => {
+                ghost.style.left = `${(x - o.left) / k - (cell.offsetWidth / 2)}px`;
+                ghost.style.top = `${(y - o.top) / k - (cell.offsetHeight / 2)}px`;
+            };
+            ghost.style.width = cell.offsetWidth + 'px';
+            ghost.style.height = cell.offsetHeight + 'px';
+            // Drop-position preview: the item itself shown sitting in the hovered tile — no
+            // frame or fill, just its own casing — sized to its full footprint (spanW x spanH
+            // cells), rather than a plain highlighted box. Appended into whichever grid is
+            // hovered, in markDropCell.
+            const gcs = getComputedStyle(cell.closest('.hs-storage-grid') || cell);
+            const cs = parseFloat(gcs.getPropertyValue('--cs')) || this.STORAGE_CELL_PX;
+            const gap = parseFloat(gcs.getPropertyValue('--hs-gap')) || this.STORAGE_GAP_PX;
+            previewBox = document.createElement('div');
+            previewBox.className = 'hs-storage-cell hs-storage-drop-preview';
+            previewBox.style.cssText = 'position:absolute;margin:0;pointer-events:none;z-index:5;box-sizing:border-box;display:none;';
+            previewBox.style.width = (spanW * cs + (spanW - 1) * gap) + 'px';
+            previewBox.style.height = (spanH * cs + (spanH - 1) * gap) + 'px';
+            const previewBody = cell.querySelector('.hs-item-body');
+            if (previewBody) previewBox.appendChild(previewBody.cloneNode(true));
+        };
+        // Coalesce pointer moves to one update per frame, same as the hangar part drag
+        // (hangar-parts-grid-part2.js) — the grid hit-test and ghost placement both read layout.
+        let rafId = 0;
+        let lastMove = null;
+        const applyMove = (ev) => {
+            if (!dragging) {
+                if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESH) return;
+                startDrag();
+            }
+            if (place) place(ev.clientX, ev.clientY);
+            clearDropMarks();
+            const grid = gridAt(ev.clientX, ev.clientY);
+            if (grid) grid.classList.add('is-drag-over');
+            if (grid) markDropCell(ev.clientX, ev.clientY); else clearCellMark();
+        };
+        const onMove = (ev) => {
+            lastMove = ev;
+            if (!rafId) rafId = requestAnimationFrame(() => {
+                rafId = 0;
+                if (lastMove) applyMove(lastMove);
+            });
+        };
+        const cleanup = () => {
+            if (rafId) cancelAnimationFrame(rafId);
+            rafId = 0;
+            lastMove = null;
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onCancel);
+            document.removeEventListener('keydown', onEsc, true);
+            try {
+                if (downEv.target && downEv.target.releasePointerCapture) downEv.target.releasePointerCapture(downEv.pointerId);
+            } catch (err) { /* ignore */ }
+            cell.classList.remove('is-dragging');
+            document.body.classList.remove('hs-part-grabbing');
+            clearDropMarks();
+            clearCellMark();
+            if (ghost) { ghost.remove(); ghost = null; }
+            if (previewBox) { previewBox.remove(); previewBox = null; }
+        };
+        const onUp = (ev) => {
+            const wasDragging = dragging;
+            const dropEl = document.elementFromPoint(ev.clientX, ev.clientY);
+            const dropCell = dropEl && dropEl.closest ? dropEl.closest('.hs-storage-cell') : null;
+            const droppedOnSelf = dropCell === cell;
+            const grid = gridAt(ev.clientX, ev.clientY);
+            // Resolve the drop to an absolute (col, row) tile under the cursor — not just
+            // "before this other cell" — so the item lands exactly where it was dropped and
+            // stays there, the same way the hangar bay-inventory grid pins items.
+            const dropTarget = (grid && !droppedOnSelf) ? this._storageGridTarget(grid, cell, ev.clientX, ev.clientY) : null;
+            cleanup();
+            if (!wasDragging) return;
+            // A real drag still ends with a native 'click' on this button (mouseup landed on
+            // it, or close enough) — swallow that one click so it doesn't also fire the cell's
+            // own action (data-move-to-ship / data-equip-select) on top of the drop just done.
+            const suppressClick = (e) => { e.preventDefault(); e.stopPropagation(); };
+            cell.addEventListener('click', suppressClick, { capture: true, once: true });
+            setTimeout(() => cell.removeEventListener('click', suppressClick, true), 0);
+            if (grid && dropTarget) this._storageDragDrop(key, source, shipId, grid, dropTarget);
+        };
+        const onCancel = () => cleanup();
+        const onEsc = (e) => {
+            if (e.key !== 'Escape') return;
+            e.stopPropagation();
+            cleanup();
+        };
+        // Keep receiving moves even when the pointer leaves the cell (same as the hangar drag).
+        try {
+            if (downEv.target && downEv.target.setPointerCapture) downEv.target.setPointerCapture(downEv.pointerId);
+        } catch (err) { /* ignore */ }
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onCancel);
+        document.addEventListener('keydown', onEsc, true);
+    },
+
+    /** Pixel origin (top-left of grid tile col=1,row=1) and step (one tile + gap) for `grid`,
+     *  derived from the grid's own box (left/top + its border + padding) rather than assumed
+     *  from the first DOM cell's rect: once any item has a pinned position, the first cell in
+     *  DOM order is no longer guaranteed to actually render at (col 1, row 1) — dense
+     *  auto-flow only puts unpinned cells there — so calibrating off "the first cell" drifted
+     *  the whole grid's coordinate math as soon as one item was pinned anywhere else,
+     *  corrupting every other position computed afterwards. The scale factor k (for a station
+     *  rendered inside a scaled stage, body carries transform: scale(--stage-scale)) still
+     *  comes from comparing a cell's rendered vs. layout width — that part doesn't depend on
+     *  which cell or where it sits. Null when the grid has no cells to measure from yet. */
+    _storageGridMetrics(grid) {
+        const anyCell = grid.querySelector('.hs-storage-cell');
+        if (!anyCell) return null;
+        const k = anyCell.getBoundingClientRect().width / Math.max(1, anyCell.offsetWidth);
+        const gr = grid.getBoundingClientRect();
+        const cs = getComputedStyle(grid);
+        const originX = gr.left + ((parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.paddingLeft) || 0)) * k;
+        const originY = gr.top + ((parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.paddingTop) || 0)) * k;
+        const cellPx = parseFloat(cs.getPropertyValue('--cs')) || this.STORAGE_CELL_PX;
+        const gapPx = parseFloat(cs.getPropertyValue('--hs-gap')) || this.STORAGE_GAP_PX;
+        return { originX, originY, step: (cellPx + gapPx) * k };
+    },
+
+    /** Resolve a drop point to an absolute (col, row) tile in `grid`, sized to the dragged
+     *  cell's own footprint (read off its inline "grid-column: span W" style). `x`/`y` are the
+     *  raw cursor position (the pointer's own point, not a dragged box's top-left corner — unlike
+     *  the hangar bay-inventory grid's gridTarget, which snaps a box's corner and so rounds to
+     *  the nearest grid line), so the containing cell is found with floor, not round: round
+     *  measures distance to the nearest cell CENTER and snaps a cursor sitting anywhere in a
+     *  cell's first half into the previous column/row — i.e. the item lands next to, not under,
+     *  the cursor. Returns null when the point isn't over the grid, or the grid has no cells to
+     *  calibrate against. Clamped so multi-cell items never hang off the grid's far edge. */
+    _storageGridTarget(grid, draggedCell, x, y) {
+        const gr = grid.getBoundingClientRect();
+        if (x < gr.left || x > gr.right || y < gr.top || y > gr.bottom) return null;
+        const m = this._storageGridMetrics(grid);
+        if (!m) return null;
+        const spanMatch = (css) => {
+            const match = (css || '').match(/span\s+(\d+)/);
+            return match ? Math.max(1, parseInt(match[1], 10)) : 1;
+        };
+        const w = spanMatch(draggedCell.style.gridColumn);
+        const h = spanMatch(draggedCell.style.gridRow);
+        const cols = Number(grid.getAttribute('data-inv-cols')) || 8;
+        const rows = Number(grid.getAttribute('data-inv-rows')) || 99;
+        const col = Math.max(1, Math.min(cols - w + 1, Math.floor((x - m.originX) / m.step) + 1));
+        const row = Math.max(1, Math.min(rows - h + 1, Math.floor((y - m.originY) / m.step) + 1));
+        return { col, row, w, h };
+    },
+
+    /** Every item currently shown in `grid`, as {key: {col, row, w, h}} read off its actual
+     *  on-screen tile. Called right before committing a drop, before any position changes, so
+     *  the rest of the grid can be pinned exactly where it already was. */
+    _readStorageLayout(grid) {
+        const m = this._storageGridMetrics(grid);
+        const layout = {};
+        if (!m) return layout;
+        const spanMatch = (css) => {
+            const match = (css || '').match(/span\s+(\d+)/);
+            return match ? Math.max(1, parseInt(match[1], 10)) : 1;
+        };
+        grid.querySelectorAll('.hs-storage-cell[data-drag-key]').forEach((c) => {
+            const r = c.getBoundingClientRect();
+            layout[c.getAttribute('data-drag-key')] = {
+                col: Math.round((r.left - m.originX) / m.step) + 1,
+                row: Math.round((r.top - m.originY) / m.step) + 1,
+                w: spanMatch(c.style.gridColumn),
+                h: spanMatch(c.style.gridRow)
+            };
+        });
+        return layout;
+    },
+
+    _storageDragDrop(key, source, shipId, grid, dropTarget) {
+        const sep = key.indexOf(':');
+        const bucket = sep === -1 ? '' : key.slice(0, sep);
+        const id = sep === -1 ? key : key.slice(sep + 1);
+        const target = grid.getAttribute('data-storage-target');
+        const targetShip = grid.getAttribute('data-ship') || '';
+        const profile = this.getProfile();
+        const scope = target === 'ship' ? 'ship' : 'station';
+        const scopeShip = target === 'ship' ? targetShip : null;
+        if (target === source && targetShip === shipId) {
+            // Dropped back onto its own grid: pin it at the exact tile it landed on (manual
+            // arrangement only, never an automatic resort). Every other item keeps its tile too
+            // — except whichever item(s) the dragged one now overlaps, which swap into the
+            // dragged item's OLD tile, so a drop onto an occupied cell trades places instead of
+            // just failing to land (which used to look like the grid silently re-sorting).
+            const layout = this._readStorageLayout(grid);
+            const dragged = layout[key];
+            const posByKey = {};
+            Object.keys(layout).forEach((k) => {
+                if (k === key) return;
+                const o = layout[k];
+                posByKey[k] = [o.col, o.row];
+            });
+            if (dragged) {
+                const overlaps = Object.keys(layout).filter((k) => {
+                    if (k === key) return false;
+                    const o = layout[k];
+                    return dropTarget.col < o.col + o.w && o.col < dropTarget.col + dropTarget.w
+                        && dropTarget.row < o.row + o.h && o.row < dropTarget.row + dropTarget.h;
+                });
+                overlaps.forEach((k) => { posByKey[k] = [dragged.col, dragged.row]; });
+            }
+            posByKey[key] = [dropTarget.col, dropTarget.row];
+            profileManager.freezeStoragePositions(profile, scope, scopeShip, posByKey);
+            this.createUI();
+            return;
+        }
+        if (target === 'ship' && !targetShip) return;
+        // Whatever already sits on the dropped-on tile in the OTHER grid swaps back into this
+        // item's old tile — same trade-places behaviour as dropping within one grid, just
+        // across the station/ship boundary. Read both sides' *full* layouts before anything
+        // moves, and pin every item that's staying put (not just the two that trade places):
+        // an item the player never dragged has no pinned position of its own, so adding or
+        // removing a sibling from its grid would otherwise let dense auto-flow repack it
+        // into whatever gap just opened up — a drop quietly resorting the entire grid around it.
+        const sourceGrid = this._storageGridEl(source, shipId);
+        const sourceLayout = sourceGrid ? this._readStorageLayout(sourceGrid) : {};
+        const oldPos = sourceLayout[key] || null;
+        const destLayout = this._readStorageLayout(grid);
+        const overlapKeys = Object.keys(destLayout).filter((k) => {
+            const o = destLayout[k];
+            return dropTarget.col < o.col + o.w && o.col < dropTarget.col + dropTarget.w
+                && dropTarget.row < o.row + o.h && o.row < dropTarget.row + dropTarget.h;
+        });
+
+        const res = this._transferStorageItem(profile, source, shipId, target, targetShip, bucket, id);
+        this.setStatus(res.ok ? (target === 'ship' ? 'MOVED TO SHIP STORAGE' : 'MOVED TO STATION STORAGE') : (res.reason || 'FAILED'));
+        if (typeof soundManager !== 'undefined') {
+            if (res.ok) { if (soundManager.playUIConfirm) soundManager.playUIConfirm(); }
+            else if (soundManager.playUIDeny) soundManager.playUIDeny();
+        }
+        if (!res.ok) return;
+        const pinnedKey = res.instanceKey || key;
+        // Everything left behind in the source grid keeps its tile.
+        Object.keys(sourceLayout).forEach((k) => {
+            if (k === key) return;
+            profileManager.setStoragePos(profile, source === 'ship' ? 'ship' : 'station', source === 'ship' ? shipId : null, k, sourceLayout[k].col, sourceLayout[k].row);
+        });
+        // Everything already in the destination grid keeps its tile too, except what's being
+        // swapped out.
+        Object.keys(destLayout).forEach((k) => {
+            if (overlapKeys.indexOf(k) !== -1) return;
+            profileManager.setStoragePos(profile, scope, scopeShip, k, destLayout[k].col, destLayout[k].row);
+        });
+        profileManager.setStoragePos(profile, scope, scopeShip, pinnedKey, dropTarget.col, dropTarget.row);
+        if (oldPos && overlapKeys.length) {
+            overlapKeys.forEach((ok) => {
+                const osep = ok.indexOf(':');
+                const obucket = osep === -1 ? '' : ok.slice(0, osep);
+                const oid = osep === -1 ? ok : ok.slice(osep + 1);
+                const swapRes = this._transferStorageItem(profile, target, targetShip, source, shipId, obucket, oid);
+                if (swapRes.ok) {
+                    const swapKey = swapRes.instanceKey || ok;
+                    profileManager.setStoragePos(profile, source === 'ship' ? 'ship' : 'station', source === 'ship' ? shipId : null, swapKey, oldPos.col, oldPos.row);
+                }
+            });
+        }
+        profileManager.save();
+        this.createUI();
+    },
+
+    /** The live .hs-storage-grid element for one storage scope, or null if not currently
+     *  rendered (e.g. a ship panel that's scrolled out / collapsed). */
+    _storageGridEl(scope, shipId) {
+        if (!this.overlay) return null;
+        return scope === 'ship'
+            ? this.overlay.querySelector(`.hs-storage-grid[data-storage-target="ship"][data-ship="${shipId}"]`)
+            : this.overlay.querySelector('.hs-storage-grid[data-storage-target="station"]');
+    },
+
+    /** Move one unit of bucket/id from one storage scope to another ('station' or 'ship'
+     *  + shipId), reusing ProfileManager's move-to-ship/move-to-station API. A same-ship
+     *  no-op is skipped; ship-to-ship hops through station storage (no direct API for that).
+     *  Instance ids (`defId#unit`) strip to defId for the ledger, then remap upgrade bags
+     *  so that specific copy keeps its EQUIPMENT levels. */
+    _transferStorageItem(profile, fromScope, fromShip, toScope, toShip, bucket, id) {
+        if (fromScope === toScope && (fromScope !== 'ship' || fromShip === toShip)) return { ok: true };
+        const parsed = (profileManager.parsePartInstanceId)
+            ? profileManager.parsePartInstanceId(id)
+            : { defId: id, unit: null };
+        const defId = parsed.defId || id;
+        const movedUnit = parsed.unit;
+        let res;
+        if (fromScope === 'ship' && toScope === 'ship') {
+            const r = profileManager.moveToStationStorage(profile, fromShip, bucket, defId, 1);
+            res = r.ok ? profileManager.moveToShipStorage(profile, toShip, bucket, defId, 1) : r;
+        } else if (toScope === 'ship') {
+            res = profileManager.moveToShipStorage(profile, toShip, bucket, defId, 1);
+        } else {
+            res = profileManager.moveToStationStorage(profile, fromShip, bucket, defId, 1);
+        }
+        if (res && res.ok && movedUnit != null && bucket !== 'blueprints'
+            && profileManager.remapPartInstanceUpgrades && profileManager.getPartInstanceLayout) {
+            const layout = profileManager.getPartInstanceLayout(profile, bucket, defId);
+            let toIndex = movedUnit;
+            if (toScope === 'ship') {
+                const units = (layout.ships && layout.ships[toShip]) || [];
+                if (units.length) toIndex = units[units.length - 1];
+            } else if (layout.station && layout.station.length) {
+                toIndex = layout.station[layout.station.length - 1];
+            }
+            profileManager.remapPartInstanceUpgrades(profile, bucket, defId, movedUnit, toIndex);
+            res.instanceKey = bucket + ':' + defId + '#' + toIndex;
+        } else if (res && res.ok) {
+            res.instanceKey = bucket + ':' + defId + (movedUnit != null ? '#' + movedUnit : '');
+        }
+        return res;
+    },
+
+    /** Same transfer as _transferStorageItem, but pins every item that's staying in either
+     *  grid at its current tile first — so the MOVE TO SHIP/STATION STORAGE buttons (which
+     *  have no drop target of their own to swap into) don't let the rest of the grid quietly
+     *  reflow around the one item that just arrived or left, same as a drag. */
+    _transferStorageItemPreservingLayout(profile, fromScope, fromShip, toScope, toShip, bucket, id) {
+        const fromGrid = this._storageGridEl(fromScope, fromShip);
+        const toGrid = this._storageGridEl(toScope, toShip);
+        const fromLayout = fromGrid ? this._readStorageLayout(fromGrid) : {};
+        const toLayout = toGrid ? this._readStorageLayout(toGrid) : {};
+        const oldKey = bucket + ':' + id;
+        const res = this._transferStorageItem(profile, fromScope, fromShip, toScope, toShip, bucket, id);
+        if (!res.ok) return res;
+        Object.keys(fromLayout).forEach((k) => {
+            if (k === oldKey) return;
+            profileManager.setStoragePos(profile, fromScope === 'ship' ? 'ship' : 'station', fromScope === 'ship' ? fromShip : null, k, fromLayout[k].col, fromLayout[k].row);
+        });
+        Object.keys(toLayout).forEach((k) => {
+            profileManager.setStoragePos(profile, toScope === 'ship' ? 'ship' : 'station', toScope === 'ship' ? toShip : null, k, toLayout[k].col, toLayout[k].row);
+        });
+        profileManager.save();
+        return res;
     },
 
     /** Hangar ship list, anatomy reset, module toggles, fire modes and test area. */
@@ -111371,8 +115841,10 @@ extendClass(HomeStationUI, {
                 if (v && v.charAt(0) === '#') color = v;
             } catch (e) { /* ignore */ }
         }
+        // Native 16×16 hard-pixel art (1 CSS px per cell). Glass host nearest-neighbors
+        // the transform:scale; requesting 32 only stretched soft greys into mush.
         return `<div class="hs-hangar-stat${extraClass || ''}" title="${String(title || '').replace(/"/g, '&quot;')}">` +
-            `<span class="hs-stat-icon">${this.iconHtml(icon, 32, 'hs-pixel', label, color)}</span>` +
+            `<span class="hs-stat-icon">${this.iconHtml(icon, 16, 'hs-pixel', label, color)}</span>` +
             `<span class="hs-stat-body">` +
                 `<em>${label}</em>` +
                 `<strong class="hs-stat-value">${valueHtml}</strong>` +
@@ -111764,7 +116236,7 @@ extendClass(PlayerSelectionManager, {
 
         // Create overlay
         this.overlay = document.createElement('div');
-        this.overlay.className = 'player-selection-overlay';
+        this.overlay.className = 'player-selection-overlay vf-glass';
         this.overlay.innerHTML = `
             <div class="player-selection-content">
                 <h2 class="player-selection-title">SELECT YOUR SHIP</h2>
@@ -112617,7 +117089,7 @@ extendClass(StartScreenManager, {
             {
                 name: 'Player Shots',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
-                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'player'))) : '4',
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'player'))) : '10',
                 min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'player'
@@ -112625,7 +117097,7 @@ extendClass(StartScreenManager, {
             {
                 name: 'Enemy Shots',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
-                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'enemy'))) : '4',
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'enemy'))) : '7',
                 min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'enemy'
@@ -112633,7 +117105,7 @@ extendClass(StartScreenManager, {
             {
                 name: 'Boss Shots',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
-                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'boss'))) : '4',
+                    ? String(Math.round(uiAppearanceManager.getSizePx('shot', 'boss'))) : '7',
                 min: 1, max: 40, step: 1, suffix: 'px',
                 type: 'shotSize',
                 shotKind: 'boss'
@@ -113224,6 +117696,7 @@ extendClass(StartScreenManager, {
         if (itemId === 'WEAPONS') return profileManager.hasDiscovered('weapons');
         if (itemId === 'ABILITIES') return profileManager.hasDiscovered('abilities');
         if (itemId === 'DEFENSE SYSTEMS') return profileManager.hasDiscovered('defenses');
+        if (itemId === 'ENERGY SYSTEMS') return profileManager.hasDiscovered('energy');
         if (itemId === 'COMPONENTS') {
             return profileManager.hasDiscovered('weapons')
                 || profileManager.hasDiscovered('abilities')
@@ -114447,7 +118920,10 @@ extendClass(StartScreenManager, {
     /** Guarantee the five enemy-class size rows exist (survives stale caches). */
     sizePxDefaults(kind, id) {
         if (kind === 'player') return { min: 6, max: 60, fallback: 18 };
-        if (kind === 'shot') return { min: 1, max: 40, fallback: 4 };
+        if (kind === 'shot') {
+            const shotFallback = { player: 10, enemy: 7, boss: 7 };
+            return { min: 1, max: 40, fallback: shotFallback[id] || 7 };
+        }
         return { min: 12, max: 200, fallback: ({ scout: 36, assault: 48, heavy: 58, elite: 70, capital: 84 })[id] || 48 };
     },
 
@@ -115340,10 +119816,19 @@ extendClass(StartScreenManager, {
             `<header class="hs-layout-area-head"><span class="hs-layout-area-name">MENU</span></header>` +
             `<ul class="hs-layout-tabs">${menuRows}</ul></section>`;
 
+        // Sidebar: a second view of the MENU row (the "not shown in a card"
+        // pages), kept next to the cards so they can be dragged straight in.
+        const sidebarHtml = `<aside class="hs-layout-area hs-layout-area-menu hs-layout-sidebar" data-area="${MENU}">` +
+            `<header class="hs-layout-area-head"><span class="hs-layout-area-name">SIDEBAR</span></header>` +
+            `<ul class="hs-layout-tabs">${menuRows}</ul></aside>`;
+
         panel.innerHTML =
             '<h2 class="hs-menu-panel-section-title">MENU LAYOUT</h2>' +
-            '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas.</p>' +
+            '<p class="hs-menu-panel-copy">Drag the area names to reorder the top bar; drag a tab name to reorder it or move it into another area. Click an icon to change it; hover a name and click ✎ to rename it. ★ marks the tab an area opens on. An area without tabs is hidden from the top bar. The MENU card orders the menu row; station pages can move between the menu and the areas. The SIDEBAR lists the same not-shown pages — drag straight from it into a card.</p>' +
+            `<div class="hs-layout-layout-wrap">` +
             `<div class="hs-layout-areas">${areasHtml}${profilesHtml}${menuHtml}</div>` +
+            sidebarHtml +
+            `</div>` +
             '<div class="hs-menu-panel-actions">' + (this.devMode ? '<button type="button" class="action-button hs-menu-panel-action" data-act="enemy-card" data-nav-item>ENEMY CARD LAYOUT</button>' : '') + '<button type="button" class="action-button hs-menu-panel-action" data-act="reset" data-nav-item>RESET LAYOUT</button></div>';
 
         // ---- Drag & drop: tabs between / inside areas, areas left-right.
@@ -117296,7 +121781,7 @@ extendClass(StartScreenManager, {
                 sound: Math.round(volumeControlsManager.getSoundVolume() * 100),
                 music: Math.round(volumeControlsManager.getMusicVolume() * 100)
             }
-            : { master: 10, sound: 5, music: 20 };
+            : { master: 75, sound: 50, music: 65 };
 
         const rows = [
             { key: 'master', label: 'MASTER', setter: 'setMasterVolume' },
@@ -118119,14 +122604,13 @@ var startupSoundEditorUI = new StartupSoundEditorUI();
 /* --- js/ui/soundtrack-editor.js --- */
 "use strict";
 
-// Soundtrack Editor (dev mode → Settings → Soundtrack Editor): assigns a
-// YouTube URL or a local audio file to a stage or an enemy type, overriding
-// the planet track / procedural drone. Priority at playback time (see
-// js/game/sounds/soundtrack-override.js): active enemy type > stage > planet.
+// Soundtrack Editor (dev mode → Settings → Soundtrack Editor):
+// YouTube / local audio / vftrack JSON per menu·stage·enemy, plus planet
+// tracker library import/export for LLM-authored chiptune loops.
 var SoundtrackEditorUI = class SoundtrackEditorUI {
     constructor() {
-        this.selectedKind = 'stage';
-        this.selectedId = null;
+        this.selectedKind = 'planet';
+        this.selectedId = 'mars';
         this.ensureOverlay();
     }
 
@@ -118152,6 +122636,37 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         return [...new Set(ids)];
     }
 
+    getPlanetIds() {
+        return ['mars', 'jupiter', 'saturn', 'neptune', 'pluto',
+            'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'];
+    }
+
+    getFactionIds() {
+        if (typeof VFTrackerFactionCompose !== 'undefined') return VFTrackerFactionCompose.FACTIONS.slice();
+        return ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
+    }
+
+    getFactionCombatKeys() {
+        const out = [];
+        this.getPlanetIds().filter((p) => p.indexOf('boss') === -1).forEach((p) => {
+            this.getFactionIds().forEach((f) => {
+                out.push(p + ':' + f);
+                out.push(p + '-boss:' + f);
+            });
+        });
+        this.getFactionIds().forEach((f) => out.push('faction:' + f));
+        return out;
+    }
+
+    getEndingKeys() {
+        const out = ['victory', 'lose'];
+        this.getFactionIds().forEach((f) => {
+            out.push('victory:' + f);
+            out.push('lose:' + f);
+        });
+        return out;
+    }
+
     ensureOverlay() {
         if (document.getElementById('soundtrackEditorOverlay')) return;
         const overlay = document.createElement('div');
@@ -118167,6 +122682,12 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
                     <aside class="difficulty-editor-nav">
                         <div class="de-section-title">MENU</div>
                         <div id="steMenuList"></div>
+                        <div class="de-section-title">PLANET TRACKER</div>
+                        <div id="stePlanetList"></div>
+                        <div class="de-section-title">PLANET × FACTION</div>
+                        <div id="steFactionList"></div>
+                        <div class="de-section-title">VICTORY / LOSE</div>
+                        <div id="steEndingList"></div>
                         <div class="de-section-title">STAGES</div>
                         <div id="steStageList"></div>
                         <div class="de-section-title">ENEMY TYPES</div>
@@ -118192,12 +122713,11 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         });
     }
 
-    renderNavButton(container, label, kind, id, trackGetter) {
+    renderNavButton(container, label, kind, id, hasMark) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'de-profile-btn';
-        const hasTrack = typeof soundtrackConfigManager !== 'undefined' && soundtrackConfigManager.hasTrack(trackGetter());
-        b.textContent = (hasTrack ? '♪ ' : '') + label;
+        b.textContent = (hasMark ? '♪ ' : '') + label;
         if (kind === this.selectedKind && id === this.selectedId) b.classList.add('pe-primary');
         b.addEventListener('click', () => {
             this.selectedKind = kind;
@@ -118226,6 +122746,7 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         const overlay = document.getElementById('soundtrackEditorOverlay');
         if (overlay) overlay.classList.add('hidden');
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
         if (this._returnToSettings && typeof startScreenManager !== 'undefined' && startScreenManager) {
             this._returnToSettings = false;
             startScreenManager.showSettings = true;
@@ -118242,21 +122763,48 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
 
     render() {
         const menuList = document.getElementById('steMenuList');
+        const planetList = document.getElementById('stePlanetList');
+        const factionList = document.getElementById('steFactionList');
+        const endingList = document.getElementById('steEndingList');
         const stageList = document.getElementById('steStageList');
         const enemyList = document.getElementById('steEnemyList');
         menuList.innerHTML = '';
+        planetList.innerHTML = '';
+        if (factionList) factionList.innerHTML = '';
+        if (endingList) endingList.innerHTML = '';
         stageList.innerHTML = '';
         enemyList.innerHTML = '';
 
-        this.renderNavButton(menuList, 'Main Menu', 'menu', 'menu',
-            () => soundtrackConfigManager.getMenuTrack());
+        const menuHas = typeof soundtrackConfigManager !== 'undefined'
+            && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getMenuTrack());
+        this.renderNavButton(menuList, 'Main Menu', 'menu', 'menu', menuHas);
+
+        this.getPlanetIds().forEach((id) => {
+            const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
+            this.renderNavButton(planetList, id, 'planet', id, !!custom);
+        });
+        if (factionList) {
+            this.getFactionCombatKeys().forEach((id) => {
+                const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
+                this.renderNavButton(factionList, id, 'planet', id, !!custom);
+            });
+        }
+        if (endingList) {
+            this.getEndingKeys().forEach((id) => {
+                const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
+                this.renderNavButton(endingList, id, 'planet', id, !!custom);
+            });
+        }
+
         this.getStageIds().forEach((id) => {
-            this.renderNavButton(stageList, id, 'stage', id,
-                () => soundtrackConfigManager.getStageTrack(id));
+            const has = typeof soundtrackConfigManager !== 'undefined'
+                && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getStageTrack(id));
+            this.renderNavButton(stageList, id, 'stage', id, has);
         });
         this.getEnemyTypeIds().forEach((id) => {
-            this.renderNavButton(enemyList, id, 'enemy', id,
-                () => soundtrackConfigManager.getEnemyTrack(id));
+            const has = typeof soundtrackConfigManager !== 'undefined'
+                && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getEnemyTrack(id));
+            this.renderNavButton(enemyList, id, 'enemy', id, has);
         });
 
         const host = document.getElementById('steControls');
@@ -118264,14 +122812,211 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         if (!this.selectedId) {
             const hint = document.createElement('p');
             hint.className = 'ss-code-hint';
-            hint.textContent = 'Pick a stage or enemy type on the left. Enemy-type overrides win over stage overrides, which win over the planet track.';
+            hint.textContent = 'Planet×faction combat, victory/lose, then stage/enemy overrides. Hostile faction comes from the planet.';
             host.appendChild(hint);
             return;
         }
-        this.renderEditorFor(host, this.selectedKind, this.selectedId);
+        if (this.selectedKind === 'planet') this.renderPlanetTracker(host, this.selectedId);
+        else this.renderOverrideEditor(host, this.selectedKind, this.selectedId);
     }
 
-    renderEditorFor(host, kind, id) {
+    _stopPreview() {
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+    }
+
+    _addTrackerTools(host, opts) {
+        const { getJson, setJson, libraryKey, title } = opts;
+
+        const section = document.createElement('div');
+        section.className = 'de-section-title';
+        section.textContent = title || 'VF TRACKER (.vftrack.json)';
+        host.appendChild(section);
+
+        const hint = document.createElement('p');
+        hint.className = 'ss-code-hint';
+        hint.textContent = 'Code / LLM authored chiptune. Import JSON from Gemini etc., or export + edit with assets/soundtracks/LLM_PROMPT.md';
+        host.appendChild(hint);
+
+        const ta = document.createElement('textarea');
+        ta.rows = 14;
+        ta.spellcheck = false;
+        ta.style.width = '100%';
+        ta.style.fontFamily = 'monospace';
+        ta.style.fontSize = '11px';
+        ta.value = getJson() || '';
+        ta.addEventListener('keydown', (e) => e.stopPropagation());
+        host.appendChild(ta);
+
+        const status = document.createElement('p');
+        status.className = 'ss-code-hint';
+        status.id = 'steTrackerStatus';
+        host.appendChild(status);
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'de-slider-row';
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'pe-btn pe-primary';
+        applyBtn.textContent = 'APPLY JSON';
+        applyBtn.addEventListener('click', () => {
+            try {
+                setJson(ta.value);
+                status.textContent = 'Applied.';
+                this.render();
+            } catch (e) {
+                status.textContent = 'Error: ' + (e && e.message ? e.message : e);
+            }
+        });
+
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'pe-btn';
+        previewBtn.textContent = 'PREVIEW';
+        previewBtn.addEventListener('click', () => {
+            try {
+                const data = JSON.parse(ta.value);
+                this._stopPreview();
+                if (typeof soundManager !== 'undefined' && soundManager.ensureContext) soundManager.ensureContext();
+                if (typeof vfTrackerManager !== 'undefined') {
+                    const bus = (typeof soundManager !== 'undefined' && soundManager.musicBusVolume)
+                        ? Math.max(0.25, soundManager.musicBusVolume()) : 0.35;
+                    vfTrackerManager.setVolume(bus);
+                    vfTrackerManager.play('preview:' + (libraryKey || 'edit'), data);
+                    status.textContent = 'Playing preview…';
+                }
+            } catch (e) {
+                status.textContent = 'Error: ' + (e && e.message ? e.message : e);
+            }
+        });
+
+        const stopBtn = document.createElement('button');
+        stopBtn.type = 'button';
+        stopBtn.className = 'pe-btn';
+        stopBtn.textContent = 'STOP';
+        stopBtn.addEventListener('click', () => {
+            this._stopPreview();
+            status.textContent = 'Stopped.';
+        });
+
+        const exportBtn = document.createElement('button');
+        exportBtn.type = 'button';
+        exportBtn.className = 'pe-btn';
+        exportBtn.textContent = 'EXPORT';
+        exportBtn.addEventListener('click', () => {
+            try {
+                const compact = VFTrackerParse.toCompact(JSON.parse(ta.value));
+                const json = JSON.stringify(compact, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = (libraryKey || 'track') + '.vftrack.json';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+                status.textContent = 'Exported.';
+            } catch (e) {
+                status.textContent = 'Export error: ' + (e && e.message ? e.message : e);
+            }
+        });
+
+        const importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.className = 'pe-btn';
+        importBtn.textContent = 'IMPORT FILE';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json,application/json,.vftrack.json';
+        fileInput.style.display = 'none';
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                ta.value = String(reader.result || '');
+                status.textContent = 'Loaded ' + file.name + ' — press APPLY JSON.';
+            };
+            reader.readAsText(file);
+        });
+        importBtn.addEventListener('click', () => fileInput.click());
+
+        const promptBtn = document.createElement('button');
+        promptBtn.type = 'button';
+        promptBtn.className = 'pe-btn';
+        promptBtn.textContent = 'COPY LLM PROMPT';
+        promptBtn.addEventListener('click', async () => {
+            const planet = libraryKey || this.selectedId || 'mars';
+            const prompt = this.buildLlmPrompt(planet);
+            try {
+                await navigator.clipboard.writeText(prompt);
+                status.textContent = 'LLM prompt copied.';
+            } catch (e) {
+                ta.value = prompt;
+                status.textContent = 'Clipboard blocked — prompt pasted into the editor.';
+            }
+        });
+
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'pe-btn';
+        resetBtn.textContent = 'RESET DEFAULT';
+        resetBtn.addEventListener('click', () => {
+            setJson(null);
+            status.textContent = 'Reverted to built-in default.';
+            this.render();
+        });
+
+        btnRow.append(applyBtn, previewBtn, stopBtn, exportBtn, importBtn, promptBtn, resetBtn, fileInput);
+        host.appendChild(btnRow);
+    }
+
+    buildLlmPrompt(planet) {
+        const p = String(planet || 'mars');
+        return [
+            'You write chiptune tracker songs for GLXEE / VolleyFire.',
+            'Output ONLY valid JSON, format "vftrack" version 1. No markdown.',
+            '',
+            'Schema: format, version, meta{title,author,planet,notes}, bpm, rowsPerBeat:1,',
+            'rowsPerPattern:16, channels:4, instruments[{id,name,wave,volume,attack,decay,sustain,release,filter}],',
+            'patterns[{id, channels:["tok tok ..."]}], order:[0], loop:true.',
+            '',
+            'Each channels[i] has exactly 16 space-separated tokens.',
+            'Tokens: "." | "OFF" | "C-2:1" | "C-2:1:64" | "C#4:2:40" | "Eb3:3:32"',
+            'waves: sine|square|sawtooth|triangle|noise. Volume on notes 0-64.',
+            'ch0 bass, ch1 lead, ch2 arp, ch3 kick+hat. Sci-fi minor mood.',
+            '',
+            'Write a vftrack for planet "' + p + '". BPM 84-118. Title something thematic.',
+            'Return only the JSON object.'
+        ].join('\n');
+    }
+
+    renderPlanetTracker(host, planetId) {
+        const title = document.createElement('div');
+        title.className = 'de-section-title';
+        title.textContent = 'PLANET TRACKER: ' + planetId;
+        host.appendChild(title);
+
+        this._addTrackerTools(host, {
+            libraryKey: planetId,
+            title: 'VF TRACKER JSON',
+            getJson: () => {
+                if (typeof vfTrackerManager === 'undefined') return '';
+                return vfTrackerManager.exportJson(planetId) || '';
+            },
+            setJson: (text) => {
+                if (typeof vfTrackerManager === 'undefined') throw new Error('tracker manager missing');
+                if (text == null || String(text).trim() === '') {
+                    vfTrackerManager.setTrack(planetId, null);
+                    return;
+                }
+                vfTrackerManager.importJson(planetId, text);
+            }
+        });
+    }
+
+    renderOverrideEditor(host, kind, id) {
         const title = document.createElement('div');
         title.className = 'de-section-title';
         title.textContent = (kind === 'menu' ? 'MAIN MENU' : kind === 'stage' ? 'STAGE: ' + id : 'ENEMY TYPE: ' + id);
@@ -118281,14 +123026,13 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
             const t = kind === 'menu' ? soundtrackConfigManager.getMenuTrack()
                 : kind === 'stage' ? soundtrackConfigManager.getStageTrack(id)
                 : soundtrackConfigManager.getEnemyTrack(id);
-            return t || { youtubeUrl: '', localAudioData: '', localAudioName: '' };
+            return t || { youtubeUrl: '', localAudioData: '', localAudioName: '', trackerData: null };
         };
         const setTrack = (data) => {
             if (kind === 'menu') soundtrackConfigManager.setMenuTrack(data);
             else if (kind === 'stage') soundtrackConfigManager.setStageTrack(id, data);
             else soundtrackConfigManager.setEnemyTrack(id, data);
             if (kind === 'menu' && typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
-                // Re-apply immediately so a change is audible while the editor is open.
                 soundManager.startMenuMusic();
             }
             this.render();
@@ -118307,7 +123051,12 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         urlInput.spellcheck = false;
         urlInput.addEventListener('keydown', (e) => e.stopPropagation());
         urlInput.addEventListener('change', () => {
-            setTrack({ youtubeUrl: urlInput.value.trim(), localAudioData: '', localAudioName: '' });
+            setTrack({
+                youtubeUrl: urlInput.value.trim(),
+                localAudioData: '',
+                localAudioName: '',
+                trackerData: null
+            });
         });
         urlRow.append(urlLabel, urlInput);
         host.appendChild(urlRow);
@@ -118324,7 +123073,12 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
             if (!file) return;
             const reader = new FileReader();
             reader.onload = () => {
-                setTrack({ youtubeUrl: '', localAudioData: reader.result, localAudioName: file.name });
+                setTrack({
+                    youtubeUrl: '',
+                    localAudioData: reader.result,
+                    localAudioName: file.name,
+                    trackerData: null
+                });
             };
             reader.readAsDataURL(file);
         });
@@ -118343,12 +123097,17 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         const previewBtn = document.createElement('button');
         previewBtn.type = 'button';
         previewBtn.className = 'pe-btn';
-        previewBtn.textContent = 'PREVIEW';
+        previewBtn.textContent = 'PREVIEW MEDIA';
         previewBtn.addEventListener('click', () => {
             const t = getTrack();
+            this._stopPreview();
             if (t.localAudioData && typeof localAudioManager !== 'undefined') {
                 localAudioManager.setVolume(0.3);
                 localAudioManager.play('preview:' + kind + ':' + id, t.localAudioData);
+            } else if (t.trackerData && typeof vfTrackerManager !== 'undefined') {
+                if (typeof soundManager !== 'undefined' && soundManager.ensureContext) soundManager.ensureContext();
+                vfTrackerManager.setVolume(0.35);
+                vfTrackerManager.play('preview:' + kind + ':' + id, t.trackerData);
             } else if (t.youtubeUrl && typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.setEnabled(true);
                 youtubeSoundtrackManager.setVolume(0.3);
@@ -118360,12 +123119,48 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         clearBtn.className = 'pe-btn';
         clearBtn.textContent = 'CLEAR';
         clearBtn.addEventListener('click', () => {
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            this._stopPreview();
             setTrack(null);
         });
         btnRow.append(previewBtn, clearBtn);
         host.appendChild(btnRow);
+
+        this._addTrackerTools(host, {
+            libraryKey: kind + '-' + id,
+            title: 'OR ASSIGN VF TRACKER JSON',
+            getJson: () => {
+                const t = getTrack();
+                if (!t.trackerData) return '';
+                try {
+                    return JSON.stringify(VFTrackerParse.toCompact(t.trackerData), null, 2);
+                } catch (e) {
+                    return JSON.stringify(t.trackerData, null, 2);
+                }
+            },
+            setJson: (text) => {
+                if (text == null || String(text).trim() === '') {
+                    const cur = getTrack();
+                    if (cur.youtubeUrl || cur.localAudioData) {
+                        setTrack({
+                            youtubeUrl: cur.youtubeUrl || '',
+                            localAudioData: cur.localAudioData || '',
+                            localAudioName: cur.localAudioName || '',
+                            trackerData: null
+                        });
+                    } else {
+                        setTrack(null);
+                    }
+                    return;
+                }
+                const data = VFTrackerParse.toCompact(JSON.parse(text));
+                setTrack({
+                    youtubeUrl: '',
+                    localAudioData: '',
+                    localAudioName: '',
+                    trackerData: data
+                });
+            }
+        });
     }
 }
 
@@ -118585,68 +123380,43 @@ window.VFStartIntro = VFStartIntro;
 /* --- js/ui/volume-controls.js --- */
 "use strict";
 
-// Volume Controls Manager
+// Volume Controls Manager — linear MASTER × (SOUND|MUSIC) routing into soundManager.
 var VolumeControlsManager = class VolumeControlsManager {
     constructor() {
-        this.masterVolume = 0.1; // Default 10%
-        this.soundVolume = 0.05; // Default 5%
-        this.musicVolume = 0.2;  // Default 20%
-        
+        this.masterVolume = 0.75;
+        this.soundVolume = 0.5;
+        this.musicVolume = 0.65;
+        /** Music tempo multiplier (1 = authored BPM). */
+        this.musicSpeed = 3.5;
         this.init();
     }
-    
+
     init() {
-        // Load saved volumes from localStorage
         this.loadVolumes();
-        
-        // Setup event listeners
         this.setupEventListeners();
-        
-        // Update UI
         this.updateUI();
-        
-        // Apply volumes to sound system
         this.applyVolumes();
     }
-    
+
     setupEventListeners() {
-        // Master volume slider
-        const masterSlider = document.getElementById('masterVolume');
-        if (masterSlider) {
-            masterSlider.addEventListener('input', (e) => {
-                this.masterVolume = parseInt(e.target.value) / 100;
+        const bind = (id, prop) => {
+            const slider = document.getElementById(id);
+            if (!slider) return;
+            slider.addEventListener('input', (e) => {
+                this[prop] = Math.max(0, Math.min(1, parseInt(e.target.value, 10) / 100));
                 this.updateUI();
                 this.applyVolumes();
                 this.saveVolumes();
             });
-        }
-        
-        // Sound volume slider
-        const soundSlider = document.getElementById('soundVolume');
-        if (soundSlider) {
-            soundSlider.addEventListener('input', (e) => {
-                this.soundVolume = parseInt(e.target.value) / 100;
-                this.updateUI();
-                this.applyVolumes();
-                this.saveVolumes();
-            });
-        }
-        
-        // Music volume slider
-        const musicSlider = document.getElementById('musicVolume');
-        if (musicSlider) {
-            musicSlider.addEventListener('input', (e) => {
-                this.musicVolume = parseInt(e.target.value) / 100;
-                this.updateUI();
-                this.applyVolumes();
-                this.saveVolumes();
-            });
-        }
+        };
+        bind('masterVolume', 'masterVolume');
+        bind('soundVolume', 'soundVolume');
+        bind('musicVolume', 'musicVolume');
     }
-    
+
     updateUI() {
         const sync = (id, valueId, vol) => {
-            const pct = Math.round(vol * 100);
+            const pct = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
             const valueEl = document.getElementById(valueId);
             if (valueEl) valueEl.textContent = pct + '%';
             const slider = document.getElementById(id);
@@ -118660,7 +123430,6 @@ var VolumeControlsManager = class VolumeControlsManager {
         sync('soundVolume', 'soundVolumeValue', this.soundVolume);
         sync('musicVolume', 'musicVolumeValue', this.musicVolume);
 
-        // Embedded settings panels use data-volume attributes (no fixed ids)
         document.querySelectorAll('.volume-slider[data-volume]').forEach((slider) => {
             const key = slider.dataset.volume;
             let vol = null;
@@ -118668,115 +123437,158 @@ var VolumeControlsManager = class VolumeControlsManager {
             else if (key === 'sound') vol = this.soundVolume;
             else if (key === 'music') vol = this.musicVolume;
             if (vol == null) return;
-            const pct = Math.round(vol * 100);
+            const pct = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
             slider.value = pct;
             slider.style.setProperty('--vol-fill', pct + '%');
             const value = slider.parentElement && slider.parentElement.querySelector(`[data-volume-value="${key}"]`);
             if (value) value.textContent = pct + '%';
         });
     }
-    
+
     applyVolumes() {
-        // Apply to sound manager if available
         if (typeof soundManager !== 'undefined') {
-            soundManager.setMasterVolume(this.masterVolume);
-            soundManager.setSoundVolume(this.soundVolume);
-            soundManager.setMusicVolume(this.musicVolume);
+            if (soundManager.setMasterVolume) soundManager.setMasterVolume(this.masterVolume);
+            if (soundManager.setSoundVolume) soundManager.setSoundVolume(this.soundVolume);
+            if (soundManager.setMusicVolume) soundManager.setMusicVolume(this.musicVolume);
         }
 
-        if (typeof youtubeSoundtrackManager !== 'undefined') {
-            youtubeSoundtrackManager.setVolume(this.masterVolume * this.musicVolume);
+        const bus = (typeof soundManager !== 'undefined' && soundManager.musicBusVolume)
+            ? soundManager.musicBusVolume()
+            : Math.max(0, Math.min(1, this.masterVolume * this.musicVolume));
+
+        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.setVolume) {
+            youtubeSoundtrackManager.setVolume(bus);
         }
-        
-        // Apply to color manager if available (for overlay effects)
-        if (typeof colorManager !== 'undefined') {
-            // Could be used for visual feedback
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setVolume) {
+            localAudioManager.setVolume(bus);
         }
-        
-        // Update sound config
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+            vfTrackerManager.setVolume(bus);
+        }
+        this.applyMusicSpeed();
+
         if (typeof soundConfig !== 'undefined') {
             soundConfig.masterVolume = this.masterVolume;
             soundConfig.soundVolume = this.soundVolume;
             soundConfig.musicVolume = this.musicVolume;
         }
     }
-    
+
+    applyMusicSpeed() {
+        const speed = Math.max(0.5, Math.min(4, Number(this.musicSpeed) || 1));
+        this.musicSpeed = speed;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setTempoScale) {
+            vfTrackerManager.setTempoScale(speed);
+        } else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.player) {
+            vfTrackerManager.player.tempoScale = speed;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
+            localAudioManager.setPlaybackRate(speed);
+        }
+    }
+
     saveVolumes() {
         try {
-            localStorage.setItem('vf_masterVolume', this.masterVolume.toString());
-            localStorage.setItem('vf_soundVolume', this.soundVolume.toString());
-            localStorage.setItem('vf_musicVolume', this.musicVolume.toString());
+            localStorage.setItem('vf_masterVolume', String(this.masterVolume));
+            localStorage.setItem('vf_soundVolume', String(this.soundVolume));
+            localStorage.setItem('vf_musicVolume', String(this.musicVolume));
+            localStorage.setItem('vf_musicSpeed', String(this.musicSpeed));
+            localStorage.setItem('vf_volumeSchema', '2');
         } catch (e) {
             console.warn('Could not save volume settings:', e);
         }
     }
-    
+
     loadVolumes() {
         try {
+            const schema = localStorage.getItem('vf_volumeSchema');
             const savedMaster = localStorage.getItem('vf_masterVolume');
             const savedSound = localStorage.getItem('vf_soundVolume');
             const savedMusic = localStorage.getItem('vf_musicVolume');
-            
-            if (savedMaster !== null) {
-                this.masterVolume = parseFloat(savedMaster);
+            const savedSpeed = localStorage.getItem('vf_musicSpeed');
+            const speedDefaultMark = localStorage.getItem('vf_musicSpeedDefault');
+
+            if (savedMaster !== null) this.masterVolume = parseFloat(savedMaster);
+            if (savedSound !== null) this.soundVolume = parseFloat(savedSound);
+            if (savedMusic !== null) this.musicVolume = parseFloat(savedMusic);
+
+            // One-shot migrate: lock in 3.5× as the stored music speed.
+            if (speedDefaultMark !== '3.5') {
+                this.musicSpeed = 3.5;
+                localStorage.setItem('vf_musicSpeedDefault', '3.5');
+                localStorage.setItem('vf_musicSpeed', '3.5');
+            } else if (savedSpeed !== null) {
+                this.musicSpeed = parseFloat(savedSpeed);
             }
-            if (savedSound !== null) {
-                this.soundVolume = parseFloat(savedSound);
-            }
-            if (savedMusic !== null) {
-                this.musicVolume = parseFloat(savedMusic);
+
+            if (!Number.isFinite(this.masterVolume)) this.masterVolume = 0.75;
+            if (!Number.isFinite(this.soundVolume)) this.soundVolume = 0.5;
+            if (!Number.isFinite(this.musicVolume)) this.musicVolume = 0.65;
+            if (!Number.isFinite(this.musicSpeed)) this.musicSpeed = 3.5;
+
+            this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
+            this.soundVolume = Math.max(0, Math.min(1, this.soundVolume));
+            this.musicVolume = Math.max(0, Math.min(1, this.musicVolume));
+            this.musicSpeed = Math.max(0.5, Math.min(4, this.musicSpeed));
+
+            // Old schema used ~10%/5%/20% plus a hidden ×8 music bus — migrate up once.
+            if (schema !== '2'
+                && this.masterVolume <= 0.15
+                && this.soundVolume <= 0.12
+                && this.musicVolume <= 0.3) {
+                this.masterVolume = 0.75;
+                this.soundVolume = 0.5;
+                this.musicVolume = 0.65;
+                this.saveVolumes();
             }
         } catch (e) {
             console.warn('Could not load volume settings:', e);
         }
     }
-    
-    // Public methods for external access
-    getMasterVolume() {
-        return this.masterVolume;
-    }
-    
-    getSoundVolume() {
-        return this.soundVolume;
-    }
-    
-    getMusicVolume() {
-        return this.musicVolume;
-    }
-    
+
+    getMasterVolume() { return this.masterVolume; }
+    getSoundVolume() { return this.soundVolume; }
+    getMusicVolume() { return this.musicVolume; }
+    getMusicSpeed() { return this.musicSpeed; }
+
     setMasterVolume(volume) {
-        this.masterVolume = Math.max(0, Math.min(1, volume));
+        this.masterVolume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
-    
+
     setSoundVolume(volume) {
-        this.soundVolume = Math.max(0, Math.min(1, volume));
+        this.soundVolume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
-    
+
     setMusicVolume(volume) {
-        this.musicVolume = Math.max(0, Math.min(1, volume));
+        this.musicVolume = Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
-    
-    // Reset to defaults
+
+    setMusicSpeed(speed) {
+        this.musicSpeed = Math.max(0.5, Math.min(4, Number(speed) || 1));
+        this.applyMusicSpeed();
+        this.saveVolumes();
+    }
+
     resetToDefaults() {
-        this.masterVolume = 0.1;
-        this.soundVolume = 0.05;
-        this.musicVolume = 0.2;
+        this.masterVolume = 0.75;
+        this.soundVolume = 0.5;
+        this.musicVolume = 0.65;
+        this.musicSpeed = 3.5;
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
 }
 
-// Global volume controls manager instance
 var volumeControlsManager = new VolumeControlsManager();
 
 
@@ -120935,7 +125747,6 @@ var StartStationBackdrop = class StartStationBackdrop {
         });
         this.devPanel.querySelector('#ssdCopy').addEventListener('click', () => {
             const text = 'Station backdrop dev values:\n' + JSON.stringify(this.adjust, null, 2) + '\nres: ' + this.devResMult;
-            console.log(text);
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
         });
     }
@@ -122138,7 +126949,7 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         skipBtn.textContent = 'SKIP ▶';
         skipBtn.addEventListener('click', () => this.skip());
         overlay.appendChild(skipBtn);
-        document.body.appendChild(overlay);
+        document.documentElement.appendChild(overlay);
         this.overlay = overlay;
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -122834,31 +127645,52 @@ var physicalItem = (() => {
     };
 })();
 
-// Inventory grid positions per ship: { 'kind:id': [col, row] } (1-based grid lines).
+// Bucket (plural, used by profile.storagePos / Ship Storage) for a bay-inventory cell's
+// data-part-kind (singular, used for ship-slot matching — "blueprint" is a synthetic kind,
+// never a real slot type, so a blueprint cell can never register as an equip match).
+physicalItem.BUCKET_OF_KIND = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy', blueprint: 'blueprints' };
+
+// Inventory grid positions per ship: { 'bucket:id': [col, row] } (1-based grid lines) — the
+// exact same profile.storagePos map (scope 'ship:<shipId>') that SHIP STORAGE on the station
+// tab reads/writes (render-parts-list.js renderShipStorage), not a separate one: dragging an
+// item here and seeing it elsewhere use one shared position, not two that can drift apart.
 physicalItem.invPositions = function (shipId) {
-    try { return (JSON.parse(localStorage.getItem('vf_hs_inv_pos') || '{}') || {})[shipId] || {}; } catch (e) { return {}; }
+    if (typeof profileManager === 'undefined' || !profileManager.getStoragePosMap) return {};
+    const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+    if (!profile) return {};
+    return profileManager.getStoragePosMap(profile, 'ship', shipId);
 };
 /** Grid target for an inventory item with its top-left at client (x, y): { grid, col, row, w, h, free, all, at } or null. */
 physicalItem.gridTarget = function (cell, x, y) {
-    const grid = cell && cell.closest('.hs-bay-inv .hs-pick-grid');
+    const grid = cell && cell.closest('.hs-bay-inv .hs-storage-grid');
     if (!grid) return null;
     const gr = grid.getBoundingClientRect();
     const k = gr.width / Math.max(1, grid.offsetWidth);
-    const step = (48 + 4) * k;
+    const cs = parseFloat(getComputedStyle(grid).getPropertyValue('--cs')) || 48;
+    const gap = parseFloat(getComputedStyle(grid).columnGap) || 2;
+    const step = (cs + gap) * k;
+    // Tile (1,1)'s own top-left, not the grid's outer border-box edge: the grid now also
+    // carries the shared .hs-storage-grid border (same card framing as ship/station storage),
+    // so content starts border-width (+ any padding) in from gr.left/top — origin must match
+    // that or every column/row comes out shifted by that offset, landing drops a slot off.
+    const gcs = getComputedStyle(grid);
+    const originX = gr.left + ((parseFloat(gcs.borderLeftWidth) || 0) + (parseFloat(gcs.paddingLeft) || 0)) * k;
+    const originY = gr.top + ((parseFloat(gcs.borderTopWidth) || 0) + (parseFloat(gcs.paddingTop) || 0)) * k;
     const cols = Number(grid.getAttribute('data-inv-cols')) || 8;
     const spanOf = (c, prop) => Number((c.style[prop].match(/span (\d+)/) || [0, 1])[1]);
     const w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
     // Over the grid at all (by the item's centre)?
     const cx = x + w * step / 2, cy = y + h * step / 2;
     if (cx < gr.left || cx > gr.right || cy < gr.top || cy > gr.bottom) return null;
-    const col = Math.max(1, Math.min(cols - w + 1, Math.round((x - gr.left) / step) + 1));
+    const col = Math.max(1, Math.min(cols - w + 1, Math.round((x - originX) / step) + 1));
     const rows = Number(grid.getAttribute('data-inv-rows')) || 99;
-    const row = Math.max(1, Math.min(rows - h + 1, Math.round((y - gr.top) / step) + 1));
+    const row = Math.max(1, Math.min(rows - h + 1, Math.round((y - originY) / step) + 1));
     // Every other item keeps its current tile; the target must be free.
-    const all = Array.from(grid.querySelectorAll('.hs-pick-cell'));
+    // (Empty placeholder cells just tile the unused grid area visually and don't occupy anything.)
+    const all = Array.from(grid.querySelectorAll('[data-part-id]'));
     const at = (c) => {
         const r = c.getBoundingClientRect();
-        return [Math.round((r.left - gr.left) / step) + 1, Math.round((r.top - gr.top) / step) + 1, spanOf(c, 'gridColumn'), spanOf(c, 'gridRow')];
+        return [Math.round((r.left - originX) / step) + 1, Math.round((r.top - originY) / step) + 1, spanOf(c, 'gridColumn'), spanOf(c, 'gridRow')];
     };
     const free = !all.some((c) => {
         if (c === cell) return false;
@@ -122872,13 +127704,29 @@ physicalItem.previewInGrid = function (cell, x, y) {
     const old = document.querySelector('.hs-inv-drop-preview');
     const t = x == null ? null : physicalItem.gridTarget(cell, x, y);
     if (!t) { if (old) old.remove(); return; }
-    const el = old && old.parentNode === t.grid ? old : document.createElement('div');
-    if (el !== old && old) old.remove();
-    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-blocked');
-    el.style.left = `${(t.col - 1) * 52}px`;
-    el.style.top = `${(t.row - 1) * 52}px`;
-    el.style.width = `${t.w * 52 - 4}px`;
-    el.style.height = `${t.h * 52 - 4}px`;
+    const isNew = !(old && old.parentNode === t.grid);
+    const el = isNew ? document.createElement('div') : old;
+    if (isNew && old) old.remove();
+    // Dropping on an occupied tile now swaps instead of being refused, so the preview reads
+    // "swap" rather than "blocked" there — never a dead-end red X for a drop that will work.
+    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-swap');
+    const gcs = getComputedStyle(t.grid);
+    const cs = parseFloat(gcs.getPropertyValue('--cs')) || 48;
+    const gap = parseFloat(gcs.columnGap) || 2;
+    const step = cs + gap;
+    // Absolute left/top are from the grid's padding edge; cells sit after padding — match that
+    // or the preview paints in the padding gutter while Inspect still shows the cell elsewhere.
+    const padL = parseFloat(gcs.paddingLeft) || 0;
+    const padT = parseFloat(gcs.paddingTop) || 0;
+    el.style.left = `${padL + (t.col - 1) * step}px`;
+    el.style.top = `${padT + (t.row - 1) * step}px`;
+    el.style.width = `${t.w * step - gap}px`;
+    el.style.height = `${t.h * step - gap}px`;
+    // The dragged item's own casing sitting in the hovered tile, not a highlighted box.
+    if (isNew) {
+        const body = cell && cell.querySelector && cell.querySelector('.hs-item-body');
+        if (body) el.appendChild(body.cloneNode(true));
+    }
     if (!el.parentNode) t.grid.appendChild(el);
 };
 /** Drop an inventory item with its top-left at client (x, y). Returns true when it landed in the grid. */
@@ -122886,64 +127734,53 @@ physicalItem.dropInGrid = function (ui, cell, x, y) {
     physicalItem.previewInGrid(null);
     const t = physicalItem.gridTarget(cell, x, y);
     if (!t) return false;
-    if (!t.free) return true; // over the grid but occupied: stay where it was
-    const key = (c) => c.getAttribute('data-part-kind') + ':' + c.getAttribute('data-part-id');
-    let store = {};
-    try { store = JSON.parse(localStorage.getItem('vf_hs_inv_pos') || '{}') || {}; } catch (e) { /* ignore */ }
+    if (typeof profileManager === 'undefined' || !profileManager.freezeStoragePositions) return false;
+    const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+    if (!profile) return false;
+    const key = (c) => {
+        const kind = c.getAttribute('data-part-kind');
+        return (physicalItem.BUCKET_OF_KIND[kind] || kind) + ':' + c.getAttribute('data-part-id');
+    };
+    const posByKey = {};
     // Pin every item to where it is now, so the others don't reflow around the moved one.
-    const ship = store[ui.hangarShipId] = {};
-    t.all.forEach((c) => { const [c0, r0] = t.at(c); ship[key(c)] = [c0, r0]; });
-    ship[key(cell)] = [t.col, t.row];
-    try { localStorage.setItem('vf_hs_inv_pos', JSON.stringify(store)); } catch (e) { /* ignore */ }
+    t.all.forEach((c) => { const [c0, r0] = t.at(c); posByKey[key(c)] = [c0, r0]; });
+    const [oldCol, oldRow] = t.at(cell);
+    // Whatever already sits on the dropped-on tile(s) swaps back into this item's old tile
+    // instead of just blocking the drop (free is false exactly when this list is non-empty).
+    t.all.filter((c) => {
+        if (c === cell) return false;
+        const [c0, r0, cw, ch] = t.at(c);
+        return t.col < c0 + cw && c0 < t.col + t.w && t.row < r0 + ch && r0 < t.row + t.h;
+    }).forEach((c) => { posByKey[key(c)] = [oldCol, oldRow]; });
+    posByKey[key(cell)] = [t.col, t.row];
+    profileManager.freezeStoragePositions(profile, 'ship', ui.hangarShipId, posByKey);
     ui.createUI();
     return true;
 };
 
-// Hangar bay: switch the centre ship view to the part inventory (same physical items as the slot picker).
+// Hangar bay: switch the centre ship view to the part inventory. Literally renders through
+// HomeStationUI.renderShipStorage (render-parts-list.js) — the exact same function SHIP
+// STORAGE on the station tab uses for this ship — instead of a second, independent item
+// set/position/grid-size pipeline, which kept drifting out of sync with it (wrong item count,
+// wrong grid size, positions landing in the wrong spot).
 physicalItem.bayInventoryHtml = function (ui) {
     const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
     if (!slm || !ui || !ui.hangarShipId) return '';
+    const profile = typeof profileManager !== 'undefined' && profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+    if (!profile) return '';
+    const shipId = ui.hangarShipId;
     const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d;
     const colors = { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') };
-    const inv = slm.getInventory(ui.hangarShipId) || {}, L = slm.getLoadout(ui.hangarShipId) || {};
-    const pools = [['weapon', 'weapons'], ['defense', 'defenses'], ['ability', 'abilities'], ['energy', 'energy']];
-    const cells = [];
-    let occupied = 0;
-    const pos = physicalItem.invPositions(ui.hangarShipId);
-    // Cells whose installed state changed since the last draw play an equip / unequip animation.
-    const prev = ui._bayInvPrev && ui._bayInvPrev.ship === ui.hangarShipId ? ui._bayInvPrev.set : null;
-    const now = {};
-    pools.forEach(([kind, key]) => {
-        const eq = {};
-        ((kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[key]) || []).forEach((id) => { if (id) eq[id] = true; });
-        (inv[key] || []).forEach((id) => {
-            now[kind + ':' + id] = !!eq[id];
-            const anim = prev && prev[kind + ':' + id] !== undefined && prev[kind + ':' + id] !== !!eq[id] ? (eq[id] ? ' is-anim-equip' : ' is-anim-unequip') : '';
-            const lv = Math.max(0, Math.min(2, slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
-            const span = [[1, 1], [1, 2], [2, 2]][lv];
-            const label = ui.hangarModuleLabel(id);
-            // Compact tip: no repeated name line, short hint.
-            const tipLines = String(ui.hangarModuleTip(kind, id)).split('\n').filter((l, n) => !(n === 0 && l.trim().toUpperCase() === String(label).trim().toUpperCase()));
-            const tip = (tipLines.join('\n') + '\nSIZE: ' + slm.partSizeLabel(kind, id) + '\nSTATUS: ' + (eq[id] ? 'INSTALLED' : 'IN INVENTORY') + '\nDRAG OR RIGHT-CLICK TO TOGGLE').replace(/"/g, '&quot;');
-            const body = physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, colors[kind], '');
-            occupied += span[0] * span[1];
-            cells.push(`<span class="hs-pick-cell${eq[id] ? ' is-equipped' : ''}${anim}" data-part-kind="${kind}" data-part-id="${id}" style="grid-column: ${pos[kind + ':' + id] ? pos[kind + ':' + id][0] + ' / ' : ''}span ${span[0]}; grid-row: ${pos[kind + ':' + id] ? pos[kind + ':' + id][1] + ' / ' : ''}span ${span[1]}; --pk-c:${colors[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${ui.hangarModuleLabel(id).replace(/"/g, '')}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ui.moduleIconHtml(kind, id, 32, 'hs-pixel', false)}</span><span class="hs-pick-size">${slm.partSizeLabel(kind, id)}</span></span>`);
-        });
-    });
-    ui._bayInvPrev = { ship: ui.hangarShipId, set: now };
-    const filter = ui._bayInvFilter || 'all', cs = 48;
-    // Grid size: the ship's inventory (start profile + frame level).
-    const invGrid = slm.getInventoryGrid ? slm.getInventoryGrid(ui.hangarShipId) : { cols: 4, rows: 2 };
-    // Fill the rest of the grid with empty placeholder cells so unused slots still read as a grid.
-    const freeCells = Math.max(0, invGrid.cols * invGrid.rows - occupied);
-    for (let i = 0; i < freeCells; i++) cells.push('<span class="hs-pick-cell hs-pick-cell-empty"></span>');
+    const filter = ui._bayInvFilter || 'all';
+    const cs = (ui.STORAGE_CELL_PX | 0) || 56;
+    const gridHtml = ui.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
-    const ico = (key, col) => (ir ? String(ir.imgHtml(key, 24, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
+    // Native 16×16 sprite grid — size ≥24 triggers Scale2x and looks mushy in these tiny filter buttons.
+    const ico = (key, col) => (ir ? String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]
         .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
     return `<div class="hs-slot-picker hs-bay-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div>` +
-        `</div>` +
-        `<div class="hs-pick-grid" data-inv-cols="${invGrid.cols}" data-inv-rows="${invGrid.rows}" style="grid-template-columns: repeat(${invGrid.cols}, var(--cs)); grid-template-rows: repeat(${invGrid.rows}, var(--cs)); width: calc(${invGrid.cols} * var(--cs) + ${invGrid.cols - 1} * 4px); height: calc(${invGrid.rows} * var(--cs) + ${invGrid.rows - 1} * 4px); flex: 0 0 auto; align-self: flex-start">${cells.join('') || '<em>NO PARTS OWNED</em>'}</div></div>`;
+        `</div>${gridHtml}</div>`;
 };
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-bay-inv]');
@@ -122955,32 +127792,64 @@ document.addEventListener('click', (e) => {
     homeStationUI._hangarFit = null; homeStationUI._hangarBayZoom = 1; homeStationUI._hangarZoomTarget = 1;
     homeStationUI.createUI();
 }, true);
+// The grid itself is HomeStationUI.renderShipStorage's own markup (render-parts-list.js —
+// the same SHIP STORAGE grid shown on the station tab), which marks its buttons
+// draggable="true" for the *station's* pointer-suppressed-native-drag convention
+// (bindStorageDragAndDrop). That bind call skips anything inside .hs-bay-inv (the hangar
+// drag below needs those cells instead), so nothing else turns off the browser's native
+// HTML5 drag for them — do that here, or a native dragstart fights the pointer-based one.
+document.addEventListener('dragstart', (e) => {
+    if (e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]')) e.preventDefault();
+}, true);
 // Drag an inventory part onto a slot (reuses the hangar part drag; a plain click does nothing).
 document.addEventListener('pointerdown', (e) => {
-    const cell = e.target.closest && e.target.closest('.hs-bay-inv .hs-pick-cell');
-    if (!cell || e.button !== 0 || typeof homeStationUI === 'undefined') return;
+    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    // Slot-picker modal (.hs-pick-inv) owns its own drag/click → install into THAT slot.
+    if (!cell || cell.closest('.hs-pick-inv') || e.button !== 0 || typeof homeStationUI === 'undefined') return;
     e.preventDefault();
     const sx = e.clientX, sy = e.clientY;
     const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
     const mv = (m) => { if (Math.hypot(m.clientX - sx, m.clientY - sy) < 5) return; off(); homeStationUI.startHangarPartDrag(cell, e); };
     window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
 }, true);
-// Right-click: install into a free slot that fits, else swap out an installed part of the same type.
-document.addEventListener('contextmenu', (e) => {
-    const cell = e.target.closest && e.target.closest('.hs-bay-inv .hs-pick-cell');
-    if (!cell || typeof homeStationUI === 'undefined') return;
-    e.preventDefault();
+// Toggle a bay-inventory part's slot state: installed → unequip, not installed → install into
+// a free slot that fits (else swap into the first slot that fits). Shared by a plain click
+// (the inventory's main gesture: tap a part to slot/unslot it) and right-click (same toggle,
+// kept as a muscle-memory alias for players used to the storage grid's right-click equip).
+function toggleHangarInventorySlot(cell) {
+    if (typeof homeStationUI === 'undefined') return;
     const ui = homeStationUI, slm = shipLoadoutManager;
     const kind = cell.getAttribute('data-part-kind'), id = cell.getAttribute('data-part-id');
     const idx = [];
     ui.overlay.querySelectorAll(`.hs-hangar-slot[data-slot-kind="${kind}"]`).forEach((el) => { const i = Number(el.getAttribute('data-slot-index') || 0); if (idx.indexOf(i) === -1) idx.push(i); });
     idx.sort((a, b) => a - b);
     const at = idx.find((i) => ui.hangarSlotModuleId(kind, i) === id);
-    if (at != null) { ui.applyHangarSlotChoice(kind, at, '', null); return; } // installed: right-click toggles it off
+    if (at != null) { ui.applyHangarSlotChoice(kind, at, '', null); return; } // installed: toggles it off
     const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(ui.hangarShipId, kind, id, i).ok;
     const target = idx.find((i) => !ui.hangarSlotModuleId(kind, i) && fits(i)) ?? idx.find((i) => fits(i));
     if (target == null) { ui.playButtonResult(cell, false, idx.length ? 'NO SLOT BIG ENOUGH' : 'NO ' + kind.toUpperCase() + ' SLOT'); return; }
     ui.applyHangarSlotChoice(kind, target, id, null);
+}
+document.addEventListener('contextmenu', (e) => {
+    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    if (!cell || cell.closest('.hs-pick-inv')) return;
+    e.preventDefault();
+    toggleHangarInventorySlot(cell);
+}, true);
+// Plain click: same toggle as right-click above. Needs its own flag since the pointerdown
+// handler right above already preventDefault()s and arms a drag-or-not watch — a click fired
+// without having dragged (the pointerup below the threshold) is this gesture, not a drag.
+// button !== 0 guard: a right-click on a <button> still fires a trailing 'click' (button 2) as
+// the browser's own activation behavior, after the 'contextmenu' listener above already ran the
+// toggle once — without this guard that trailing click ran the same toggle a second time,
+// immediately undoing it (equip-then-unequip), which is what made a part vanish on right-click.
+document.addEventListener('click', (e) => {
+    if (e.button !== 0) return;
+    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    if (!cell || cell.closest('.hs-pick-inv')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    toggleHangarInventorySlot(cell);
 }, true);
 
 // Inventory filter + zoom: applied in place (no re-render), remembered on the UI.
@@ -122989,9 +127858,14 @@ document.addEventListener('click', (e) => {
     if (!b || typeof homeStationUI === 'undefined') return;
     e.preventDefault();
     const panel = b.closest('.hs-bay-inv');
-    homeStationUI._bayInvFilter = b.getAttribute('data-inv-filter');
-    try { localStorage.setItem('vf_hs_bay_inv_filter', homeStationUI._bayInvFilter); } catch (err) { /* ignore */ }
-    panel.setAttribute('data-filter', homeStationUI._bayInvFilter);
+    if (!panel) return;
+    const next = b.getAttribute('data-inv-filter');
+    // Slot-picker modal filter is local — don't overwrite the bay sidebar's remembered filter.
+    if (!panel.classList.contains('hs-pick-inv')) {
+        homeStationUI._bayInvFilter = next;
+        try { localStorage.setItem('vf_hs_bay_inv_filter', next); } catch (err) { /* ignore */ }
+    }
+    panel.setAttribute('data-filter', next);
     panel.querySelectorAll('[data-inv-filter]').forEach((x) => x.classList.toggle('is-active', x === b));
 }, true);
 
@@ -124654,161 +129528,1642 @@ window.shopkeeperFace = shopkeeperFace;
 "use strict";
 
 /**
- * In-stage shop: a kiosk beside some sluice gates (see objective-manager.js
- * getShopStation/isNearShopStation). Walk up, press E, buy a stage-only
- * buff or a temporary weapon with a shot limit, paid in real credits.
+ * In-stage shop: opened from the victory screen between stages.
+ * Two vendor grids — TEMP PERKS (next stage only, stronger than crate drops)
+ * and PERMANENT PARTS (owned modules that stay in storage).
+ *
+ * Layout: local planet inhabitant · perk/part stock · ship/station bags.
+ * Gamepad/keyboard: arrows move focus, Enter buys, Escape/B/E closes.
  */
 var InStageShop = class InStageShop {
     constructor() {
         this.isOpen = false;
+        this.fromVictory = false;
         this.prevInteract = false;
         this.lastMsg = '';
+        this.pendingBuffs = [];
+        this.pendingWeapons = [];
+        /** @type {Set<string>} Keys `source::shipId::bucket:id` marked for sale (right-click). */
+        this.markedForSale = new Set();
+        /** @type {Set<string>} Stock buy keys (`buff:id` / `weapon:id` / `part:kind:id`) in the cart. */
+        this.cartBuys = new Set();
+        /** Frozen permanent-part offer for this shop visit. */
+        this._partsOffer = null;
+        this._faceState = 0;
+        this._faceUntil = 0;
+        this.focusIndex = 0;
+        this._stockCols = 3;
+        this._hsPatched = false;
+        this._hsPrevOverlay = null;
+        this._hsPrevCreate = null;
     }
 
-    catalog() {
+    /**
+     * Temp perks for the next stage — stronger / longer than crate pickups.
+     * `stats` lines feed the tooltip (damage, ammo, shields, etc.).
+     */
+    perkCatalog() {
         return {
             buffs: [
-                { id: 'barrier', label: 'SHIELD BARRIER', desc: 'Halves incoming damage', cost: 60, ms: 60000 },
-                { id: 'speed_boost', label: 'AFTERBURNER', desc: 'Faster movement', cost: 45, ms: 60000 },
-                { id: 'power_shot', label: 'POWER SHOT', desc: 'Bigger, stronger shots', cost: 70, ms: 60000 }
+                {
+                    id: 'barrier', label: 'SHIELD BARRIER', cost: 85, ms: 90000,
+                    icon: 'ability_energy_shield',
+                    stats: ['DMG TAKEN ×0.5', 'SHIELD HOLD · 90s', 'STACKS WITH SHIELD REGEN']
+                },
+                {
+                    id: 'speed_boost', label: 'AFTERBURNER', cost: 55, ms: 75000,
+                    icon: 'ability_high_speed',
+                    stats: ['MOVE SPEED ×1.45', 'DURATION 75s']
+                },
+                {
+                    id: 'power_shot', label: 'POWER SHOT', cost: 95, ms: 90000,
+                    icon: 'ability_powerful_cannon',
+                    stats: ['DAMAGE ×1.6', 'SHOT SIZE ×1.3', 'DURATION 90s']
+                },
+                {
+                    id: 'rapid_fire', label: 'RAPID FIRE', cost: 90, ms: 75000,
+                    icon: 'ability_versatile_weapons',
+                    stats: ['FIRE RATE ×1.7', 'COOLDOWN ×0.6', 'DURATION 75s']
+                },
+                {
+                    id: 'repair', label: 'FIELD REPAIR', cost: 70, ms: 60000,
+                    icon: 'ability_energy_shield',
+                    stats: ['HULL REGEN 4%/s', 'DURATION 60s']
+                },
+                {
+                    id: 'magnet', label: 'LOOT MAGNET', cost: 50, ms: 90000,
+                    icon: 'ability_high_speed',
+                    stats: ['PICKUP RADIUS ×1.8', 'DURATION 90s']
+                }
             ],
+            /** Temporary weapons — ammo depletes, then reverts. */
             weapons: [
-                { id: 'spread', label: 'SPREAD GUN', shots: 30, cost: 50 },
-                { id: 'missile', label: 'MISSILES', shots: 12, cost: 80 },
-                { id: 'plasma', label: 'PLASMA CANNON', shots: 20, cost: 90 }
+                {
+                    id: 'spread', label: 'SPREAD GUN', shots: 48, cost: 65,
+                    icon: 'ability_versatile_weapons',
+                    stats: ['AMMO 48', 'MULTI-SHOT BURST']
+                },
+                {
+                    id: 'missile', label: 'MISSILES', shots: 18, cost: 95,
+                    icon: 'ability_devastating_cannon',
+                    stats: ['AMMO 18', 'HIGH DAMAGE']
+                },
+                {
+                    id: 'plasma', label: 'PLASMA CANNON', shots: 32, cost: 110,
+                    icon: 'ability_weapon_systems',
+                    stats: ['AMMO 32', 'SUSTAINED BEAM']
+                }
             ]
         };
     }
 
-    /** Called every frame while a stage is running and not paused. */
-    update(deltaTime, keys) {
-        if (typeof shopkeeperFace !== 'undefined') shopkeeperFace.update(deltaTime);
-        if (this.isOpen) return;
-        const near = typeof objectiveManager !== 'undefined' && objectiveManager.isNearShopStation
-            && objectiveManager.isNearShopStation();
-        if (!near) {
-            this.prevInteract = false;
-            return;
-        }
-        const interact = !!(keys && (keys['e'] || keys['E']));
-        if (interact && !this.prevInteract) this.show();
-        this.prevInteract = interact;
+    /** @deprecated use perkCatalog — kept for any external callers. */
+    catalog() {
+        return this.perkCatalog();
     }
 
-    show() {
+    flatPerks() {
+        const c = this.perkCatalog();
+        return c.buffs.map((i) => Object.assign({ kind: 'buff', stock: 'perk' }, i))
+            .concat(c.weapons.map((i) => Object.assign({ kind: 'weapon', stock: 'perk' }, i)));
+    }
+
+    flatParts() {
+        return (this._partsOffer || this.buildPartsOffer()).slice();
+    }
+
+    flatStock() {
+        return this.flatPerks().concat(this.flatParts());
+    }
+
+    /**
+     * Permanent modules for this visit — credit-priced, faction-flavoured,
+     * capped so the PARTS grid stays readable.
+     */
+    buildPartsOffer() {
+        const planetFaction = String((this.planetContext().faction) || '').toLowerCase();
+        const list = [];
+        const push = (kind, id, item) => {
+            if (!item || !id) return;
+            if (typeof economyConfig === 'undefined' || !economyConfig.getPartCost) return;
+            const cost = economyConfig.getPartCost(kind, item);
+            const credits = Math.max(0, Math.round(Number(cost && cost.credits) || 0));
+            if (credits <= 0) return;
+            list.push({
+                kind: 'part',
+                stock: 'part',
+                partKind: kind,
+                id: id,
+                label: String((item && item.name) || id).toUpperCase(),
+                cost: credits,
+                item: item,
+                icon: kind === 'weapon' ? 'statWeapon'
+                    : (kind === 'defense' ? 'statArmor'
+                        : (kind === 'energy' ? 'ability_energy_shield' : 'statAbilities'))
+            });
+        };
+
+        if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getIds) {
+            weaponConfigManager.getIds().forEach((id) => {
+                push('weapon', id, weaponConfigManager.getWeapon(id));
+            });
+        }
+        if (typeof abilityConfigManager !== 'undefined') {
+            const by = abilityConfigManager.getIdsByCluster
+                ? abilityConfigManager.getIdsByCluster()
+                : {};
+            (by.defense || []).forEach((id) => {
+                push('defense', id, abilityConfigManager.getAbility(id));
+            });
+            ['mobility', 'offense', 'combat', 'core', 'other'].forEach((cluster) => {
+                (by[cluster] || []).forEach((id) => {
+                    const a = abilityConfigManager.getAbility(id);
+                    if (!a || a.cluster === 'defense') return;
+                    if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.isEnergyId
+                        && shipLoadoutManager.isEnergyId(id)) return;
+                    push('ability', id, a);
+                });
+            });
+            const core = abilityConfigManager.getAbility('energy_core');
+            if (core) push('energy', 'energy_core', core);
+        }
+
+        const factionScore = (e) => {
+            const f = e.item && e.item.faction != null ? String(e.item.faction).toLowerCase() : '';
+            if (f && planetFaction && f === planetFaction) return 0;
+            if (!f) return 1;
+            return 2;
+        };
+        list.sort((a, b) => factionScore(a) - factionScore(b) || a.cost - b.cost || a.label.localeCompare(b.label));
+
+        // Keep a tight stash: mix kinds, max 8.
+        const picked = [];
+        const kindCount = { weapon: 0, defense: 0, ability: 0, energy: 0 };
+        const kindCap = { weapon: 3, defense: 2, ability: 2, energy: 1 };
+        list.forEach((e) => {
+            if (picked.length >= 8) return;
+            if ((kindCount[e.partKind] || 0) >= (kindCap[e.partKind] || 1)) return;
+            kindCount[e.partKind] = (kindCount[e.partKind] || 0) + 1;
+            picked.push(e);
+        });
+        this._partsOffer = picked;
+        return picked;
+    }
+
+    /** Current fight planet (or ambush stub) for trader flavour. */
+    planetContext() {
+        let lvl = null;
+        if (typeof game !== 'undefined') {
+            if (typeof game.getCurrentLevel === 'function') lvl = game.getCurrentLevel();
+            if (!lvl && game.coreLevelManager && game.coreLevelManager.getCurrentLevel) {
+                lvl = game.coreLevelManager.getCurrentLevel();
+            }
+            if (!lvl && game.levelManager && game.levelManager.getCurrentLevel) {
+                lvl = game.levelManager.getCurrentLevel();
+            }
+        }
+        const pid = String((lvl && (lvl.planetId || lvl.id)) || '').toLowerCase().split('-')[0];
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        const cfg = (pid && pcm && pcm.getConfig) ? pcm.getConfig(pid) : null;
+        const isAmbush = pid.indexOf('ambush_') === 0;
+        let faction = 'terran';
+        if (isAmbush) {
+            faction = 'pirate';
+        } else if (pcm && pcm.getPlanetFactions && pid) {
+            const list = pcm.getPlanetFactions(pid) || [];
+            if (list[0]) faction = String(list[0]).toLowerCase();
+        }
+        let name = String((lvl && lvl.planetName) || (cfg && cfg.name) || pid || 'UNKNOWN').toUpperCase();
+        if (isAmbush && (!name || name.indexOf('AMBUSH_') === 0 || name === pid.toUpperCase())) {
+            name = 'PIRATE OUTPOST';
+        }
+        let hash = 0;
+        const seed = pid || name;
+        for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+        const v = Math.abs(hash) % 16;
+        return { planetId: pid, name, faction, variant: v, isAmbush };
+    }
+
+    update(_deltaTime, _keys) {
+        /* portraits animate via voxelPortrait rAF */
+    }
+
+    show(opts) {
         if (this.isOpen) return;
         this.isOpen = true;
-        if (typeof shopkeeperFace !== 'undefined') shopkeeperFace.setState('idle', 0);
-        if (typeof game !== 'undefined' && game.gameState && game.gameState.pauseGame) game.gameState.pauseGame();
+        this.fromVictory = !!(opts && opts.fromVictory);
+        this._faceState = 0;
+        this._faceUntil = 0;
+        this.focusIndex = 0;
+        this.markedForSale.clear();
+        this.cartBuys.clear();
+        this._partsOffer = null;
+        this.buildPartsOffer();
+        if (!this.fromVictory
+            && typeof game !== 'undefined'
+            && game.gameState
+            && game.gameState.pauseGame) {
+            game.gameState.pauseGame();
+        }
         this.renderDom();
+    }
+
+    showFromVictory() {
+        this.show({ fromVictory: true });
     }
 
     close() {
         if (!this.isOpen) return;
         this.isOpen = false;
+        this.markedForSale.clear();
+        this.cartBuys.clear();
+        this._unpatchHomeStation();
         if (this._faceRaf) cancelAnimationFrame(this._faceRaf);
+        this._faceRaf = null;
         const el = document.getElementById('vf-in-stage-shop');
         if (el) el.remove();
-        if (typeof game !== 'undefined' && game.gameState && game.gameState.resumeGame) game.gameState.resumeGame();
+        const wasVictory = this.fromVictory;
+        this.fromVictory = false;
+        if (!wasVictory
+            && typeof game !== 'undefined'
+            && game.gameState
+            && game.gameState.resumeGame) {
+            game.gameState.resumeGame();
+        }
+    }
+
+    /** Route hangar storage drag drops back into this shop UI while open. */
+    _patchHomeStation() {
+        if (this._hsPatched || typeof homeStationUI === 'undefined') return;
+        this._hsPrevOverlay = homeStationUI.overlay;
+        this._hsPrevCreate = typeof homeStationUI.createUI === 'function'
+            ? homeStationUI.createUI.bind(homeStationUI)
+            : null;
+        const shop = this;
+        homeStationUI.overlay = document.getElementById('vf-in-stage-shop');
+        homeStationUI.createUI = function () {
+            if (shop.isOpen) shop.renderDom();
+            else if (shop._hsPrevCreate) shop._hsPrevCreate();
+        };
+        this._hsPatched = true;
+    }
+
+    _unpatchHomeStation() {
+        if (!this._hsPatched || typeof homeStationUI === 'undefined') return;
+        homeStationUI.overlay = this._hsPrevOverlay;
+        if (this._hsPrevCreate) homeStationUI.createUI = this._hsPrevCreate;
+        this._hsPatched = false;
+        this._hsPrevOverlay = null;
+        this._hsPrevCreate = null;
+    }
+
+    _syncHomeStationOverlay() {
+        if (typeof homeStationUI === 'undefined') return;
+        this._patchHomeStation();
+        homeStationUI.overlay = document.getElementById('vf-in-stage-shop');
+    }
+
+    saleMarkKey(source, shipId, dragKey) {
+        return `${source || ''}::${shipId || ''}::${dragKey || ''}`;
+    }
+
+    parseSaleMarkKey(mark) {
+        const parts = String(mark || '').split('::');
+        return {
+            source: parts[0] || '',
+            shipId: parts[1] || '',
+            dragKey: parts.slice(2).join('::') || ''
+        };
+    }
+
+    bucketToSellKind(bucket) {
+        if (bucket === 'weapons') return 'weapon';
+        if (bucket === 'defenses') return 'defense';
+        if (bucket === 'abilities') return 'ability';
+        if (bucket === 'energy') return 'energy';
+        return '';
+    }
+
+    /** Credits the trader would pay for one unit of this storage cell. */
+    sellValueForCell(cell) {
+        if (typeof profileManager === 'undefined') return 0;
+        const kind = cell.getAttribute('data-part-kind') || '';
+        const id = cell.getAttribute('data-part-id') || '';
+        if (!id) return 0;
+        let raw = 0;
+        if (kind === 'blueprint') {
+            raw = profileManager.getBlueprintSellValue
+                ? profileManager.getBlueprintSellValue(id)
+                : 0;
+        } else {
+            raw = profileManager.getPartSellValue
+                ? profileManager.getPartSellValue(kind, id)
+                : 0;
+        }
+        return Math.max(0, Math.round(Number(raw) || 0));
+    }
+
+    sellValueForMark(mark) {
+        const { dragKey } = this.parseSaleMarkKey(mark);
+        const sep = dragKey.indexOf(':');
+        const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
+        const id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+        if (!id || typeof profileManager === 'undefined') return 0;
+        let raw = 0;
+        if (bucket === 'blueprints') {
+            raw = profileManager.getBlueprintSellValue
+                ? profileManager.getBlueprintSellValue(id)
+                : 0;
+        } else {
+            const kind = this.bucketToSellKind(bucket);
+            raw = kind && profileManager.getPartSellValue
+                ? profileManager.getPartSellValue(kind, id)
+                : 0;
+        }
+        return Math.max(0, Math.round(Number(raw) || 0));
+    }
+
+    markedSalePayout() {
+        let total = 0;
+        this.markedForSale.forEach((mark) => { total += this.sellValueForMark(mark); });
+        return Math.max(0, Math.round(total));
+    }
+
+    /** Buy-key used in cart / data-shop-buy. */
+    stockBuyKey(item) {
+        if (!item) return '';
+        if (item.kind === 'part') return `part:${item.partKind}:${item.id}`;
+        return `${item.kind}:${item.id}`;
+    }
+
+    cartBuyCost() {
+        let total = 0;
+        this.cartBuys.forEach((key) => {
+            const item = this.resolveBuyKey(key);
+            total += Math.max(0, Math.round(Number(item && item.cost) || 0));
+        });
+        return total;
+    }
+
+    /** Credits after settling marked sells then cart buys (preview only). */
+    projectedCredits() {
+        return Math.max(0, this.getCredits() + this.markedSalePayout() - this.cartBuyCost());
+    }
+
+    tradeNet() {
+        return this.markedSalePayout() - this.cartBuyCost();
+    }
+
+    canAffordCartItem(item) {
+        if (!item) return false;
+        const key = this.stockBuyKey(item);
+        const already = this.cartBuys.has(key);
+        const cost = Math.max(0, Math.round(Number(item.cost) || 0));
+        // Removing from cart is always allowed; adding needs headroom after sells − other cart lines.
+        if (already) return true;
+        const others = this.cartBuyCost(); // includes this only if already in cart
+        return this.getCredits() + this.markedSalePayout() - others >= cost;
+    }
+
+    toggleCartBuy(item) {
+        if (!item) return false;
+        const key = this.stockBuyKey(item);
+        if (!key) return false;
+        if (this.cartBuys.has(key)) {
+            this.cartBuys.delete(key);
+            this.applyCartMarks();
+            this.updateCompleteButton();
+            this.updateWalletProjection();
+            return true;
+        }
+        if (!this.canAffordCartItem(item)) {
+            this.flashFace('sad');
+            this.lastMsg = 'NOT ENOUGH CREDITS';
+            return false;
+        }
+        this.cartBuys.add(key);
+        this.applyCartMarks();
+        this.updateCompleteButton();
+        this.updateWalletProjection();
+        return true;
+    }
+
+    applyCartMarks() {
+        const root = document.getElementById('vf-in-stage-shop');
+        if (!root) return;
+        root.querySelectorAll('[data-shop-buy]').forEach((cell) => {
+            const key = cell.getAttribute('data-shop-buy') || '';
+            const on = this.cartBuys.has(key);
+            cell.classList.toggle('is-in-cart', on);
+            let badge = cell.querySelector('.vf-iss-cart-mark');
+            if (on) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'vf-iss-cart-mark';
+                    cell.appendChild(badge);
+                }
+                badge.textContent = 'CART';
+            } else if (badge) {
+                badge.remove();
+            }
+        });
+    }
+
+    updateWalletProjection() {
+        const root = document.getElementById('vf-in-stage-shop');
+        if (!root) return;
+        const now = this.getCredits();
+        const next = this.projectedCredits();
+        const cash = root.querySelector('.vf-iss-trader-cash');
+        if (cash) {
+            cash.textContent = (this.cartBuys.size || this.markedForSale.size)
+                ? `${now}c → ${next}c`
+                : `${now}c ON HAND`;
+        }
+        const chip = root.querySelector('.vf-iss-wallet-item[data-wallet="credits"] b');
+        if (chip) {
+            chip.textContent = String(
+                (this.cartBuys.size || this.markedForSale.size) ? next : now
+            );
+        }
+    }
+
+    toggleMarkForSale(cell) {
+        if (!cell || cell.classList.contains('is-equipped')) {
+            this.flashFace('sad');
+            this.lastMsg = 'UNEQUIP FIRST';
+            return false;
+        }
+        const dragKey = cell.getAttribute('data-drag-key') || '';
+        const source = cell.getAttribute('data-drag-source') || '';
+        const shipId = cell.getAttribute('data-drag-ship') || '';
+        if (!dragKey || !source) return false;
+        const mark = this.saleMarkKey(source, shipId, dragKey);
+        if (this.markedForSale.has(mark)) this.markedForSale.delete(mark);
+        else this.markedForSale.add(mark);
+        this.applySaleMarks();
+        this.updateCompleteButton();
+        this.updateWalletProjection();
+        return true;
+    }
+
+    applySaleMarks() {
+        const root = document.getElementById('vf-in-stage-shop');
+        if (!root) return;
+        const cells = Array.from(root.querySelectorAll(
+            '.vf-iss-ship-inv .hs-storage-cell[data-drag-key], .vf-iss-station-inv .hs-storage-cell[data-drag-key]'
+        ));
+        // After a bag-to-bag drag the cell's source/ship changes — rematch by drag-key.
+        if (this.markedForSale.size) {
+            const next = new Set();
+            this.markedForSale.forEach((mark) => {
+                const { dragKey } = this.parseSaleMarkKey(mark);
+                const cell = cells.find((c) => c.getAttribute('data-drag-key') === dragKey);
+                if (!cell) return;
+                next.add(this.saleMarkKey(
+                    cell.getAttribute('data-drag-source') || '',
+                    cell.getAttribute('data-drag-ship') || '',
+                    dragKey
+                ));
+            });
+            this.markedForSale = next;
+        }
+        cells.forEach((cell) => {
+            const mark = this.saleMarkKey(
+                cell.getAttribute('data-drag-source') || '',
+                cell.getAttribute('data-drag-ship') || '',
+                cell.getAttribute('data-drag-key') || ''
+            );
+            const on = this.markedForSale.has(mark);
+            cell.classList.toggle('is-for-sale', on);
+            let badge = cell.querySelector('.vf-iss-sell-mark');
+            if (on) {
+                const val = this.sellValueForCell(cell);
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'vf-iss-sell-mark';
+                    cell.appendChild(badge);
+                }
+                badge.textContent = `SELL +${val}c`;
+            } else if (badge) {
+                badge.remove();
+            }
+        });
+    }
+
+    updateCompleteButton() {
+        const btn = document.querySelector('#vf-in-stage-shop [data-shop-complete]');
+        if (!btn) return;
+        const sells = this.markedForSale.size;
+        const buys = this.cartBuys.size;
+        const pay = this.markedSalePayout();
+        const spend = this.cartBuyCost();
+        const net = pay - spend;
+        const busy = sells > 0 || buys > 0;
+        const canSettle = busy && this.projectedCredits() >= 0
+            && this.getCredits() + pay >= spend;
+        btn.disabled = !canSettle;
+        btn.classList.toggle('is-ready', canSettle);
+        if (!busy) {
+            btn.textContent = 'COMPLETE TRADE';
+            return;
+        }
+        const bits = [];
+        if (buys) bits.push(`BUY −${spend}c`);
+        if (sells) bits.push(`SELL +${pay}c`);
+        bits.push(`NET ${net >= 0 ? '+' : ''}${net}c`);
+        btn.textContent = `COMPLETE TRADE (${bits.join(' · ')})`;
+    }
+
+    /**
+     * Settle cart: sell marked inventory first (credits in), then purchase
+     * cart stock (credits out). Nothing is charged until this runs.
+     */
+    completeTrade() {
+        if ((!this.markedForSale.size && !this.cartBuys.size)
+            || typeof profileManager === 'undefined') {
+            this.flashFace('sad');
+            return false;
+        }
+        const profile = this.getProfile();
+        if (!profile) {
+            this.flashFace('sad');
+            return false;
+        }
+
+        let gained = 0;
+        let sold = 0;
+        Array.from(this.markedForSale).forEach((mark) => {
+            const res = this._sellMarkedUnit(profile, mark);
+            if (res && res.ok) {
+                sold += 1;
+                gained += Math.max(0, Math.round(Number(res.credits) || 0));
+                this.markedForSale.delete(mark);
+            }
+        });
+
+        let spent = 0;
+        let bought = 0;
+        const buyKeys = Array.from(this.cartBuys);
+        buyKeys.forEach((key) => {
+            const item = this.resolveBuyKey(key);
+            if (!item) {
+                this.cartBuys.delete(key);
+                return;
+            }
+            const cost = Math.max(0, Math.round(Number(item.cost) || 0));
+            if (!profileManager.canAffordCredits(cost)) return;
+            if (!this._fulfillCartBuy(item)) return;
+            this.cartBuys.delete(key);
+            spent += cost;
+            bought += 1;
+        });
+
+        if (sold <= 0 && bought <= 0) {
+            this.flashFace('sad');
+            this.lastMsg = 'TRADE FAILED';
+            this.updateCompleteButton();
+            return false;
+        }
+        this.flashFace('happy');
+        const net = gained - spent;
+        this.lastMsg = `TRADE · +${gained}c / −${spent}c · NET ${net >= 0 ? '+' : ''}${net}c`;
+        this.renderDom();
+        return true;
+    }
+
+    /** Spend + grant one cart line (perk queue / temp weapon / permanent part). */
+    _fulfillCartBuy(item) {
+        const cost = Math.max(0, Math.round(Number(item.cost) || 0));
+        if (!profileManager.spendCredits(cost)) return false;
+        if (item.kind === 'part') {
+            const profile = this.getProfile();
+            if (!profile) {
+                if (profileManager.addCredits) profileManager.addCredits(cost, true);
+                return false;
+            }
+            if (profileManager.ensureEconomyDefaults) profileManager.ensureEconomyDefaults(profile);
+            const bag = item.partKind === 'weapon' ? profile.parts.weapons
+                : (item.partKind === 'defense' ? profile.parts.defenses
+                    : (item.partKind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+            if (!bag) {
+                if (profileManager.addCredits) profileManager.addCredits(cost, true);
+                return false;
+            }
+            bag[item.id] = (bag[item.id] || 0) + 1;
+            const discoverCat = item.partKind === 'weapon' ? 'weapons'
+                : (item.partKind === 'defense' ? 'defenses'
+                    : (item.partKind === 'energy' ? 'energy' : 'abilities'));
+            if (profileManager.discover) profileManager.discover(discoverCat, item.id);
+            profileManager.save();
+            return true;
+        }
+        if (item.kind === 'weapon') {
+            if (this.fromVictory) {
+                this.pendingWeapons.push({
+                    id: item.id, shots: item.shots, cost: cost, label: item.label, icon: item.icon
+                });
+            } else if (typeof bulletManager !== 'undefined' && bulletManager.equipTemporaryWeapon) {
+                bulletManager.equipTemporaryWeapon(item.id, item.shots);
+            }
+            return true;
+        }
+        // buff / perk
+        if (this.fromVictory) {
+            this.pendingBuffs.push({
+                id: item.id, ms: item.ms, cost: cost, label: item.label, icon: item.icon
+            });
+        } else if (typeof pickupManager !== 'undefined' && pickupManager.grantPowerUp) {
+            pickupManager.grantPowerUp(item.id, item.ms);
+        }
+        return true;
+    }
+
+    _sellMarkedUnit(profile, mark) {
+        const { source, shipId, dragKey } = this.parseSaleMarkKey(mark);
+        const sep = dragKey.indexOf(':');
+        const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
+        const id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+        if (!bucket || !id) return { ok: false, reason: 'BAD KEY' };
+
+        if (bucket === 'blueprints') {
+            return profileManager.sellBlueprint
+                ? profileManager.sellBlueprint(id)
+                : { ok: false, reason: 'NO API' };
+        }
+
+        const kind = this.bucketToSellKind(bucket);
+        if (!kind) return { ok: false, reason: 'BAD BUCKET' };
+
+        // Equipped-only: refuse (marking already blocks, but re-check).
+        if (source === 'ship' && shipId
+            && typeof profileManager._equippedStorageCount === 'function'
+            && profileManager._equippedStorageCount(profile, shipId, bucket, id) > 0) {
+            const entry = (profile.shipStorage || {})[shipId];
+            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+            if (filed <= 0) return { ok: false, reason: 'EQUIPPED' };
+        }
+
+        // Filed ship cargo must leave the ship's ledger before ownership drops.
+        if (source === 'ship' && shipId && profileManager.consumeFiledPart) {
+            const entry = (profile.shipStorage || {})[shipId];
+            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+            if (filed > 0) profileManager.consumeFiledPart(profile, shipId, bucket, id);
+        }
+
+        return profileManager.sellPart
+            ? profileManager.sellPart(kind, id)
+            : { ok: false, reason: 'NO API' };
+    }
+
+    /** Pointer drag-sort / bag transfer via HomeStationUI storage drag engine. */
+    bindInventoryInteractions(root) {
+        if (!root || typeof homeStationUI === 'undefined') return;
+        this._syncHomeStationOverlay();
+        const bags = root.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv');
+        bags.forEach((bag) => {
+            bag.querySelectorAll('.hs-storage-cell[data-drag-key]').forEach((cell) => {
+                cell.setAttribute('draggable', 'false');
+                cell.addEventListener('dragstart', (e) => e.preventDefault());
+                cell.addEventListener('pointerdown', (ev) => {
+                    if (ev.button !== 0) return;
+                    this._syncHomeStationOverlay();
+                    homeStationUI._storageDragStart(ev, cell);
+                });
+            });
+        });
     }
 
     getCredits() {
         return (typeof profileManager !== 'undefined' && profileManager.getCredits) ? profileManager.getCredits() : 0;
     }
 
-    buyBuff(item) {
-        if (typeof profileManager === 'undefined' || !profileManager.canAffordCredits(item.cost)) {
-            this.flashFace('sad');
-            return;
-        }
-        profileManager.spendCredits(item.cost);
-        if (typeof pickupManager !== 'undefined' && pickupManager.grantPowerUp) {
-            pickupManager.grantPowerUp(item.id, item.ms);
-        }
-        this.flashFace('happy');
-        this.renderDom();
+    getProfile() {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return null;
+        return profileManager.getActiveProfile();
     }
 
-    buyWeapon(item) {
-        if (typeof profileManager === 'undefined' || !profileManager.canAffordCredits(item.cost)) {
-            this.flashFace('sad');
+    resolveBuyKey(raw) {
+        const key = String(raw || '');
+        if (key.startsWith('part:')) {
+            const rest = key.slice(5);
+            const sep = rest.indexOf(':');
+            const partKind = sep === -1 ? '' : rest.slice(0, sep);
+            const id = sep === -1 ? rest : rest.slice(sep + 1);
+            return this.flatParts().find((i) => i.partKind === partKind && i.id === id) || null;
+        }
+        const sep = key.indexOf(':');
+        const kind = sep === -1 ? key : key.slice(0, sep);
+        const id = sep === -1 ? '' : key.slice(sep + 1);
+        return this.flatPerks().find((i) => i.kind === kind && i.id === id) || null;
+    }
+
+    /** Left-click stock: toggle cart line — credits move only on COMPLETE TRADE. */
+    purchaseItem(item) {
+        return this.toggleCartBuy(item);
+    }
+
+    buyFocused() {
+        const list = this.focusables();
+        const el = list[this.focusIndex];
+        if (!el) return;
+        if (el.hasAttribute('data-shop-close')) {
+            this.close();
             return;
         }
-        profileManager.spendCredits(item.cost);
-        if (typeof bulletManager !== 'undefined' && bulletManager.equipTemporaryWeapon) {
-            bulletManager.equipTemporaryWeapon(item.id, item.shots);
+        if (el.hasAttribute('data-shop-complete')) {
+            this.completeTrade();
+            return;
         }
-        this.flashFace('happy');
-        this.renderDom();
+        const key = el.getAttribute('data-shop-buy');
+        if (!key) return;
+        this.purchaseItem(this.resolveBuyKey(key));
+    }
+
+    applyPending() {
+        const buffs = this.pendingBuffs.splice(0, this.pendingBuffs.length);
+        const weapons = this.pendingWeapons.splice(0, this.pendingWeapons.length);
+        buffs.forEach((item) => {
+            if (typeof pickupManager !== 'undefined' && pickupManager.grantPowerUp) {
+                pickupManager.grantPowerUp(item.id, item.ms);
+            }
+        });
+        weapons.forEach((item) => {
+            if (typeof bulletManager !== 'undefined' && bulletManager.equipTemporaryWeapon) {
+                bulletManager.equipTemporaryWeapon(item.id, item.shots);
+            }
+        });
+    }
+
+    refundPending() {
+        let back = 0;
+        this.pendingBuffs.forEach((item) => { back += Number(item.cost) || 0; });
+        this.pendingWeapons.forEach((item) => { back += Number(item.cost) || 0; });
+        this.pendingBuffs.length = 0;
+        this.pendingWeapons.length = 0;
+        if (back > 0 && typeof profileManager !== 'undefined' && profileManager.addCredits) {
+            profileManager.addCredits(back);
+        } else if (back > 0 && typeof profileManager !== 'undefined' && profileManager.getCredits) {
+            const cur = profileManager.getCredits() || 0;
+            if (typeof profileManager.setCredits === 'function') {
+                profileManager.setCredits(cur + back);
+            }
+        }
     }
 
     flashFace(state) {
-        if (typeof shopkeeperFace !== 'undefined') shopkeeperFace.setState(state, 1200);
+        this._faceState = state === 'happy' ? 3 : (state === 'sad' ? 4 : 0);
+        this._faceUntil = performance.now() + 1200;
+        const canvas = document.querySelector('#vf-in-stage-shop canvas.vx-portrait');
+        if (canvas && typeof voxelPortrait !== 'undefined' && voxelPortrait.setState) {
+            voxelPortrait.setState(canvas, this._faceState);
+        }
+        if (!this._faceRaf) this.startFaceLoop();
     }
 
-    rowHtml(item, kind) {
-        const afford = this.getCredits() >= item.cost;
-        const sub = kind === 'weapon' ? `${item.shots} shots` : item.desc;
-        return `<div class="vf-shop-row">` +
-            `<div class="vf-shop-row-text"><b>${item.label}</b><span>${sub}</span></div>` +
-            `<button type="button" data-shop-buy="${kind}:${item.id}" ${afford ? '' : 'disabled'}>${item.cost}c</button>` +
+    iconHtml(key, size, tint) {
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml) {
+            return iconRenderer.imgHtml(key, size || 40, 'vf-iss-icon', tint, false);
+        }
+        return '';
+    }
+
+    resourceIconKey(id) {
+        const map = {
+            credits: 'menuCredits',
+            scrap: 'resScrap',
+            ore: 'resOre',
+            crystal: 'resCrystal',
+            voltex: 'resVoltex'
+        };
+        return map[id] || 'resScrap';
+    }
+
+    /** Same generative casing the hangar bay uses — ability_* UI icons tint into blank blobs. */
+    stockVisualHtml(item, cellPx) {
+        const box = Math.max(28, (cellPx | 0) - 6);
+        let kind = 'ability';
+        let color = '#c08cff';
+        let inner = '';
+        let physId = 'iss_' + item.id;
+
+        if (item.kind === 'part') {
+            kind = item.partKind === 'weapon' ? 'weapon'
+                : (item.partKind === 'defense' ? 'defense'
+                    : (item.partKind === 'energy' ? 'energy' : 'ability'));
+            physId = item.id;
+            if (kind === 'weapon') {
+                color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+                    ? (weaponConfigManager.getWeaponUiColor(item.id) || '#ff6a4a')
+                    : '#ff6a4a';
+                if (typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
+                    inner = `<span class="hs-storage-cell-icon">${iconRenderer.weaponImgHtml(item.id, Math.max(18, Math.floor(box * 0.42)), 'vf-iss-icon', false)}</span>`;
+                }
+            } else if (typeof homeStationUI !== 'undefined' && homeStationUI._storageBucketColor) {
+                const bucket = item.partKind === 'defense' ? 'defenses'
+                    : (item.partKind === 'energy' ? 'energy' : 'abilities');
+                color = homeStationUI._storageBucketColor(bucket);
+            }
+        } else if (item.kind === 'weapon') {
+            kind = 'weapon';
+            color = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+                ? (weaponConfigManager.getWeaponUiColor(item.id) || '#ff6a4a')
+                : '#ff6a4a';
+            if (typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
+                inner = `<span class="hs-storage-cell-icon">${iconRenderer.weaponImgHtml(item.id, Math.max(18, Math.floor(box * 0.42)), 'vf-iss-icon', false)}</span>`;
+            }
+        } else {
+            const pu = (typeof POWER_UPS !== 'undefined') ? POWER_UPS[item.id] : null;
+            if (item.id === 'barrier' || item.id === 'repair') {
+                kind = 'defense';
+                color = (pu && pu.color) || '#5cff7a';
+            } else if (item.id === 'speed_boost' || item.id === 'magnet') {
+                kind = 'ability';
+                color = (pu && pu.color) || '#ff8a3a';
+            } else {
+                kind = 'weapon';
+                color = (pu && pu.color) || '#ffcf3a';
+            }
+            inner = `<span class="hs-storage-cell-icon">${this.powerUpBadgeHtml(item.id, color, Math.max(16, Math.floor(box * 0.4)))}</span>`;
+        }
+        if (typeof physicalItem !== 'undefined' && physicalItem.wrap) {
+            return physicalItem.wrap(kind, physId, box, box, color, inner);
+        }
+        return inner || this.iconHtml(item.icon || 'hsShop', Math.floor(box * 0.55), color);
+    }
+
+    escTip(s) {
+        return String(s == null ? '' : s).replace(/"/g, '&quot;');
+    }
+
+    /** Stat / flavour lines for a perk or temp weapon. */
+    perkDetailLines(item) {
+        const lines = ['TEMP · NEXT STAGE'];
+        (item.stats || []).forEach((s) => lines.push(String(s)));
+        if (item.kind === 'weapon') {
+            const w = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon)
+                ? weaponConfigManager.getWeapon(item.id) : null;
+            if (w) {
+                const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) + '/S' : null;
+                lines.push(['DMG ' + w.damage, 'SPD ' + w.speed, rate, 'AMMO ' + item.shots]
+                    .filter(Boolean).join(' · '));
+                if (w.description) lines.push(String(w.description));
+            } else if (item.shots != null) {
+                lines.push('AMMO ' + item.shots);
+            }
+            lines.push('REVERTS WHEN AMMO EMPTY');
+        } else if (item.ms) {
+            lines.push('DURATION ' + Math.round(item.ms / 1000) + 's');
+        }
+        lines.push(item.cost + 'c');
+        return lines;
+    }
+
+    /** Tooltip body for a perk/temp-weapon — always includes concrete combat stats. */
+    perkTipText(item) {
+        return this.escTip(this.perkDetailLines(item).join('\n'));
+    }
+
+    /** Stat lines for a permanent part. */
+    partDetailLines(item) {
+        const lines = ['PERMANENT PART'];
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip) {
+            const tip = String(homeStationUI.hangarModuleTip(item.partKind, item.id) || '');
+            tip.split('\n').slice(1).forEach((line) => {
+                if (line) lines.push(line);
+            });
+        } else if (item.partKind === 'weapon') {
+            const w = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon)
+                ? weaponConfigManager.getWeapon(item.id) : null;
+            if (w) {
+                if (w.description) lines.push(String(w.description));
+                lines.push(['DMG ' + w.damage, 'SPD ' + w.speed]
+                    .filter((x) => x && !String(x).includes('undefined')).join(' · '));
+            }
+        }
+        lines.push(item.cost + 'c');
+        return lines;
+    }
+
+    /** Tooltip for a permanent part — hangar module stats when available. */
+    partTipText(item) {
+        return this.escTip(this.partDetailLines(item).join('\n'));
+    }
+
+    detailEmptyHtml() {
+        return `<div class="vf-iss-detail-empty">HOVER AN ITEM</div>` +
+            `<div class="vf-iss-detail-hint">Stats, ammo, shields and cost show here.</div>`;
+    }
+
+    detailShellHtml() {
+        return `<aside class="vf-iss-detail" id="vf-iss-detail" aria-live="polite">` +
+            `<h3 class="vf-iss-col-title">DETAIL</h3>` +
+            `<div class="vf-iss-detail-body">${this.detailEmptyHtml()}</div>` +
+            `</aside>`;
+    }
+
+    detailStatRowsHtml(lines) {
+        return (lines || []).map((line, i) => {
+            const text = String(line || '');
+            const cls = i === 0 ? ' is-tag' : (/\d+c$/.test(text.trim()) ? ' is-cost' : '');
+            return `<div class="vf-iss-detail-line${cls}">${text.replace(/</g, '&lt;')}</div>`;
+        }).join('');
+    }
+
+    /** Paint the right-hand detail pane for a stock item or inventory cell. */
+    showDetail(payload) {
+        const root = document.querySelector('#vf-in-stage-shop #vf-iss-detail .vf-iss-detail-body');
+        if (!root) return;
+        if (!payload) {
+            root.innerHTML = this.detailEmptyHtml();
+            return;
+        }
+        const layout = this.slotLayout();
+        const previewCs = Math.max(layout.cell + 10, 64);
+        const visual = payload.visualHtml
+            || (payload.item ? this.stockVisualHtml(payload.item, previewCs) : '');
+        const title = String(payload.title || 'ITEM').replace(/</g, '&lt;');
+        const tag = payload.tag
+            ? `<span class="vf-iss-detail-badge${payload.temp ? ' is-temp' : ''}">${payload.tag}</span>`
+            : '';
+        const cost = payload.cost != null
+            ? `<div class="vf-iss-detail-price">${payload.cost}c</div>`
+            : '';
+        root.innerHTML =
+            `<div class="vf-iss-detail-hero">` +
+            `<div class="vf-iss-detail-preview" style="--cs:${previewCs}px">${visual}</div>` +
+            `<div class="vf-iss-detail-meta">` +
+            `<div class="vf-iss-detail-name">${title}</div>` +
+            tag +
+            cost +
+            `</div></div>` +
+            `<div class="vf-iss-detail-stats">${this.detailStatRowsHtml(payload.lines || [])}</div>`;
+    }
+
+    detailFromStockItem(item) {
+        if (!item) return null;
+        const isPart = item.kind === 'part';
+        const lines = (isPart ? this.partDetailLines(item) : this.perkDetailLines(item)).slice();
+        // Cost already in lines — keep it once in the header price.
+        if (lines.length && /\d+c$/.test(String(lines[lines.length - 1]).trim())) lines.pop();
+        return {
+            item: item,
+            title: item.label || item.id,
+            tag: isPart ? 'PERMANENT' : 'TEMP · NEXT STAGE',
+            temp: !isPart,
+            cost: item.cost,
+            lines: lines
+        };
+    }
+
+    detailFromInvCell(cell) {
+        if (!cell) return null;
+        const kind = cell.getAttribute('data-part-kind') || '';
+        const id = cell.getAttribute('data-part-id') || '';
+        const dragKey = cell.getAttribute('data-drag-key') || '';
+        const head = cell.getAttribute('data-ui-tip-head') || id || 'ITEM';
+        const tip = String(cell.getAttribute('data-ui-tip') || '');
+        const lines = tip.split('\n').filter(Boolean);
+        const marked = cell.classList.contains('is-for-sale');
+        if (marked) {
+            const val = this.sellValueForCell(cell);
+            lines.push('MARKED FOR SALE · +' + val + 'c');
+        }
+        let visual = '';
+        const body = cell.querySelector('.hs-item-body');
+        if (body) {
+            visual = body.outerHTML;
+        } else if (typeof physicalItem !== 'undefined' && physicalItem.wrap && kind && id) {
+            const color = cell.style.getPropertyValue('--pk-c') || '#7ec8ff';
+            visual = physicalItem.wrap(kind === 'blueprint' ? 'ability' : kind, id, 58, 58, color, '');
+        }
+        return {
+            title: head,
+            tag: cell.classList.contains('is-equipped') ? 'EQUIPPED'
+                : (marked ? 'FOR SALE' : (dragKey.indexOf('blueprints:') === 0 ? 'BLUEPRINT' : 'INVENTORY')),
+            temp: false,
+            lines: lines,
+            visualHtml: visual
+        };
+    }
+
+    bindDetailHover(root) {
+        if (!root) return;
+        const update = (target) => {
+            const buy = target && target.closest && target.closest('[data-shop-buy]');
+            if (buy) {
+                this.showDetail(this.detailFromStockItem(
+                    this.resolveBuyKey(buy.getAttribute('data-shop-buy'))
+                ));
+                return;
+            }
+            const inv = target && target.closest && target.closest(
+                '.vf-iss-ship-inv .hs-storage-cell[data-drag-key], .vf-iss-station-inv .hs-storage-cell[data-drag-key]'
+            );
+            if (inv) {
+                this.showDetail(this.detailFromInvCell(inv));
+                return;
+            }
+        };
+        root.addEventListener('mousemove', (e) => update(e.target));
+        root.addEventListener('focusin', (e) => update(e.target));
+    }
+
+    /** Pixel silhouette matching in-world power-up pickups (POWER_UPS). */
+    powerUpBadgeHtml(id, color, size) {
+        const def = (typeof POWER_UPS !== 'undefined' && POWER_UPS[id]) || {
+            color: color || '#c08cff',
+            light: '#ffffff',
+            shape: 'circle',
+            glyph: 'cross'
+        };
+        const s = Math.max(12, size | 0);
+        try {
+            const c = document.createElement('canvas');
+            c.width = s;
+            c.height = s;
+            const ctx = c.getContext('2d');
+            if (!ctx) return '';
+            ctx.imageSmoothingEnabled = false;
+            const x = Math.floor(s / 2);
+            const y = Math.floor(s / 2);
+            const r = Math.max(3, Math.floor(s * 0.36));
+            const half = (dy, rr) => {
+                const a = Math.abs(dy);
+                if (def.shape === 'diamond') return rr - a;
+                if (def.shape === 'hex') return Math.min(rr - 1, (rr - a) * 2);
+                if (def.shape === 'square') return rr - 1;
+                if (def.shape === 'triangle') return Math.round((rr - 1) * ((dy + rr) / (2 * rr || 1)));
+                return Math.round(Math.sqrt(Math.max(0, rr * rr - a * a)));
+            };
+            const shape = (rr, col) => {
+                ctx.fillStyle = col;
+                for (let dy = -rr; dy <= rr; dy++) {
+                    const h = half(dy, rr);
+                    if (h >= 0) ctx.fillRect(x - h, y + dy, h * 2 + 1, 1);
+                }
+            };
+            shape(r + 1, '#05060a');
+            shape(r, def.color || color);
+            shape(Math.max(1, r - 2), def.light || '#ffffff');
+            ctx.fillStyle = '#05060a';
+            const mark = (mx, my, mw, mh) => ctx.fillRect(mx, my, mw, mh);
+            if (def.glyph === 'arrow') {
+                mark(x, y - 2, 1, 5); mark(x - 1, y - 1, 3, 1); mark(x - 2, y, 5, 1);
+            } else if (def.glyph === 'chevrons') {
+                for (let k = 0; k < 2; k++) {
+                    const yy = y - 2 + k * 3;
+                    mark(x, yy, 1, 1); mark(x - 1, yy + 1, 1, 1); mark(x + 1, yy + 1, 1, 1);
+                    mark(x - 2, yy + 2, 1, 1); mark(x + 2, yy + 2, 1, 1);
+                }
+            } else {
+                mark(x, y - 2, 1, 5); mark(x - 2, y, 5, 1);
+            }
+            return `<img class="vf-iss-icon" src="${c.toDataURL()}" width="${s}" height="${s}" alt="" draggable="false" style="image-rendering:pixelated;width:${s}px;height:${s}px">`;
+        } catch (err) {
+            return '';
+        }
+    }
+
+    /** Focusable: stock cells + complete + close. */
+    focusables() {
+        const root = document.getElementById('vf-in-stage-shop');
+        if (!root) return [];
+        return Array.from(root.querySelectorAll(
+            '[data-shop-buy], [data-shop-complete], [data-shop-close]'
+        ));
+    }
+
+    updateFocusDisplay() {
+        const list = this.focusables();
+        if (!list.length) return;
+        if (this.focusIndex < 0) this.focusIndex = list.length - 1;
+        if (this.focusIndex >= list.length) this.focusIndex = 0;
+        list.forEach((el, i) => {
+            const on = i === this.focusIndex;
+            el.classList.toggle('nav-focused', on);
+            el.classList.toggle('is-focused', on);
+            if (on) {
+                try { el.focus({ preventScroll: true }); } catch (err) { /* ignore */ }
+                if (typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+                    gamepadCursor.follow(el);
+                }
+                if (el.hasAttribute('data-shop-buy')) {
+                    this.showDetail(this.detailFromStockItem(
+                        this.resolveBuyKey(el.getAttribute('data-shop-buy'))
+                    ));
+                }
+            }
+        });
+    }
+
+    moveFocus(dx, dy) {
+        const list = this.focusables();
+        if (!list.length) return;
+        const cols = this._stockCols || 3;
+        const stockCount = this.flatStock().length;
+        // Last item is CLOSE — treat as its own row.
+        let idx = this.focusIndex;
+        if (idx >= stockCount) {
+            if (dy < 0 || dx !== 0) idx = Math.min(stockCount - 1, Math.max(0, idx));
+            else return;
+        } else {
+            const col = idx % cols;
+            const row = Math.floor(idx / cols);
+            let nc = col + dx;
+            let nr = row + dy;
+            if (dy > 0 && (row + 1) * cols >= stockCount) {
+                // Drop to CLOSE
+                this.focusIndex = stockCount; // close button index among focusables if present
+                // focusables = stock + close → close at stockCount
+                this.updateFocusDisplay();
+                return;
+            }
+            if (nc < 0) nc = cols - 1;
+            if (nc >= cols) nc = 0;
+            const next = nr * cols + nc;
+            if (next < 0) idx = stockCount; // wrap to close
+            else if (next >= stockCount) idx = Math.min(stockCount - 1, Math.max(0, next));
+            else idx = next;
+        }
+        this.focusIndex = idx;
+        this.updateFocusDisplay();
+    }
+
+    /**
+     * Victory / gamepad key path. Returns true when the event was handled.
+     */
+    handleInput(event) {
+        if (!this.isOpen) return false;
+        if (event.repeat) return true;
+        const key = event.key;
+        switch (key) {
+            case 'ArrowLeft':
+                this.moveFocus(-1, 0);
+                return true;
+            case 'ArrowRight':
+                this.moveFocus(1, 0);
+                return true;
+            case 'ArrowUp':
+                this.moveFocus(0, -1);
+                return true;
+            case 'ArrowDown':
+                this.moveFocus(0, 1);
+                return true;
+            case 'Enter':
+            case ' ':
+                this.buyFocused();
+                return true;
+            case 'Escape':
+            case 'e':
+            case 'E':
+                this.close();
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    walletHtml() {
+        const profile = this.getProfile();
+        const map = (profile && profile.resources) || {};
+        const ids = (typeof economyConfig !== 'undefined' && economyConfig.resourceIds)
+            ? economyConfig.resourceIds.slice()
+            : ['scrap', 'ore', 'crystal', 'voltex'];
+        const chip = (id, amount, iconId) => {
+            const n = Math.max(0, Math.round(Number(amount) || 0));
+            const label = id === 'credits'
+                ? 'CREDITS'
+                : ((typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
+                    ? economyConfig.getResourceLabel(id)
+                    : String(id).toUpperCase());
+            return `<span class="vf-iss-wallet-item${n <= 0 ? ' is-empty' : ''}">` +
+                `<span class="vf-iss-wallet-ico">${this.iconHtml(this.resourceIconKey(iconId || id), 28)}</span>` +
+                `<span class="vf-iss-wallet-meta"><span>${label}</span><b>${n}</b></span>` +
+                `</span>`;
+        };
+        return `<div class="vf-iss-wallet" aria-label="Resources">` +
+            chip('credits', this.getCredits(), 'credits').replace(
+                'class="vf-iss-wallet-item',
+                'data-wallet="credits" class="vf-iss-wallet-item'
+            ) +
+            ids.map((id) => chip(id, map[id] || 0, id)).join('') +
             `</div>`;
     }
 
+    /** Compact stash cells — room for the right-hand detail pane. */
+    SHOP_CELL_PX = 40;
+    SHOP_GAP_PX = 2;
+    /** Vendor stash footprint (empty pads give the Diablo bag feel). */
+    STOCK_COLS = 6;
+    STOCK_ROWS = 4;
+
+    slotLayout() {
+        if (typeof homeStationUI !== 'undefined' && homeStationUI._storageLayoutPx) {
+            const prev = homeStationUI.STORAGE_CELL_PX;
+            const prevGap = homeStationUI.STORAGE_GAP_PX;
+            homeStationUI.STORAGE_CELL_PX = this.SHOP_CELL_PX;
+            homeStationUI.STORAGE_GAP_PX = this.SHOP_GAP_PX;
+            let layout;
+            try {
+                layout = homeStationUI._storageLayoutPx();
+            } finally {
+                homeStationUI.STORAGE_CELL_PX = prev;
+                homeStationUI.STORAGE_GAP_PX = prevGap;
+            }
+            return layout;
+        }
+        return { cell: this.SHOP_CELL_PX, gap: this.SHOP_GAP_PX };
+    }
+
+    /** Run hangar storage renderers with shop cell size, then restore. */
+    withShopSlotSize(fn) {
+        const layout = this.slotLayout();
+        if (typeof homeStationUI === 'undefined') return { layout, html: fn(layout) };
+        const prev = homeStationUI.STORAGE_CELL_PX;
+        const prevGap = homeStationUI.STORAGE_GAP_PX;
+        homeStationUI.STORAGE_CELL_PX = layout.cell;
+        homeStationUI.STORAGE_GAP_PX = layout.gap;
+        try {
+            return { layout, html: fn(layout) };
+        } finally {
+            homeStationUI.STORAGE_CELL_PX = prev;
+            homeStationUI.STORAGE_GAP_PX = prevGap;
+        }
+    }
+
+    storageGridShell(cols, rows, cs, gap, extraClass, innerHtml) {
+        return `<div class="hs-storage-grid ${extraClass || ''}" data-inv-cols="${cols}" data-inv-rows="${rows}" ` +
+            `style="--cs:${cs}px;--hs-gap:${gap}px;grid-auto-flow:row dense;` +
+            `grid-template-columns:repeat(${cols},${cs}px);` +
+            `grid-template-rows:repeat(${rows},${cs}px);` +
+            `width:calc(${cols}*${cs}px + ${cols - 1}*${gap}px);` +
+            `height:calc(${rows}*${cs}px + ${rows - 1}*${gap}px)">` +
+            innerHtml +
+            `</div>`;
+    }
+
+    /** Shared cell builder for perk / part vendor grids. */
+    stockCellHtml(item, cs) {
+        const cost = Math.max(0, Math.round(Number(item.cost) || 0));
+        item.cost = cost;
+        const buyKey = this.stockBuyKey(item);
+        const inCart = this.cartBuys.has(buyKey);
+        const afford = inCart || this.canAffordCartItem(item);
+        const isPart = item.kind === 'part';
+        let accent = '#c08cff';
+        if (isPart && item.partKind === 'weapon') {
+            accent = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+                ? (weaponConfigManager.getWeaponUiColor(item.id) || '#ff6a4a')
+                : '#ff6a4a';
+        } else if (item.kind === 'weapon') {
+            accent = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+                ? (weaponConfigManager.getWeaponUiColor(item.id) || '#ff6a4a')
+                : '#ff6a4a';
+        } else {
+            const pu = (typeof POWER_UPS !== 'undefined') ? POWER_UPS[item.id] : null;
+            accent = (pu && pu.color) || accent;
+        }
+        const tip = isPart ? this.partTipText(item) : this.perkTipText(item);
+        const head = String(item.label || item.id).replace(/"/g, '&quot;');
+        const badge = isPart
+            ? `<span class="vf-iss-stock-tag">OWN</span>`
+            : `<span class="vf-iss-stock-tag is-temp">TEMP</span>`;
+        const cartBadge = inCart ? `<span class="vf-iss-cart-mark">CART</span>` : '';
+        // Keep unaffordable cells clickable so the trader can flash "NOT ENOUGH CREDITS".
+        return `<button type="button" class="hs-storage-cell vf-iss-stock-cell${isPart ? ' is-part' : ' is-perk'}${afford ? '' : ' is-locked'}${inCart ? ' is-in-cart' : ''}" ` +
+            `data-shop-buy="${buyKey}" data-nav-item tabindex="-1" style="--pk-c:${accent}" ` +
+            `data-ui-tip-compact data-ui-tip-head="${head}" data-ui-tip="${tip}" ` +
+            `aria-label="Add ${head} to cart for ${cost} credits">` +
+            this.stockVisualHtml(item, cs) +
+            badge +
+            cartBadge +
+            `<span class="vf-iss-stock-cost">${cost}c</span>` +
+            `</button>`;
+    }
+
+    /** Pad a cell list out to cols×rows empty slots. */
+    padStockCells(cells, cols, rows) {
+        const pad = Math.max(0, cols * rows - cells.length);
+        for (let i = 0; i < pad; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return cells;
+    }
+
+    /** Temp perks / temp weapons for the next stage. */
+    perkGridHtml() {
+        const items = this.flatPerks();
+        const cols = this.STOCK_COLS;
+        const rows = Math.max(2, Math.ceil(Math.max(items.length, 1) / cols));
+        this._stockCols = cols;
+        const layout = this.slotLayout();
+        const cs = layout.cell;
+        const gap = layout.gap;
+        const cells = this.padStockCells(items.map((item) => this.stockCellHtml(item, cs)), cols, rows);
+        return this.storageGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid', cells.join(''));
+    }
+
+    /** Permanent parts that go into ship/station storage. */
+    partsGridHtml() {
+        const items = this.flatParts();
+        const cols = this.STOCK_COLS;
+        const rows = Math.max(2, Math.ceil(Math.max(items.length, 1) / cols));
+        const layout = this.slotLayout();
+        const cs = layout.cell;
+        const gap = layout.gap;
+        const cells = this.padStockCells(items.map((item) => this.stockCellHtml(item, cs)), cols, rows);
+        return this.storageGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid', cells.join(''));
+    }
+
+    /** Both vendor grids under STOCK. */
+    stockGridsHtml() {
+        return `<h3 class="vf-iss-col-title vf-iss-sub-title">PERKS · NEXT STAGE</h3>` +
+            this.perkGridHtml() +
+            `<h3 class="vf-iss-col-title vf-iss-sub-title">PARTS · PERMANENT</h3>` +
+            this.partsGridHtml();
+    }
+
+    /** Ship cargo bay at shop slot size. */
+    shipInventoryHtml() {
+        const profile = this.getProfile();
+        const shipId = profile && profile.activeShipId;
+        if (!profile || !shipId || typeof homeStationUI === 'undefined' || !homeStationUI.renderShipStorage) {
+            return this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
+        }
+        const { html } = this.withShopSlotSize(() => homeStationUI.renderShipStorage(profile, shipId, {
+            tipAction: false,
+            extraGridClass: 'vf-iss-inv-grid',
+            // Shop: one tile per part — hangar footprints make the trader bag look messy.
+            compactSpans: true
+        }));
+        return html || this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
+    }
+
+    /** Station storage bay at the same shop slot size, beside ship. */
+    stationInventoryHtml() {
+        const profile = this.getProfile();
+        if (!profile || typeof homeStationUI === 'undefined' || !homeStationUI.renderStationStorage) {
+            return this.emptyBagHtml('STATION EMPTY');
+        }
+        const { html } = this.withShopSlotSize(() => homeStationUI.renderStationStorage(profile, {
+            tipAction: false,
+            compactSpans: true,
+            maxCols: this.STOCK_COLS
+        }));
+        if (!html) return this.emptyBagHtml('STATION EMPTY');
+        // Tag for shop CSS (renderStationStorage has no extraGridClass hook).
+        return String(html).replace(
+            'class="hs-storage-grid',
+            'class="hs-storage-grid vf-iss-station-grid'
+        );
+    }
+
+    emptyBagHtml(label) {
+        const layout = this.slotLayout();
+        const cols = 6;
+        const rows = 2;
+        const cells = [];
+        for (let i = 0; i < cols * rows; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return `<div class="vf-iss-empty-bag" data-empty-label="${label}">` +
+            this.storageGridShell(cols, rows, layout.cell, layout.gap, 'vf-iss-station-grid', cells.join('')) +
+            `</div>`;
+    }
+
+    /** Ship + station bags (+ queued stage buys). */
+    inventoryColumnsHtml() {
+        const layout = this.slotLayout();
+        return `<div class="vf-iss-bags">` +
+            `<section class="vf-iss-col vf-iss-ship">` +
+            `<h3 class="vf-iss-col-title">SHIP</h3>` +
+            `<div class="vf-iss-ship-inv hs-slot-picker">${this.shipInventoryHtml()}</div>` +
+            `</section>` +
+            `<section class="vf-iss-col vf-iss-station">` +
+            `<h3 class="vf-iss-col-title">STATION</h3>` +
+            `<div class="vf-iss-station-inv hs-slot-picker">${this.stationInventoryHtml()}</div>` +
+            `</section>` +
+            `</div>` +
+            this.queuedInventoryCells(layout.cell);
+    }
+
+    /** Stage buys waiting for next fight — same slot casing as hangar parts. */
+    queuedInventoryCells(cs) {
+        const pending = this.pendingBuffs.concat(this.pendingWeapons);
+        if (!pending.length) return '';
+        const layout = this.slotLayout();
+        const gap = layout.gap;
+        const cols = Math.min(4, Math.max(1, pending.length));
+        const rows = Math.ceil(pending.length / cols);
+        const cells = pending.map((item) => {
+            const kind = item.shots != null ? 'weapon' : 'ability';
+            const color = (typeof POWER_UPS !== 'undefined' && POWER_UPS[item.id] && POWER_UPS[item.id].color)
+                || '#4fd8e8';
+            const body = (typeof physicalItem !== 'undefined' && physicalItem.wrap)
+                ? physicalItem.wrap(kind, 'iss_q_' + item.id, cs - 6, cs - 6, color, '')
+                : this.iconHtml(item.icon || 'hsShop', Math.floor(cs * 0.5), color);
+            return `<div class="hs-storage-cell is-queued" style="--pk-c:${color}" title="${item.label || item.id}">` +
+                body +
+                `<span class="hs-storage-cell-qty">${item.shots != null ? item.shots : 1}</span>` +
+                `</div>`;
+        });
+        const pad = Math.max(0, cols * rows - pending.length);
+        for (let i = 0; i < pad; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return `<h3 class="vf-iss-col-title vf-iss-queued-title">QUEUED</h3>` +
+            this.storageGridShell(cols, rows, cs, gap, 'vf-iss-queued-grid', cells.join(''));
+    }
+
+    fallbackInventoryGrid(layout, extraClass) {
+        const cols = 6;
+        const rows = 4;
+        const cs = layout.cell;
+        const gap = layout.gap;
+        const cells = [];
+        for (let i = 0; i < cols * rows; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return this.storageGridShell(cols, rows, cs, gap, extraClass || 'vf-iss-inv-grid', cells.join(''));
+    }
+
+    portraitHtml(ctx) {
+        if (typeof voxelPortrait !== 'undefined' && voxelPortrait.canvasHtml) {
+            return voxelPortrait.canvasHtml(
+                { faction: ctx.faction, v: ctx.variant },
+                null,
+                { state: this._faceState || 0 }
+            );
+        }
+        return `<canvas id="vf-shop-face" class="vf-iss-face-fallback" width="96" height="96" aria-hidden="true"></canvas>`;
+    }
+
+    /** Paint shop chrome in the trader's faction colours (not the player's HUD theme). */
+    applyTraderTheme(root, factionId) {
+        if (!root) return;
+        const id = String(factionId || 'terran').toLowerCase();
+        root.dataset.faction = id;
+        let style = null;
+        if (typeof factionShipStyles !== 'undefined') {
+            if (factionShipStyles.getFactionStyle) style = factionShipStyles.getFactionStyle(id);
+            else if (factionShipStyles.getDefaultFactionStyle) style = factionShipStyles.getDefaultFactionStyle(id);
+        }
+        const hull = (style && style.hull) || '#3A6EA5';
+        const edge = (style && style.edge) || '#1a2a3a';
+        const accent = (style && style.accent)
+            || (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor
+                ? factionShipStyles.getFactionColor(id) : null)
+            || '#7ec8ff';
+        const set = (k, v) => root.style.setProperty(k, v);
+        set('--faction-hull', hull);
+        set('--faction-edge', edge);
+        set('--faction-accent', accent);
+        set('--color-primary', accent);
+        set('--color-secondary', hull);
+        set('--color-border', edge);
+        set('--iss-accent', accent);
+        set('--iss-hull', hull);
+        set('--iss-edge', edge);
+    }
+
     renderDom() {
+        const keepFocus = this.focusIndex;
         let el = document.getElementById('vf-in-stage-shop');
         if (!el) {
             el = document.createElement('div');
             el.id = 'vf-in-stage-shop';
-            el.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;background:rgba(5,6,10,0.72);font-family:monospace;color:#e8f0ff;';
+            el.className = 'vf-iss';
             document.body.appendChild(el);
             el.addEventListener('click', (e) => {
+                // Inventory cells: left-click does not move/craft — drag sorts, right-click marks.
+                const invCell = e.target.closest(
+                    '.vf-iss-ship-inv .hs-storage-cell[data-drag-key], .vf-iss-station-inv .hs-storage-cell[data-drag-key]'
+                );
+                if (invCell) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 const buyBtn = e.target.closest('[data-shop-buy]');
                 if (buyBtn) {
-                    const [kind, id] = buyBtn.getAttribute('data-shop-buy').split(':');
-                    const list = kind === 'weapon' ? this.catalog().weapons : this.catalog().buffs;
-                    const item = list.find((i) => i.id === id);
-                    if (item) kind === 'weapon' ? this.buyWeapon(item) : this.buyBuff(item);
+                    const list = this.focusables();
+                    const idx = list.indexOf(buyBtn);
+                    if (idx >= 0) this.focusIndex = idx;
+                    this.purchaseItem(this.resolveBuyKey(buyBtn.getAttribute('data-shop-buy')));
+                    return;
+                }
+                if (e.target.closest('[data-shop-complete]')) {
+                    this.completeTrade();
                     return;
                 }
                 if (e.target.closest('[data-shop-close]')) this.close();
             });
+            el.addEventListener('contextmenu', (e) => {
+                const cell = e.target.closest(
+                    '.vf-iss-ship-inv .hs-storage-cell[data-drag-key], .vf-iss-station-inv .hs-storage-cell[data-drag-key]'
+                );
+                if (!cell) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleMarkForSale(cell);
+            });
+            el.addEventListener('mousemove', (e) => {
+                const btn = e.target.closest(
+                    '[data-shop-buy], [data-shop-complete], [data-shop-close]'
+                );
+                if (btn) {
+                    const list = this.focusables();
+                    const idx = list.indexOf(btn);
+                    if (idx >= 0 && idx !== this.focusIndex) {
+                        this.focusIndex = idx;
+                        this.updateFocusDisplay();
+                    }
+                }
+            });
+            this.bindDetailHover(el);
         }
-        const c = this.catalog();
+        const ctx = this.planetContext();
+        this.applyTraderTheme(el, ctx.faction);
+        const factionLabel = String(ctx.faction || 'local').toUpperCase();
+        const pendingNote = (this.pendingBuffs.length || this.pendingWeapons.length)
+            ? `<div class="vf-iss-note">QUEUED FOR NEXT STAGE</div>`
+            : '';
+        const saleHint = `<div class="vf-iss-note vf-iss-hint">CLICK stock → cart · RIGHT-CLICK inventory → sell mark · COMPLETE TRADE settles credits</div>`;
         el.innerHTML =
-            `<div style="background:#10141c;border:2px solid #3a4a64;border-radius:6px;padding:14px;width:260px;max-width:90vw;">` +
-            `<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">` +
-            `<canvas id="vf-shop-face" width="40" height="40" style="image-rendering:pixelated;background:#05060a;border-radius:4px;"></canvas>` +
-            `<div><div style="font-weight:bold;">TRAVELING TRADER</div><div style="opacity:0.7;font-size:12px;">${this.getCredits()}c on hand</div></div>` +
+            `<div class="vf-iss-panel" data-faction="${String(ctx.faction || 'terran').toLowerCase()}" role="dialog" aria-label="Planet shop">` +
+            `<header class="vf-iss-head">` +
+            `<div class="vf-iss-trader">` +
+            `<div class="vf-iss-portrait">${this.portraitHtml(ctx)}</div>` +
+            `<div class="vf-iss-trader-meta">` +
+            `<div class="vf-iss-trader-title">${ctx.name} LOCAL</div>` +
+            `<div class="vf-iss-trader-sub">${factionLabel} · PLANET TRADER</div>` +
+            `<div class="vf-iss-trader-cash">${this.getCredits()}c ON HAND</div>` +
+            `</div></div>` +
+            `<button type="button" class="vf-iss-close" data-shop-close data-nav-item tabindex="-1">CLOSE [E / B]</button>` +
+            `</header>` +
+            this.walletHtml() +
+            pendingNote +
+            saleHint +
+            `<div class="vf-iss-body">` +
+            `<div class="vf-iss-main">` +
+            `<section class="vf-iss-col vf-iss-stock">` +
+            `<h3 class="vf-iss-col-title">STOCK</h3>` +
+            this.stockGridsHtml() +
+            `</section>` +
+            this.inventoryColumnsHtml() +
             `</div>` +
-            `<div style="font-size:11px;opacity:0.7;margin:6px 0 2px;">STAGE-ONLY BUFFS</div>` +
-            c.buffs.map((i) => this.rowHtml(i, 'buff')).join('') +
-            `<div style="font-size:11px;opacity:0.7;margin:10px 0 2px;">TEMPORARY WEAPONS</div>` +
-            c.weapons.map((i) => this.rowHtml(i, 'weapon')).join('') +
-            `<button type="button" data-shop-close style="margin-top:12px;width:100%;">CLOSE [E]</button>` +
-            `</div>`;
-        el.querySelectorAll('.vf-shop-row').forEach((row) => {
-            row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;';
-        });
-        el.querySelectorAll('.vf-shop-row-text').forEach((d) => {
-            d.style.cssText = 'display:flex;flex-direction:column;font-size:12px;';
-        });
+            this.detailShellHtml() +
+            `</div>` +
+            `<footer class="vf-iss-foot">` +
+            `<button type="button" class="vf-iss-complete" data-shop-complete data-nav-item tabindex="-1" disabled>COMPLETE TRADE</button>` +
+            `</footer></div>`;
+        // Theme lives on the root; re-apply after innerHTML so dataset/vars stay.
+        this.applyTraderTheme(el, ctx.faction);
+        if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) {
+            voxelPortrait.scan(el);
+        }
+        this.bindInventoryInteractions(el);
+        this.applySaleMarks();
+        this.applyCartMarks();
+        this.updateCompleteButton();
+        this.updateWalletProjection();
+        this.focusIndex = Math.min(keepFocus, Math.max(0, this.focusables().length - 1));
+        this.updateFocusDisplay();
+        const focused = this.focusables()[this.focusIndex];
+        if (focused && focused.hasAttribute('data-shop-buy')) {
+            this.showDetail(this.detailFromStockItem(
+                this.resolveBuyKey(focused.getAttribute('data-shop-buy'))
+            ));
+        }
         this.startFaceLoop();
     }
 
     startFaceLoop() {
-        const canvas = document.getElementById('vf-shop-face');
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
+        if (this._faceRaf) cancelAnimationFrame(this._faceRaf);
+        const fallback = document.getElementById('vf-shop-face');
         const tick = () => {
-            if (!this.isOpen) return;
-            if (typeof shopkeeperFace !== 'undefined') {
+            if (!this.isOpen) {
+                this._faceRaf = null;
+                return;
+            }
+            const now = performance.now();
+            if (this._faceUntil && now >= this._faceUntil) {
+                this._faceUntil = 0;
+                this._faceState = 0;
+                const canvas = document.querySelector('#vf-in-stage-shop canvas.vx-portrait');
+                if (canvas && typeof voxelPortrait !== 'undefined' && voxelPortrait.setState) {
+                    voxelPortrait.setState(canvas, 0);
+                }
+            }
+            if (fallback && typeof shopkeeperFace !== 'undefined') {
+                const ctx = fallback.getContext('2d');
                 shopkeeperFace.update(16);
-                shopkeeperFace.render(ctx, canvas.width, canvas.height);
+                shopkeeperFace.render(ctx, fallback.width, fallback.height);
             }
             this._faceRaf = requestAnimationFrame(tick);
         };
-        tick();
+        this._faceRaf = requestAnimationFrame(tick);
     }
 }
 
@@ -125103,15 +131458,130 @@ window.inStageShop = inStageShop;
 extendClass(ProfileManager, {
     ITEM_UPGRADE_BUCKETS: ['weapons', 'defenses', 'abilities', 'energy'],
 
+    /** Split `defId` / `defId#unit` so each owned copy can keep its own upgrades. */
+    parsePartInstanceId(itemId) {
+        const raw = String(itemId || '');
+        const m = raw.match(/^(.*)#(\d+)$/);
+        if (m) {
+            return {
+                defId: m[1],
+                unit: Math.max(0, parseInt(m[2], 10) || 0),
+                instanceId: raw
+            };
+        }
+        return { defId: raw, unit: null, instanceId: raw };
+    },
+
+    partDefId(itemId) {
+        return this.parsePartInstanceId(itemId).defId;
+    },
+
+    /** Canonical upgrade bag key for one owned copy (`defId#unit`). Bare defId → #0. */
+    partInstanceKey(itemId) {
+        const p = this.parsePartInstanceId(itemId);
+        if (!p.defId) return '';
+        const unit = p.unit != null ? p.unit : 0;
+        return p.defId + '#' + unit;
+    },
+
+    /**
+     * Stable unit indices 0..owned-1 packed by location: each ship's equipped copies,
+     * then that ship's filed copies (ownedShipIds order), then station leftovers.
+     */
+    getPartInstanceLayout(profile, bucket, defId) {
+        const p = profile || this.getActiveProfile();
+        const id = String(defId || '');
+        const out = { station: [], ships: {}, owned: 0 };
+        if (!p || !id || bucket === 'blueprints') return out;
+        let owned = Math.max(0, Math.round(Number(this._ownedStorageCount(p, bucket, id)) || 0));
+        if (owned <= 0) {
+            // Starter loadout parts can be visible with owned=0 (filed/equipped only).
+            const ships = p.ownedShipIds || [];
+            let visible = 0;
+            ships.forEach((shipId) => {
+                visible += this._equippedStorageCount(p, shipId, bucket, id);
+                const entry = (p.shipStorage || {})[shipId];
+                visible += (entry && entry[bucket] && entry[bucket][id]) || 0;
+            });
+            owned = Math.max(0, visible);
+        }
+        out.owned = owned;
+        let cursor = 0;
+        const take = (n) => {
+            const slice = [];
+            const count = Math.max(0, Math.round(Number(n) || 0));
+            for (let i = 0; i < count && cursor < owned; i++) slice.push(cursor++);
+            return slice;
+        };
+        (p.ownedShipIds || []).forEach((shipId) => {
+            const eq = this._equippedStorageCount(p, shipId, bucket, id);
+            const entry = (p.shipStorage || {})[shipId];
+            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+            out.ships[shipId] = take(eq).concat(take(filed));
+        });
+        while (cursor < owned) out.station.push(cursor++);
+        return out;
+    },
+
+    /** Upgrade-bag key for the Nth equipped copy of defId on a ship (0-based). */
+    getEquippedInstanceId(profile, shipId, bucket, defId, occurrence) {
+        const id = String(defId || '');
+        const occ = Math.max(0, Math.round(Number(occurrence) || 0));
+        const layout = this.getPartInstanceLayout(profile, bucket, id);
+        const shipUnits = (layout.ships && layout.ships[shipId]) || [];
+        const eq = this._equippedStorageCount(profile, shipId, bucket, id);
+        if (occ >= eq || occ >= shipUnits.length) return this.partInstanceKey(id);
+        return id + '#' + shipUnits[occ];
+    },
+
+    /**
+     * After a station↔ship move of one specific unit, slide upgrade bags so the
+     * dragged copy keeps its levels under the new packed index.
+     */
+    remapPartInstanceUpgrades(profile, bucket, defId, fromUnit, toIndex) {
+        const p = profile || this.getActiveProfile();
+        if (!p || !defId || bucket === 'blueprints') return;
+        this.ensureEconomyDefaults(p);
+        const bag = p.itemUpgrades && p.itemUpgrades[bucket];
+        if (!bag) return;
+        const owned = Math.max(0, Math.round(Number(this._ownedStorageCount(p, bucket, defId)) || 0));
+        if (owned <= 1) return;
+        const from = Math.max(0, Math.round(Number(fromUnit) || 0));
+        const to = Math.max(0, Math.round(Number(toIndex) || 0));
+        if (from === to || from >= owned || to >= owned) return;
+        const arr = [];
+        for (let i = 0; i < owned; i++) {
+            const k = defId + '#' + i;
+            if (bag[k] && typeof bag[k] === 'object') arr.push(bag[k]);
+            else if (i === 0 && bag[defId] && typeof bag[defId] === 'object') arr.push(bag[defId]);
+            else arr.push(null);
+        }
+        const moved = arr.splice(from, 1)[0];
+        arr.splice(to, 0, moved);
+        if (bag[defId]) delete bag[defId];
+        for (let i = 0; i < owned; i++) {
+            const k = defId + '#' + i;
+            if (arr[i]) bag[k] = arr[i];
+            else delete bag[k];
+        }
+    },
+
     /** Raw per-item entry ({ tracks, mode, tune }), ensuring buckets exist first. */
     _itemUpgradeEntry(bucket, itemId, profile) {
         const p = profile || this.getActiveProfile();
         if (!p) return null;
         this.ensureEconomyDefaults(p);
         const b = String(bucket || '');
-        const id = String(itemId || '');
+        const parsed = this.parsePartInstanceId(itemId);
+        if (!parsed.defId) return null;
+        const id = this.partInstanceKey(parsed.instanceId);
         const bag = p.itemUpgrades && p.itemUpgrades[b];
         if (!bag) return null;
+        // Legacy saves keyed upgrades by bare defId — fold onto #0 once.
+        if (!bag[id] && bag[parsed.defId] && typeof bag[parsed.defId] === 'object') {
+            bag[id] = bag[parsed.defId];
+            delete bag[parsed.defId];
+        }
         if (!bag[id] || typeof bag[id] !== 'object') {
             bag[id] = { tracks: {}, mode: 'single', tune: 0.5, tuneUnlocked: false };
         }
@@ -125131,10 +131601,26 @@ extendClass(ProfileManager, {
         return Object.keys(entry.tracks).reduce((sum, t) => sum + Math.max(0, Math.round(Number(entry.tracks[t]) || 0)), 0);
     },
 
-    /** Owned anywhere (station/ship storage) or currently equipped on any owned ship. */
+    /** Owned anywhere (station/ship storage) or currently equipped on any owned ship.
+     *  Instance ids (`defId#unit`) resolve against the bare defId ledger. */
     _itemIsOwnedOrEquipped(profile, bucket, itemId) {
-        if (this._ownedStorageCount(profile, bucket, itemId) > 0) return true;
-        return this._equippedStorageCountAll(profile, bucket, itemId) > 0;
+        const parsed = this.parsePartInstanceId(itemId);
+        const defId = parsed.defId;
+        if (!defId) return false;
+        const owned = this._ownedStorageCount(profile, bucket, defId);
+        if (parsed.unit != null) {
+            if (owned > 0) return parsed.unit >= 0 && parsed.unit < owned;
+            // owned=0 starter copies still upgradeable while filed/equipped
+            const layout = this.getPartInstanceLayout(profile, bucket, defId);
+            return parsed.unit >= 0 && parsed.unit < layout.owned;
+        }
+        if (owned > 0) return true;
+        if (this._equippedStorageCountAll(profile, bucket, defId) > 0) return true;
+        const map = profile.shipStorage || {};
+        return Object.keys(map).some((shipId) => {
+            const entry = map[shipId] && map[shipId][bucket];
+            return !!(entry && (entry[defId] || 0) > 0);
+        });
     },
 
     canPurchaseItemTrackUpgrade(bucket, itemId, track, profile) {
@@ -125458,7 +131944,11 @@ extendClass(HomeStationUI, {
         if (!bucket || !id || bucket === 'blueprints') {
             return wrap(this.emptyHtml('hsHangar', 'SELECT A PART'));
         }
-        const meta = this._storageItemMeta(bucket, id);
+        const parsed = (typeof profileManager !== 'undefined' && profileManager.parsePartInstanceId)
+            ? profileManager.parsePartInstanceId(id)
+            : { defId: id, unit: null };
+        const defId = parsed.defId || id;
+        const meta = this._storageItemMeta(bucket, defId);
         const level = (typeof profileManager !== 'undefined') ? profileManager.getItemUpgradeLevel(bucket, id, profile) : 0;
         const trackDefs = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs)
             ? economyConfig.itemUpgradeTrackDefs[bucket]
@@ -125466,21 +131956,39 @@ extendClass(HomeStationUI, {
         const maxLevel = trackDefs
             ? Object.keys(trackDefs).reduce((sum, t) => sum + (trackDefs[t].maxLevel || 5), 0)
             : ((typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeMaxLevel) || 5);
-        const equipped = this._itemIsEquippedOnShip(shipId, bucket, id);
         const kind = this._itemBucketKind(bucket);
-        const stationQty = profileManager.getStationStorageQty(profile, bucket, id);
-        const shipQty = profileManager.getShipStorageQty(profile, shipId, bucket, id);
+        let onStation = false;
+        let onShip = false;
+        let equipped = false;
+        if (parsed.unit != null && profileManager.getPartInstanceLayout) {
+            const layout = profileManager.getPartInstanceLayout(profile, bucket, defId);
+            onStation = (layout.station || []).indexOf(parsed.unit) !== -1;
+            const shipUnits = (layout.ships && layout.ships[shipId]) || [];
+            const shipIdx = shipUnits.indexOf(parsed.unit);
+            onShip = shipIdx !== -1;
+            if (onShip) {
+                const eq = profileManager._equippedStorageCount
+                    ? profileManager._equippedStorageCount(profile, shipId, bucket, defId)
+                    : 0;
+                equipped = shipIdx >= 0 && shipIdx < eq;
+            }
+        } else {
+            equipped = this._itemIsEquippedOnShip(shipId, bucket, defId);
+            onStation = profileManager.getStationStorageQty(profile, bucket, defId) > 0;
+            onShip = profileManager.getShipStorageQty(profile, shipId, bucket, defId) > 0;
+        }
         let actionHtml = '';
         if (equipped) {
-            actionHtml += `<button class="action-button hs-line-action hs-equip-unequip" data-item-unequip="${shipId}|${kind}|${id}" title="Unequip">UNEQUIP</button>`;
+            actionHtml += `<button class="action-button hs-line-action hs-equip-unequip" data-item-unequip="${shipId}|${kind}|${defId}" title="Unequip">UNEQUIP</button>`;
         }
-        if (stationQty > 0 && shipId) {
+        // Keep instance id on move attrs so upgrade bags follow this specific copy.
+        if (onStation && shipId) {
             actionHtml += `<button class="action-button hs-line-action" data-move-to-ship="${bucket}:${id}" data-ship="${shipId}">TO SHIP</button>`;
         }
-        if (shipQty > 0) {
+        if (onShip) {
             actionHtml += `<button class="action-button hs-line-action" data-move-to-station="${bucket}:${id}" data-ship="${shipId}">TO STATION</button>`;
         }
-        const where = equipped ? 'EQUIPPED' : (stationQty > 0 && shipQty <= 0 ? 'STATION' : 'SHIP');
+        const where = equipped ? 'EQUIPPED' : (onStation ? 'STATION' : 'SHIP');
         return wrap(
             `<div class="hs-line hs-shop-line hs-equip-line is-expanded">` +
             `<span class="hs-line-name">` +
@@ -125581,12 +132089,16 @@ extendClass(HomeStationUI, {
     };
 
     GamepadCursor.prototype.ensure = function () {
-        if (this.el && document.body.contains(this.el)) return this.el;
-        const el = document.createElement('div');
+        // Mount on <html>, not <body>: body carries transform: scale(--stage-scale),
+        // so position:fixed resolves in stage space while getBoundingClientRect is
+        // viewport px (same trap as js/ui/dev-hover-screen.js).
+        const root = document.documentElement;
+        if (this.el && root.contains(this.el) && this.el.parentElement === root) return this.el;
+        const el = this.el || document.createElement('div');
         el.className = 'vf-gp-cursor';
         el.setAttribute('aria-hidden', 'true');
-        el.innerHTML = '<i></i><i></i><i></i><i></i>';
-        document.body.appendChild(el);
+        if (!el.childElementCount) el.innerHTML = '<i></i><i></i><i></i><i></i>';
+        if (el.parentElement !== root) root.appendChild(el);
         this.el = el;
         return el;
     };
@@ -125707,4 +132219,633 @@ extendClass(HomeStationUI, {
     const gamepadCursor = new GamepadCursor();
     window.gamepadCursor = gamepadCursor;
 })();
+
+
+/* --- js/ui/content-viewer-stat-range.js --- */
+"use strict";
+
+/**
+ * Shared by the weapon/ability/defense/energy library viewers: every equippable item's stats
+ * are not fixed — they scale across the category's MODULES upgrade tracks (economyConfig
+ * .moduleUpgradeDefs), so a flat number in the wiki would be wrong the moment the player
+ * upgrades anything. This lists each track's own label/description — the real upgrade system,
+ * not invented numbers — as "stat rows" so every item's page reads "this varies, upgradeable
+ * via these tracks" instead of implying a fixed value.
+ */
+function contentViewerUpgradeRangeRowsHtml(category) {
+    if (typeof economyConfig === 'undefined' || !economyConfig.moduleUpgradeDefs) return '';
+    const tracks = economyConfig.moduleUpgradeDefs[category];
+    if (!tracks) return '';
+    return Object.keys(tracks).map((track) => {
+        const meta = tracks[track];
+        return `<div class="stat-row"><span class="stat-label">Range: ${meta.label}</span>` +
+            `<span class="stat-value">${meta.desc} · L0–L${meta.maxLevel}</span></div>`;
+    }).join('');
+}
+
+
+/* --- js/ui/energy-viewer/core.js --- */
+"use strict";
+
+/**
+ * Energy Systems Viewer — browse energy-core modules (the ship's power plant).
+ * Open: Start menu → ENERGY SYSTEMS
+ */
+var EnergyViewerUI = class EnergyViewerUI {
+    constructor() {
+        this.visible = false;
+        this.selectedIndex = 0;
+        this.items = [];
+        this.overlay = null;
+        this.previewCanvas = null;
+        this.previewCtx = null;
+        this.previewAnimId = null;
+        this.previewZoom = 1;
+        this.previewFullscreen = false;
+        this.previewPanX = 0;
+        this.previewPanY = 0;
+        this.previewPanning = false;
+        this.previewPanLastX = 0;
+        this.previewPanLastY = 0;
+        this.previewSim = null;
+        this.previewLastTs = 0;
+        this._keyHandler = (e) => this.handleKeyDown(e);
+    }
+
+    getEnergyList() {
+        if (typeof abilityConfigManager === 'undefined' || typeof shipLoadoutManager === 'undefined') return [];
+        const list = [];
+        const grouped = abilityConfigManager.getIdsByCluster();
+        // Energy modules sit in the 'core' cluster alongside Flight Assist / Weapon Systems —
+        // isEnergyId is what actually marks an id as an energy-slot module (today: energy_core).
+        const ids = (grouped.core || []).filter((id) => shipLoadoutManager.isEnergyId(id));
+        const devMode = typeof startScreenManager !== 'undefined' && startScreenManager.devMode;
+        const allowed = {};
+        if (!devMode && typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
+            profileManager.getDiscovered('energy').forEach((id) => { allowed[id] = true; });
+        }
+        const filterDiscovery = !devMode && typeof profileManager !== 'undefined' && profileManager.hasActiveProfile();
+        ids.forEach((id) => {
+            if (filterDiscovery && !allowed[id]) return;
+            const a = abilityConfigManager.getAbility(id);
+            list.push({
+                id: a.id,
+                name: a.name,
+                description: a.description,
+                icon: a.icon,
+                mountSprite: a.mountSprite,
+                cluster: a.cluster,
+                clusterLabel: abilityConfigManager.getClusterLabel(a.cluster),
+                type: a.type,
+                tier: a.tier,
+                uiDescription: a.uiDescription,
+                custom: !!a.custom
+            });
+        });
+        return list;
+    }
+
+    show(options) {
+        if (options && Object.prototype.hasOwnProperty.call(options, 'onClose')) {
+            this.onClose = options.onClose;
+        }
+        this.items = this.getEnergyList();
+        if (!this.items.length) return;
+        const preferId = options && options.energyId;
+        if (preferId) {
+            const idx = this.items.findIndex((a) => a.id === preferId);
+            if (idx >= 0) this.selectedIndex = idx;
+        }
+        this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.items.length - 1));
+        this.visible = true;
+        this.createUI();
+        document.addEventListener('keydown', this._keyHandler);
+        if (!(options && options.skipPersist) && typeof menuStateManager !== 'undefined') {
+            menuStateManager.setScreen('energy-viewer', {
+                energyId: this.items[this.selectedIndex].id
+            });
+        }
+    }
+
+    hide() {
+        this.visible = false;
+        this.stopPreview();
+        this.cleanupPreviewControls();
+        this.setPreviewFullscreen(false);
+        document.removeEventListener('keydown', this._keyHandler);
+        if (this._panelResize) {
+            this._panelResize.destroy();
+            this._panelResize = null;
+        }
+        if (this.overlay) {
+            this.overlay.remove();
+            this.overlay = null;
+        }
+        this.previewCanvas = null;
+        this.previewCtx = null;
+        this.previewSim = null;
+    }
+
+    themeColor() {
+        if (typeof iconRenderer !== 'undefined' && iconRenderer.getThemeTint) {
+            return iconRenderer.getThemeTint() || '#ffd24a';
+        }
+        return '#ffd24a';
+    }
+
+    createUI() {
+        if (this._panelResize) {
+            this._panelResize.destroy();
+            this._panelResize = null;
+        }
+        if (this.overlay) this.overlay.remove();
+
+        this.overlay = document.createElement('div');
+        this.overlay.className = 'content-viewer-overlay';
+        this.overlay.innerHTML = `
+            <div class="content-viewer-panel">
+                <h2 class="content-viewer-title">ENERGY SYSTEMS</h2>
+                <div class="content-viewer-body has-preview" id="evViewerBody">
+                    <aside class="content-viewer-list" id="evList"></aside>
+                    <div class="pe-resize-handle" data-resize="left" title="Resize energy list"></div>
+                    <div class="content-viewer-detail" id="evDetail"></div>
+                    <div class="pe-resize-handle" data-resize="right" title="Resize preview"></div>
+                    <aside class="content-viewer-preview planet-editor-preview-wrap" id="evPreviewWrap">
+                        <div class="pe-preview-toolbar">
+                            <button type="button" class="pe-btn pe-preview-btn" id="evZoomOut" title="Zoom out">−</button>
+                            <span class="pe-zoom-label" id="evZoomLabel">100%</span>
+                            <button type="button" class="pe-btn pe-preview-btn" id="evZoomIn" title="Zoom in">+</button>
+                            <button type="button" class="pe-btn pe-preview-btn" id="evZoomReset" title="Reset zoom">1:1</button>
+                            <button type="button" class="pe-btn pe-preview-btn" id="evPreviewFullscreen" title="Fullscreen">FULL</button>
+                        </div>
+                        <div class="pe-preview-viewport" id="evPreviewViewport">
+                            <canvas id="evPreview" width="200" height="300"></canvas>
+                        </div>
+                        <div class="pe-preview-label">PREVIEW</div>
+                    </aside>
+                </div>
+                <div class="content-viewer-footer">
+                    <button type="button" class="pe-btn pe-primary" id="evEdit">EDIT</button>
+                    <button type="button" class="pe-btn" id="evEditGfx">EDIT GFX</button>
+                    <button type="button" class="pe-btn" id="evClose">CLOSE</button>
+                </div>
+                <div class="content-viewer-hint">↑↓ Navigate • E Edit • ESC Close</div>
+            </div>
+        `;
+        document.body.appendChild(this.overlay);
+        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
+            VFBgMouseParallax.refresh();
+        }
+
+        this.bindPreviewControls();
+        this.setupPanelResize();
+        this.renderList();
+        this.renderDetail();
+        this.resetPreviewSim();
+        this.startPreview();
+
+        this.overlay.querySelector('#evEdit').addEventListener('click', () => this.openEditor());
+        this.overlay.querySelector('#evEditGfx').addEventListener('click', () => this.openGfxEditor());
+        this.overlay.querySelector('#evClose').addEventListener('click', () => this.close());
+        this.mountDevToggles();
+    }
+
+    mountDevToggles() {
+        this._devToggles = null;
+        if (typeof devProfileToggles === 'undefined' || !devProfileToggles.active()) return;
+        const footer = this.overlay.querySelector('.content-viewer-footer');
+        const hint = this.overlay.querySelector('.content-viewer-hint');
+        this._devToggles = devProfileToggles.mount(footer, hint, {
+            known: () => {
+                const a = this.items[this.selectedIndex];
+                return !!(a && profileManager.isDiscovered('energy', a.id));
+            },
+            toggleKnown: () => {
+                const a = this.items[this.selectedIndex];
+                if (a) profileManager.toggleDiscovered('energy', a.id);
+            },
+            owned: () => {
+                const a = this.items[this.selectedIndex];
+                return !!(a && profileManager.getPartCount('energy', a.id) > 0);
+            },
+            toggleOwned: () => {
+                const a = this.items[this.selectedIndex];
+                if (a) profileManager.togglePartOwned('energy', a.id);
+            },
+            onChange: () => {
+                this.renderList();
+                this.renderDetail();
+                if (this._devToggles) this._devToggles.refresh();
+            }
+        });
+    }
+
+    setupPanelResize() {
+        const body = this.overlay && this.overlay.querySelector('#evViewerBody');
+        if (!body || typeof setupPanelResize !== 'function') return;
+        this._panelResize = setupPanelResize({
+            body,
+            root: this.overlay,
+            storageKey: 'evPanelWidths',
+            defaults: { left: 240, right: 260 },
+            mins: { left: 140, right: 180, center: 200 },
+            leftVar: '--cv-left-w',
+            rightVar: '--cv-right-w',
+            onChange: () => {
+                if (this.visible) this.applyPreviewView();
+            }
+        });
+    }
+
+    bindPreviewControls() {
+        const overlay = this.overlay;
+        this.previewCanvas = overlay.querySelector('#evPreview');
+        this.previewCtx = this.previewCanvas.getContext('2d');
+        this.previewZoom = 1;
+        this.previewPanX = 0;
+        this.previewPanY = 0;
+        this.previewFullscreen = false;
+
+        overlay.querySelector('#evZoomOut').addEventListener('click', () => this.setPreviewZoom(this.previewZoom - 0.25));
+        overlay.querySelector('#evZoomIn').addEventListener('click', () => this.setPreviewZoom(this.previewZoom + 0.25));
+        overlay.querySelector('#evZoomReset').addEventListener('click', () => {
+            this.previewPanX = 0;
+            this.previewPanY = 0;
+            this.setPreviewZoom(1);
+        });
+        overlay.querySelector('#evPreviewFullscreen').addEventListener('click', () => {
+            this.setPreviewFullscreen(!this.previewFullscreen);
+        });
+
+        const viewport = overlay.querySelector('#evPreviewViewport');
+        viewport.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            this.setPreviewZoom(this.previewZoom + (e.deltaY < 0 ? 0.1 : -0.1));
+        }, { passive: false });
+        viewport.addEventListener('contextmenu', (e) => e.preventDefault());
+        viewport.addEventListener('mousedown', (e) => {
+            if (e.button !== 2) return;
+            e.preventDefault();
+            this.previewPanning = true;
+            this.previewPanLastX = e.clientX;
+            this.previewPanLastY = e.clientY;
+            viewport.classList.add('pe-panning');
+        });
+        const onMove = (e) => {
+            if (!this.previewPanning || !this.visible) return;
+            this.previewPanX += e.clientX - this.previewPanLastX;
+            this.previewPanY += e.clientY - this.previewPanLastY;
+            this.previewPanLastX = e.clientX;
+            this.previewPanLastY = e.clientY;
+            this.applyPreviewView();
+        };
+        const endPan = () => {
+            if (!this.previewPanning) return;
+            this.previewPanning = false;
+            const vp = this.overlay && this.overlay.querySelector('#evPreviewViewport');
+            if (vp) vp.classList.remove('pe-panning');
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', endPan);
+        this._previewCleanup = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', endPan);
+        };
+        this.applyPreviewView();
+        requestAnimationFrame(() => this.applyPreviewView());
+    }
+
+    setPreviewZoom(zoom) {
+        this.previewZoom = Math.min(3, Math.max(0.5, Math.round(zoom * 100) / 100));
+        this.applyPreviewView();
+    }
+
+    setPreviewFullscreen(on) {
+        this.previewFullscreen = !!on;
+        requestAnimationFrame(() => this.applyPreviewView());
+    }
+}
+
+
+/* --- js/ui/energy-viewer/apply-preview-view.js --- */
+"use strict";
+
+// EnergyViewerUI methods, split from energy-viewer.js.
+extendClass(EnergyViewerUI, {
+    applyPreviewView() {
+        const wrap = this.overlay && this.overlay.querySelector('#evPreviewWrap');
+        const label = this.overlay && this.overlay.querySelector('#evZoomLabel');
+        const fsBtn = this.overlay && this.overlay.querySelector('#evPreviewFullscreen');
+        const viewport = this.overlay && this.overlay.querySelector('#evPreviewViewport');
+        if (wrap) wrap.classList.toggle('pe-preview-fs', this.previewFullscreen);
+        if (label) label.textContent = `${Math.round(this.previewZoom * 100)}%`;
+        if (fsBtn) fsBtn.textContent = this.previewFullscreen ? 'EXIT' : 'FULL';
+        if (this.previewCanvas && viewport) {
+            const pad = 8;
+            const availW = Math.max(140, viewport.clientWidth - pad);
+            const availH = Math.max(200, viewport.clientHeight - pad);
+            const aspect = this.previewCanvas.width / this.previewCanvas.height || (2 / 3);
+            let fitW = availW;
+            let fitH = fitW / aspect;
+            if (fitH > availH) {
+                fitH = availH;
+                fitW = fitH * aspect;
+            }
+            this.previewCanvas.style.width = `${Math.round(fitW)}px`;
+            this.previewCanvas.style.height = `${Math.round(fitH)}px`;
+            this.previewCanvas.style.transform =
+                `translate(${this.previewPanX}px, ${this.previewPanY}px) scale(${this.previewZoom})`;
+        }
+    },
+
+    startPreview() {
+        this.stopPreview();
+        this.previewLastTs = 0;
+        if (!this.previewSim) this.resetPreviewSim();
+        const loop = () => {
+            if (!this.visible) return;
+            this.drawPreview();
+            this.previewAnimId = requestAnimationFrame(loop);
+        };
+        this.previewAnimId = requestAnimationFrame(loop);
+    },
+
+    stopPreview() {
+        if (this.previewAnimId) {
+            cancelAnimationFrame(this.previewAnimId);
+            this.previewAnimId = null;
+        }
+        this.previewLastTs = 0;
+    },
+
+    cleanupPreviewControls() {
+        if (this._previewCleanup) {
+            this._previewCleanup();
+            this._previewCleanup = null;
+        }
+    },
+
+    resetPreviewSim() {
+        this.previewSim = { phase: 0, pulse: 0 };
+        this.previewLastTs = 0;
+    },
+
+    updatePreviewSim(dtMs) {
+        const sim = this.previewSim;
+        if (!sim) return;
+        sim.phase += dtMs * 0.003;
+        sim.pulse = 0.5 + Math.sin(sim.phase * 3) * 0.5;
+    },
+
+    drawPreview() {
+        const canvas = this.previewCanvas;
+        const ctx = this.previewCtx;
+        const item = this.items[this.selectedIndex];
+        if (!canvas || !ctx || !item) return;
+        canvas.setAttribute('data-ag-type', 'ability');
+        canvas.setAttribute('data-ag-id', item.id);
+        if (item.mountSprite) canvas.setAttribute('data-ag-key', item.mountSprite);
+        else if (item.icon) canvas.setAttribute('data-ag-key', item.icon);
+        else canvas.setAttribute('data-ag-key', item.id);
+
+        const now = performance.now();
+        const dt = this.previewLastTs ? Math.min(48, now - this.previewLastTs) : 16;
+        this.previewLastTs = now;
+        if (!this.previewSim) this.resetPreviewSim();
+        this.updatePreviewSim(dt);
+
+        const w = canvas.width;
+        const h = canvas.height;
+        const sim = this.previewSim;
+        const tint = this.themeColor();
+        const cx = w / 2;
+        const cy = 150;
+
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.fillStyle = 'rgba(200, 180, 140, 0.28)';
+        for (let i = 0; i < 32; i++) {
+            const sx = (i * 91) % w;
+            const sy = (i * 57 + Math.floor(sim.phase * 16)) % h;
+            ctx.fillRect(sx, sy, 2, 2);
+        }
+
+        // Power-core pulse: a few expanding rings instead of the shield/armor hit sim the other
+        // viewers use — this item isn't absorbing hits, it's radiating power to the rest of the ship.
+        for (let r = 0; r < 3; r++) {
+            const ringPhase = (sim.phase * 1.2 + r / 3) % 1;
+            ctx.strokeStyle = tint;
+            ctx.globalAlpha = Math.max(0, 0.5 - ringPhase * 0.5);
+            ctx.beginPath();
+            ctx.arc(cx, cy, 14 + ringPhase * 34, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+
+        if (typeof iconRenderer !== 'undefined' && item.icon) {
+            const tmp = document.createElement('canvas');
+            tmp.width = 40;
+            tmp.height = 40;
+            iconRenderer.drawToCanvas(tmp, item.icon, tint);
+            ctx.globalAlpha = 0.75 + sim.pulse * 0.25;
+            ctx.drawImage(tmp, cx - 20, cy - 20, 40, 40);
+            ctx.globalAlpha = 1;
+        }
+
+        ctx.fillStyle = tint;
+        ctx.font = '10px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(item.name || item.id).toUpperCase(), w / 2, h - 34);
+        ctx.font = '9px "Courier New", monospace';
+        ctx.globalAlpha = 0.75;
+        ctx.fillText(`TIER ${item.tier}  ${String(item.type || '').toUpperCase()}`, w / 2, h - 20);
+        ctx.fillText(item.uiDescription || 'ENERGY', w / 2, h - 8);
+        ctx.globalAlpha = 1;
+    },
+
+    iconHtml(icon, size, tipLabel) {
+        if (typeof abilityConfigManager !== 'undefined') {
+            return abilityConfigManager.resolveIconHtml(icon, size || 16, 'cv-ability-icon-img', tipLabel);
+        }
+        return icon || '◆';
+    },
+
+    renderList() {
+        const list = this.overlay && this.overlay.querySelector('#evList');
+        if (!list) return;
+        list.innerHTML = '';
+        this.items.forEach((item, index) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'content-viewer-item' + (index === this.selectedIndex ? ' selected' : '');
+            btn.innerHTML =
+                `<span class="cv-ability-icon cv-list-ability-icon">${this.iconHtml(item.icon, 16, item.name)}</span>` +
+                `<span class="cv-item-label">${item.name}${item.custom ? ' *' : ''}` +
+                (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
+                    ? devProfileToggles.badgesHtml({
+                        known: profileManager.isDiscovered('energy', item.id),
+                        owned: profileManager.getPartCount('energy', item.id) > 0
+                    })
+                    : '') +
+                `</span>`;
+            btn.addEventListener('click', () => {
+                this.selectedIndex = index;
+                this.renderList();
+                this.renderDetail();
+                this.resetPreviewSim();
+                this.persist();
+            });
+            list.appendChild(btn);
+        });
+        const selected = list.querySelector('.content-viewer-item.selected');
+        if (selected) selected.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    },
+});
+
+
+/* --- js/ui/energy-viewer/render-detail.js --- */
+"use strict";
+
+// EnergyViewerUI methods, split from energy-viewer.js.
+extendClass(EnergyViewerUI, {
+    renderDetail() {
+        const root = this.overlay && this.overlay.querySelector('#evDetail');
+        const a = this.items[this.selectedIndex];
+        if (!root || !a) return;
+        root.innerHTML = `
+            <div class="content-viewer-hero">
+                <div class="cv-ability-hero-icon">${this.iconHtml(a.icon, 48, a.name)}</div>
+                <div>
+                    <h3 class="content-viewer-name">${a.name}</h3>
+                    <p class="content-viewer-desc">${a.description || 'No description.'}</p>
+                </div>
+            </div>
+            <div class="content-viewer-stats">
+                <div class="stat-row"><span class="stat-label">System</span><span class="stat-value">ENERGY</span></div>
+                <div class="stat-row"><span class="stat-label">Type</span><span class="stat-value">${String(a.type || '—').toUpperCase()}</span></div>
+                <div class="stat-row"><span class="stat-label">Tier</span><span class="stat-value">${a.tier}</span></div>
+                <div class="stat-row"><span class="stat-label">ID</span><span class="stat-value">${a.id}</span></div>
+                <div class="stat-row"><span class="stat-label">Summary</span><span class="stat-value">${a.uiDescription || '—'}</span></div>
+                ${contentViewerUpgradeRangeRowsHtml('energy')}
+            </div>
+        `;
+        if (this._devToggles) this._devToggles.refresh();
+    },
+
+    persist() {
+        if (typeof menuStateManager !== 'undefined' && this.visible) {
+            const a = this.items[this.selectedIndex];
+            menuStateManager.setScreen('energy-viewer', { energyId: a ? a.id : 'energy_core' });
+        }
+    },
+
+    handleKeyDown(e) {
+        if (!this.visible) return;
+        if (this._devToggles && this._devToggles.handleKey(e)) return;
+        if (e.key === 'Escape' && this.previewFullscreen) {
+            e.preventDefault();
+            this.setPreviewFullscreen(false);
+            return;
+        }
+        switch (e.key) {
+            case 'ArrowUp':
+            case 'ArrowLeft':
+                e.preventDefault();
+                this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+                this.renderList();
+                this.renderDetail();
+                this.resetPreviewSim();
+                this.persist();
+                break;
+            case 'ArrowDown':
+            case 'ArrowRight':
+                e.preventDefault();
+                this.selectedIndex = Math.min(this.items.length - 1, this.selectedIndex + 1);
+                this.renderList();
+                this.renderDetail();
+                this.resetPreviewSim();
+                this.persist();
+                break;
+            case 'e':
+            case 'E':
+            case 'Enter':
+                e.preventDefault();
+                this.openEditor();
+                break;
+            case 'Escape':
+                e.preventDefault();
+                this.close();
+                break;
+        }
+    },
+
+    openEditor() {
+        const item = this.items[this.selectedIndex];
+        if (!item || typeof abilityEditorUI === 'undefined') return;
+        this.hide();
+        abilityEditorUI.show(item.id, false, { returnTo: 'energy-viewer' });
+    },
+
+    openGfxEditor() {
+        const item = this.items[this.selectedIndex];
+        if (!item || typeof componentEditorUI === 'undefined') return;
+        let type = 'mount';
+        let id = item.mountSprite || ('mount_' + item.id);
+        if (typeof assetGenRegistry !== 'undefined' && assetGenRegistry.findByKey) {
+            const hit = assetGenRegistry.findByKey(id) || assetGenRegistry.get('ability', item.id);
+            if (hit) {
+                type = hit.type;
+                id = hit.id;
+            }
+        }
+        const returnCb = this.onClose;
+        this.hide();
+        componentEditorUI.open({
+            type: type,
+            id: id,
+            returnTo: 'energy-viewer',
+            onClose: () => {
+                this.show({ onClose: returnCb });
+            }
+        });
+    },
+
+    close() {
+        this.hide();
+        const container = document.querySelector('.game-container');
+        const inGame = container && container.style.display !== 'none';
+        if (inGame) {
+            if (typeof menuStateManager !== 'undefined') menuStateManager.setScreen('ingame');
+            return;
+        }
+        if (this.onClose) {
+            const cb = this.onClose;
+            this.onClose = null;
+            cb();
+            return;
+        }
+        if (typeof homeStationUI !== 'undefined') {
+            homeStationUI.show({
+                tab: 'explorations',
+                focusExplore: 'energy',
+                onClose: () => {
+                    if (typeof startScreenManager !== 'undefined') startScreenManager.show();
+                }
+            });
+        } else if (typeof startScreenManager !== 'undefined') {
+            startScreenManager.show();
+        } else if (typeof menuStateManager !== 'undefined') {
+            menuStateManager.setScreen('start');
+        }
+    },
+});
+
+
+/* --- js/ui/energy-viewer.js --- */
+"use strict";
+
+// EnergyViewerUI is defined in energy-viewer/core.js and extended by the other files in energy-viewer/,
+// which index.html loads before this file.
+var energyViewerUI = new EnergyViewerUI();
 

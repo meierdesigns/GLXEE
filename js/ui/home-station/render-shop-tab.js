@@ -171,7 +171,49 @@ extendClass(HomeStationUI, {
                 ? abilityConfigManager.configs[key] : null;
             if (cfg) {
                 if (cfg.description) lines.push(String(cfg.description));
-                if (cfg.uiDescription && cfg.uiDescription !== cfg.description) lines.push(String(cfg.uiDescription));
+                // Concrete numbers for this specific ship, not the ability's flat %: a +8% SPEED
+                // ability reads differently on a fast ship than a slow one, so compute the actual
+                // delta from this ship's own base speed (ability-stats.js's ABILITY_STAT_EFFECTS).
+                const eff = typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getAbilityStatEffect
+                    ? shipLoadoutManager.getAbilityStatEffect(key) : null;
+                const baseCfg = (eff && typeof shipConfigManager !== 'undefined')
+                    ? shipConfigManager.getConfig(this.hangarShipId) : null;
+                let statLine = null;
+                if (eff && eff.speedMul && baseCfg) {
+                    const base = Number(baseCfg.speed) || 0;
+                    const delta = Math.round((base * eff.speedMul - base) * 10) / 10;
+                    statLine = (delta >= 0 ? '+' : '') + delta + ' SPEED';
+                } else if (eff && eff.damageMul && baseCfg) {
+                    const base = Number(baseCfg.damage) || 0;
+                    const delta = Math.round(base * eff.damageMul - base);
+                    statLine = (delta >= 0 ? '+' : '') + delta + ' DAMAGE';
+                }
+                if (eff && eff.armor) {
+                    statLine = (statLine ? statLine + ' · ' : '') + (eff.armor >= 0 ? '+' : '') + eff.armor + ' ARMOR';
+                }
+                // Defense and energy items don't go through ABILITY_STAT_EFFECTS at all — their
+                // numbers come from computeDefenseStats/computeEnergyStats (resolve-module-icon.js),
+                // the same functions applyLayoutToModel uses, run here for just this one item so
+                // its own contribution shows instead of nothing.
+                if (!statLine && kind === 'defense' && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeDefenseStats) {
+                    const d = shipLoadoutManager.computeDefenseStats([key]);
+                    const parts = [];
+                    if (d.shieldMax) parts.push('SHIELD +' + d.shieldMax);
+                    // Always surface REGEN for shield modules — they self-recharge.
+                    if (d.shieldMax || d.shieldRegen) {
+                        const r = Math.round((Number(d.shieldRegen) || 0) * 10) / 10;
+                        parts.push('REGEN +' + r + '/s');
+                    }
+                    if (d.damageReduction) parts.push('DMG REDUCTION +' + d.damageReduction);
+                    if (d.reflectChance) parts.push('REFLECT ' + d.reflectChance);
+                    statLine = parts.join(' · ') || null;
+                }
+                if (!statLine && kind === 'energy' && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeEnergyStats) {
+                    const e = shipLoadoutManager.computeEnergyStats({ energy: [key] });
+                    if (e.hasCore) statLine = 'MAX ENERGY ' + e.maxEnergy + ' · REGEN ' + e.regen;
+                }
+                if (statLine) lines.push(statLine);
+                else if (cfg.uiDescription && cfg.uiDescription !== cfg.description) lines.push(String(cfg.uiDescription));
                 const type = cfg.type ? String(cfg.type).toUpperCase() : '';
                 if (type) lines.push(type + (cfg.tier ? ' · TIER ' + cfg.tier : ''));
             }

@@ -6,9 +6,10 @@
 
 **Open the hatch. Own the lane. Make the next jump count.**
 
-A no-build, browser-native Game Boy–shell space shooter — five doctrines at war
-across living galaxies, modular hulls forged in the hangar, and a Home Station
-that remembers every scrap you haul back through the dark.
+A no-build, browser-native space shooter in a living shell — five doctrines at
+war across contested galaxies, modular hulls forged in the hangar, chiptune
+lanes that remix per planet and foe, and a Home Station that keeps every scrap
+you haul back through the dark.
 
 [![Runtime: browser](https://img.shields.io/badge/runtime-browser-111111?style=flat-square&labelColor=000000&color=b0b0b0)](#boot)
 [![License: MIT](https://img.shields.io/badge/license-MIT-111111?style=flat-square&labelColor=000000&color=888888)](#credits)
@@ -29,10 +30,12 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
+│  BUILD           1.14.3 · TRACKER LIVE · SALVAGE ONLINE                     │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
-│  OBJECTIVE       CLEAR THE STAGE · CLAIM THE LOOT · HOLD THE LANE           │
+│  AUDIO           PLANET × FACTION VFTRACK · INTRO FANFARE · ENV SFX         │
+│  OBJECTIVE       CLEAR THE STAGE · SCOOP SALVAGE · HOLD THE LANE            │
 │  NEXT JUMP       HOME STATION → TRAVEL → UNKNOWN SECTOR                     │
 │  WARNING         EVERY SILHOUETTE ON SCAN IS A DOCTRINE                     │
 │  PLAY            https://meierdesigns.itch.io/glxee                         │
@@ -69,6 +72,7 @@ move galaxies, and jump again before the lane goes quiet.
 - [Factions and galaxies](#factions-and-galaxies)
 - [Home Station and hangar](#home-station-and-hangar)
 - [Combat](#combat)
+- [Audio — VF Tracker and environment SFX](#audio--vf-tracker-and-environment-sfx)
 - [Screenshots](#screenshots)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -145,13 +149,12 @@ npm run icons:preview   # render icon previews
 Run the server from the repository root.
 
 The repository itself is the itch.io runtime package: the GitHub download
-contains only the game entry point, runtime code, CSS, and game assets
-(under 800 tracked files, kept well below GitHub's 1000-file download cap).
-README media, development-only archive/package sources, local Cursed bridge
-packages, and unreferenced generated sprite dumps (`assets/{levels,ships,weapons}/sprites/`)
-are excluded from the runtime tree.
-README screenshots, documentation graphics, development tools, and package
-sources stay in the repository but are excluded from the upload.
+contains the game entry point, runtime code, CSS, and game assets (kept near
+~800 tracked files, well below GitHub's 1000-file download cap). README media,
+development-only archive/package sources, local Cursed bridge packages, and
+unreferenced generated sprite dumps (`assets/{levels,ships,weapons}/sprites/`)
+are excluded from the itch upload. Version archives under `.claude/` are local
+only and never nested inside the download ZIP.
 
 <img src="assets/ui/readme-h-controls.svg" alt="CH.02 CONTROLS" width="960" />
 
@@ -164,12 +167,15 @@ sources stay in the repository but are excluded from the upload.
 | Shift | Charge Drive boost |
 | Q / E | Cycle weapons |
 | Escape | Pause; switch menu groups in the station |
+| Gamepad | Combat stick + fire; menu focus cursor; fire-to-start; confirm end screens |
 | Ctrl + 1–8 | Select color palette |
 | `#` or Settings → Assets | Open Asset Generator |
 | Settings → Faction | Open Faction Command |
+| Bezel FX → AUDIO | Master / sounds / music sliders and toggles |
 
 Menu navigation is keyboard-first: arrow keys move focus, Enter confirms, and
-Escape closes the active overlay. Text fields keep their normal caret controls.
+Escape closes the active overlay. A gamepad drives the same focus path with an
+animated HUD cursor. Text fields keep their normal caret controls.
 
 ## The game loop
 
@@ -180,14 +186,16 @@ Forge the hull at Home Station — upgrade · shop · craft · hangar · faction
     ↓
 Accept a planet strike, faction contract, or bounty hunt
     ↓
-Travel / launch → clear the stage → haul loot through the hatch
+Travel / launch → clear the stage → scoop salvage → sluice out
     ↓
-Refit areas and slots · trade with allies · rewrite the loadout · jump again
+Victory trader (optional) · refit · trade · rewrite the loadout · jump again
 ```
 
 A mission is either a **LIBERATE** run on an uncleared planet or a lower-paying
 **PATROL** on a cleared one. One mission can be active at a time. Faction
 contracts can target reachable galaxies and may teleport the pilot before launch.
+Stage boot plays a short **planet×faction intro fanfare**, then the combat
+vftrack loop; wrecks can drop salvage you must scoop before the sluice.
 
 <img src="assets/ui/readme-h-factions.svg" alt="CH.03 FACTIONS" width="960" />
 
@@ -321,20 +329,27 @@ The station is the progression hub:
 
 | Area | Purpose |
 |:-----|:--------|
-| Station | Overview, cargo, and current status |
+| Station | Overview, resource silos, cargo bay, and current status |
 | Upgrade | Hull-area and slot-size upgrades |
-| Hangar | Ship editor, loadout, parts workspace, and test arena |
+| Hangar | Ship editor, loadout, inventory grid, and test arena |
+| Equipment | Per-item upgrades with ship/station storage select |
 | Shop | Ships, blueprints, modules, and style unlocks |
 | Craft | Unlock hulls and equipment from blueprints |
 | Explorations | Ships, planets, enemies, factions, and events |
-| Missions | Liberate / patrol board and mission rewards |
+| Missions | Liberate / patrol board, story logbook, and rewards |
 | Factions | Relations, trade quotes, contracts, and fleet previews |
 
-**PLAY** is no longer a station sub-tab. A dedicated header launch button (and a
-matching control in the main menu) drops straight onto the galaxy map. Area tabs
-carry corner deco icons so HOME STATION, HANGAR, FACTIONS, and EXPLORATIONS read
-as distinct hubs at a glance. Travel remains a modal over PLAY and is never
-restored after a reload.
+**PLAY** is a dedicated header launch button (and a matching main-menu control)
+that drops straight onto the galaxy map — not a station sub-tab. Area tabs carry
+corner deco icons so HOME STATION, HANGAR, FACTIONS, and EXPLORATIONS read as
+distinct hubs. Travel remains a modal over PLAY and is never restored after a
+reload.
+
+**Station storage** is a growing vault grid (starts 6×2, expands with vault
+upgrades) beside **OWNED SHIPS**. Parts and blueprints file as **ship storage**
+or **station storage** independently of equip state. Inventory tiles render as
+seeded **physical metal casings**; equip / unequip plays a short pop or sweep.
+Resource stores are vertical **chamber silos** with level fill and capacity marks.
 
 ### Browser shell, stage, and resolution
 
@@ -382,9 +397,9 @@ Every ship has four areas: **NOSE**, **CORE**, **AFT**, and **WINGS**.
   tooltip (description first, key/value facts below).
 - Equipping and unequipping play a short pop / sweep animation; installed items
   pulse and bob while hovered (disabled under `prefers-reduced-motion`).
-- Station, menus, and fight share one `.vf-glass` host in the bezel opening
-  (`transform: scale` GUI zoom, undivided `--fr-open-*` insets; header may peek
-  under the metal band).
+- Station, menus, and fight share one **`.vf-glass`** host in the bezel opening:
+  one transform recipe, undivided `--fr-open-*` insets, and a header that may
+  peek under the metal band so the shell reads as one screen, not nested zooms.
 
 The loadout is persistent per profile and per ship. It includes weapon mounts,
 module offsets, slot upgrades, anatomy settings, cosmetic skins, wing variants,
@@ -498,17 +513,22 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 - Ambush encounters can roll a raider boss, a pirate pack, or a light swarm.
 - Weapons, abilities, shields, charge, drive, pickups, and explosion FX form the
   moment-to-moment combat layer. Hit bursts stay compact so silhouette reads.
-- Enemy wrecks can shed **blueprint** and rarer **part** pickups that must be
-  scooped into cargo (lost on death, teleported home on victory).
+- Enemy wrecks can shed **blueprint** and rarer **part** salvage pickups that
+  must be scooped into cargo. Death forfeits them; victory teleports remaining
+  salvage home to the station vault.
 - Victory loot pays resources, credits, blueprint/part salvage, and active mission
   rewards; the scoop phase ends as soon as the field is clear (idle vacuum for
   stranded drops; bosses keep a longer safety net).
+- **Victory trader:** after a clear, open the stage shop from the victory screen
+  (credits-only buys queue for the next stage). The old sluice-wall kiosk is gone.
 - **Launch hatch:** every planet arrival starts in a pixel tube that rises out of
   the home station's hull; the dome opens on GO and the ship flies out. Later
   stages on the same planet start from a sluice instead.
 - **Sluice exit:** planet stages no longer end on the last kill. A faction-styled
   gate (Terran steel, Machine bulkhead, Pirate scrap, Kronax bone, Voidborn
   flesh) scrolls in, its hatch dome is shot open, and the ship flies through.
+  Hatch, sluice, warp, rock breaks, crystal shatter, pickups, and wall scrape
+  fire as coded **environment SFX** on the sounds bus.
 - **Chain waves:** Xenon-style lines of craft snake along one shared path,
   sometimes as two mirrored chains. Light classes (scout / assault / heavy)
   do one job and go down faster; side craft launch from canyon hangar openings.
@@ -567,6 +587,26 @@ actions: **LOG / COPY PERF**, reload, clear local settings, log debug info.
 
 Console: `vfPerfSnapshot()` returns the same object the remote paints.
 
+### Audio — VF Tracker and environment SFX
+
+Combat music is **VF Tracker** JSON (`*.vftrack.json` under `assets/soundtracks/`),
+not a drone bed. Voices stay in a pulse / wave / noise palette (Volley Fire GB
+era roles: Main-BGM, Boss, Select).
+
+- **Planet × hostile faction** composition picks the combat loop; explored planets
+  remix handcrafted motifs (blend / key / order) instead of random notes.
+- **Intro fanfare** plays once on stage boot (`intro:` keys), then the loop.
+- **Boss**, **menu**, **victory**, and **lose** themes are distinct; victory /
+  lose can bridge per faction.
+- Multi-section arrangements (A / B / C / fill) and per-pattern faction drums
+  keep long stages from looping flat.
+- Volume is a linear **MASTER × MUSIC** bus with gesture resume after browser
+  autoplay blocks; station and menu restore the correct track on return.
+- Dev **Soundtrack Editor** imports / exports vftrack files and ships an LLM
+  prompt for Gemini-style editors (`assets/soundtracks/LLM_PROMPT.md`).
+- **Environment SFX** (`js/game/sounds/env-sfx.js`) cover sluice / hatch / warp,
+  obstacle breaks, pickups, and wall scrape on the sounds bus (bezel FX → AUDIO).
+
 ## Screenshots
 
 Live captures from the current build (pilot creation, mission start, combat,
@@ -610,46 +650,45 @@ station shell, factions, travel).
 Short index — the full systems live in the sections above.
 
 - Five factions / galaxies: relations, contracts, trade, fleet preview, universe save.
-- Home Station war-room: upgrade, hangar, shop, craft, missions, factions, PLAY launch.
-- Station stores as vertical resource silos; ship/station bays with physical item casings.
-- Modular loadouts, area pager, hangar bay zoom, VOXEL combat with field presence.
-- Hangar inventory with generative metal casings, kind filters, and equip animations.
+- Home Station war-room: upgrade, hangar, equipment bay, shop, craft, missions, PLAY.
+- Station vault + ship storage; chamber silos; physical item casings; equip animations.
+- Shared `.vf-glass` bezel host for station, menus, and fight.
+- Modular loadouts, area pager, hangar inventory, VOXEL combat with field presence.
 - Full-screen start menu with the pilot's station as living backdrop.
 - Galaxy explore: shared pixel grid, stored nebulae, checkpoints, traffic, ship locator.
-- 4:3 stage, faction-styled bezel, pilot HUD, PERF/DEBUG remote, boot loading screen.
-- Launch hatch and sluice exit per stage; chain waves, prism / bulwark obstacles.
-- Enemy hero cards with reacting pilot portraits; side-view weapon cards.
-- Bezel remote **PERF** / **DEBUG**: live FPS, loop state, backing store, heap, entities.
+- 4:3 stage, faction bezel, pilot HUD, PERF / DEBUG / AUDIO remote, boot loading screen.
+- Launch hatch and sluice exit; chain waves; prism / bulwark; salvage pickups.
+- Victory trader for the next stage; enemy hero cards; side-view weapon cards.
+- VF Tracker BGM: planet×faction loops, intro fanfare, victory/lose, Soundtrack Editor.
+- Coded environment SFX: sluice / hatch / warp, breaks, pickups, wall scrape.
+- Gamepad focus cursor: combat, menus, fire-to-start, end-screen confirm.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
-- Gamepad/controller support: combat and menu navigation, fire-to-start, victory/game-over confirm.
-- VF Tracker soundtracks: planet×faction combat, victory/lose per faction, import/export + `assets/soundtracks/`.
-- Coded environment SFX: sluice/hatch/warp, obstacle breaks, pickups, wall scrape.
 
 ### Current build focus
 
 ```text
+AUDIO   ── VF Tracker planet×faction ── intro fanfare ── victory/lose ── env SFX
+   │
+SHELL   ── shared .vf-glass host ── undivided bezel opening ── header peek
+   │
+SALVAGE ── wreck blueprint/part pickups ── death forfeit ── victory teleport
+   │
+TRADE   ── victory-screen shop ── tighter in-stage grids ── next-stage inventory
+   │
 STAGE   ── launch hatch ── sluice gate exit ── faction tube / dome styles
    │
 WAVES   ── chain paths ── hangar launches ── cover AI ── prism / bulwark
    │
 HUD     ── enemy hero cards ── reacting portraits ── weapon art cards
    │
-LOOK    ── FX plate (bloom/HDR/vignette) ── pixel frame ── GUI voxel ── font scales
-   │
-PERF    ── remote FPS / FRAME / LOOP ── backing px ── heap ── entity counts
+PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / heap
    │
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
-   │
-FLEET   ── player ship in preview ── live colour overrides
-   │
-MATCH   ── restore victory/game-over after refresh ── map opens on the fought planet
-   │
-BOOT    ── fight screen hidden until shown ── nebula prepared during menu build
 ```
 
-Recent waves frame every stage with a launch hatch and a sluice exit, add chain
-waves and functional obstacles, and put enemy heroes on the HUD with portraits
-that react to hits.
+Build **1.14.3** ships live tracker music, coded environment SFX, shared bezel
+glass, salvage pickups, and a victory trader — on top of the hatch / sluice /
+hero-card combat frame from earlier waves.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -912,6 +951,7 @@ be reviewed or reverted independently.
 | 70O | VF GB soundtrack | Tracks oriented on Volley Fire GB (1990): pulse/wave/noise palette, Main-BGM/Boss/Select roles |
 | 70P | Motivic BGM | Planet themes state→sequence→climax; intro/boss reuse motif; remix keeps one donor intact |
 | 70Q | In-stage shop grids | Smaller cells (40px), tighter panel gaps; shop ship/station bags force 1×1 tiles + 6-col station |
+| 70R | README audio archive | Document VF Tracker, env SFX, glass shell, salvage, victory trader; VOLTEX panel + build focus for 70A–70Q |
 
 The wave commit convention is:
 
@@ -961,5 +1001,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · Game Boy shell, intergalactic stakes
+- Runtime: browser · no build step · version **1.14.3** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

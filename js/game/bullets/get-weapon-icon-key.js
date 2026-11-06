@@ -348,7 +348,13 @@ extendClass(BulletManager, {
         const list = document.getElementById('weaponList');
         if (!list) return;
         const now = Date.now();
-        list.querySelectorAll('.weapon-card').forEach((card) => {
+        // Cache card nodes until the list is rebuilt (renderWeaponList clears _weaponHudCards).
+        let cards = this._weaponHudCards;
+        if (!cards || !cards.length || (cards[0] && !cards[0].isConnected)) {
+            cards = list.querySelectorAll('.weapon-card');
+            this._weaponHudCards = cards;
+        }
+        cards.forEach((card) => {
             const id = card.dataset.weapon;
             if (!id) return;
             const st = this.getWeaponHudState(id, now);
@@ -409,6 +415,7 @@ extendClass(BulletManager, {
             return;
         }
         this._weaponListIdSig = idSig;
+        this._weaponHudCards = null;
         list.innerHTML = '';
         ids.forEach((id) => {
             const name = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)

@@ -200,11 +200,19 @@ class GameLoop {
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
         if (typeof soundManager !== 'undefined' && soundManager.setActiveEnemyTypes && typeof enemyManager !== 'undefined') {
-            const activeTypes = [];
+            // Reuse buffer — setActiveEnemyTypes only copies when the key changes.
+            const activeTypes = this._activeEnemyTypeBuf || (this._activeEnemyTypeBuf = []);
+            activeTypes.length = 0;
             if (enemyManager.enemy && !enemyManager.exploding) {
                 activeTypes.push(enemyManager.enemy.isBoss ? 'boss' : enemyManager.enemy.type);
             }
-            (enemyManager.sideEnemies || []).forEach((e) => { if (e && e.type) activeTypes.push(e.type); });
+            const sides = enemyManager.sideEnemies;
+            if (sides) {
+                for (let si = 0; si < sides.length; si++) {
+                    const e = sides[si];
+                    if (e && e.type) activeTypes.push(e.type);
+                }
+            }
             soundManager.setActiveEnemyTypes(activeTypes);
         }
         if (typeof inStageShop !== 'undefined') inStageShop.update(deltaTime, keys);

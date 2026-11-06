@@ -223,6 +223,8 @@ extendClass(RenderManager, {
 
     // Calculate bullet lighting based on proximity to elements
     calculateBulletLighting(bullet) {
+        // Reuse one result object per frame — avoids GC from hundreds of bullets.
+        const out = this._lightOut || (this._lightOut = { intensity: 0, color: null });
         let maxIntensity = 0;
         // Same overlay colour for every bullet this frame — resolve once.
         const now = (typeof performance !== 'undefined') ? performance.now() : 0;
@@ -241,29 +243,41 @@ extendClass(RenderManager, {
             const r2 = radius * radius;
             const d2 = dx * dx + dy * dy;
             if (d2 >= r2) return;
+            // Same linear falloff as before: (r - dist) / r * strength
             const distance = Math.sqrt(d2);
             const intensity = ((radius - distance) / radius) * strength;
             if (intensity > maxIntensity) maxIntensity = intensity;
         };
 
-        const enemy = enemyManager.getEnemy();
-        if (enemy) consider(enemy, 40, 0.8);
+        // Cache obstacle list once per frame (getObstacles can allocate).
+        const frame = (typeof game !== 'undefined' && game && game.gameState)
+            ? game.gameState.frameCount : now;
+        if (this._lightObsFrame !== frame) {
+            this._lightObsFrame = frame;
+            this._lightObsList = (typeof obstacleManager !== 'undefined' && obstacleManager.getObstacles)
+                ? obstacleManager.getObstacles()
+                : null;
+            this._lightEnemy = (typeof enemyManager !== 'undefined' && enemyManager.getEnemy)
+                ? enemyManager.getEnemy() : null;
+            this._lightPlayer = (typeof playerManager !== 'undefined' && playerManager.getPosition)
+                ? playerManager.getPosition() : null;
+        }
 
-        const obstacles = obstacleManager.getObstacles ? obstacleManager.getObstacles() : null;
-        if (obstacles && obstacles.length) {
+        if (this._lightEnemy) consider(this._lightEnemy, 40, 0.8);
+
+        const obstacles = this._lightObsList;
+        if (obstacles && obstacles.length && maxIntensity < 0.8) {
             for (let i = 0; i < obstacles.length; i++) {
                 consider(obstacles[i], 30, 0.6);
                 if (maxIntensity >= 0.8) break;
             }
         }
 
-        const player = playerManager.getPosition();
-        if (player) consider(player, 35, 0.7);
+        if (this._lightPlayer) consider(this._lightPlayer, 35, 0.7);
 
-        return {
-            intensity: maxIntensity,
-            color: lightingColor
-        };
+        out.intensity = maxIntensity;
+        out.color = lightingColor;
+        return out;
     },
 
     // Calculate distance between two objects

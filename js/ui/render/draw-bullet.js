@@ -97,7 +97,10 @@ extendClass(RenderManager, {
                 rect(cx - bw / 2, y, bw, h - tl, color);
                 rect(cx - bw / 4, tipY(1), bw / 2, 1, hot);
                 const tail = down ? y : y + h - tl;
-                rect(cx - bw / 4, tail, bw / 2, tl, '#ffb03d', 0.5 + 0.5 * Math.random());
+                // Deterministic flicker (no Math.random per bullet — smoother frame pacing).
+                const flick = 0.5 + 0.5 * ((((bullet._fid || (bullet._fid = (bullet.x * 13 + bullet.y) | 0))
+                    + ((typeof game !== 'undefined' && game.gameState && game.gameState.frameCount) || 0)) & 3) * 0.25);
+                rect(cx - bw / 4, tail, bw / 2, tl, '#ffb03d', flick);
                 break;
             }
             case 'wave': {

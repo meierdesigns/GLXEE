@@ -8,15 +8,15 @@ class ParticleSystem {
         this.particles = [];
     }
 
-    /** Soft cap from PERF / performance mode — keeps combat FPS stable. */
+    /**
+     * Hard safety cap only in explicit PERFORMANCE MODE.
+     * Default stays uncapped enough for full explosion quality.
+     */
     maxParticles() {
         try {
-            const root = document.documentElement;
-            if (root.hasAttribute('data-vf-performance')) return 48;
-            if (root.getAttribute('data-vf-perf-anim') === 'off') return 96;
-            if (root.getAttribute('data-vf-perf-heavy') === 'off') return 140;
+            if (document.documentElement.hasAttribute('data-vf-performance')) return 96;
         } catch (e) { /* ignore */ }
-        return 220;
+        return 480;
     }
 
     createHitParticles(x, y, count = 8, colorOrOpts = null) {

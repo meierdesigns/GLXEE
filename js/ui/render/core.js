@@ -259,7 +259,8 @@ class RenderManager {
                         + ') saturate(' + String(sat).trim()
                         + ') brightness(' + String(bri).trim() + ')';
                 }
-                c.filter = this._geckoFilter;
+                // Only touch ctx.filter when the string actually changed (Gecko cost).
+                if (c.filter !== this._geckoFilter) c.filter = this._geckoFilter;
             } catch (e) { /* keep none */ }
         }
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) || null;

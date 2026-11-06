@@ -95,10 +95,20 @@ extendClass(SoundManager, {
     },
 
     setActiveEnemyTypes(types) {
-        const list = (types || []).filter(Boolean);
-        const key = list.slice().sort().join(',');
+        const raw = types || [];
+        // Stable key from call order (game-loop push order) — no sort/filter alloc
+        // on the quiet path when nothing changed.
+        let key = '';
+        for (let i = 0; i < raw.length; i++) {
+            if (!raw[i]) continue;
+            key += (key ? ',' : '') + raw[i];
+        }
         if (key === this._activeEnemyTypesKey) return;
         this._activeEnemyTypesKey = key;
+        const list = [];
+        for (let i = 0; i < raw.length; i++) {
+            if (raw[i]) list.push(raw[i]);
+        }
         this._activeEnemyTypes = list;
         // Remember types for the next silent boot, but never yank an already
         // audible combat/hub song to an enemy/stage override mid-fight —

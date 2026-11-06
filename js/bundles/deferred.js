@@ -22825,11 +22825,19 @@ var GameLoop = class GameLoop {
         }
         if (typeof enemyManager !== 'undefined') enemyManager.update(deltaTime, this.gameState);
         if (typeof soundManager !== 'undefined' && soundManager.setActiveEnemyTypes && typeof enemyManager !== 'undefined') {
-            const activeTypes = [];
+            // Reuse buffer — setActiveEnemyTypes only copies when the key changes.
+            const activeTypes = this._activeEnemyTypeBuf || (this._activeEnemyTypeBuf = []);
+            activeTypes.length = 0;
             if (enemyManager.enemy && !enemyManager.exploding) {
                 activeTypes.push(enemyManager.enemy.isBoss ? 'boss' : enemyManager.enemy.type);
             }
-            (enemyManager.sideEnemies || []).forEach((e) => { if (e && e.type) activeTypes.push(e.type); });
+            const sides = enemyManager.sideEnemies;
+            if (sides) {
+                for (let si = 0; si < sides.length; si++) {
+                    const e = sides[si];
+                    if (e && e.type) activeTypes.push(e.type);
+                }
+            }
             soundManager.setActiveEnemyTypes(activeTypes);
         }
         if (typeof inStageShop !== 'undefined') inStageShop.update(deltaTime, keys);
@@ -36009,10 +36017,20 @@ extendClass(SoundManager, {
     },
 
     setActiveEnemyTypes(types) {
-        const list = (types || []).filter(Boolean);
-        const key = list.slice().sort().join(',');
+        const raw = types || [];
+        // Stable key from call order (game-loop push order) — no sort/filter alloc
+        // on the quiet path when nothing changed.
+        let key = '';
+        for (let i = 0; i < raw.length; i++) {
+            if (!raw[i]) continue;
+            key += (key ? ',' : '') + raw[i];
+        }
         if (key === this._activeEnemyTypesKey) return;
         this._activeEnemyTypesKey = key;
+        const list = [];
+        for (let i = 0; i < raw.length; i++) {
+            if (raw[i]) list.push(raw[i]);
+        }
         this._activeEnemyTypes = list;
         // Remember types for the next silent boot, but never yank an already
         // audible combat/hub song to an enemy/stage override mid-fight —
@@ -38315,7 +38333,13 @@ extendClass(BulletManager, {
         const list = document.getElementById('weaponList');
         if (!list) return;
         const now = Date.now();
-        list.querySelectorAll('.weapon-card').forEach((card) => {
+        // Cache card nodes until the list is rebuilt (renderWeaponList clears _weaponHudCards).
+        let cards = this._weaponHudCards;
+        if (!cards || !cards.length || (cards[0] && !cards[0].isConnected)) {
+            cards = list.querySelectorAll('.weapon-card');
+            this._weaponHudCards = cards;
+        }
+        cards.forEach((card) => {
             const id = card.dataset.weapon;
             if (!id) return;
             const st = this.getWeaponHudState(id, now);
@@ -38376,6 +38400,7 @@ extendClass(BulletManager, {
             return;
         }
         this._weaponListIdSig = idSig;
+        this._weaponHudCards = null;
         list.innerHTML = '';
         ids.forEach((id) => {
             const name = (typeof iconRenderer !== 'undefined' && iconRenderer.weaponIconInfo)
@@ -48828,15 +48853,15 @@ var ParticleSystem = class ParticleSystem {
         this.particles = [];
     }
 
-    /** Soft cap from PERF / performance mode — keeps combat FPS stable. */
+    /**
+     * Hard safety cap only in explicit PERFORMANCE MODE.
+     * Default stays uncapped enough for full explosion quality.
+     */
     maxParticles() {
         try {
-            const root = document.documentElement;
-            if (root.hasAttribute('data-vf-performance')) return 48;
-            if (root.getAttribute('data-vf-perf-anim') === 'off') return 96;
-            if (root.getAttribute('data-vf-perf-heavy') === 'off') return 140;
+            if (document.documentElement.hasAttribute('data-vf-performance')) return 96;
         } catch (e) { /* ignore */ }
-        return 220;
+        return 480;
     }
 
     createHitParticles(x, y, count = 8, colorOrOpts = null) {
@@ -57109,22 +57134,57 @@ var ColorPalette = class ColorPalette {
 "use strict";
 
 /**
- * Lighting system for dynamic visual effects
+ * Lighting system for dynamic visual effects.
+ * Glow sprites are baked once per (radius, intensity) and reused — same look as
+ * createRadialGradient every frame, without the per-bullet GPU/CPU cost.
  */
 var LightingSystem = class LightingSystem {
     constructor() {
-        // Empty constructor
+        /** @type {Object.<string, HTMLCanvasElement>} */
+        this._glowCache = Object.create(null);
+        this._glowCacheCount = 0;
     }
 
-    /** Skip / thin lighting when PERF heavy/anim is off or performance mode. */
+    /** Only mute lights in explicit performance mode — never thin quality by default. */
     lightingBudget() {
         try {
-            const root = document.documentElement;
-            if (root.hasAttribute('data-vf-performance')) return 0;
-            if (root.getAttribute('data-vf-perf-heavy') === 'off') return 6;
-            if (root.getAttribute('data-vf-perf-anim') === 'off') return 10;
+            if (document.documentElement.hasAttribute('data-vf-performance')) return 0;
         } catch (e) { /* ignore */ }
-        return 24;
+        return 32;
+    }
+
+    /**
+     * Offscreen radial glow matching the previous gradient stops.
+     * @param {number} radius
+     * @param {number} inten 0..1
+     */
+    _glowSprite(radius, inten) {
+        const r = Math.max(4, Math.min(32, Math.round(radius)));
+        const iKey = Math.max(1, Math.min(55, Math.round(inten * 100)));
+        const key = r + ':' + iKey;
+        let c = this._glowCache[key];
+        if (c) return c;
+        // Bound cache so long sessions don't grow forever.
+        if (this._glowCacheCount > 64) {
+            this._glowCache = Object.create(null);
+            this._glowCacheCount = 0;
+        }
+        const size = r * 2;
+        c = document.createElement('canvas');
+        c.width = size;
+        c.height = size;
+        const g = c.getContext('2d');
+        if (!g) return null;
+        const intenN = iKey / 100;
+        const grd = g.createRadialGradient(r, r, 0, r, r, r);
+        grd.addColorStop(0, 'rgba(255, 255, 255, ' + intenN + ')');
+        grd.addColorStop(0.35, 'rgba(255, 255, 255, ' + (intenN * 0.35) + ')');
+        grd.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        g.fillStyle = grd;
+        g.fillRect(0, 0, size, size);
+        this._glowCache[key] = c;
+        this._glowCacheCount++;
+        return c;
     }
 
     // Lighting system for bullets
@@ -57132,49 +57192,52 @@ var LightingSystem = class LightingSystem {
         if (!bullets || !bullets.length) return;
         const budget = this.lightingBudget();
         if (budget <= 0) return;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+
         let lit = 0;
         for (let i = bullets.length - 1; i >= 0 && lit < budget; i--) {
             const bullet = bullets[i];
             if (bullet && bullet.lightRadius && bullet.lightIntensity) {
-                this.renderBulletLight(ctx, bullet, obstacles, player, enemy, budget <= 6);
+                this.renderBulletLight(ctx, bullet, obstacles, player, enemy);
                 lit++;
             }
         }
+
+        ctx.restore();
     }
 
-    renderBulletLight(ctx, bullet, obstacles, player, enemy, cheap) {
+    renderBulletLight(ctx, bullet, obstacles, player, enemy) {
         const bulletCenterX = bullet.x + bullet.width / 2;
         const bulletCenterY = bullet.y + bullet.height / 2;
-        
+
         // Soft point light — keep radius small so shots don't look like slabs
-        const radius = Math.min(cheap ? 16 : 24, bullet.lightRadius || 14);
+        const radius = Math.min(24, bullet.lightRadius || 14);
         const radius2 = radius * radius;
-        const gradient = ctx.createRadialGradient(
-            bulletCenterX, bulletCenterY, 0,
-            bulletCenterX, bulletCenterY, radius
-        );
-        
-        // Light falloff
         const inten = Math.min(0.55, bullet.lightIntensity || 0.4);
-        gradient.addColorStop(0, `rgba(255, 255, 255, ${inten})`);
-        gradient.addColorStop(0.35, `rgba(255, 255, 255, ${inten * 0.35})`);
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        
-        // Apply lighting to nearby objects
-        ctx.save();
-        ctx.globalCompositeOperation = 'screen';
-        ctx.fillStyle = gradient;
-        ctx.fillRect(
-            bulletCenterX - radius,
-            bulletCenterY - radius,
-            radius * 2,
-            radius * 2
-        );
-        ctx.restore();
 
-        // Cheap path: glow only — skip per-object illuminate (main cost).
-        if (cheap) return;
+        const sprite = this._glowSprite(radius, inten);
+        if (sprite) {
+            ctx.drawImage(sprite, bulletCenterX - radius, bulletCenterY - radius);
+        } else {
+            const gradient = ctx.createRadialGradient(
+                bulletCenterX, bulletCenterY, 0,
+                bulletCenterX, bulletCenterY, radius
+            );
+            gradient.addColorStop(0, 'rgba(255, 255, 255, ' + inten + ')');
+            gradient.addColorStop(0.35, 'rgba(255, 255, 255, ' + (inten * 0.35) + ')');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(
+                bulletCenterX - radius,
+                bulletCenterY - radius,
+                radius * 2,
+                radius * 2
+            );
+        }
 
+        // Object illuminate (same thresholds as before).
         const near = (ox, oy) => {
             const dx = bulletCenterX - ox;
             const dy = bulletCenterY - oy;
@@ -57182,7 +57245,7 @@ var LightingSystem = class LightingSystem {
             if (d2 >= radius2) return -1;
             return Math.sqrt(d2);
         };
-        
+
         if (obstacles && obstacles.length) {
             for (let i = 0; i < obstacles.length; i++) {
                 const obstacle = obstacles[i];
@@ -57191,32 +57254,31 @@ var LightingSystem = class LightingSystem {
                     obstacle.x + obstacle.width / 2,
                     obstacle.y + obstacle.height / 2
                 );
-                if (distance >= 0) this.illuminateObject(ctx, obstacle, bullet, distance, radius);
+                if (distance >= 0) this.illuminateObject(ctx, obstacle, bullet, distance, radius, inten);
             }
         }
-        
+
         if (player) {
             const distance = near(player.x + player.width / 2, player.y + player.height / 2);
-            if (distance >= 0) this.illuminateObject(ctx, player, bullet, distance, radius);
+            if (distance >= 0) this.illuminateObject(ctx, player, bullet, distance, radius, inten);
         }
-        
+
         if (enemy) {
             const distance = near(enemy.x + enemy.width / 2, enemy.y + enemy.height / 2);
-            if (distance >= 0) this.illuminateObject(ctx, enemy, bullet, distance, radius);
+            if (distance >= 0) this.illuminateObject(ctx, enemy, bullet, distance, radius, inten);
         }
     }
 
-    illuminateObject(ctx, object, bullet, distance, radius) {
+    illuminateObject(ctx, object, bullet, distance, radius, inten) {
         const r = radius || Math.min(24, bullet.lightRadius || 14);
         const intensity = Math.max(0, 1 - (distance / r));
-        const illumination = intensity * Math.min(0.55, bullet.lightIntensity || 0.4) * 0.2;
-        
+        const base = inten != null ? inten : Math.min(0.55, bullet.lightIntensity || 0.4);
+        const illumination = intensity * base * 0.2;
+
         if (illumination > 0.08) {
-            ctx.save();
-            ctx.globalCompositeOperation = 'screen';
-            ctx.fillStyle = `rgba(255, 255, 255, ${illumination})`;
+            // Already in screen composite from renderLighting — no nested save.
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + illumination + ')';
             ctx.fillRect(object.x, object.y, object.width, object.height);
-            ctx.restore();
         }
     }
 
@@ -57224,7 +57286,6 @@ var LightingSystem = class LightingSystem {
         return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
     }
 }
-
 
 
 /* --- js/graphics/graphics-manager/core.js?v=ship-assets-move-1 --- */
@@ -62529,7 +62590,8 @@ var RenderManager = class RenderManager {
                         + ') saturate(' + String(sat).trim()
                         + ') brightness(' + String(bri).trim() + ')';
                 }
-                c.filter = this._geckoFilter;
+                // Only touch ctx.filter when the string actually changed (Gecko cost).
+                if (c.filter !== this._geckoFilter) c.filter = this._geckoFilter;
             } catch (e) { /* keep none */ }
         }
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) || null;
@@ -63263,6 +63325,8 @@ extendClass(RenderManager, {
 
     // Calculate bullet lighting based on proximity to elements
     calculateBulletLighting(bullet) {
+        // Reuse one result object per frame — avoids GC from hundreds of bullets.
+        const out = this._lightOut || (this._lightOut = { intensity: 0, color: null });
         let maxIntensity = 0;
         // Same overlay colour for every bullet this frame — resolve once.
         const now = (typeof performance !== 'undefined') ? performance.now() : 0;
@@ -63281,29 +63345,41 @@ extendClass(RenderManager, {
             const r2 = radius * radius;
             const d2 = dx * dx + dy * dy;
             if (d2 >= r2) return;
+            // Same linear falloff as before: (r - dist) / r * strength
             const distance = Math.sqrt(d2);
             const intensity = ((radius - distance) / radius) * strength;
             if (intensity > maxIntensity) maxIntensity = intensity;
         };
 
-        const enemy = enemyManager.getEnemy();
-        if (enemy) consider(enemy, 40, 0.8);
+        // Cache obstacle list once per frame (getObstacles can allocate).
+        const frame = (typeof game !== 'undefined' && game && game.gameState)
+            ? game.gameState.frameCount : now;
+        if (this._lightObsFrame !== frame) {
+            this._lightObsFrame = frame;
+            this._lightObsList = (typeof obstacleManager !== 'undefined' && obstacleManager.getObstacles)
+                ? obstacleManager.getObstacles()
+                : null;
+            this._lightEnemy = (typeof enemyManager !== 'undefined' && enemyManager.getEnemy)
+                ? enemyManager.getEnemy() : null;
+            this._lightPlayer = (typeof playerManager !== 'undefined' && playerManager.getPosition)
+                ? playerManager.getPosition() : null;
+        }
 
-        const obstacles = obstacleManager.getObstacles ? obstacleManager.getObstacles() : null;
-        if (obstacles && obstacles.length) {
+        if (this._lightEnemy) consider(this._lightEnemy, 40, 0.8);
+
+        const obstacles = this._lightObsList;
+        if (obstacles && obstacles.length && maxIntensity < 0.8) {
             for (let i = 0; i < obstacles.length; i++) {
                 consider(obstacles[i], 30, 0.6);
                 if (maxIntensity >= 0.8) break;
             }
         }
 
-        const player = playerManager.getPosition();
-        if (player) consider(player, 35, 0.7);
+        if (this._lightPlayer) consider(this._lightPlayer, 35, 0.7);
 
-        return {
-            intensity: maxIntensity,
-            color: lightingColor
-        };
+        out.intensity = maxIntensity;
+        out.color = lightingColor;
+        return out;
     },
 
     // Calculate distance between two objects
@@ -64594,7 +64670,10 @@ extendClass(RenderManager, {
                 rect(cx - bw / 2, y, bw, h - tl, color);
                 rect(cx - bw / 4, tipY(1), bw / 2, 1, hot);
                 const tail = down ? y : y + h - tl;
-                rect(cx - bw / 4, tail, bw / 2, tl, '#ffb03d', 0.5 + 0.5 * Math.random());
+                // Deterministic flicker (no Math.random per bullet — smoother frame pacing).
+                const flick = 0.5 + 0.5 * ((((bullet._fid || (bullet._fid = (bullet.x * 13 + bullet.y) | 0))
+                    + ((typeof game !== 'undefined' && game.gameState && game.gameState.frameCount) || 0)) & 3) * 0.25);
+                rect(cx - bw / 4, tail, bw / 2, tl, '#ffb03d', flick);
                 break;
             }
             case 'wave': {

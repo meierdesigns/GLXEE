@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.8 · TRACKER LIVE · STYLE MIX ONLINE                   │
+│  BUILD           1.14.9 · TRACKER LIVE · STYLE MIX ONLINE                   │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,7 +717,7 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.8** ships scene-aware tracker BGM (combat / boss / map / end screens),
+Build **1.14.9** ships scene-aware tracker BGM (combat / boss / map / end screens),
 live STYLE mixing, channel voices, BPM, crossfades, mute-key VOL / SND / MUS, and
 Linux gamepad display-wake — on top of bezel glass, salvage, and the victory trader.
 
@@ -1046,6 +1046,8 @@ be reviewed or reverted independently.
 | 73E | VFStorage facade | Shared get/set/JSON/schema helper; volume save routes through it |
 | 73F | README media slim | Drop unused shots; compress + JPEG live shots (archive keeps PNG masters) |
 | 73G | Release 1.14.8 | Deploy ZIP `.claude/GLXEE-V1.14.8.zip` — lazy editors, volume/PERF, slim README media |
+| 73H | Combat frame smooth | Baked light glow sprites, reuse bullet-light/HUD/enemy-type buffers; no quality cuts |
+| 73I | Release 1.14.9 | Deploy ZIP `.claude/GLXEE-V1.14.9.zip` — combat frame smooth (73H) |
 
 The wave commit convention is:
 
@@ -1095,5 +1097,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.8** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.9** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

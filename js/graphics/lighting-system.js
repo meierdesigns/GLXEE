@@ -8,23 +8,38 @@ class LightingSystem {
         // Empty constructor
     }
 
+    /** Skip / thin lighting when PERF heavy/anim is off or performance mode. */
+    lightingBudget() {
+        try {
+            const root = document.documentElement;
+            if (root.hasAttribute('data-vf-performance')) return 0;
+            if (root.getAttribute('data-vf-perf-heavy') === 'off') return 6;
+            if (root.getAttribute('data-vf-perf-anim') === 'off') return 10;
+        } catch (e) { /* ignore */ }
+        return 24;
+    }
+
     // Lighting system for bullets
     renderLighting(ctx, bullets, obstacles, player, enemy) {
         if (!bullets || !bullets.length) return;
-        for (let i = 0; i < bullets.length; i++) {
+        const budget = this.lightingBudget();
+        if (budget <= 0) return;
+        let lit = 0;
+        for (let i = bullets.length - 1; i >= 0 && lit < budget; i--) {
             const bullet = bullets[i];
             if (bullet && bullet.lightRadius && bullet.lightIntensity) {
-                this.renderBulletLight(ctx, bullet, obstacles, player, enemy);
+                this.renderBulletLight(ctx, bullet, obstacles, player, enemy, budget <= 6);
+                lit++;
             }
         }
     }
 
-    renderBulletLight(ctx, bullet, obstacles, player, enemy) {
+    renderBulletLight(ctx, bullet, obstacles, player, enemy, cheap) {
         const bulletCenterX = bullet.x + bullet.width / 2;
         const bulletCenterY = bullet.y + bullet.height / 2;
         
         // Soft point light — keep radius small so shots don't look like slabs
-        const radius = Math.min(24, bullet.lightRadius || 14);
+        const radius = Math.min(cheap ? 16 : 24, bullet.lightRadius || 14);
         const radius2 = radius * radius;
         const gradient = ctx.createRadialGradient(
             bulletCenterX, bulletCenterY, 0,
@@ -48,6 +63,9 @@ class LightingSystem {
             radius * 2
         );
         ctx.restore();
+
+        // Cheap path: glow only — skip per-object illuminate (main cost).
+        if (cheap) return;
 
         const near = (ox, oy) => {
             const dx = bulletCenterX - ox;

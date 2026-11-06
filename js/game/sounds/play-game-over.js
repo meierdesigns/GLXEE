@@ -30,10 +30,10 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        // Soft duck only — no track swap.
-        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
-            const bus = this.musicBusVolume ? this.musicBusVolume() : 0.2;
-            vfTrackerManager.setVolume(Math.max(0.05, bus * 0.55));
+        // Soft duck only — no track swap (55% of current music bus).
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume(0.55);
+        else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+            vfTrackerManager.setVolume((this.musicBusVolume ? this.musicBusVolume() : VFVolume.busDefault()) * 0.55);
         }
     },
 
@@ -77,7 +77,7 @@ extendClass(SoundManager, {
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
         if (typeof vfTrackerManager === 'undefined') return;
         this._applyMusicScene(mode);
-        vfTrackerManager.setVolume(this.musicBusVolume());
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
         if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
     },
@@ -114,7 +114,7 @@ extendClass(SoundManager, {
         if (!this.ensureContext()) return;
         if (typeof vfTrackerManager === 'undefined') return;
         this._applyMusicScene('shop');
-        vfTrackerManager.setVolume(this.musicBusVolume());
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
         const keys = [key, 'shop', 'menu'];
         if (vfTrackerManager.playFirst && vfTrackerManager.playFirst(keys)) {
@@ -188,7 +188,7 @@ extendClass(SoundManager, {
                 : null;
             if (keepKey && vfTrackerManager.isPlaying(keepKey)) {
                 // Restore full bus (victory duck left volume at ~55%).
-                vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+                if (this.pushMusicBusVolume) this.pushMusicBusVolume();
                 this.clearPendingMusic();
                 return;
             }
@@ -223,7 +223,7 @@ extendClass(SoundManager, {
                 return;
             }
             youtubeSoundtrackManager.setEnabled(true);
-            youtubeSoundtrackManager.setVolume(this.musicBusVolume());
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             youtubeSoundtrackManager.playPlanet(id);
             this.clearPendingMusic();
             if (typeof beatSyncManager !== 'undefined') {
@@ -253,7 +253,7 @@ extendClass(SoundManager, {
                 else localAudioManager.stop();
             }
             vfTrackerManager.setEnabled(true);
-            vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             const stage = String(this._currentStageId || '').toLowerCase();
             const boss = stage === 'boss' || stage === 'b';
             this._applyMusicScene(boss ? 'boss' : 'combat');
@@ -412,7 +412,7 @@ extendClass(SoundManager, {
         if (!this.ensureContext()) return;
         if (typeof vfTrackerManager === 'undefined') return;
         this._applyMusicScene('map');
-        vfTrackerManager.setVolume(this.musicBusVolume());
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
         if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying(key)) {
             this.clearPendingMusic();
@@ -457,7 +457,7 @@ extendClass(SoundManager, {
             && vfTrackerManager.isPlaying()) {
             const ck = String(vfTrackerManager.currentKey || '');
             if (ck === 'menu' || ck === 'station' || ck === 'hub' || ck.indexOf('map:') === 0) {
-                vfTrackerManager.setVolume(this.musicBusVolume());
+                if (this.pushMusicBusVolume) this.pushMusicBusVolume();
                 this.clearPendingMusic();
                 return;
             }
@@ -471,14 +471,14 @@ extendClass(SoundManager, {
             && vfTrackerManager.isPlaying('menu')
             && !(menuTrack && soundtrackConfigManager.hasTrack(menuTrack)
                 && (menuTrack.localAudioData || menuTrack.youtubeUrl))) {
-            vfTrackerManager.setVolume(this.musicBusVolume());
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             this.clearPendingMusic();
             return;
         }
         if (typeof localAudioManager !== 'undefined' && localAudioManager.isPlaying
             && localAudioManager.isPlaying('menu')
             && menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
-            localAudioManager.setVolume(this.musicBusVolume());
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             this.clearPendingMusic();
             return;
         }
@@ -489,7 +489,7 @@ extendClass(SoundManager, {
                 else vfTrackerManager.stop();
             }
             if (typeof localAudioManager !== 'undefined') {
-                localAudioManager.setVolume(this.musicBusVolume());
+                if (this.pushMusicBusVolume) this.pushMusicBusVolume();
                 localAudioManager.play('menu', menuTrack.localAudioData);
                 this.clearPendingMusic();
             }
@@ -503,7 +503,7 @@ extendClass(SoundManager, {
             }
             if (!this.ensureContext()) return;
             if (typeof vfTrackerManager !== 'undefined') {
-                vfTrackerManager.setVolume(this.musicBusVolume());
+                if (this.pushMusicBusVolume) this.pushMusicBusVolume();
                 // No force: play() keeps position when the same menu track is already audible.
                 if (vfTrackerManager.play('menu', menuTrack.trackerData)) {
                     this.clearPendingMusic();
@@ -516,7 +516,7 @@ extendClass(SoundManager, {
         }
 
         if (typeof youtubeSoundtrackManager !== 'undefined') {
-            youtubeSoundtrackManager.setVolume(this.musicBusVolume());
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
             if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
                 if (typeof vfTrackerManager !== 'undefined') {
@@ -542,7 +542,7 @@ extendClass(SoundManager, {
         if (!this.ensureContext()) return;
         if (typeof vfTrackerManager !== 'undefined') {
             this._applyMusicScene('menu');
-            vfTrackerManager.setVolume(this.musicBusVolume());
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             if (vfTrackerManager.playMenu()) this.clearPendingMusic();
         }
     },
@@ -561,18 +561,22 @@ extendClass(SoundManager, {
     },
 
     updateAmbientVolume() {
-        const bus = this.musicBusVolume();
-        if (typeof youtubeSoundtrackManager !== 'undefined') {
-            youtubeSoundtrackManager.setVolume(bus);
-        }
-        if (typeof localAudioManager !== 'undefined') {
-            localAudioManager.setVolume(bus);
-        }
-        if (typeof vfTrackerManager !== 'undefined') {
-            vfTrackerManager.setVolume(bus);
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        else {
+            const bus = this.musicBusVolume();
+            if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.setVolume) {
+                youtubeSoundtrackManager.setVolume(bus);
+            }
+            if (typeof localAudioManager !== 'undefined' && localAudioManager.setVolume) {
+                localAudioManager.setVolume(bus);
+            }
+            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+                vfTrackerManager.setVolume(bus);
+            }
         }
         if (!this.ambientGain || !this.audioContext) return;
         const now = this.audioContext.currentTime;
+        // Soft planet drone at 35% of the music bus (single intentional scale).
         const vol = this.musicEnabled ? this.musicVol(0.35) : 0.0001;
         this.ambientGain.gain.cancelScheduledValues(now);
         this.ambientGain.gain.linearRampToValueAtTime(vol, now + 0.15);
@@ -581,16 +585,22 @@ extendClass(SoundManager, {
     // --- Volume / settings ---
 
     setMasterVolume(volume) {
-        this.masterVolume = Math.max(0, Math.min(1, volume));
+        this.masterVolume = (typeof VFVolume !== 'undefined')
+            ? VFVolume.normalize(volume)
+            : Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateAmbientVolume();
     },
 
     setSoundVolume(volume) {
-        this.soundVolume = Math.max(0, Math.min(1, volume));
+        this.soundVolume = (typeof VFVolume !== 'undefined')
+            ? VFVolume.normalize(volume)
+            : Math.max(0, Math.min(1, Number(volume) || 0));
     },
 
     setMusicVolume(volume) {
-        this.musicVolume = Math.max(0, Math.min(1, volume));
+        this.musicVolume = (typeof VFVolume !== 'undefined')
+            ? VFVolume.normalize(volume)
+            : Math.max(0, Math.min(1, Number(volume) || 0));
         this.updateAmbientVolume();
     },
 

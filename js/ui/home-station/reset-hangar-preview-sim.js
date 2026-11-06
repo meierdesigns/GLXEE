@@ -215,24 +215,37 @@ extendClass(HomeStationUI, {
         }
         this.resetHangarPreviewSim();
         this.bindHangarPreviewZoom();
-        // ~30 fps is enough for the pixel hangar sim; same look, half the draw cost.
-        const frameInterval = 1000 / 30;
-        const loop = (ts) => {
-            if (!this.isVisible || this.tab !== 'hangar') {
-                this._hangarPreviewAnimId = 0;
-                return;
-            }
+        // Shared station ticker (~30 fps) — one RAF chain for hangar + fleet.
+        if (typeof vfStationAnim !== 'undefined' && vfStationAnim.subscribe) {
+            vfStationAnim.subscribe('hangarPreview', (dt) => {
+                if (!this.isVisible || this.tab !== 'hangar') {
+                    vfStationAnim.unsubscribe('hangarPreview');
+                    this._hangarPreviewAnimId = 0;
+                    return;
+                }
+                this.updateHangarPreviewSim(dt);
+                this.drawHangarPreview();
+            }, 30);
+            this._hangarPreviewAnimId = 1;
+        } else {
+            const frameInterval = 1000 / 30;
+            const loop = (ts) => {
+                if (!this.isVisible || this.tab !== 'hangar') {
+                    this._hangarPreviewAnimId = 0;
+                    return;
+                }
+                this._hangarPreviewAnimId = requestAnimationFrame(loop);
+                if (document.hidden) return;
+                if (!this._hangarPreviewLastTs) this._hangarPreviewLastTs = ts;
+                const elapsed = ts - this._hangarPreviewLastTs;
+                if (elapsed < frameInterval) return;
+                const dt = Math.min(50, elapsed);
+                this._hangarPreviewLastTs = ts;
+                this.updateHangarPreviewSim(dt);
+                this.drawHangarPreview();
+            };
             this._hangarPreviewAnimId = requestAnimationFrame(loop);
-            if (document.hidden) return;
-            if (!this._hangarPreviewLastTs) this._hangarPreviewLastTs = ts;
-            const elapsed = ts - this._hangarPreviewLastTs;
-            if (elapsed < frameInterval) return;
-            const dt = Math.min(50, elapsed);
-            this._hangarPreviewLastTs = ts;
-            this.updateHangarPreviewSim(dt);
-            this.drawHangarPreview();
-        };
-        this._hangarPreviewAnimId = requestAnimationFrame(loop);
+        }
     },
 
     stopHangarPreview() {
@@ -245,10 +258,14 @@ extendClass(HomeStationUI, {
             if (viewport) viewport.removeEventListener('wheel', this._hangarPreviewWheelBound);
             this._hangarPreviewWheelBound = null;
         }
-        if (this._hangarPreviewAnimId) {
-            cancelAnimationFrame(this._hangarPreviewAnimId);
-            this._hangarPreviewAnimId = null;
+        if (typeof vfStationAnim !== 'undefined' && vfStationAnim.unsubscribe) {
+            vfStationAnim.unsubscribe('hangarPreview');
         }
+        // Sentinel 1 = station-anim subscription; real ids are RAF handles.
+        if (this._hangarPreviewAnimId && this._hangarPreviewAnimId !== 1) {
+            cancelAnimationFrame(this._hangarPreviewAnimId);
+        }
+        this._hangarPreviewAnimId = null;
         this._hangarPreviewLastTs = 0;
         this._hangarPreviewSim = null;
         this._hangarPreviewCanvas = null;

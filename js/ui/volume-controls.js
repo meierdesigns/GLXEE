@@ -1,11 +1,13 @@
 "use strict";
 
 // Volume Controls Manager — linear MASTER × (SOUND|MUSIC) routing into soundManager.
+// Defaults live on VFVolume (sounds/core.js) so every audio path shares one source.
 class VolumeControlsManager {
     constructor() {
-        this.masterVolume = 0.75;
-        this.soundVolume = 0.5;
-        this.musicVolume = 0.65;
+        const d = (typeof VFVolume !== 'undefined') ? VFVolume : { MASTER: 0.1, SOUND: 0.5, MUSIC: 0.65 };
+        this.masterVolume = d.MASTER;
+        this.soundVolume = d.SOUND;
+        this.musicVolume = d.MUSIC;
         /**
          * Heard playback tempo (BPM = beats/minute). Default = authored
          * combat reference (132) — not the old 3.5× inflated value (462).
@@ -42,7 +44,7 @@ class VolumeControlsManager {
             const slider = document.getElementById(id);
             if (!slider) return;
             slider.addEventListener('input', (e) => {
-                this[prop] = Math.max(0, Math.min(1, parseInt(e.target.value, 10) / 100));
+                this[prop] = this._normVol(parseInt(e.target.value, 10) / 100);
                 this.autoUnmuteOnSliderMove();
                 this.updateUI();
                 this.applyVolumes();
@@ -263,24 +265,28 @@ class VolumeControlsManager {
 
     applyVolumes() {
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.setMasterVolume) soundManager.setMasterVolume(this.masterVolume);
-            if (soundManager.setSoundVolume) soundManager.setSoundVolume(this.soundVolume);
-            if (soundManager.setMusicVolume) soundManager.setMusicVolume(this.musicVolume);
+            // Assign levels once, then one bus push (updateAmbientVolume →
+            // pushMusicBusVolume + soft drone). Avoid triple setMaster/Sound/Music.
+            soundManager.masterVolume = this.masterVolume;
+            soundManager.soundVolume = this.soundVolume;
+            soundManager.musicVolume = this.musicVolume;
+            if (soundManager.updateAmbientVolume) soundManager.updateAmbientVolume();
+            else if (soundManager.pushMusicBusVolume) soundManager.pushMusicBusVolume();
+        } else {
+            const bus = Math.max(0, Math.min(1, this.masterVolume * this.musicVolume));
+            if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.setVolume) {
+                youtubeSoundtrackManager.setVolume(bus);
+            }
+            if (typeof localAudioManager !== 'undefined' && localAudioManager.setVolume) {
+                localAudioManager.setVolume(bus);
+            }
+            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+                vfTrackerManager.setVolume(bus);
+            }
         }
-
         const bus = (typeof soundManager !== 'undefined' && soundManager.musicBusVolume)
             ? soundManager.musicBusVolume()
             : Math.max(0, Math.min(1, this.masterVolume * this.musicVolume));
-
-        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.setVolume) {
-            youtubeSoundtrackManager.setVolume(bus);
-        }
-        if (typeof localAudioManager !== 'undefined' && localAudioManager.setVolume) {
-            localAudioManager.setVolume(bus);
-        }
-        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
-            vfTrackerManager.setVolume(bus);
-        }
         if (bus > 0 && typeof soundManager !== 'undefined' && soundManager.ensureMusicPlaying) {
             soundManager.ensureMusicPlaying();
         }
@@ -385,21 +391,30 @@ class VolumeControlsManager {
     }
 
     saveVolumes() {
+        const set = (k, v) => {
+            if (typeof VFStorage !== 'undefined') VFStorage.set(k, v);
+            else try { localStorage.setItem(k, String(v)); } catch (e) { /* ignore */ }
+        };
+        const setJSON = (k, v) => {
+            if (typeof VFStorage !== 'undefined') VFStorage.setJSON(k, v);
+            else try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ }
+        };
         try {
-            localStorage.setItem('vf_masterVolume', String(this.masterVolume));
-            localStorage.setItem('vf_soundVolume', String(this.soundVolume));
-            localStorage.setItem('vf_musicVolume', String(this.musicVolume));
-            localStorage.setItem('vf_musicBpm', String(this.musicBpm));
-            localStorage.setItem('vf_musicSpeed', String(this.musicSpeed));
-            localStorage.setItem('vf_musicJungle', String(this.jungleAmount));
-            localStorage.setItem('vf_musicJungleBipolar', '1');
-            localStorage.setItem('vf_musicStyleAmount', '1');
-            localStorage.setItem('vf_musicTheme', String(this.musicTheme));
-            localStorage.setItem('vf_musicStyleSchema', '3');
-            localStorage.setItem('vf_musicBpmFollowsStyle', this.bpmFollowsStyle === false ? '0' : '1');
-            localStorage.setItem('vf_channelVolumes', JSON.stringify(this.channelVolumes || [1, 1, 1, 1]));
-            localStorage.setItem('vf_channelVoices', JSON.stringify(this.channelVoices || ['default', 'default', 'default', 'default']));
-            localStorage.setItem('vf_volumeSchema', '2');
+            set('vf_masterVolume', this.masterVolume);
+            set('vf_soundVolume', this.soundVolume);
+            set('vf_musicVolume', this.musicVolume);
+            set('vf_musicBpm', this.musicBpm);
+            set('vf_musicSpeed', this.musicSpeed);
+            set('vf_musicJungle', this.jungleAmount);
+            set('vf_musicJungleBipolar', '1');
+            set('vf_musicStyleAmount', '1');
+            set('vf_musicTheme', this.musicTheme);
+            set('vf_musicStyleSchema', '3');
+            set('vf_musicBpmFollowsStyle', this.bpmFollowsStyle === false ? '0' : '1');
+            setJSON('vf_channelVolumes', this.channelVolumes || [1, 1, 1, 1]);
+            setJSON('vf_channelVoices', this.channelVoices || ['default', 'default', 'default', 'default']);
+            set('vf_volumeSchema', '3');
+            if (typeof VFStorage !== 'undefined') VFStorage.schema('volume', '3');
         } catch (e) {
             console.warn('Could not save volume settings:', e);
         }
@@ -469,9 +484,10 @@ class VolumeControlsManager {
                 this.musicBpm = parseFloat(savedSpeed) * this.referenceBpm;
             }
 
-            if (!Number.isFinite(this.masterVolume)) this.masterVolume = 0.75;
-            if (!Number.isFinite(this.soundVolume)) this.soundVolume = 0.5;
-            if (!Number.isFinite(this.musicVolume)) this.musicVolume = 0.65;
+            const d = (typeof VFVolume !== 'undefined') ? VFVolume : { MASTER: 0.1, SOUND: 0.5, MUSIC: 0.65 };
+            if (!Number.isFinite(this.masterVolume)) this.masterVolume = d.MASTER;
+            if (!Number.isFinite(this.soundVolume)) this.soundVolume = d.SOUND;
+            if (!Number.isFinite(this.musicVolume)) this.musicVolume = d.MUSIC;
             if (!Number.isFinite(this.musicBpm)) this.musicBpm = 132;
 
             if (savedChannels) {
@@ -508,17 +524,21 @@ class VolumeControlsManager {
             const savedFollow = localStorage.getItem('vf_musicBpmFollowsStyle');
             this.bpmFollowsStyle = savedFollow !== '0';
 
-            // Old schema used exactly 10%/5%/20% plus a hidden ×8 music bus.
-            // Migrate that one authored default up once — never treat intentional
-            // quiet levels (or mute) as "legacy" or refresh would blast volume again.
-            if (schema !== '2') {
+            // Schema 1: 10%/5%/20% (+ hidden ×8 music bus) → keep master 10%, raise SND/MUS.
+            // Schema 2: 75%/50%/65% authored default → master 10% (quiet start until adjusted).
+            // Never treat intentional quiet/mute levels as "legacy".
+            if (schema !== '3') {
                 const near = (a, b) => Math.abs(a - b) < 0.001;
                 if (near(this.masterVolume, 0.1)
                     && near(this.soundVolume, 0.05)
                     && near(this.musicVolume, 0.2)) {
-                    this.masterVolume = 0.75;
+                    this.masterVolume = 0.1;
                     this.soundVolume = 0.5;
                     this.musicVolume = 0.65;
+                } else if (near(this.masterVolume, 0.75)
+                    && near(this.soundVolume, 0.5)
+                    && near(this.musicVolume, 0.65)) {
+                    this.masterVolume = 0.1;
                 }
                 this.saveVolumes();
             }
@@ -609,8 +629,14 @@ class VolumeControlsManager {
         }
     }
 
+    _normVol(volume) {
+        return (typeof VFVolume !== 'undefined')
+            ? VFVolume.normalize(volume)
+            : Math.max(0, Math.min(1, Number(volume) > 1 ? Number(volume) / 100 : (Number(volume) || 0)));
+    }
+
     setMasterVolume(volume) {
-        this.masterVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.masterVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
@@ -618,7 +644,7 @@ class VolumeControlsManager {
     }
 
     setSoundVolume(volume) {
-        this.soundVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.soundVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
@@ -626,7 +652,7 @@ class VolumeControlsManager {
     }
 
     setMusicVolume(volume) {
-        this.musicVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.musicVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
@@ -716,9 +742,10 @@ class VolumeControlsManager {
     }
 
     resetToDefaults() {
-        this.masterVolume = 0.75;
-        this.soundVolume = 0.5;
-        this.musicVolume = 0.65;
+        const d = (typeof VFVolume !== 'undefined') ? VFVolume : { MASTER: 0.1, SOUND: 0.5, MUSIC: 0.65 };
+        this.masterVolume = d.MASTER;
+        this.soundVolume = d.SOUND;
+        this.musicVolume = d.MUSIC;
         this.musicBpm = 132;
         this.musicSpeed = 1;
         this.jungleAmount = 0;

@@ -278,7 +278,8 @@ class SoundtrackEditorUI {
                 if (typeof soundManager !== 'undefined' && soundManager.ensureContext) soundManager.ensureContext();
                 if (typeof vfTrackerManager !== 'undefined') {
                     const bus = (typeof soundManager !== 'undefined' && soundManager.musicBusVolume)
-                        ? Math.max(0.25, soundManager.musicBusVolume()) : 0.35;
+                        ? soundManager.musicBusVolume()
+                        : ((typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065);
                     vfTrackerManager.setVolume(bus);
                     vfTrackerManager.play('preview:' + (libraryKey || 'edit'), data);
                     status.textContent = 'Playing preview…';

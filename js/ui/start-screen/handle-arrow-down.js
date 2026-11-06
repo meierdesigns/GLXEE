@@ -277,35 +277,39 @@ extendClass(StartScreenManager, {
     },
 
     openAssetGenerator(opts) {
-        if (typeof assetGenUI === 'undefined' || !assetGenUI) {
-            console.warn('Asset Generator UI not loaded');
-            return;
-        }
-        const fromStationMenu = this.overlayMode || this.embeddedMode;
-        if (this.overlayMode) {
-            this.hideOverlay();
-        }
-        if (this.embeddedMode) {
-            this.hideEmbedded();
-        }
-        const o = opts || {};
-        const returnToSettings = o.returnToSettings !== false;
-        if (o.typeId) {
-            assetGenUI.show({ typeId: o.typeId, returnToSettings: returnToSettings });
-            if (assetGenUI.setStatus) {
-                const label = (o.typeId === 'faction' || o.typeId === 'factionShip')
-                    ? 'FACTIONS'
-                    : String(o.typeId).toUpperCase();
-                assetGenUI.setStatus(
-                    ((returnToSettings || fromStationMenu) ? 'From Settings · ' : 'From Menu · ') +
-                    label + ' · Generate → Accept'
-                );
+        const run = () => {
+            if (typeof assetGenUI === 'undefined' || !assetGenUI) {
+                console.warn('Asset Generator UI not loaded');
+                return;
             }
-            return;
-        }
-        const focus = o.focusEntry
-            ? Object.assign({}, o.focusEntry, { returnToSettings: returnToSettings })
-            : { returnToSettings: returnToSettings };
-        assetGenUI.show(focus);
+            const fromStationMenu = this.overlayMode || this.embeddedMode;
+            if (this.overlayMode) {
+                this.hideOverlay();
+            }
+            if (this.embeddedMode) {
+                this.hideEmbedded();
+            }
+            const o = opts || {};
+            const returnToSettings = o.returnToSettings !== false;
+            if (o.typeId) {
+                assetGenUI.show({ typeId: o.typeId, returnToSettings: returnToSettings });
+                if (assetGenUI.setStatus) {
+                    const label = (o.typeId === 'faction' || o.typeId === 'factionShip')
+                        ? 'FACTIONS'
+                        : String(o.typeId).toUpperCase();
+                    assetGenUI.setStatus(
+                        ((returnToSettings || fromStationMenu) ? 'From Settings · ' : 'From Menu · ') +
+                        label + ' · Generate → Accept'
+                    );
+                }
+                return;
+            }
+            const focus = o.focusEntry
+                ? Object.assign({}, o.focusEntry, { returnToSettings: returnToSettings })
+                : { returnToSettings: returnToSettings };
+            assetGenUI.show(focus);
+        };
+        if (typeof ensureVfEditors === 'function') ensureVfEditors(run);
+        else run();
     },
 });

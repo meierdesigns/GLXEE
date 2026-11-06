@@ -9,7 +9,7 @@ class VFTrackerPlayer {
         this.track = null;
         this.playing = false;
         this.masterGain = null;
-        this.volume = 0.2;
+        this.volume = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
         this._timer = null;
         this._raf = null;
         this._nextRowTime = 0;
@@ -376,7 +376,9 @@ class VFTrackerPlayer {
             this._channels.push({ gain: null, source: null, release: 0.1 });
         }
         const vol = opts && opts.volume != null ? opts.volume : this.volume;
-        this.volume = Math.max(0.0001, Math.min(1, Number(vol) || 0.2));
+        const fallback = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
+        this.volume = Math.max(0, Math.min(1, Number.isFinite(Number(vol)) ? Number(vol) : fallback));
+        if (this.volume <= 0) this.volume = 0.0001;
         const fadeIn = opts && opts.fadeIn != null
             ? Math.max(0, Number(opts.fadeIn) || 0)
             : 0;

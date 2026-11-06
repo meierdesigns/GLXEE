@@ -458,7 +458,7 @@
             const sm = (typeof soundManager !== 'undefined') ? soundManager : null;
             const settings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager.settings
                 : (typeof settingsManager !== 'undefined' && settingsManager ? settingsManager.settings : null);
-            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 75;
+            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
             const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 50;
             const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 65;
             const musicBpm = vol && vol.getMusicBpm

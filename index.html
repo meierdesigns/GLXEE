@@ -7,13 +7,11 @@
     <style>/* The fight screen stays hidden until a fight is really shown (no flash of it while the page boots). */
     html:not(.vf-game-shown) .game-container { display: none !important; }</style>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
-    <link rel="preload" href="assets/fonts/Silkscreen-400.ttf" as="font" type="font/ttf" crossorigin>
-    <!-- Only set via CSS background-image on the station tab (no JS loader), so without this
-         the first-ever visit to that tab can paint black until the fetch finishes (css/styles/part-07.css). -->
-    <link rel="preload" href="assets/ui/hs-bg-station.png" as="image">
     <link rel="stylesheet" href="css/fonts.css">
     <!-- Critical boot loader paint: visible before the large styles.css arrives (css/styles/part-*.css) -->
     <style id="vf-boot-critical">
+        /* Inline face starts the fetch with the boot UI (no orphan <link rel=preload>). */
+        @font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: block; src: url('assets/fonts/Silkscreen-400.ttf') format('truetype'); }
         html, body { margin: 0; background: #05060a; }
         #vf-boot-veil.vf-boot-veil-loading {
             position: fixed; inset: 0; z-index: 9980; pointer-events: auto;   /* under the bezel (9990): the screen frame is already there while loading */
@@ -69,7 +67,7 @@
 
     </style>
     <link rel="stylesheet" href="css/styles/part-01.css?v=vf-glass-19">
-    <link rel="stylesheet" href="css/styles/part-02.css?v=transit-rail-2">
+    <link rel="stylesheet" href="css/styles/part-02.css?v=gecko-canvas-2">
     <link rel="stylesheet" href="css/styles/part-03.css?v=voice-eq-2">
     <link rel="stylesheet" href="css/styles/part-04.css?v=vf-glass-8">
     <link rel="stylesheet" href="css/styles/part-05.css?v=split-2">
@@ -100,7 +98,7 @@
     <link rel="stylesheet" href="css/screen-frame.css?v=23">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
-    <script src="js/core/stage-boot.js?v=boot-10"></script>
+    <script src="js/core/stage-boot.js?v=boot-14"></script>
     <script src="js/core/boot-loader.js"></script>
     <script src="js/core/reload-keys.js?v=f4-4"></script>
     <script src="js/core/zoom-rect-fix.js?v=vf-glass-1"></script>
@@ -230,8 +228,8 @@
                 <div class="volume-controls">
                     <div class="volume-control">
                         <label for="masterVolume">MASTER:</label>
-                        <input type="range" id="masterVolume" min="0" max="100" value="75" class="volume-slider" data-volume="master">
-                        <span id="masterVolumeValue" data-volume-value="master">75%</span>
+                        <input type="range" id="masterVolume" min="0" max="100" value="10" class="volume-slider" data-volume="master">
+                        <span id="masterVolumeValue" data-volume-value="master">10%</span>
                     </div>
                     <div class="volume-control">
                         <label for="soundVolume">SOUNDS:</label>

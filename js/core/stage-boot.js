@@ -8,11 +8,23 @@
         var saved = parseInt(localStorage.getItem('vf-stage-res'), 10);
         if (saved >= 0 && saved < STEPS.length) idx = saved;
     } catch (e) { /* ignore */ }
-    var vv = window.visualViewport;
-    var w = (vv && vv.width) || window.innerWidth || 800;
-    var h = (vv && vv.height) || window.innerHeight || 600;
+    // Do NOT read innerWidth / visualViewport here: Firefox warns
+    // "Layout was forced before the page was fully loaded" while stylesheets
+    // are still pending (itch iframe + many part-*.css). Use the last good
+    // scale, then refine after window.load.
     var LW = 1280, LH = 960, FILL = 0.95;
-    var scale = Math.max(0.05, Math.min(w * FILL / LW, h * FILL / LH));
+    var scale = 0.75;
+    try {
+        var cachedScale = parseFloat(localStorage.getItem('vf-stage-scale'));
+        if (isFinite(cachedScale) && cachedScale >= 0.05 && cachedScale <= 5) {
+            scale = cachedScale;
+        } else {
+            // screen.* does not force document layout (unlike innerWidth).
+            var sw = (screen && (screen.availWidth || screen.width)) || LW;
+            var sh = (screen && (screen.availHeight || screen.height)) || LH;
+            scale = Math.max(0.05, Math.min(sw * FILL / LW, sh * FILL / LH));
+        }
+    } catch (e) { /* ignore */ }
     // ONE snapshot of the GUI state (vf-gui-state = faction + colours + palette), written together by
     // factionShipStyles.stampDocumentTheme. Everything below paints from it on the very first frame,
     // so faction, frame, cables and background can never come from different sources.
@@ -113,6 +125,15 @@
         if (reloaded && BUILD && localStorage.getItem('vf-build') === BUILD) mode = 'refresh';
     } catch (e) { /* ignore */ }
     document.documentElement.setAttribute('data-vf-load', mode);
+    // Gecko (Firefox): CSS filter / border-radius on #gameCanvas under body
+    // transform:scale(--stage-scale) corrupts playfield tiles into horizontal
+    // streaks (WebRender). CSS keys off data-vf-engine="gecko".
+    try {
+        var ua = navigator.userAgent || '';
+        if (/Gecko\//.test(ua) && !/like Gecko/i.test(ua)) {
+            document.documentElement.setAttribute('data-vf-engine', 'gecko');
+        }
+    } catch (e) { /* ignore */ }
     window.vfBuildId = BUILD;
     // Destination screen is known from the saved menu state: start its background art loading
     // now (in parallel with the scripts) instead of after they have all run.
@@ -128,29 +149,36 @@
             : (!ms.screen || /^(start|settings|credits|profiles|ingame|theme-editor)$/.test(ms.screen)
                 ? (fid && ms.screen !== 'ingame' && ms.screen !== 'theme-editor' ? fbg(ms.screen === 'profiles' ? 'profiles' : 'menu') : 'assets/ui/menu-hangar-bg.png')
                 : '');
-        if (bg) {
-            var ln = document.createElement('link');
-            ln.rel = 'preload'; ln.as = 'image'; ln.href = bg;
-            document.head.appendChild(ln);
-        }
-        // The faction's other main backdrops too, so the first tab/screen change after the start is already decoded.
+        // Warm the HTTP cache via Image() — <link rel=preload> warns when the
+        // start-screen CSS background is applied only after deferred.js (itch).
+        var warm = function (u) { try { var im = new Image(); im.decoding = 'async'; im.src = u; } catch (e) { /* ignore */ } };
+        if (bg) warm(bg);
         if (fid) ['menu', 'profiles'].forEach(function (n) {
             var u = fbg(n);
-            if (u === bg) return;
-            var l2 = document.createElement('link');
-            l2.rel = 'preload'; l2.as = 'image'; l2.href = u;
-            document.head.appendChild(l2);
+            if (u !== bg) warm(u);
         });
     } catch (e) { /* ignore */ }
     // Animations/transitions stay off until the first render has settled (no load-time jumping).
     document.documentElement.classList.add('vf-loading');
-    window.addEventListener('load', function () {
-        setTimeout(function () { document.documentElement.classList.remove('vf-loading'); }, 900);
-    });
     var r = document.documentElement.style;
     r.setProperty('--vw', LW + 'px');
     r.setProperty('--vh', LH + 'px');
     r.setProperty('--stage-scale', String(Number(scale.toFixed(5))));
+    function refineStageScale() {
+        var vv = window.visualViewport;
+        var w = (vv && vv.width) || window.innerWidth || 800;
+        var h = (vv && vv.height) || window.innerHeight || 600;
+        var next = Math.max(0.05, Math.min(w * FILL / LW, h * FILL / LH));
+        r.setProperty('--stage-scale', String(Number(next.toFixed(5))));
+        try { localStorage.setItem('vf-stage-scale', String(Number(next.toFixed(5)))); } catch (e) { /* ignore */ }
+        setTimeout(function () { document.documentElement.classList.remove('vf-loading'); }, 900);
+    }
+    function scheduleRefine() {
+        // Two rAFs after load: CSSOM settled — same pattern as zoom-rect-fix.js.
+        requestAnimationFrame(function () { requestAnimationFrame(refineStageScale); });
+    }
+    if (document.readyState === 'complete') scheduleRefine();
+    else window.addEventListener('load', scheduleRefine, { once: true });
 })();
 
 // Faction-switch debug log: opt-in with localStorage vf-debug = 1.

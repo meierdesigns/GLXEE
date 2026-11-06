@@ -224,14 +224,44 @@ class RenderManager {
         if (canvas.width !== bw || canvas.height !== bh) {
             canvas.width = bw;
             canvas.height = bh;
+            // Firefox: backing-store resize under transform:scale can leave a
+            // stretched stale layer — toggle a compositor hint without sync layout.
+            if (document.documentElement.getAttribute('data-vf-engine') === 'gecko') {
+                canvas.classList.add('vf-gecko-resize');
+                requestAnimationFrame(() => { canvas.classList.remove('vf-gecko-resize'); });
+            }
         }
-        const c = ctx || canvas.getContext('2d');
+        const c = ctx || canvas.getContext('2d', { alpha: false }) || canvas.getContext('2d');
         if (!c) return;
         c.setTransform(k, 0, 0, k, 0, 0);
         c.imageSmoothingEnabled = false;
         if (c.mozImageSmoothingEnabled !== undefined) c.mozImageSmoothingEnabled = false;
         if (c.webkitImageSmoothingEnabled !== undefined) c.webkitImageSmoothingEnabled = false;
         if (c.msImageSmoothingEnabled !== undefined) c.msImageSmoothingEnabled = false;
+        // Theme contrast/sat/bri used to live as a CSS filter on #gameCanvas; on
+        // Gecko that corrupts, so bake the same stack into the 2D context.
+        const isGecko = document.documentElement.getAttribute('data-vf-engine') === 'gecko';
+        const isVoxel = document.documentElement.getAttribute('data-vf-ship-render') === 'VOXEL';
+        const prevFilter = c.filter;
+        if (isGecko && !isVoxel) {
+            try {
+                const rootStyle = document.documentElement.style;
+                const contrast = rootStyle.getPropertyValue('--theme-contrast-filter')
+                    || vfCssVar('--theme-contrast-filter') || '1.15';
+                const sat = rootStyle.getPropertyValue('--theme-saturation-filter')
+                    || vfCssVar('--theme-saturation-filter') || '1';
+                const bri = rootStyle.getPropertyValue('--theme-brightness-filter')
+                    || vfCssVar('--theme-brightness-filter') || '1';
+                const key = contrast + '|' + sat + '|' + bri;
+                if (this._geckoFilterKey !== key) {
+                    this._geckoFilterKey = key;
+                    this._geckoFilter = 'contrast(' + String(contrast).trim()
+                        + ') saturate(' + String(sat).trim()
+                        + ') brightness(' + String(bri).trim() + ')';
+                }
+                c.filter = this._geckoFilter;
+            } catch (e) { /* keep none */ }
+        }
         const loader = (typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader) || null;
         const prevScale = loader ? loader.deviceScale : null;
         const prevDetail = loader ? loader.voxelDetail : null;
@@ -245,6 +275,7 @@ class RenderManager {
         try {
             return this.renderFrame(c, width || lw, height || lh);
         } finally {
+            if (isGecko) c.filter = prevFilter || 'none';
             if (loader) {
                 loader.deviceScale = prevScale;
                 loader.voxelDetail = prevDetail;

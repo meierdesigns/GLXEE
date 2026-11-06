@@ -67,7 +67,10 @@ shot-probe.png
 verify-top.*
 .tmp-*.png
 .cursor-tmp-*.png
+.cursor-bug-*.png
 kronax-full.png
+*.local.zip
+GLXEE-V*.zip
 
 # Local import dumps / tracker MOD exports (not runtime)
 .import/

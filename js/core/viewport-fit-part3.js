@@ -279,7 +279,7 @@
         const muteBtn = q('mute');
         if (muteBtn) {
             muteBtn.classList.toggle('is-open', vfs.volOpen);
-            const vol = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager.getMasterVolume() : 0.75;
+            const vol = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager.getMasterVolume() : 0.1;
             const isMuted = vol <= 0;
             if (muteBtn.dataset.state !== (isMuted ? '1' : '0')) {
                 muteBtn.dataset.state = isMuted ? '1' : '0';

@@ -1148,6 +1148,29 @@ html[data-vf-ship-render="VOXEL"] #gameCanvas {
     image-rendering: -moz-crisp-edges !important;
     image-rendering: crisp-edges !important;
 }
+/* Firefox/Gecko + Win: CSS filter (and voidborn border-radius) on a canvas that
+   lives under body { transform: scale(--stage-scale) } makes WebRender smear
+   dirty tiles into horizontal terrain streaks. Drop those; keep nearest-neighbour. */
+html[data-vf-engine="gecko"] body .game-container .game-stage #gameCanvas,
+html[data-vf-engine="gecko"] body .game-container .game-canvas-container > .game-stage #gameCanvas {
+    filter: none !important;
+    border-radius: 0 !important;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+}
+/* One-frame compositor poke after a backing-store resize (see render/core.js). */
+html[data-vf-engine="gecko"] #gameCanvas.vf-gecko-resize {
+    transform: translateZ(0);
+}
+/* Backdrop-filter FX over the scaled stage: same Gecko corruption class
+   (SVG filters and CRT contrast backdrop both smear under transform:scale). */
+html[data-vf-engine="gecko"] .vf-fx-chroma,
+html[data-vf-engine="gecko"] .vf-fx-bloom,
+html[data-vf-engine="gecko"] .vf-fx-scanwarp,
+html[data-vf-engine="gecko"] .vf-fx-crt {
+    display: none !important;
+}
 /* VOXEL CRT inherits the shared no-warp CRT stack above. */
 html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     image-rendering: pixelated !important;

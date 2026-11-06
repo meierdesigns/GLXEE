@@ -15,7 +15,7 @@ class VFTrackerManager {
         this.library = {};
         this.currentKey = null;
         this.enabled = true;
-        this.volume = 0.2;
+        this.volume = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
         /** Crossfade length when swapping distinct tracks (seconds). */
         this.crossfadeSeconds = 1.4;
         this._outgoing = [];

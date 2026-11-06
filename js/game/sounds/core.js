@@ -1,5 +1,27 @@
 "use strict";
 
+/**
+ * Single source of truth for authored volume defaults + linear routing.
+ * MASTER × SOUND → SFX, MASTER × MUSIC → music bus (tracker / YT / local / ambient).
+ * Values are 0..1. UI percents (0..100) are accepted via normalize().
+ */
+var VFVolume = {
+    MASTER: 0.1,
+    SOUND: 0.5,
+    MUSIC: 0.65,
+    /** Authored music-bus level before the player moves a slider. */
+    busDefault: function () {
+        return Math.max(0, Math.min(1, this.MASTER * this.MUSIC));
+    },
+    /** Coerce UI/API input to 0..1 (treats values > 1 as percent). */
+    normalize: function (v) {
+        var n = Number(v);
+        if (!Number.isFinite(n)) return 0;
+        if (n > 1) n = n / 100;
+        return Math.max(0, Math.min(1, n));
+    }
+};
+
 // Procedural Web Audio sound system with named event profiles
 class SoundManager {
     constructor() {
@@ -8,9 +30,9 @@ class SoundManager {
         this.soundEnabled = true;
         this.musicEnabled = true;
         this.activeTimeouts = [];
-        this.masterVolume = 0.75;
-        this.soundVolume = 0.5;
-        this.musicVolume = 0.65;
+        this.masterVolume = VFVolume.MASTER;
+        this.soundVolume = VFVolume.SOUND;
+        this.musicVolume = VFVolume.MUSIC;
         this._audioUnlocked = false;
 
         this.ambientNodes = null;
@@ -62,25 +84,49 @@ class SoundManager {
     }
 
     sfxVolume(scale) {
-        const s = scale == null ? 1 : scale;
-        // Linear master×sound — slider 100%/100% ≈ full SFX.
-        return Math.max(0.0001, Math.min(1, this.masterVolume * this.soundVolume * s));
-    }
-
-    musicVol(scale) {
-        const s = scale == null ? 1 : scale;
-        return Math.max(0.0001, Math.min(1, this.masterVolume * this.musicVolume * (s == null ? 1 : s) * 0.35));
+        const s = scale == null ? 1 : Number(scale);
+        const mul = Number.isFinite(s) ? s : 1;
+        // Linear MASTER × SOUND — slider 100%/100% ≈ full SFX.
+        return Math.max(0.0001, Math.min(1, this.masterVolume * this.soundVolume * mul));
     }
 
     /**
-     * Linear music bus: MASTER% × MUSIC% (0..1). No hidden ×8 boost —
-     * that made the sliders feel broken. Tracker instruments are already loud.
+     * Procedural ambient / soft beds: MASTER × MUSIC × scale.
+     * No hidden attenuations — scale is the only intentional quiet factor.
+     */
+    musicVol(scale) {
+        const s = scale == null ? 1 : Number(scale);
+        const mul = Number.isFinite(s) ? s : 1;
+        return Math.max(0.0001, Math.min(1, this.masterVolume * this.musicVolume * mul));
+    }
+
+    /**
+     * Linear music bus: MASTER × MUSIC (0..1). Shared by tracker, YouTube,
+     * local audio, and volume UI — never floor or boost this value.
      */
     musicBusVolume() {
         const m = Number(this.masterVolume);
         const u = Number(this.musicVolume);
-        if (!Number.isFinite(m) || !Number.isFinite(u)) return 0.4;
+        if (!Number.isFinite(m) || !Number.isFinite(u)) {
+            return (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
+        }
         return Math.max(0, Math.min(1, m * u));
+    }
+
+    /** Push current music bus (× optional mul) to every music output. */
+    pushMusicBusVolume(mul) {
+        const scale = mul == null ? 1 : Number(mul);
+        const bus = Math.max(0, Math.min(1, this.musicBusVolume() * (Number.isFinite(scale) ? scale : 1)));
+        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.setVolume) {
+            youtubeSoundtrackManager.setVolume(bus);
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setVolume) {
+            localAudioManager.setVolume(bus);
+        }
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+            vfTrackerManager.setVolume(bus);
+        }
+        return bus;
     }
 
     canPlaySfx() {

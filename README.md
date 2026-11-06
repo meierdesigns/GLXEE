@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/ui/readme-banner.png" alt="GLXEE — UGDF Archive · Intergalactic Combat Simulator" width="960" />
+<img src="assets/ui/readme-banner.jpg" alt="GLXEE — UGDF Archive · Intergalactic Combat Simulator" width="960" />
 
 # GLXEE
 
@@ -44,7 +44,7 @@ move galaxies, and jump again before the lane goes quiet.
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-combat-71o.png" alt="GLXEE combat on Mars — canyon run with enemy hero card" width="960" />
+<img src="assets/ui/readme-shot-combat-71o.jpg" alt="GLXEE combat on Mars — canyon run with enemy hero card" width="960" />
 
 <br/>
 
@@ -52,7 +52,7 @@ move galaxies, and jump again before the lane goes quiet.
 
 <br/>
 
-<img src="assets/ui/readme-shot-factions-65c.png" alt="GLXEE Factions relations screen — live screenshot" width="960" />
+<img src="assets/ui/readme-shot-factions-65c.jpg" alt="GLXEE Factions relations screen — live screenshot" width="960" />
 
 <br/>
 
@@ -140,6 +140,8 @@ scripts, so the art behind the bezel is ready when the veil lifts.
 Optional local tools:
 
 ```bash
+npm run build:bundle    # rebuild deferred.js + deferred-editors.js
+npm run ship:audit      # tracked file count vs ~800 / 1000 cap
 npm run assets          # ComfyUI + asset-gen bridge
 npm run comfy           # ComfyUI workflows
 npm run asset-gen       # asset-gen bridge on :8787
@@ -154,7 +156,8 @@ contains the game entry point, runtime code, CSS, and game assets (kept near
 development-only archive/package sources, local Cursed bridge packages, and
 unreferenced generated sprite dumps (`assets/{levels,ships,weapons}/sprites/`)
 are excluded from the itch upload. Version archives under `.claude/` are local
-only and never nested inside the download ZIP.
+only and never nested inside the download ZIP. DevMode editors load from
+`js/bundles/deferred-editors.js` on demand (`ensureVfEditors`).
 
 <img src="assets/ui/readme-h-controls.svg" alt="CH.02 CONTROLS" width="960" />
 
@@ -223,7 +226,7 @@ change whether a faction trades and which prices it offers.
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-emblems-65c.png" alt="Hi-res faction emblems in the Relations screen" width="960" />
+<img src="assets/ui/readme-shot-emblems-65c.jpg" alt="Hi-res faction emblems in the Relations screen" width="960" />
 
 <br/>
 
@@ -549,7 +552,7 @@ Combat is a vertical shooter with a readable pixel hierarchy:
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-launch-hatch-68a.png" alt="Station launch hatch with GET READY countdown" width="960" />
+<img src="assets/ui/readme-shot-launch-hatch-68a.jpg" alt="Station launch hatch with GET READY countdown" width="960" />
 
 </div>
 
@@ -644,20 +647,20 @@ station shell, factions, travel).
 
 | New pilot — faction | New pilot — portrait |
 |:---:|:---:|
-| <img src="assets/ui/readme-shot-faction-pick-71o.png" alt="New pilot faction step" width="460" /> | <img src="assets/ui/readme-shot-pilot-68a.png" alt="Create your pilot portrait grid" width="460" /> |
+| <img src="assets/ui/readme-shot-faction-pick-71o.jpg" alt="New pilot faction step" width="460" /> | <img src="assets/ui/readme-shot-pilot-68a.jpg" alt="Create your pilot portrait grid" width="460" /> |
 | Mission start | Launch hatch |
-| <img src="assets/ui/readme-shot-mission-68a.png" alt="Mission start with galaxy route and planet card" width="460" /> | <img src="assets/ui/readme-shot-launch-hatch-68a.png" alt="Station launch hatch countdown" width="460" /> |
+| <img src="assets/ui/readme-shot-mission-68a.jpg" alt="Mission start with galaxy route and planet card" width="460" /> | <img src="assets/ui/readme-shot-launch-hatch-68a.jpg" alt="Station launch hatch countdown" width="460" /> |
 | Home Station | Galaxy travel |
 |:---:|:---:|
-| <img src="assets/ui/readme-shot-station-65c.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy-65c.png" alt="Galaxy travel map" width="460" /> |
+| <img src="assets/ui/readme-shot-station-65c.jpg" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy-65c.jpg" alt="Galaxy travel map" width="460" /> |
 | Upgrade tree | Combat focus |
-| <img src="assets/ui/readme-shot-upgrade-65c.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus-71o.png" alt="Mars combat focus crop" width="460" /> |
+| <img src="assets/ui/readme-shot-upgrade-65c.jpg" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus-71o.jpg" alt="Mars combat focus crop" width="460" /> |
 | Factions (hi-res emblems) | Emblem strip |
-| <img src="assets/ui/readme-shot-factions-65c.png" alt="Factions relations with hi-res emblems" width="460" /> | <img src="assets/ui/readme-strip-emblems-65c.png" alt="Hand-shaded faction emblems @4x" width="460" /> |
+| <img src="assets/ui/readme-shot-factions-65c.jpg" alt="Factions relations with hi-res emblems" width="460" /> | <img src="assets/ui/readme-strip-emblems-65c.png" alt="Hand-shaded faction emblems @4x" width="460" /> |
 
 <br/>
 
-<img src="assets/ui/readme-shot-emblems-65c.png" alt="Relations row — live hi-res emblems" width="960" />
+<img src="assets/ui/readme-shot-emblems-65c.jpg" alt="Relations row — live hi-res emblems" width="960" />
 
 <br/>
 
@@ -1002,7 +1005,7 @@ be reviewed or reverted independently.
 | 71L | Release 1.14.4 | GitHub README audio/STYLE docs + local `.claude/GLXEE-V1.14.4.zip` runtime archive |
 | 71M | Mute volume trio | Bezel mute dropdown shows VOL + SND + MUS sliders (master / sounds / music) |
 | 71N | Release 1.14.5 | GitHub push + `.claude/GLXEE-V1.14.5.zip` with mute volume trio |
-| 71O | README media refresh | New cinematic `readme-banner.png`; live `-71o` combat / faction-command shots |
+| 71O | README media refresh | New cinematic `readme-banner.jpg`; live `-71o` combat / faction-command shots |
 | 71P | Music loop stability | Tempo-anchored tracker schedule, RAF pump, milder stall skip; STYLE heads actually replace bass/lead/arp |
 | 71Q | Dev music editor | DevMode MUSIC tab: STEPS/BARS/PACKS zoom, pack reorder/copy, live playhead (`js/ui/dev/`, not uploaded) |
 | 71R | Menu AUDIO tab | Sound + music leave SETTINGS; dedicated ESC-menu AUDIO tab (volumes, toggles, soundtrack, editors) |
@@ -1033,6 +1036,15 @@ be reviewed or reverted independently.
 | 72O | Distinct boss BGM | Boss no longer keeps stage loop; *-boss keys + darker/faster faction skin |
 | 72P | Controller display wake | Linux idle reset while gamepad connected: Wake Lock + `/__user-activity` D-Bus poke via dev-server |
 | 72Q | Release 1.14.7 | GitHub push + `.claude/GLXEE-V1.14.7.zip` runtime archive (music scenes, UI, gamepad wake) |
+| 72R | Firefox canvas smear | Gecko: drop CSS filter/radius on `#gameCanvas` under stage scale; hide SVG backdrop FX; poke layer after backing resize |
+| 72S | Boot console quiet | No early layout read in stage-boot (FOUC); drop unused font/station preloads; warm BGs via Image() |
+| 72T | Firefox canvas harden | Gecko: CRT off; opaque playfield ctx; theme via ctx.filter; class poke on resize |
+| 73A | Ship audit + ignore | `npm run ship:audit`; tighten `.gitignore` (ZIPs/scratch); volume defaults quiet + consistent bus |
+| 73B | Lazy editors bundle | Dev/Asset-Gen/viewers → `deferred-editors.js` via `ensureVfEditors`; core boot stays leaner |
+| 73C | Station RAF unify | Hangar + fleet previews share `vfStationAnim` (one ticker) |
+| 73D | PERF combat caps | Particle soft caps + lighting budget from PERF / performance mode |
+| 73E | VFStorage facade | Shared get/set/JSON/schema helper; volume save routes through it |
+| 73F | README media slim | Drop unused shots; compress + JPEG live shots (archive keeps PNG masters) |
 
 The wave commit convention is:
 

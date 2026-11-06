@@ -214,7 +214,7 @@
         const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
         const readPct = function (key) {
             if (!mgr) {
-                return key === 'master' ? 75 : key === 'sound' ? 50 : 65;
+                return key === 'master' ? 10 : key === 'sound' ? 50 : 65;
             }
             if (key === 'master') return Math.round(mgr.getMasterVolume() * 100);
             if (key === 'sound') return Math.round(mgr.getSoundVolume() * 100);

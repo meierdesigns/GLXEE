@@ -22,12 +22,15 @@ class CoreRenderManager {
             return;
         }
         
-        this.ctx = this.canvas.getContext('2d');
+        // Opaque buffer: Firefox WebRender composites alpha canvases under
+        // body transform:scale more reliably when the playfield has no alpha.
+        this.ctx = this.canvas.getContext('2d', { alpha: false }) || this.canvas.getContext('2d');
         if (!this.ctx) {
             console.error('Could not get 2D context');
             return;
         }
         this.ctx.imageSmoothingEnabled = false;
+        if (this.ctx.mozImageSmoothingEnabled !== undefined) this.ctx.mozImageSmoothingEnabled = false;
         
         // Set canvas size
         this.canvas.width = this.width;

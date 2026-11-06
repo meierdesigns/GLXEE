@@ -103,41 +103,49 @@ extendClass(StartScreenManager, {
 
         this.devMode = !this.devMode;
         this.saveDevMode();
-        this.rebuildVisibleMenu();
-        if (this.selectedIndex >= this.menuItems.length) {
-            this.selectedIndex = Math.max(0, this.menuItems.length - 1);
-        }
-        // Shift+C also toggles this mid-combat (see js/ui/hud-layout-editor.js, bindGlobalToggle),
-        // where the start screen's own overlay DOM isn't even attached/visible — a full
-        // createStartScreenUI() rebuild there is pure wasted work (innerHTML='' + rebuilding the
-        // whole menu tree) and is exactly what made toggling devMode feel slow. Only rebuild it
-        // when it's actually on screen to look at.
-        if (this.visible) this.createStartScreenUI();
-        // Dev-only tabs + tutorial-locked area nav: patch chrome only (no full rebuild).
-        if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
-            if (!homeStationUI.statusMsg) {
-                homeStationUI.statusMsg = this.devMode
-                    ? 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED'
-                    : 'DEV MODE OFF';
+        const finishToggle = () => {
+            this.rebuildVisibleMenu();
+            if (this.selectedIndex >= this.menuItems.length) {
+                this.selectedIndex = Math.max(0, this.menuItems.length - 1);
             }
-            if (homeStationUI.syncDevModeChrome) {
-                homeStationUI.syncDevModeChrome();
-            } else if (homeStationUI.createUI) {
-                homeStationUI._hsShellReady = false;
-                homeStationUI._softBodyCache = null;
-                homeStationUI._softAreaId = null;
-                homeStationUI.createUI();
+            // Shift+C also toggles this mid-combat (see js/ui/hud-layout-editor.js, bindGlobalToggle),
+            // where the start screen's own overlay DOM isn't even attached/visible — a full
+            // createStartScreenUI() rebuild there is pure wasted work (innerHTML='' + rebuilding the
+            // whole menu tree) and is exactly what made toggling devMode feel slow. Only rebuild it
+            // when it's actually on screen to look at.
+            if (this.visible) this.createStartScreenUI();
+            // Dev-only tabs + tutorial-locked area nav: patch chrome only (no full rebuild).
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+                if (!homeStationUI.statusMsg) {
+                    homeStationUI.statusMsg = this.devMode
+                        ? 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED'
+                        : 'DEV MODE OFF';
+                }
+                if (homeStationUI.syncDevModeChrome) {
+                    homeStationUI.syncDevModeChrome();
+                } else if (homeStationUI.createUI) {
+                    homeStationUI._hsShellReady = false;
+                    homeStationUI._softBodyCache = null;
+                    homeStationUI._softAreaId = null;
+                    homeStationUI.createUI();
+                }
             }
-        }
-        // Overlay create flow (openProfileCreate) is not remounted by createStartScreenUI;
-        // refresh so later steps pick up / drop the DevMode faction swatches without
-        // resetting pendingFaction.
-        if (typeof profileSelectionManager !== 'undefined'
-            && profileSelectionManager.isVisible
-            && profileSelectionManager.mode === 'create'
-            && !this.showProfiles
-            && profileSelectionManager.createUI) {
-            profileSelectionManager.createUI();
+            // Overlay create flow (openProfileCreate) is not remounted by createStartScreenUI;
+            // refresh so later steps pick up / drop the DevMode faction swatches without
+            // resetting pendingFaction.
+            if (typeof profileSelectionManager !== 'undefined'
+                && profileSelectionManager.isVisible
+                && profileSelectionManager.mode === 'create'
+                && !this.showProfiles
+                && profileSelectionManager.createUI) {
+                profileSelectionManager.createUI();
+            }
+        };
+        // Editors (layout / component / asset-gen) live in the lazy bundle.
+        if (this.devMode && typeof ensureVfEditors === 'function') {
+            ensureVfEditors(() => finishToggle());
+        } else {
+            finishToggle();
         }
         return this.devMode;
     },

@@ -555,16 +555,20 @@ extendClass(HomeStationUI, {
     },
 
     openHangarTestArea() {
-        if (typeof hangarTestArena === 'undefined') return;
-        this.stopHangarPreview();
-        hangarTestArena.show({
-            shipId: this.hangarShipId || 'player_scrap',
-            onClose: () => {
-                if (this.isVisible && this.tab === 'hangar') {
-                    this.startHangarPreview();
+        const run = () => {
+            if (typeof hangarTestArena === 'undefined') return;
+            this.stopHangarPreview();
+            hangarTestArena.show({
+                shipId: this.hangarShipId || 'player_scrap',
+                onClose: () => {
+                    if (this.isVisible && this.tab === 'hangar') {
+                        this.startHangarPreview();
+                    }
                 }
-            }
-        });
+            });
+        };
+        if (typeof ensureVfEditors === 'function') ensureVfEditors(run);
+        else run();
     },
 
     close() {

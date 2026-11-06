@@ -8,6 +8,17 @@ class ParticleSystem {
         this.particles = [];
     }
 
+    /** Soft cap from PERF / performance mode — keeps combat FPS stable. */
+    maxParticles() {
+        try {
+            const root = document.documentElement;
+            if (root.hasAttribute('data-vf-performance')) return 48;
+            if (root.getAttribute('data-vf-perf-anim') === 'off') return 96;
+            if (root.getAttribute('data-vf-perf-heavy') === 'off') return 140;
+        } catch (e) { /* ignore */ }
+        return 220;
+    }
+
     createHitParticles(x, y, count = 8, colorOrOpts = null) {
         let opts = null;
         let singleColor = null;
@@ -25,7 +36,10 @@ class ParticleSystem {
         const gravity = opts && opts.gravity != null ? Number(opts.gravity) : 0.1;
         const kind = opts && opts.kind ? String(opts.kind) : 'spark';
         const fadeOut = !!(opts && opts.fadeOut);
-        const n = Math.max(0, Math.round(count));
+        const cap = this.maxParticles();
+        const room = Math.max(0, cap - this.particles.length);
+        const n = Math.max(0, Math.min(room, Math.round(count)));
+        if (n <= 0) return;
 
         for (let i = 0; i < n; i++) {
             const angle = (Math.PI * 2 * i) / Math.max(1, n) + Math.random() * 0.35;

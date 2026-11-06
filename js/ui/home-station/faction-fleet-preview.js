@@ -33,22 +33,16 @@ extendClass(HomeStationUI, {
             };
         });
         const sim = { ships, shots: [], incoming: [], sparks: [], inAcc: 0, style, env: this.buildFleetPreviewEnv(factionId, W, canvas.height), player: this.buildFleetPreviewPlayer(W, canvas.height, wall, factionId, playerOnly) };
-        let last = 0;
         // Colour edits (sliders, save, reset) are picked up by the loop itself, whatever screen they come from.
         const sig = () => JSON.stringify(fss.getColorOverrides(factionId)) + JSON.stringify(fss.getSavedColorOverrides(factionId));
         let colorSig = sig();
-        // ~24 fps is enough for the tiny pixel fleet sim; full 60 Hz was a menu FPS sink.
-        const frameInterval = 1000 / 24;
-        const loop = (ts) => {
-            if (!canvas.isConnected) { this._fleetPreviewAnim = null; return; }
-            this._fleetPreviewAnim = requestAnimationFrame(loop);
-            if (typeof document !== 'undefined' && document.hidden) return;
+        const tick = (dt) => {
+            if (!canvas.isConnected) {
+                if (typeof vfStationAnim !== 'undefined') vfStationAnim.unsubscribe('fleetPreview');
+                this._fleetPreviewAnim = null;
+                return;
+            }
             if (this.tab && this.tab !== 'ffleet') return;
-            if (!last) last = ts;
-            const elapsed = ts - last;
-            if (elapsed < frameInterval) return;
-            const dt = Math.min(50, elapsed);
-            last = ts;
             try {
                 const now = sig();
                 if (now !== colorSig) {
@@ -61,11 +55,30 @@ extendClass(HomeStationUI, {
                     if (old) Object.assign(old, { model: np.model });
                 }
             } catch (e) { console.warn('fleet preview colours', e); }
-            // A throwing frame must never stop the loop (that froze the preview).
             try { this.updateFactionFleetPreview(sim, dt, canvas); } catch (e) { console.warn('fleet preview update', e); }
             try { this.drawFactionFleetPreview(sim, canvas); } catch (e) { console.warn('fleet preview draw', e); }
         };
-        this._fleetPreviewAnim = requestAnimationFrame(loop);
+        // Shared station ticker (~24 fps) — one RAF with hangar preview.
+        if (typeof vfStationAnim !== 'undefined' && vfStationAnim.subscribe) {
+            vfStationAnim.subscribe('fleetPreview', tick, 24);
+            this._fleetPreviewAnim = 1;
+        } else {
+            let last = 0;
+            const frameInterval = 1000 / 24;
+            const loop = (ts) => {
+                if (!canvas.isConnected) { this._fleetPreviewAnim = null; return; }
+                this._fleetPreviewAnim = requestAnimationFrame(loop);
+                if (typeof document !== 'undefined' && document.hidden) return;
+                if (this.tab && this.tab !== 'ffleet') return;
+                if (!last) last = ts;
+                const elapsed = ts - last;
+                if (elapsed < frameInterval) return;
+                const dt = Math.min(50, elapsed);
+                last = ts;
+                tick(dt);
+            };
+            this._fleetPreviewAnim = requestAnimationFrame(loop);
+        }
     },
 
     /** The pilot's active ship, small, at the bottom of the preview. */
@@ -162,7 +175,12 @@ extendClass(HomeStationUI, {
     },
 
     stopFactionFleetPreview() {
-        if (this._fleetPreviewAnim) cancelAnimationFrame(this._fleetPreviewAnim);
+        if (typeof vfStationAnim !== 'undefined' && vfStationAnim.unsubscribe) {
+            vfStationAnim.unsubscribe('fleetPreview');
+        }
+        if (this._fleetPreviewAnim && this._fleetPreviewAnim !== 1) {
+            cancelAnimationFrame(this._fleetPreviewAnim);
+        }
         this._fleetPreviewAnim = null;
     },
 

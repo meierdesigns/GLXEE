@@ -130,15 +130,19 @@ extendClass(HomeStationUI, {
     },
 
     mountComponentsTab(opts) {
-        const host = this.overlay && this.overlay.querySelector('#hsComponentsHost');
-        if (!host || typeof componentEditorUI === 'undefined') return;
-        const o = Object.assign({}, opts || {});
-        if (!o.type && !o.id && typeof menuStateManager !== 'undefined') {
-            const s = menuStateManager.get();
-            if (s && s.componentType) o.type = s.componentType;
-            if (s && s.componentId) o.id = s.componentId;
-        }
-        componentEditorUI.mount(host, o);
+        const mount = () => {
+            const host = this.overlay && this.overlay.querySelector('#hsComponentsHost');
+            if (!host || typeof componentEditorUI === 'undefined') return;
+            const o = Object.assign({}, opts || {});
+            if (!o.type && !o.id && typeof menuStateManager !== 'undefined') {
+                const s = menuStateManager.get();
+                if (s && s.componentType) o.type = s.componentType;
+                if (s && s.componentId) o.id = s.componentId;
+            }
+            componentEditorUI.mount(host, o);
+        };
+        if (typeof ensureVfEditors === 'function') ensureVfEditors(mount);
+        else mount();
     },
 
     unmountComponentsTab() {
@@ -148,33 +152,37 @@ extendClass(HomeStationUI, {
     },
 
     openComponentEditorForModule(kind, modId) {
-        let type = 'mount';
-        let id = null;
-        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleShipSprite) {
-            id = shipLoadoutManager.resolveModuleShipSprite({ kind: kind, id: modId });
-        }
-        if (!id) id = 'mount_' + String(modId || '');
-        if (typeof assetGenRegistry !== 'undefined' && assetGenRegistry.findByKey) {
-            const hit = assetGenRegistry.findByKey(id);
-            if (hit) {
-                type = hit.type;
-                id = hit.id;
+        const run = () => {
+            let type = 'mount';
+            let id = null;
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.resolveModuleShipSprite) {
+                id = shipLoadoutManager.resolveModuleShipSprite({ kind: kind, id: modId });
             }
-        }
-        if (typeof componentEditorUI === 'undefined') return;
-        const stationOnClose = this.onClose;
-        this.show({
-            tab: 'components',
-            onClose: stationOnClose
-        });
-        // Remount with selection after UI rebuild
-        requestAnimationFrame(() => {
-            if (typeof componentEditorUI !== 'undefined') {
-                componentEditorUI.typeId = type;
-                componentEditorUI.selectedId = id;
-                if (componentEditorUI.root) componentEditorUI.refreshAll();
+            if (!id) id = 'mount_' + String(modId || '');
+            if (typeof assetGenRegistry !== 'undefined' && assetGenRegistry.findByKey) {
+                const hit = assetGenRegistry.findByKey(id);
+                if (hit) {
+                    type = hit.type;
+                    id = hit.id;
+                }
             }
-        });
+            if (typeof componentEditorUI === 'undefined') return;
+            const stationOnClose = this.onClose;
+            this.show({
+                tab: 'components',
+                onClose: stationOnClose
+            });
+            // Remount with selection after UI rebuild
+            requestAnimationFrame(() => {
+                if (typeof componentEditorUI !== 'undefined') {
+                    componentEditorUI.typeId = type;
+                    componentEditorUI.selectedId = id;
+                    if (componentEditorUI.root) componentEditorUI.refreshAll();
+                }
+            });
+        };
+        if (typeof ensureVfEditors === 'function') ensureVfEditors(run);
+        else run();
     },
 
     closeMainMenuOverlay() {

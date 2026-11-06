@@ -8,7 +8,7 @@ class LocalAudioManager {
     constructor() {
         this.el = null;
         this.currentKey = null;
-        this.volume = 0.2;
+        this.volume = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
         this.playbackRate = 1;
         this.crossfadeSeconds = 1.4;
         try {

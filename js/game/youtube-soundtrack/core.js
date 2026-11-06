@@ -17,7 +17,7 @@ class YouTubeSoundtrackManager {
         this.currentVideoId = null;
         this.mode = null; // 'menu' | 'planet' | null
         this.enabled = true;
-        this.volume = 0.2;
+        this.volume = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
         this.hostEl = null;
         this.load();
         // Do not load the YouTube iframe API on boot — it sets cross-site

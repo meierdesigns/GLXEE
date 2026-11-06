@@ -18,8 +18,9 @@ extendClass(SoundManager, {
             this._introPlaying = false;
             this._activeOverrideKey = ambientKey;
             // Undo victory duck / stale bus level without restarting the loop.
-            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
-                vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume ? this.musicBusVolume() : 0.2));
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+            else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+                vfTrackerManager.setVolume(this.musicBusVolume ? this.musicBusVolume() : VFVolume.busDefault());
             }
             return;
         }
@@ -262,15 +263,17 @@ extendClass(SoundManager, {
             }
         }
 
-        const bus = this.musicBusVolume ? this.musicBusVolume() : (this.masterVolume * this.musicVolume);
+        const bus = this.pushMusicBusVolume
+            ? this.pushMusicBusVolume()
+            : (this.musicBusVolume ? this.musicBusVolume() : (this.masterVolume * this.musicVolume));
         if (track.localAudioData) {
             if (typeof localAudioManager !== 'undefined') {
-                localAudioManager.setVolume(bus);
+                if (!this.pushMusicBusVolume) localAudioManager.setVolume(bus);
                 localAudioManager.play(overrideKey, track.localAudioData);
             }
         } else if (track.trackerData) {
             if (typeof vfTrackerManager !== 'undefined') {
-                vfTrackerManager.setVolume(bus);
+                if (!this.pushMusicBusVolume) vfTrackerManager.setVolume(bus);
                 vfTrackerManager.play(overrideKey, track.trackerData);
             }
         } else if (track.youtubeUrl) {
@@ -284,7 +287,7 @@ extendClass(SoundManager, {
             }
             if (typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.setEnabled(true);
-                youtubeSoundtrackManager.setVolume(bus);
+                if (!this.pushMusicBusVolume) youtubeSoundtrackManager.setVolume(bus);
                 youtubeSoundtrackManager.playUrl(overrideKey, track.youtubeUrl);
             }
         }

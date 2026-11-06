@@ -76,15 +76,54 @@ extendClass(SoundManager, {
         // Intro already owning the bus — don't clobber it with combat yet.
         if (this._introPlaying) return;
 
-        this.stopPlanetAmbientNodesOnly();
+        if (!this._currentHostileFaction && this._resolveHostileFaction) {
+            this._currentHostileFaction = this._resolveHostileFaction(id);
+        }
+        const combatKeys = this.combatTrackKeys
+            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+            : [id];
+        if (combatKeys.indexOf(id) === -1) combatKeys.push(id);
 
-        // Leaving hub: kill menu sources so they can't mask planet music.
+        // Same song already going — check BEFORE stop, or we always restart.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying) {
+            const keepKey = typeof vfTrackerManager.firstPlayableKey === 'function'
+                ? vfTrackerManager.firstPlayableKey(combatKeys)
+                : null;
+            if (keepKey && vfTrackerManager.isPlaying(keepKey)) {
+                this.clearPendingMusic();
+                return;
+            }
+            for (let i = 0; i < combatKeys.length; i++) {
+                if (vfTrackerManager.isPlaying(combatKeys[i])) {
+                    this.clearPendingMusic();
+                    return;
+                }
+            }
+        }
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.hasPlanetTrack
+            && youtubeSoundtrackManager.hasPlanetTrack(id)
+            && youtubeSoundtrackManager.mode === 'planet'
+            && youtubeSoundtrackManager.currentKey === id
+            && youtubeSoundtrackManager.enabled) {
+            this.clearPendingMusic();
+            return;
+        }
+
+        // Fade drone only — tracker/local crossfade inside their play()/fadeOut().
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true, keepLocal: true });
+
+        // Leaving hub: fade menu sources so they can't mask planet music.
         if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
-            localAudioManager.stop();
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
         }
 
         if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasPlanetTrack(id)) {
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
             if (!this.musicEnabled) {
                 youtubeSoundtrackManager.setEnabled(false);
                 if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
@@ -115,18 +154,14 @@ extendClass(SoundManager, {
 
         // Prefer coded vftrack: planet×faction (and boss) over the old drone.
         if (typeof vfTrackerManager !== 'undefined') {
-            if (!this._currentHostileFaction) {
-                this._currentHostileFaction = this._resolveHostileFaction
-                    ? this._resolveHostileFaction(id) : '';
+            if (typeof localAudioManager !== 'undefined' && localAudioManager.el
+                && !localAudioManager.el.paused) {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
             }
-            const keys = this.combatTrackKeys
-                ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
-                : [id];
-            // Always include bare planet as last-ditch playable key.
-            if (keys.indexOf(id) === -1) keys.push(id);
             vfTrackerManager.setEnabled(true);
             vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
-            const played = vfTrackerManager.playFirst(keys);
+            const played = vfTrackerManager.playFirst(combatKeys);
             if (played) {
                 this.clearPendingMusic();
                 return;
@@ -181,8 +216,16 @@ extendClass(SoundManager, {
         }
     },
 
-    stopPlanetAmbientNodesOnly() {
-        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+    stopPlanetAmbientNodesOnly(opts) {
+        const keepTracker = opts && opts.keepTracker;
+        const keepLocal = opts && opts.keepLocal;
+        if (!keepTracker && typeof vfTrackerManager !== 'undefined') {
+            if (opts && opts.fade && vfTrackerManager.fadeOut) vfTrackerManager.fadeOut(opts.fade);
+            else vfTrackerManager.stop();
+        }
+        if (!keepLocal && typeof localAudioManager !== 'undefined' && opts && opts.fadeLocal) {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut(opts.fadeLocal);
+        }
         if (!this.ambientNodes) return;
         const nodes = this.ambientNodes;
         const ctx = this.audioContext;
@@ -227,14 +270,18 @@ extendClass(SoundManager, {
             if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             return;
         }
-        this.stopPlanetAmbientNodesOnly();
+        // Keep tracker for combat→menu crossfade; only kill the soft drone bus.
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         this.ambientPlanetId = null;
 
         const menuTrack = (typeof soundtrackConfigManager !== 'undefined')
             ? soundtrackConfigManager.getMenuTrack() : null;
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
             if (typeof localAudioManager !== 'undefined') {
                 localAudioManager.setVolume(this.musicBusVolume());
                 localAudioManager.play('menu', menuTrack.localAudioData);
@@ -244,11 +291,16 @@ extendClass(SoundManager, {
         }
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.trackerData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
             if (!this.ensureContext()) return;
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.setVolume(this.musicBusVolume());
-                if (vfTrackerManager.play('menu', menuTrack.trackerData)) this.clearPendingMusic();
+                if (vfTrackerManager.play('menu', menuTrack.trackerData, { force: true })) {
+                    this.clearPendingMusic();
+                }
             }
             return;
         }
@@ -260,13 +312,19 @@ extendClass(SoundManager, {
             youtubeSoundtrackManager.setVolume(this.musicBusVolume());
             youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
             if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
-                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                if (typeof vfTrackerManager !== 'undefined') {
+                    if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                    else vfTrackerManager.stop();
+                }
                 youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
                 this.clearPendingMusic();
                 return;
             }
             if (youtubeSoundtrackManager.hasMenuTrack()) {
-                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                if (typeof vfTrackerManager !== 'undefined') {
+                    if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                    else vfTrackerManager.stop();
+                }
                 youtubeSoundtrackManager.playMenu();
                 this.clearPendingMusic();
                 return;

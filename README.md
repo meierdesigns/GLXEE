@@ -30,11 +30,11 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.3 · TRACKER LIVE · SALVAGE ONLINE                     │
+│  BUILD           1.14.4 · TRACKER LIVE · STYLE MIX ONLINE                   │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
-│  AUDIO           PLANET × FACTION VFTRACK · INTRO FANFARE · ENV SFX         │
+│  AUDIO           STYLE · AMOUNT · BPM · VOICES · PLANET × FACTION VFTRACK   │
 │  OBJECTIVE       CLEAR THE STAGE · SCOOP SALVAGE · HOLD THE LANE            │
 │  NEXT JUMP       HOME STATION → TRAVEL → UNKNOWN SECTOR                     │
 │  WARNING         EVERY SILHOUETTE ON SCAN IS A DOCTRINE                     │
@@ -167,15 +167,18 @@ only and never nested inside the download ZIP.
 | Shift | Charge Drive boost |
 | Q / E | Cycle weapons |
 | Escape | Pause; switch menu groups in the station |
-| Gamepad | Combat stick + fire; menu focus cursor; fire-to-start; confirm end screens |
+| Gamepad | Stick move; LB/RB/LT/RT = A/S/D/Space fire; L3 boost; R3 shot type; Start pause; menu cursor |
 | Ctrl + 1–8 | Select color palette |
 | `#` or Settings → Assets | Open Asset Generator |
 | Settings → Faction | Open Faction Command |
-| Bezel FX → AUDIO | Master / sounds / music sliders and toggles |
+| Bezel FX → AUDIO | Master / sounds / music; STYLE · AMOUNT · BPM · channel voices |
 
 Menu navigation is keyboard-first: arrow keys move focus, Enter confirms, and
 Escape closes the active overlay. A gamepad drives the same focus path with an
-animated HUD cursor. Text fields keep their normal caret controls.
+animated HUD cursor. On **LAUNCH**, ↓/Enter drops into the map, arrows move
+between planets at resting stations (not orbiting posts), ↓/Enter opens the
+planet card (stages → actions), and Escape climbs back out. Text fields keep
+their normal caret controls.
 
 ## The game loop
 
@@ -497,7 +500,9 @@ Combat is a vertical shooter with a readable pixel hierarchy:
   fought (cleared / current WON·LOST / locked). A refresh restores the same
   end overlay (score / time / kills) instead of dumping back to the menu.
 - **Boss stages** after the regular clear: multiphase patterns, escort calls, and
-  a dedicated HP bar — bosses ignore the normal lane shooter loop.
+  a dedicated HP bar — bosses ignore the normal lane shooter loop. Each faction
+  runs its own doctrine (Terran line volley, Pirate scrap storm, Kronax claw
+  rush, Machine forge grid, Voidborn void rift) with unique movement and specials.
 - **Supply crates** drop random timed power-ups: **POWER SHOT**, **RAPID FIRE**,
   or **BARRIER** (half damage taken), each with HUD notice and icon glow.
 - Enemy waves use **seeded liveries** so ships of one faction still look distinct;
@@ -520,7 +525,9 @@ Combat is a vertical shooter with a readable pixel hierarchy:
   rewards; the scoop phase ends as soon as the field is clear (idle vacuum for
   stranded drops; bosses keep a longer safety net).
 - **Victory trader:** after a clear, open the stage shop from the victory screen
-  (credits-only buys queue for the next stage). The old sluice-wall kiosk is gone.
+  (credits-only buys queue for the next stage). Shelf size rolls each visit from
+  how well you stand with the planet's resident faction. The old sluice-wall
+  kiosk is gone.
 - **Launch hatch:** every planet arrival starts in a pixel tube that rises out of
   the home station's hull; the dome opens on GO and the ship flies out. Later
   stages on the same planet start from a sluice instead.
@@ -600,6 +607,14 @@ era roles: Main-BGM, Boss, Select).
   lose can bridge per faction.
 - Multi-section arrangements (A / B / C / fill) and per-pattern faction drums
   keep long stages from looping flat.
+- Same song keeps position across stage / override swaps; track changes
+  **crossfade** (~1.4s) instead of hard cuts.
+- Bezel FX → **AUDIO** (and settings): **STYLE** dropdown
+  (PLANET · JUNGLE · MINIMAL · AMEN · REESE · NEURO · LIQUID · DNB · NIGHTRUN),
+  **AMOUNT** intensity, absolute **MUSIC BPM**, and per-channel **voice** selects
+  (BASS / LEAD / ARP / DRUMS). MINIMAL follows a dark-techno pulse
+  ([Max Minimal reference](https://www.youtube.com/watch?v=mv8vJQaUpDU));
+  NIGHTRUN is the darksynth / neon-highway head.
 - Volume is a linear **MASTER × MUSIC** bus with gesture resume after browser
   autoplay blocks; station and menu restore the correct track on return.
 - Dev **Soundtrack Editor** imports / exports vftrack files and ships an LLM
@@ -659,7 +674,7 @@ Short index — the full systems live in the sections above.
 - 4:3 stage, faction bezel, pilot HUD, PERF / DEBUG / AUDIO remote, boot loading screen.
 - Launch hatch and sluice exit; chain waves; prism / bulwark; salvage pickups.
 - Victory trader for the next stage; enemy hero cards; side-view weapon cards.
-- VF Tracker BGM: planet×faction loops, intro fanfare, victory/lose, Soundtrack Editor.
+- VF Tracker BGM: planet×faction loops, STYLE / AMOUNT / BPM / voices, crossfade, Soundtrack Editor.
 - Coded environment SFX: sluice / hatch / warp, breaks, pickups, wall scrape.
 - Gamepad focus cursor: combat, menus, fire-to-start, end-screen confirm.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
@@ -667,13 +682,13 @@ Short index — the full systems live in the sections above.
 ### Current build focus
 
 ```text
-AUDIO   ── VF Tracker planet×faction ── intro fanfare ── victory/lose ── env SFX
+AUDIO   ── STYLE · AMOUNT · BPM · voices ── planet×faction vftrack ── crossfade ── env SFX
    │
 SHELL   ── shared .vf-glass host ── undivided bezel opening ── header peek
    │
 SALVAGE ── wreck blueprint/part pickups ── death forfeit ── victory teleport
    │
-TRADE   ── victory-screen shop ── tighter in-stage grids ── next-stage inventory
+TRADE   ── victory-screen shop ── docked post same chrome ── category skins ── next-stage inventory
    │
 STAGE   ── launch hatch ── sluice gate exit ── faction tube / dome styles
    │
@@ -686,9 +701,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.3** ships live tracker music, coded environment SFX, shared bezel
-glass, salvage pickups, and a victory trader — on top of the hatch / sluice /
-hero-card combat frame from earlier waves.
+Build **1.14.4** ships live STYLE mixing (JUNGLE / DNB / MINIMAL / NIGHTRUN …),
+channel voices, BPM, and crossfades on top of tracker BGM, env SFX, bezel glass,
+salvage, and the victory trader.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -952,6 +967,26 @@ be reviewed or reverted independently.
 | 70P | Motivic BGM | Planet themes state→sequence→climax; intro/boss reuse motif; remix keeps one donor intact |
 | 70Q | In-stage shop grids | Smaller cells (40px), tighter panel gaps; shop ship/station bags force 1×1 tiles + 6-col station |
 | 70R | README audio archive | Document VF Tracker, env SFX, glass shell, salvage, victory trader; VOLTEX panel + build focus for 70A–70Q |
+| 70S | Docked trader modal | Galaxy trading-post dock opens a fullscreen victory-trader modal; parts/ships/BP/resources/portals/styles each have their own stock skin |
+| 70T | Music jump fix | Tracker skips overdue rows after stalls; same song keeps position across stage/override swaps; enemy-type churn no longer retriggers BGM |
+| 70U | Music crossfade | Track swaps (~0.85s) crossfade via dual tracker/local buses instead of hard cuts |
+| 70V | Remote music mix | FX remote AUDIO tab: bass/lead/arp/drums + crossfade; longer default fade (~1.4s) |
+| 70W | Music BPM control | Replace ×-speed with absolute MUSIC BPM (default 462 ≈ old 3.5× @ 132) |
+| 70X | Jungle / DnB morph | AUDIO slider: breakbeat layer, bass/drum mix push, tempo toward ~560 sequencer BPM |
+| 70Y | Melody themes | THEME regulator: PLANET / AMEN / REESE / NEURO / LIQUID heads + denser Amen break / Reese twin |
+| 70Z | Channel voice dropdowns | BASS / LEAD / ARP / DRUMS become sound selects (remote AUDIO + settings) instead of mix sliders |
+| 71B | Bipolar DnB/Jungle | Style slider: left DnB, center OFF, right Jungle; stronger two-step vs Amen-chop morph |
+| 71A | Faction boss doctrines | Five faction bosses: distinct movement, attack rotations, and specials (barrage / scatter / dive / salvo / ring+blink) |
+| 71C | Music style dropdown | STYLE select (incl. JUNGLE DNB + MINIMAL ELEKTRO) + AMOUNT intensity 0–100% on settings and FX AUDIO remote |
+| 71D | Theme on all tracks | THEME (AMEN/…) heads + breaks persist across planet / menu / intro / combat swaps; no longer gated behind AMOUNT |
+| 71E | More music styles | JUNGLE + DNB split (stronger heads/breaks), MINIMAL groove rewrite, NIGHTRUN darksynth style |
+| 71F | Dark minimal techno | MINIMAL retuned to Max Minimal–style dark techno: pumping 4/4 sub, delayed stabs, hard kit |
+| 71G | Music voice sliders | BASS / LEAD / ARP / DRUMS: more presets; dropdowns become option sliders with volume still on the right |
+| 71H | Shop stock by standing | Victory trader shelves roll larger/random per visit from planet-resident faction relation; bigger cells |
+| 71I | Launch map controller | Stable planet arrows (resting posts), ↓ into card/stages, ↓ from LAUNCH into map, no false start on Liberated |
+| 71J | Gamepad shoulder fire | LB/RB/LT/RT map to A/S/D/Space; L3 boost; R3 shot-type cycle; analog trigger press |
+| 71K | Corridor stage perf | Cache wall silhouettes, split floor/wall lattice rebuilds, cheaper fog noise + stepped fills |
+| 71L | Release 1.14.4 | GitHub README audio/STYLE docs + local `.claude/GLXEE-V1.14.4.zip` runtime archive |
 
 The wave commit convention is:
 
@@ -1001,5 +1036,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.3** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.4** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

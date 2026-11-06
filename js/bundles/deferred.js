@@ -1200,7 +1200,9 @@ var EconomyConfig = class EconomyConfig {
             weapons: {
                 dmg: { label: 'DAMAGE', desc: '+Damage', maxLevel: 5, costMul: 1.15 },
                 rof: { label: 'ROF', desc: '−Cooldown (rate of fire)', maxLevel: 5, costMul: 1.0 },
-                range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 }
+                range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 },
+                // Binary unlock: player shots from this weapon clash/redirect vs enemy shots.
+                reflect: { label: 'REFLECT', desc: 'Reflective shots (clash with enemy fire)', maxLevel: 1, costMul: 1.6 }
             },
             defenses: {
                 capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.1 },
@@ -1870,6 +1872,82 @@ var DifficultyConfigManager = class DifficultyConfigManager {
             pirate:  { fan: 'spread',     aimed: 'burst',       sweep: 'rapid',  primary: 'spread' },
             machine: { fan: 'missile',    aimed: 'pierce',      sweep: 'ion',    primary: 'missile' }
         };
+        /**
+         * Boss combat doctrine per faction — movement, attack rotation, phase pressure.
+         * patterns cycle in order; specials are named attacks handled in boss.js.
+         */
+        this.bossBehaviorKits = {
+            terran: {
+                style: 'patrol',
+                label: 'LINE VOLLEY',
+                patterns: ['aimed', 'fan', 'aimed', 'sweep', 'barrage'],
+                intervalMul: 1.08,
+                speedMul: 0.92,
+                verticalMul: 0.55,
+                trackPlayer: 0.15,
+                evasionMul: 0.7,
+                escortMul: 1,
+                phaseSpeedMul: 1.2,
+                sweepArc: 0.7,
+                sweepStepMul: 1.1
+            },
+            pirate: {
+                style: 'erratic',
+                label: 'SCRAP STORM',
+                patterns: ['fan', 'scatter', 'sweep', 'aimed', 'fan'],
+                intervalMul: 0.82,
+                speedMul: 1.2,
+                verticalMul: 1.35,
+                trackPlayer: 0.05,
+                evasionMul: 1.15,
+                escortMul: 1.25,
+                phaseSpeedMul: 1.45,
+                sweepArc: 1,
+                sweepStepMul: 0.85
+            },
+            kronax: {
+                style: 'hunter',
+                label: 'CLAW RUSH',
+                patterns: ['aimed', 'dive', 'fan', 'aimed', 'sweep'],
+                intervalMul: 0.9,
+                speedMul: 1.35,
+                verticalMul: 1.2,
+                trackPlayer: 0.55,
+                evasionMul: 0.85,
+                escortMul: 0.5,
+                phaseSpeedMul: 1.6,
+                sweepArc: 0.55,
+                sweepStepMul: 0.95
+            },
+            machine: {
+                style: 'grid',
+                label: 'FORGE GRID',
+                patterns: ['salvo', 'aimed', 'fan', 'sweep', 'salvo'],
+                intervalMul: 1.18,
+                speedMul: 0.78,
+                verticalMul: 0.45,
+                trackPlayer: 0.1,
+                evasionMul: 0.55,
+                escortMul: 1.75,
+                phaseSpeedMul: 1.1,
+                sweepArc: 0.85,
+                sweepStepMul: 1.25
+            },
+            voidborn: {
+                style: 'blink',
+                label: 'VOID RIFT',
+                patterns: ['ring', 'fan', 'blink', 'aimed', 'sweep'],
+                intervalMul: 1,
+                speedMul: 1.05,
+                verticalMul: 1.1,
+                trackPlayer: 0.25,
+                evasionMul: 1.4,
+                escortMul: 0.85,
+                phaseSpeedMul: 1.35,
+                sweepArc: 0.95,
+                sweepStepMul: 1
+            }
+        };
         this.defaults = JSON.parse(JSON.stringify(this.profiles));
         this.current = 'normal';
         this.load();
@@ -1982,6 +2060,11 @@ var DifficultyConfigManager = class DifficultyConfigManager {
     getBossWeaponKit(factionId) {
         const id = String(factionId || 'pirate').toLowerCase();
         return this.bossWeaponKits[id] || this.bossWeaponKits.pirate;
+    }
+
+    getBossBehaviorKit(factionId) {
+        const id = String(factionId || 'pirate').toLowerCase();
+        return this.bossBehaviorKits[id] || this.bossBehaviorKits.pirate;
     }
 }
 
@@ -4870,18 +4953,18 @@ extendClass(PlanetConfigManager, {
 // the walls are (see drawScrollTerrain / terrainProfile).
 // Extra flight areas by planet theme and by holding faction (added on top).
 var THEME_ZONES = {
-    fire: { spires: 2, chasm: 2 },
-    ocean: { reef: 2, delta: 2 },
-    purple: { spires: 2, ribs: 2 },
-    sunset: { chasm: 2, ruins: 2 },
-    retro: { pipes: 2, ruins: 2 }
+    fire: { chasm: 2, bulges: 2, gorge: 1 },
+    ocean: { reef: 2, delta: 2, open: 1 },
+    purple: { winding: 2, reef: 2, narrows: 1 },
+    sunset: { chasm: 2, ruins: 2, terraces: 1 },
+    retro: { pipes: 2, ruins: 2, canyon: 1 }
 };
 var FACTION_ZONES = {
     pirate: { ruins: 2, pipes: 2, terraces: 1 },
     terran: { terraces: 2, pipes: 2, ruins: 1 },
-    kronax: { spires: 2, teeth: 2, ribs: 1 },
-    machine: { pipes: 3, ribs: 2, ruins: 1 },
-    voidborn: { reef: 3, ribs: 2, spires: 1 }
+    kronax: { bulges: 2, gorge: 2, winding: 1 },
+    machine: { pipes: 3, terraces: 2, ruins: 1 },
+    voidborn: { reef: 3, winding: 2, open: 1 }
 };
 // Holding faction paints the playfield: organic growth vs welded plating.
 var FACTION_FLOORS = {
@@ -4900,23 +4983,23 @@ var FACTION_MATS = {
 };
 
 var PLANET_LOOK_ENV = {
-    lava: { surface: 'lava', floors: ['cracks', 'veins', 'rubble', 'spines'], mats: ['magma', 'rock'], zones: { teeth: 3, narrows: 2, gorge: 2, zigzag: 1, chasm: 2 }, width: 1.25 },
-    cracked: { surface: 'lava', floors: ['cracks', 'plates', 'rubble', 'veins'], mats: ['rock', 'magma'], zones: { teeth: 2, canyon: 2, terraces: 2, chasm: 2 } },
-    glacial: { surface: 'ice', floors: ['cracks', 'plates', 'rubble', 'dunes'], mats: ['crystal', 'rock'], zones: { open: 3, winding: 2, bulges: 2, icefall: 3 } },
+    lava: { surface: 'lava', floors: ['cracks', 'veins', 'rubble', 'spines'], mats: ['magma', 'rock'], zones: { canyon: 2, narrows: 2, gorge: 2, bulges: 2, chasm: 2 }, width: 1.2 },
+    cracked: { surface: 'lava', floors: ['cracks', 'plates', 'rubble', 'veins'], mats: ['rock', 'magma'], zones: { canyon: 3, terraces: 2, chasm: 2, ruins: 1 } },
+    glacial: { surface: 'ice', floors: ['cracks', 'plates', 'rubble', 'dunes'], mats: ['crystal', 'rock'], zones: { open: 3, winding: 2, bulges: 2, icefall: 2, delta: 1 } },
     oceanic: { surface: 'ice', floors: ['dunes', 'tendrils', 'plates', 'rubble'], mats: ['crystal', 'rock'], zones: { open: 4, bulges: 2, reef: 2, delta: 2 }, width: 0.7 },
-    crystal: { surface: 'void', floors: ['veins', 'plates', 'rubble', 'spines'], mats: ['crystal'], zones: { teeth: 3, narrows: 1, zigzag: 3, spires: 3 }, width: 1.2 },
-    toxic: { surface: 'toxic', floors: ['cracks', 'biomass', 'veins', 'tendrils'], mats: ['crystal', 'rock'], zones: { narrows: 3, winding: 2, funnel: 2, gorge: 1, reef: 2 }, width: 1.3 },
-    dunes: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['rock'], zones: { winding: 3, open: 2, bulges: 1, delta: 2 }, width: 0.9 },
-    craters: { surface: 'plain', floors: ['craters', 'rubble', 'cracks', 'plates'], mats: ['rock', 'metal'], zones: { canyon: 3, open: 1, terraces: 2, ruins: 2 } },
-    pocked: { surface: 'plain', floors: ['craters', 'cracks', 'rubble', 'dunes'], mats: ['rock', 'metal'], zones: { canyon: 2, teeth: 2, bulges: 2, ruins: 1 }, width: 1.1 },
-    continents: { surface: 'plain', floors: ['plates', 'craters', 'rubble', 'cracks'], mats: ['rock', 'metal'], zones: { canyon: 2, winding: 2, terraces: 2, delta: 1 } },
-    spotted: { surface: 'plain', floors: ['craters', 'dunes', 'rubble', 'biomass'], mats: ['rock', 'crystal'], zones: { open: 2, canyon: 2, bulges: 2, reef: 1 } },
-    banded: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'veins'], mats: ['metal', 'crystal'], zones: { open: 3, winding: 1, funnel: 2, ribs: 2 }, width: 0.8 },
-    striped: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['metal'], zones: { winding: 3, zigzag: 2, ribs: 2 } },
-    swirl: { surface: 'banded', floors: ['dunes', 'plates', 'veins', 'tendrils'], mats: ['metal', 'crystal'], zones: { winding: 3, open: 1, funnel: 2, delta: 2 } },
+    crystal: { surface: 'void', floors: ['veins', 'plates', 'rubble', 'spines'], mats: ['crystal'], zones: { winding: 2, narrows: 2, bulges: 2, reef: 2, open: 1 }, width: 1.1 },
+    toxic: { surface: 'toxic', floors: ['cracks', 'biomass', 'veins', 'tendrils'], mats: ['crystal', 'rock'], zones: { winding: 3, reef: 2, funnel: 2, gorge: 1, open: 1 }, width: 1.2 },
+    dunes: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['rock'], zones: { winding: 3, open: 2, bulges: 2, delta: 2 }, width: 0.9 },
+    craters: { surface: 'plain', floors: ['craters', 'rubble', 'cracks', 'plates'], mats: ['rock', 'metal'], zones: { canyon: 3, open: 2, terraces: 2, ruins: 2 } },
+    pocked: { surface: 'plain', floors: ['craters', 'cracks', 'rubble', 'dunes'], mats: ['rock', 'metal'], zones: { canyon: 3, bulges: 2, ruins: 2, open: 1 }, width: 1.05 },
+    continents: { surface: 'plain', floors: ['plates', 'craters', 'rubble', 'cracks'], mats: ['rock', 'metal'], zones: { canyon: 2, winding: 2, terraces: 2, delta: 2 } },
+    spotted: { surface: 'plain', floors: ['craters', 'dunes', 'rubble', 'biomass'], mats: ['rock', 'crystal'], zones: { open: 2, canyon: 2, bulges: 2, reef: 2 } },
+    banded: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'veins'], mats: ['metal', 'crystal'], zones: { open: 3, winding: 2, funnel: 2, delta: 1 }, width: 0.8 },
+    striped: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['metal'], zones: { winding: 3, terraces: 2, delta: 2, open: 1 } },
+    swirl: { surface: 'banded', floors: ['dunes', 'plates', 'veins', 'tendrils'], mats: ['metal', 'crystal'], zones: { winding: 3, open: 2, funnel: 2, delta: 2 } },
     cloudy: { surface: 'banded', floors: ['dunes', 'rubble', 'plates'], mats: ['metal', 'crystal'], zones: { open: 4, funnel: 1, delta: 2 }, width: 0.7 },
-    marbled: { surface: 'plain', floors: ['plates', 'dunes', 'veins', 'biomass'], mats: ['crystal', 'metal'], zones: { winding: 2, narrows: 2, zigzag: 1, reef: 2 } },
-    ringed: { surface: 'banded', floors: ['plates', 'rubble', 'conduits', 'cracks'], mats: ['metal', 'crystal'], zones: { open: 2, narrows: 2, terraces: 2, gorge: 1, pipes: 3 } }
+    marbled: { surface: 'plain', floors: ['plates', 'dunes', 'veins', 'biomass'], mats: ['crystal', 'metal'], zones: { winding: 2, open: 2, reef: 2, bulges: 2 } },
+    ringed: { surface: 'banded', floors: ['plates', 'rubble', 'conduits', 'cracks'], mats: ['metal', 'crystal'], zones: { open: 2, terraces: 2, pipes: 3, canyon: 2, winding: 1 } }
 };
 
 // PlanetConfigManager methods, split from planet-config.js.
@@ -5657,6 +5740,9 @@ var ProfileManager = class ProfileManager {
         if (!Array.isArray(profile.homeStation.ownedPortalIds)) {
             profile.homeStation.ownedPortalIds = [];
         }
+        if (!Array.isArray(profile.homeStation.portalInventory)) {
+            profile.homeStation.portalInventory = [];
+        }
         if (typeof profile.homeStation.exploreCount !== 'object' || !profile.homeStation.exploreCount) {
             profile.homeStation.exploreCount = {};
         }
@@ -5828,6 +5914,22 @@ extendClass(ProfileManager, {
         return (p.homeStation.ownedPortalIds || []).indexOf(gid) !== -1;
     },
 
+    /** Bought portal module sitting in inventory — not yet installed on the station. */
+    hasPortalInInventory(galaxyId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return false;
+        this.ensureEconomyDefaults(p);
+        const gid = String(galaxyId || '').toLowerCase();
+        return (p.homeStation.portalInventory || []).indexOf(gid) !== -1;
+    },
+
+    getPortalInventory(profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return [];
+        this.ensureEconomyDefaults(p);
+        return (p.homeStation.portalInventory || []).slice();
+    },
+
     getShopFaction(profile) {
         const gid = this.getCurrentGalaxyId(profile);
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction) {
@@ -5904,6 +6006,9 @@ extendClass(ProfileManager, {
         if (this.ownsPortal(gid, profile)) {
             return { ok: false, reason: 'OWNED' };
         }
+        if (this.hasPortalInInventory(gid, profile)) {
+            return { ok: false, reason: 'IN INVENTORY' };
+        }
         const faction = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction)
             ? planetConfigManager.getGalaxyFaction(gid)
             : null;
@@ -5922,8 +6027,33 @@ extendClass(ProfileManager, {
         } else if (!this.spendResources(cost)) {
             return { ok: false, reason: 'RESOURCES' };
         }
-        profile.homeStation.ownedPortalIds.push(gid);
+        // Bought modules sit in inventory — install from STATION → TRAVEL.
+        profile.homeStation.portalInventory.push(gid);
         if (faction) this.discoverFaction(faction);
+        this.save();
+        return { ok: true, galaxyId: gid, inventory: true };
+    },
+
+    /** Install a bought portal module onto the station (unlocks travel to that galaxy). */
+    installPortal(galaxyId) {
+        const profile = this.getActiveProfile();
+        if (!profile) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const gid = String(galaxyId || '').toLowerCase();
+        if (!gid || gid === 'milky_way') {
+            return { ok: false, reason: 'INVALID' };
+        }
+        if (this.ownsPortal(gid, profile)) {
+            return { ok: false, reason: 'OWNED' };
+        }
+        const inv = profile.homeStation.portalInventory || [];
+        const idx = inv.indexOf(gid);
+        if (idx === -1) {
+            return { ok: false, reason: 'NOT IN INVENTORY' };
+        }
+        inv.splice(idx, 1);
+        profile.homeStation.portalInventory = inv;
+        profile.homeStation.ownedPortalIds.push(gid);
         this.save();
         return { ok: true, galaxyId: gid };
     },
@@ -6625,6 +6755,7 @@ extendClass(ProfileManager, {
                 upgrades: this.emptyStationUpgrades(),
                 currentGalaxyId: 'milky_way',
                 ownedPortalIds: [],
+                portalInventory: [],
                 exploreCount: {}
             },
             shipUpgrades: {},
@@ -7044,6 +7175,97 @@ extendClass(ProfileManager, {
         profile.homeStation.lastTeleportAt = Date.now();
         this.save();
         return moved;
+    },
+
+    /** Resources only: auto-collected into the station wallet at victory, capped same as
+     *  teleportCargoToStation. Parts/blueprints are left in cargo — see sellCargoPart /
+     *  takeCargoPartToShip / clearPendingCargo — so the victory screen's found-items grid
+     *  reflects a real "take or sell" decision instead of displaying already-stored items. */
+    teleportCargoResourcesToStation() {
+        const profile = this.getActiveProfile();
+        if (!profile) return false;
+        this.ensureEconomyDefaults(profile);
+        const stats = this.getStationStats(profile);
+        let moved = false;
+        Object.keys(profile.cargo.resources).forEach((id) => {
+            const n = profile.cargo.resources[id] || 0;
+            if (n <= 0) return;
+            const applied = this.applyResourceCap(profile.resources[id], n, stats.resourceCap);
+            if (applied.granted > 0) {
+                profile.resources[id] = applied.next;
+                moved = true;
+            }
+            if (applied.leftover > 0) {
+                profile.cargo.resources[id] = applied.leftover;
+            } else {
+                delete profile.cargo.resources[id];
+            }
+        });
+        this.save();
+        return moved;
+    },
+
+    /** Credits a cargo part/blueprint would pay out (same rate as a stored one).
+     *  A key that no longer resolves (part renamed/removed since it was picked up) still
+     *  pays out a token amount — it must stay sellable or it gets stuck in cargo forever. */
+    getCargoPartSellValue(key) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp || typeof economyConfig === 'undefined') return 1;
+        return this.getSellValue(economyConfig.getPartCost(bp.kind, bp.item));
+    },
+
+    /** Sells one still-pending cargo part/blueprint stack directly — it never touches
+     *  station/ship storage. `asBlueprint` sells from profile.cargo.blueprints, otherwise
+     *  from profile.cargo.parts. */
+    sellCargoPart(key, asBlueprint) {
+        const profile = this.getActiveProfile();
+        if (!profile) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const bucket = asBlueprint ? profile.cargo.blueprints : (profile.cargo.parts || {});
+        const n = bucket[key] || 0;
+        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const unitValue = this.getCargoPartSellValue(key);
+        const credits = unitValue * n;
+        delete bucket[key];
+        if (credits > 0) this.addCredits(credits, true);
+        this.save();
+        return { ok: true, credits: credits, amount: n };
+    },
+
+    /** Files a pending cargo part onto `shipId`'s storage: grants real ownership (profile.parts)
+     *  and marks it filed on that ship in one step, then clears it out of cargo. Blueprints
+     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way. */
+    takeCargoPartToShip(shipId, key) {
+        const profile = this.getActiveProfile();
+        if (!profile || !shipId) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const n = (profile.cargo.parts || {})[key] || 0;
+        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const bag = bp.kind === 'weapon' ? profile.parts.weapons
+            : (bp.kind === 'defense' ? profile.parts.defenses
+                : (bp.kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+        bag[bp.id] = (bag[bp.id] || 0) + n;
+        const shipBucket = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+        if (shipBucket && this.discover) this.discover(shipBucket === 'energy' ? 'energy' : shipBucket, bp.id);
+        if (shipBucket && this.fileUnequippedPart) {
+            for (let i = 0; i < n; i++) this.fileUnequippedPart(profile, shipId, shipBucket, bp.id);
+        }
+        delete profile.cargo.parts[key];
+        this.save();
+        return { ok: true, amount: n };
+    },
+
+    /** Drops whatever found parts/blueprints the player never took or sold — called when the
+     *  victory screen closes (next stage / leave planet), so the decision can't be skipped. */
+    clearPendingCargo() {
+        const profile = this.getActiveProfile();
+        if (!profile) return;
+        this.ensureEconomyDefaults(profile);
+        profile.cargo.parts = {};
+        profile.cargo.blueprints = {};
+        this.save();
     },
 
     spendResources(costMap) {
@@ -7798,6 +8020,16 @@ extendClass(ProfileManager, {
         const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, defId) : 0;
         const move = Math.min(qty, onShip + equipped);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
+        // Starter-loadout parts with owned<=0 have no real backing count in profile.parts:
+        // getStationStorageQty always clamps to 0 for owned<=0 (it's owned minus filed minus
+        // equipped, and owned<=0 makes that expression <=0 no matter what), so station storage
+        // can never display them. Moving one there would unequip/unfile it on the ship with
+        // nowhere for it to land — filed+equipped both drop to 0 and it vanishes from every
+        // storage grid (see the fileUnequippedPart doc above for the same failure mode).
+        // Refuse instead of deleting it.
+        if (bucket !== 'blueprints' && this._ownedStorageCount(profile, bucket, defId) <= 0) {
+            return { ok: false, reason: 'CANNOT STORE AT STATION' };
+        }
         // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
         // push occupied cells past the budget is refused — the item stays filed on the ship.
         const stats = this.getStationStats(profile);
@@ -8488,6 +8720,24 @@ extendClass(ProfileManager, {
     },
 
     /**
+     * Vendor bag footprint for a post — richer posts open wider/taller stashes
+     * so multi-slot parts have room. Seeded so two MODEST posts still differ.
+     * Returns { cols, rows, minRows }.
+     */
+    getTradingPostStockGrid(post) {
+        const eco = this.getTradingPostEconomy(post);
+        const h = this.tradingPostHash((post && post.id) + '|grid');
+        const jitter = h % 2;
+        if (eco.wealth === 'RICH') {
+            return { cols: 8 + jitter, rows: 5, minRows: 4 };
+        }
+        if (eco.wealth === 'PROSPEROUS') {
+            return { cols: 6 + jitter, rows: 4, minRows: 3 };
+        }
+        return { cols: 4 + jitter, rows: 3, minRows: 2 };
+    },
+
+    /**
      * Economic profile of a post for the map card:
      * { stockValue, wealth, sells: { weapon: n, ... }, seeks: [resourceId] }.
      * Wealth is graded on the credit value of the stock; each post seeks two
@@ -9141,11 +9391,41 @@ extendClass(ProfileManager, {
 
     getPartSellValue(kind, partId) {
         if (typeof economyConfig === 'undefined') return 0;
-        const item = this.getPartItem(kind, partId);
+        const id = this.partDefId ? this.partDefId(partId) : String(partId || '');
+        const item = this.getPartItem(kind, id);
         return item ? this.getSellValue(economyConfig.getPartCost(kind, item)) : 0;
     },
 
-    /** Sells one stored part. Equipping depends on discovery, not the count. */
+    /** Drop one instance's upgrade bag and slide higher indices down. */
+    _compactPartInstanceUpgradesAfterSell(profile, bucket, defId, unit, ownedBefore) {
+        if (!profile || !bucket || !defId || ownedBefore <= 0) return;
+        const upBag = profile.itemUpgrades && profile.itemUpgrades[bucket];
+        if (!upBag) return;
+        const from = unit != null ? Math.max(0, Math.round(Number(unit) || 0)) : (ownedBefore - 1);
+        if (ownedBefore <= 1) {
+            Object.keys(upBag).forEach((k) => {
+                if (k === defId || k.indexOf(defId + '#') === 0) delete upBag[k];
+            });
+            return;
+        }
+        if (from >= ownedBefore) return;
+        delete upBag[defId];
+        delete upBag[defId + '#' + from];
+        for (let i = from + 1; i < ownedBefore; i++) {
+            const src = defId + '#' + i;
+            const dst = defId + '#' + (i - 1);
+            if (upBag[src]) {
+                upBag[dst] = upBag[src];
+                delete upBag[src];
+            } else {
+                delete upBag[dst];
+            }
+        }
+        delete upBag[defId + '#' + (ownedBefore - 1)];
+    },
+
+    /** Sells one stored part. Equipping depends on discovery, not the count.
+     *  Accepts bare defIds or instance ids (`defId#unit`) from shop inventory cells. */
     sellPart(kind, partId) {
         const profile = this.getActiveProfile();
         if (!profile) return { ok: false, reason: 'NO PROFILE' };
@@ -9153,11 +9433,19 @@ extendClass(ProfileManager, {
         const bag = kind === 'weapon' ? profile.parts.weapons
             : (kind === 'defense' ? profile.parts.defenses
                 : (kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
-        const id = String(partId || '');
-        if (!bag || !((bag[id] || 0) > 0)) return { ok: false, reason: 'NONE LEFT' };
+        const bucket = kind === 'weapon' ? 'weapons'
+            : (kind === 'defense' ? 'defenses'
+                : (kind === 'energy' ? 'energy' : 'abilities'));
+        const parsed = this.parsePartInstanceId
+            ? this.parsePartInstanceId(partId)
+            : { defId: String(partId || ''), unit: null };
+        const id = parsed.defId || String(partId || '');
+        const ownedBefore = (bag && bag[id]) || 0;
+        if (!bag || ownedBefore <= 0) return { ok: false, reason: 'NONE LEFT' };
         const credits = this.getPartSellValue(kind, id);
         bag[id] -= 1;
         if (bag[id] <= 0) delete bag[id];
+        this._compactPartInstanceUpgradesAfterSell(profile, bucket, id, parsed.unit, ownedBefore);
         this.addCredits(credits, true);
         this.save();
         return { ok: true, credits: credits };
@@ -11316,7 +11604,7 @@ var AbilityConfigManager = class AbilityConfigManager {
                 id: 'capacitor_shield_regen',
                 name: 'Capacitor Shield',
                 description: 'Bulkier shield capacitor bank. Higher capacity and faster self-recharge, needs a larger core mount.',
-                icon: 'ability_energy_shield',
+                icon: 'ability_capacitor_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 3,
@@ -13428,6 +13716,8 @@ extendClass(ShipConfigManager, {
                         );
                     }
                 }
+                // Reflective shots: EQUIPMENT → REFLECT unlock only (never default-on).
+                entry.reflectiveShots = !!(itemBonus && itemBonus.reflectiveShots);
                 if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
                     weaponConfigManager.clampWeaponShot(entry);
                 }
@@ -19694,7 +19984,9 @@ extendClass(CoreLevelManager, {
         const ramp = stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0;
         const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.2);
         const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.1);
-        const spawnMult = parsed.isBoss ? 0.7 : (1.15 - ramp * 0.12);
+        // Boss arenas are static (no scroll drain), so obstacles must spawn
+        // less often than scroll stages or the field packs solid.
+        const spawnMult = parsed.isBoss ? 1.85 : (1.15 - ramp * 0.12);
 
         // Planet tier: early planets easier, later ones harder.
         const tier = (typeof planetTierIndex === 'function') ? planetTierIndex(base.difficulty) : 1;
@@ -20719,8 +21011,10 @@ extendClass(GameControlSystem, {
                         const granted = profileManager.grantPlanetResources(planetId);
                         this.lastVictoryLoot = granted && Object.keys(granted).length ? granted : null;
                     }
-                    if (profileManager.teleportCargoToStation) {
-                        profileManager.teleportCargoToStation();
+                    // Resources auto-bank; found parts/blueprints stay in cargo, pending a
+                    // take-or-sell choice on the victory screen (show-victory-overlay.js).
+                    if (profileManager.teleportCargoResourcesToStation) {
+                        profileManager.teleportCargoResourcesToStation();
                     }
                     profileManager.save();
                     try {
@@ -20874,6 +21168,8 @@ extendClass(GameControlSystem, {
         // Rebuild when missing, or when stale HTML lacks the shop button.
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
+            || !document.getElementById('victoryLootCredits')
+            || !document.getElementById('victoryLoadoutList')
             || existingBtns !== 3
             || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
             || !victoryOverlay.querySelector('.victory-button[data-action="shop"]');
@@ -20907,9 +21203,19 @@ extendClass(GameControlSystem, {
                     </div>
 
                     <div class="victory-body">
-                        <div class="victory-loot" id="victoryLoot">
-                            <div class="victory-loot-title">RESOURCES ACQUIRED</div>
-                            <div class="victory-loot-list" id="victoryLootList"></div>
+                        <div class="victory-panels" style="display:flex !important;flex-direction:row !important;width:100% !important;gap:12px !important;align-items:stretch !important;">
+                            <div class="victory-loot" id="victoryLoot" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                                <div class="victory-loot-title">
+                                    <span>FOUND ITEMS</span>
+                                    <span class="victory-loot-credits" id="victoryLootCredits"></span>
+                                </div>
+                                <div class="victory-loot-list" id="victoryLootList"></div>
+                            </div>
+
+                            <div class="victory-loadout" id="victoryLoadout" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                                <div class="victory-loot-title"><span>SHIP LOADOUT</span></div>
+                                <div class="victory-loadout-list" id="victoryLoadoutList"></div>
+                            </div>
                         </div>
 
                         <div class="victory-buttons">
@@ -20943,6 +21249,7 @@ extendClass(GameControlSystem, {
             this.bindVictoryButtons(victoryOverlay);
             victoryOverlay.dataset.bound = '1';
         }
+        this.bindVictoryLootList(victoryOverlay);
 
         this.updateVictoryNextButton();
         this.cancelVictoryAutoReturn();
@@ -21037,29 +21344,271 @@ extendClass(GameControlSystem, {
         return undefined;
     },
 
-    renderVictoryLootHtml(loot) {
-        const entries = loot
-            ? Object.keys(loot).filter((id) => (loot[id] || 0) > 0)
-            : [];
+    /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
+     *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
+     *  snapshot) since selling/taking changes it while this screen stays open. Click sells
+     *  the stack; drag onto the SHIP grid below files it there. Still-pending cargo is wiped
+     *  when the screen closes (clearPendingCargo in hideVictoryOverlay) — the player has to
+     *  decide now. Plain resources aren't shown: those auto-bank straight to the station
+     *  wallet at victory (teleportCargoResourcesToStation), no decision needed. */
+    renderVictoryLootHtml() {
+        if (typeof profileManager === 'undefined') return '';
+        const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        // Fixed 6x4 slots at the exact same px size as the SHIP grid (homeStationUI.STORAGE_CELL_PX)
+        // — no stretching, no adding rows/cols to fill the panel, so the two grids always read
+        // as one consistent slot size no matter how tall/wide the surrounding panel ends up.
+        const cs = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_CELL_PX) || 56;
+        const gap = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_GAP_PX) || 2;
+        const cols = 6;
+        const rows = 4;
+        const fillSlots = cols * rows;
+        const gridStyle = `--cs:${cs}px;--hs-gap:${gap}px;` +
+            `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${rows},${cs}px);`;
+        const emptyGrid = (label) => {
+            const placeholders = Array.from({ length: fillSlots })
+                .map(() => '<span class="hs-storage-cell hs-storage-cell-empty"></span>')
+                .join('');
+            return `<div class="hs-storage-grid victory-loot-grid" style="${gridStyle}">` +
+                placeholders +
+                `</div>` +
+                (label ? `<div class="victory-loot-empty">${label}</div>` : '');
+        };
+        if (!profile) return emptyGrid();
+        const cargoParts = profile.cargo && profile.cargo.parts ? profile.cargo.parts : {};
+        const cargoBps = profile.cargo && profile.cargo.blueprints ? profile.cargo.blueprints : {};
+        // Parts never stack visually (one cell per found unit, same rule as the home-station
+        // bag); blueprints stay one stacked cell with a ×N badge, matching render-parts-list.js.
+        const entries = [];
+        Object.keys(cargoParts).forEach((key) => {
+            const n = Math.max(0, Math.round(Number(cargoParts[key]) || 0));
+            for (let i = 0; i < n; i++) entries.push({ key: key, amount: n, unitAmount: 1, isBlueprint: false });
+        });
+        Object.keys(cargoBps).forEach((key) => {
+            if ((cargoBps[key] || 0) > 0) entries.push({ key: key, amount: cargoBps[key], unitAmount: cargoBps[key], isBlueprint: true });
+        });
         if (!entries.length) {
-            return '<div class="victory-loot-empty">NO RESOURCES THIS RUN</div>';
+            return emptyGrid();
         }
-        return entries.map((id) => {
-            const amount = loot[id] || 0;
-            const label = this.victoryLootLabel(id);
-            const iconKey = this.victoryResourceIconKey(id);
+        const cells = entries.map((e) => {
+            const id = 'part:' + e.key;
             const tint = this.victoryLootTint(id);
-            const iconHtml = (typeof iconRenderer !== 'undefined')
-                ? iconRenderer.imgHtml(iconKey, 28, 'victory-loot-pixel', tint)
-                : '';
+            const parsed = (typeof profileManager !== 'undefined' && profileManager.parseBlueprintKey)
+                ? profileManager.parseBlueprintKey(e.key) : null;
+            // Real name + stat lines (DMG/SPD, SHIELD, ARMOR, …) from the same lookup the
+            // home-station hangar uses — not just a bare id label.
+            const fullTip = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip)
+                ? homeStationUI.hangarModuleTip(parsed.kind, parsed.id)
+                : 'UNKNOWN ITEM';
+            const tipLines = fullTip.split('\n');
+            const name = tipLines[0] + (e.isBlueprint ? ' (BP)' : '');
+            const iconHtml = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml)
+                ? homeStationUI.moduleIconHtml(parsed.kind, parsed.id, cs - 20, 'victory-loot-pixel', false, tint)
+                : (typeof iconRenderer !== 'undefined')
+                    ? iconRenderer.imgHtml(this.victoryResourceIconKey(id), cs - 20, 'victory-loot-pixel', tint)
+                    : '';
             const color = tint || '#ccc';
-            const safeClass = String(id).replace(/[^a-z0-9_-]+/gi, '-');
-            return `<div class="victory-loot-row victory-loot-${safeClass}" style="--victory-res-color:${color}" title="${label}">` +
-                `<span class="victory-loot-icon">${iconHtml}</span>` +
-                `<span class="victory-loot-label">${label}</span>` +
-                `<span class="victory-loot-amount">${amount}</span>` +
-                `</div>`;
+            const sellValue = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0) * e.amount;
+            const sellable = sellValue > 0 ? ' is-sellable' : '';
+            const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
+            const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
+            const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
+                : (parsed ? `DRAG TO SHIP · CLICK TO SELL ALL · ${sellValue}c` : `CLICK TO SELL · ${sellValue}c`));
+            const tip = tipLines.concat(actionLine.split('\n')).join('\n');
+            return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
+                `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" style="--pk-c:${color}" ` +
+                `data-ui-tip-compact data-ui-tip-head="${name.replace(/"/g, '&quot;')}" data-ui-tip="${tip.replace(/"/g, '&quot;')}" ` +
+                `aria-label="${name}">` +
+                iconHtml +
+                qtyHtml +
+                `</button>`;
         }).join('');
+        const totalRows = Math.max(rows, Math.ceil(entries.length / cols));
+        const padCount = Math.max(0, cols * totalRows - entries.length);
+        const padding = Array.from({ length: padCount })
+            .map(() => '<span class="hs-storage-cell hs-storage-cell-empty"></span>')
+            .join('');
+        const filledGridStyle = totalRows === rows
+            ? gridStyle
+            : `--cs:${cs}px;--hs-gap:${gap}px;` +
+                `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${totalRows},${cs}px);`;
+        return `<div class="hs-storage-grid victory-loot-grid" style="${filledGridStyle}">` +
+            cells + padding +
+            `</div>`;
+    },
+
+    /** Sells one pending cargo stack (part or blueprint) and refreshes the panel. */
+    sellVictoryCargoItem(key, isBlueprint) {
+        if (typeof profileManager === 'undefined' || !profileManager.sellCargoPart) return;
+        const res = profileManager.sellCargoPart(key, isBlueprint);
+        if (!res || !res.ok) return;
+        this.updateVictoryStats();
+    },
+
+    /** Files one pending cargo part onto the active ship and refreshes the panel. */
+    takeVictoryCargoItem(key) {
+        if (typeof profileManager === 'undefined' || !profileManager.takeCargoPartToShip) return;
+        const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
+        if (!shipId) return;
+        const res = profileManager.takeCargoPartToShip(shipId, key);
+        if (!res || !res.ok) return;
+        this.updateVictoryStats();
+    },
+
+    /** Same square-slot storage grid as the home station (hs-storage-grid): the active ship's
+     *  equipped + filed parts, view-only except as a drop target for the found-items grid. */
+    renderVictoryLoadoutHtml() {
+        if (typeof profileManager === 'undefined' || typeof homeStationUI === 'undefined') return '';
+        const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
+        if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
+        const shipGrid = homeStationUI.renderShipStorage(profile, shipId, { tipAction: false }) || '';
+        return `<div class="victory-loadout-bags">` +
+            `<div class="victory-loadout-col"><h3 class="victory-loadout-col-title">SHIP</h3>${shipGrid}</div>` +
+            `</div>`;
+    },
+
+    victoryShipGridAt(x, y) {
+        const el = document.elementFromPoint(x, y);
+        return el && el.closest ? el.closest('#victoryLoadoutList .hs-storage-grid[data-storage-target="ship"]') : null;
+    },
+
+    /** Route the home-station storage drag engine at the victory screen's own SHIP grid for the
+     *  span of exactly one drag gesture, so items already on the ship can be rearranged — same
+     *  monkey-patch idea as js/ui/in-stage-shop/core.js, but patched and unpatched around each
+     *  drag rather than left in place for the overlay's whole lifetime. Opening SHOP from the
+     *  victory screen does not hide it (hideVictoryOverlay never runs), so a patch left "on"
+     *  for the whole screen would still be active when the shop's OWN patch runs, has it save
+     *  OUR wrapper as "the real original", and leave homeStationUI permanently pointed at the
+     *  victory screen afterwards — which is exactly why rearranges stopped showing up anywhere
+     *  else. Patching only around the drag itself means every other UI always sees the real,
+     *  unpatched homeStationUI. */
+    patchHomeStationForVictory() {
+        if (this._hsVictoryPatched || typeof homeStationUI === 'undefined') return;
+        this._hsVictoryPrevOverlay = homeStationUI.overlay;
+        this._hsVictoryPrevCreate = typeof homeStationUI.createUI === 'function'
+            ? homeStationUI.createUI.bind(homeStationUI)
+            : null;
+        const self = this;
+        homeStationUI.overlay = document.getElementById('victoryOverlay');
+        homeStationUI.createUI = function () {
+            self.unpatchHomeStationForVictory();
+            self.updateVictoryStats();
+        };
+        this._hsVictoryPatched = true;
+    },
+
+    unpatchHomeStationForVictory() {
+        if (!this._hsVictoryPatched || typeof homeStationUI === 'undefined') return;
+        homeStationUI.overlay = this._hsVictoryPrevOverlay;
+        if (this._hsVictoryPrevCreate) homeStationUI.createUI = this._hsVictoryPrevCreate;
+        this._hsVictoryPatched = false;
+        this._hsVictoryPrevOverlay = null;
+        this._hsVictoryPrevCreate = null;
+    },
+
+    bindVictoryShipGridDrag(victoryOverlay) {
+        if (!victoryOverlay || typeof homeStationUI === 'undefined') return;
+        victoryOverlay.querySelectorAll('#victoryLoadoutList .hs-storage-cell[data-drag-key]').forEach((cell) => {
+            cell.setAttribute('draggable', 'false');
+            cell.addEventListener('dragstart', (e) => e.preventDefault());
+            cell.addEventListener('pointerdown', (ev) => {
+                if (ev.button !== 0) return;
+                this.patchHomeStationForVictory();
+                homeStationUI._storageDragStart(ev, cell);
+                // Safety net: a plain click (no real drag past the threshold) never reaches a
+                // drop, so createUI — where the patch normally lifts — never runs either.
+                // These fire after the engine's own pointerup/cancel handlers (registered
+                // first, during _storageDragStart above), so unpatching here never races a
+                // drop that's still in flight.
+                const releasePatch = () => {
+                    document.removeEventListener('pointerup', releasePatch);
+                    document.removeEventListener('pointercancel', releasePatch);
+                    this.unpatchHomeStationForVictory();
+                };
+                document.addEventListener('pointerup', releasePatch);
+                document.addEventListener('pointercancel', releasePatch);
+            });
+        });
+    },
+
+    /** Pointer-drag (not native HTML5 DnD — this app shell runs inside a scaled stage where
+     *  dragover/drop don't fire reliably) from a found-items cargo cell onto the SHIP grid. */
+    bindVictoryCargoDrag(victoryOverlay) {
+        const list = victoryOverlay.querySelector('#victoryLootList');
+        if (!list) return;
+        list.querySelectorAll('.victory-loot-cell.is-draggable').forEach((cell) => {
+            cell.addEventListener('pointerdown', (downEv) => {
+                if (downEv.button !== 0) return;
+                const startX = downEv.clientX;
+                const startY = downEv.clientY;
+                const THRESH = 6;
+                let dragging = false;
+                let ghost = null;
+                try {
+                    if (cell.setPointerCapture) cell.setPointerCapture(downEv.pointerId);
+                } catch (err) { /* ignore */ }
+                const cleanup = () => {
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onCancel);
+                    try {
+                        if (cell.releasePointerCapture) cell.releasePointerCapture(downEv.pointerId);
+                    } catch (err) { /* ignore */ }
+                    cell.classList.remove('is-dragging');
+                    victoryOverlay.querySelectorAll('.hs-storage-grid.is-drag-over')
+                        .forEach((g) => g.classList.remove('is-drag-over'));
+                    if (ghost) { ghost.remove(); ghost = null; }
+                };
+                const onMove = (ev) => {
+                    if (!dragging) {
+                        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESH) return;
+                        dragging = true;
+                        cell.classList.add('is-dragging');
+                        ghost = cell.cloneNode(true);
+                        ghost.classList.add('victory-drag-ghost');
+                        ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:10050;opacity:0.85;margin:0;';
+                        ghost.style.width = cell.offsetWidth + 'px';
+                        ghost.style.height = cell.offsetHeight + 'px';
+                        document.body.appendChild(ghost);
+                    }
+                    ev.preventDefault();
+                    ghost.style.left = (ev.clientX - cell.offsetWidth / 2) + 'px';
+                    ghost.style.top = (ev.clientY - cell.offsetHeight / 2) + 'px';
+                    const overShip = this.victoryShipGridAt(ev.clientX, ev.clientY);
+                    victoryOverlay.querySelectorAll('#victoryLoadoutList .hs-storage-grid[data-storage-target="ship"]')
+                        .forEach((g) => g.classList.toggle('is-drag-over', g === overShip));
+                };
+                const onUp = (ev) => {
+                    const wasDragging = dragging;
+                    const dropTarget = wasDragging ? this.victoryShipGridAt(ev.clientX, ev.clientY) : null;
+                    cleanup();
+                    if (!wasDragging) return;
+                    // A real drag still ends with a native 'click' on this button — swallow it
+                    // so it doesn't also fire the cell's own sell action right after the drop.
+                    const suppressClick = (e) => { e.preventDefault(); e.stopPropagation(); };
+                    cell.addEventListener('click', suppressClick, { capture: true, once: true });
+                    setTimeout(() => cell.removeEventListener('click', suppressClick, true), 0);
+                    if (dropTarget) this.takeVictoryCargoItem(cell.dataset.cargoKey);
+                };
+                const onCancel = () => cleanup();
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                document.addEventListener('pointercancel', onCancel);
+            });
+        });
+    },
+
+    bindVictoryLootList(victoryOverlay) {
+        const list = victoryOverlay.querySelector('#victoryLootList');
+        if (!list || list.dataset.sellBound) return;
+        list.dataset.sellBound = '1';
+        list.addEventListener('click', (event) => {
+            const btn = event.target.closest('.victory-loot-cell.is-sellable');
+            if (!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this.sellVictoryCargoItem(btn.dataset.cargoKey, btn.dataset.cargoBlueprint === '1');
+        });
     },
 
     applyVictoryPixelIcons(victoryOverlay) {
@@ -21201,10 +21750,17 @@ extendClass(GameControlSystem, {
             leaveBtn.hidden = hideLeaveBtn;
             leaveBtn.setAttribute('aria-hidden', hideLeaveBtn ? 'true' : 'false');
         }
+        // Ambush is a brief raider interruption, not a real planet stage — no
+        // trader to shop from, so the SHOP button has no business showing here.
+        const shopBtn = document.querySelector('#victoryOverlay .victory-button[data-action="shop"]');
+        if (shopBtn) {
+            shopBtn.hidden = ambushVictory;
+            shopBtn.setAttribute('aria-hidden', ambushVictory ? 'true' : 'false');
+        }
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuItems = hideLeaveBtn
-                ? ['nextLevel', 'shop']
-                : ['nextLevel', 'shop', 'levelSelection'];
+            uiManager.victoryMenuItems = ambushVictory
+                ? ['nextLevel']
+                : (hideLeaveBtn ? ['nextLevel', 'shop'] : ['nextLevel', 'shop', 'levelSelection']);
             const visible = typeof uiManager.getVictoryButtons === 'function'
                 ? uiManager.getVictoryButtons().length
                 : uiManager.victoryMenuItems.length;
@@ -21245,8 +21801,16 @@ extendClass(GameControlSystem, {
 
     hideVictoryOverlay() {
         this.cancelVictoryAutoReturn();
+        this.unpatchHomeStationForVictory();
+        // Whatever the player never took or sold is lost here — no silent fallback into
+        // station storage, so the found-items decision on this screen actually matters.
+        if (typeof profileManager !== 'undefined' && profileManager.clearPendingCargo) {
+            profileManager.clearPendingCargo();
+        }
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay) {
+            victoryOverlay.querySelectorAll('.victory-button.nav-focused, .victory-button.selected')
+                .forEach((btn) => btn.classList.remove('nav-focused', 'selected'));
             victoryOverlay.classList.add('hidden');
         }
 
@@ -21489,10 +22053,15 @@ extendClass(GameControlSystem, {
         // Next planet entry is a fresh arrival: launch from the home station again.
         if (typeof objectiveManager !== 'undefined') objectiveManager.arrivalPlanetId = null;
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
+            // Keep tracker bus for combat→menu crossfade (startMenuMusic forces hub).
+            if (soundManager.stopPlanetAmbientNodesOnly) {
+                soundManager.stopPlanetAmbientNodesOnly({ keepTracker: true });
+            } else if (soundManager.stopPlanetAmbient) {
+                soundManager.stopPlanetAmbient();
+            }
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
             if (soundManager.clearMusicContext) soundManager.clearMusicContext();
-            // Back to station / map — restore hub soundtrack.
+            // Back to station / map — restore hub soundtrack (forced swap).
             if (soundManager.startMenuMusic) soundManager.startMenuMusic();
         }
 
@@ -21716,7 +22285,28 @@ extendClass(GameControlSystem, {
 
         const lootList = document.getElementById('victoryLootList');
         if (lootList) {
-            lootList.innerHTML = this.renderVictoryLootHtml(this.lastVictoryLoot);
+            lootList.innerHTML = this.renderVictoryLootHtml();
+        }
+
+        const loadoutList = document.getElementById('victoryLoadoutList');
+        if (loadoutList && this.renderVictoryLoadoutHtml) {
+            loadoutList.innerHTML = this.renderVictoryLoadoutHtml();
+        }
+
+        const victoryOverlay = document.getElementById('victoryOverlay');
+        if (victoryOverlay && this.bindVictoryCargoDrag) {
+            this.bindVictoryCargoDrag(victoryOverlay);
+        }
+        if (victoryOverlay && this.bindVictoryShipGridDrag) {
+            this.bindVictoryShipGridDrag(victoryOverlay);
+        }
+
+        const creditsElement = document.getElementById('victoryLootCredits');
+        if (creditsElement) {
+            const credits = typeof profileManager !== 'undefined' && profileManager.getCredits
+                ? profileManager.getCredits()
+                : 0;
+            creditsElement.textContent = credits + 'c';
         }
     },
 
@@ -23010,6 +23600,7 @@ var UIManager = class UIManager {
             const enemy = enemies[i];
             if (!enemy || !fill) continue;
             this.updateEnemyFace(card, enemy);
+            this.syncEnemyShipIcon(card, enemy);
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
             const hpCur = Math.max(0, Math.ceil(enemy.health));
             const hpMax = Math.ceil(enemy.maxHealth || 0);
@@ -23093,6 +23684,21 @@ var UIManager = class UIManager {
             else out.push(e);
         });
         return out;
+    }
+
+    /**
+     * Line ships fall back to a drawn ship-icon canvas (no pilot portrait). It's drawn once at
+     * card creation, but the ship sprite atlas can still be loading then and the canvas stays
+     * blank forever since nothing else ever redraws it. Retry each tick until the asset loader
+     * reports ready, then stop.
+     */
+    syncEnemyShipIcon(card, enemy) {
+        const icon = card.querySelector('.health-ship-icon');
+        if (!icon || icon.dataset.vfIconDrawn === '1') return;
+        const loader = typeof graphicsManager !== 'undefined' ? graphicsManager.shipAssetLoader : null;
+        if (loader && !loader.isLoaded()) return;
+        this.renderEnemyHealthIcon(icon, enemy);
+        icon.dataset.vfIconDrawn = '1';
     }
 
     /** Portrait expression: dead once defeated, pain on a hit (anger once the hull is low), calm otherwise. */
@@ -23425,9 +24031,16 @@ extendClass(UIManager, {
     updateGameOverMenuDisplay() {
         // Same lit-block selection as the victory buttons (no text arrow: icon + label stay intact).
         const buttons = document.querySelectorAll('#gameOver .game-over-button');
+        let focused = null;
         buttons.forEach((button, index) => {
-            button.classList.toggle('selected', index === this.gameOverMenuIndex);
+            const on = index === this.gameOverMenuIndex;
+            button.classList.toggle('selected', on);
+            button.classList.toggle('nav-focused', on);
+            if (on) focused = button;
         });
+        if (focused && typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(focused);
+        }
     },
 
     selectGameOverOption() {
@@ -23508,13 +24121,18 @@ extendClass(UIManager, {
             this.victoryMenuIndex = 0;
         }
 
+        let focused = null;
         buttons.forEach((button, index) => {
-            if (index === this.victoryMenuIndex) {
-                button.classList.add('selected');
-            } else {
-                button.classList.remove('selected');
-            }
+            const on = index === this.victoryMenuIndex;
+            button.classList.toggle('selected', on);
+            button.classList.toggle('nav-focused', on);
+            if (on) focused = button;
         });
+        // Keep the gamepad HUD frame locked to the lit button so it cannot
+        // freeze as a ghost over the planet / stats when the target rebuilds.
+        if (focused && typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(focused);
+        }
     },
 
     runVictoryAction(action) {
@@ -23801,14 +24419,30 @@ var SettingsManager = class SettingsManager {
     constructor(gameState) {
         this.gameState = gameState;
         this.settings = {
-            soundEnabled: true,
-            musicEnabled: true,
+            soundEnabled: this.getCachedMuteState('vf_soundEnabled'),
+            musicEnabled: this.getCachedMuteState('vf_musicEnabled'),
             difficulty: (typeof difficultyConfigManager !== 'undefined')
                 ? difficultyConfigManager.current : 'normal',
             colorPalette: this.getCachedAppTheme()
         };
-        
+
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.setSoundEnabled) soundManager.setSoundEnabled(this.settings.soundEnabled);
+            if (soundManager.setMusicEnabled) soundManager.setMusicEnabled(this.settings.musicEnabled);
+        }
+
         this.initializeColorTheme();
+    }
+
+    getCachedMuteState(key) {
+        try {
+            const saved = localStorage.getItem(key);
+            if (saved === '0') return false;
+            if (saved === '1') return true;
+        } catch (e) {
+            // localStorage unavailable
+        }
+        return true;
     }
 
     getCachedAppTheme() {
@@ -23877,18 +24511,28 @@ var SettingsManager = class SettingsManager {
     toggleSound() {
         this.settings.soundEnabled = !this.settings.soundEnabled;
         this.updateSettingsDisplay();
-        
+
         if (typeof soundManager !== 'undefined') {
             soundManager.setSoundEnabled(this.settings.soundEnabled);
         }
+        this.saveMuteState('vf_soundEnabled', this.settings.soundEnabled);
     }
 
     toggleMusic() {
         this.settings.musicEnabled = !this.settings.musicEnabled;
         this.updateSettingsDisplay();
-        
+
         if (typeof soundManager !== 'undefined') {
             soundManager.setMusicEnabled(this.settings.musicEnabled);
+        }
+        this.saveMuteState('vf_musicEnabled', this.settings.musicEnabled);
+    }
+
+    saveMuteState(key, enabled) {
+        try {
+            localStorage.setItem(key, enabled ? '1' : '0');
+        } catch (e) {
+            // localStorage unavailable
         }
     }
 
@@ -24308,7 +24952,7 @@ var CoreRenderManager = class CoreRenderManager {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
     const syncPilotPlate = (...args) => NS.syncPilotPlate(...args); // defined in a later part
     const update = (...args) => NS.update(...args); // defined in a later part
-    Object.assign(NS, { applyFrameStyle, clamp, endPreviewFaction, ensureBezel, frameAdjust, frameDefaults, getUi, hexToHsl, playfieldParams, readCssNumber, resLabel, saveFrameStyles, setPerf, setPreviewFaction, syncMapToAspect, viewportSize }); // functions (hoisted)
+    Object.assign(NS, { applyFrameStyle, clamp, endPreviewFaction, ensureBezel, ensureVolPlate, frameAdjust, frameDefaults, getUi, hexToHsl, playfieldParams, readCssNumber, resLabel, saveFrameStyles, setPerf, setPreviewFaction, syncMapToAspect, viewportSize }); // functions (hoisted)
 
     const ROOT = document.documentElement;
     const DEFAULT_ASPECT = 1.42;
@@ -24487,6 +25131,43 @@ var CoreRenderManager = class CoreRenderManager {
         return el;
     }
 
+    // Master-volume dropdown plate, unfolding under the mute key in the bezel strip.
+    // Same "child of <html>" trick as #vf-res: fixed pixel size outside the scaled stage.
+    function ensureVolPlate() {
+        let el = document.getElementById('vf-vol');
+        if (el) return el;
+        el = document.createElement('label');
+        el.id = 'vf-vol';
+        el.className = 'vf-bezel-vol';
+        el.style.display = 'none';
+        el.innerHTML = '<span>VOL</span>' +
+            '<input type="range" id="vfVolSlider" min="0" max="100" step="1" aria-label="Master volume">' +
+            '<output id="vfVolValue"></output>';
+        document.documentElement.appendChild(el);
+        const input = el.querySelector('input');
+        const out = el.querySelector('output');
+        const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+        const fill = function (pct) { input.style.setProperty('--look-fill', pct + '%'); };
+        const sync = function () {
+            const pct = Math.round((mgr ? mgr.getMasterVolume() : 0.75) * 100);
+            input.value = String(pct);
+            fill(pct);
+            out.textContent = pct + '%';
+        };
+        sync();
+        input.addEventListener('input', function () {
+            const pct = parseInt(input.value, 10) || 0;
+            fill(pct);
+            out.textContent = pct + '%';
+            if (mgr) mgr.setMasterVolume(pct / 100);
+        });
+        ['keydown', 'keyup'].forEach(function (t) {
+            input.addEventListener(t, function (e) { e.stopPropagation(); });
+        });
+        el.addEventListener('vf-vol-sync', sync);
+        return el;
+    }
+
     // All tool icons are drawn on the same 16x16 pixel grid.
     // Every icon: 16x16 grid, 2px strokes, square caps, no fills.
     const svg16 = function (body) {
@@ -24496,7 +25177,8 @@ var CoreRenderManager = class CoreRenderManager {
     const FS_ON = svg16('<path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4"/>');
     const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
     const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
-    const FX_ICON = svg16('<path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/>');
+    // Settings remote (fernbedienung): tall handset body, dial, button rows.
+    const FX_ICON = svg16('<rect x="4" y="1" width="8" height="14"/><circle cx="8" cy="5" r="2"/><path d="M6 9h4M6 12h4"/>');
     // HUD remote: pilot plate + crest (second fernbedienung).
     const HUD_ICON = svg16('<rect x="2" y="3" width="12" height="10"/><circle cx="6" cy="7" r="2"/><path d="M10 5h2M10 8h2M10 11h2"/>');
     const LAYOUT_ICON = svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/>');
@@ -24508,8 +25190,12 @@ var CoreRenderManager = class CoreRenderManager {
     const FRAME_EDIT_ICON = svg16('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>');
     const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
+    const MUTE_ON = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5c1.5 1 1.5 5 0 6M13 3c3 2.5 3 7.5 0 10"/>');
+    const MUTE_OFF = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5l5 6M16 5l-5 6"/>');
+    Object.assign(NS, { MUTE_ON, MUTE_OFF });
     vfs.resOpen = false;
     vfs.fxOpen = false;
+    vfs.volOpen = false;
 
     // Per-faction frame style overrides (bevel, plate colours, deco), kept in localStorage.
     const FACTIONS = ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
@@ -25054,6 +25740,7 @@ var CoreRenderManager = class CoreRenderManager {
         }, true);
         plate.addEventListener('click', onFxClick);
         plate.addEventListener('input', onFxInput);
+        plate.addEventListener('change', onFxChange);
         return plate;
     }
     /** Live performance snapshot for PERF / DEBUG tabs and console. */
@@ -25402,6 +26089,24 @@ var CoreRenderManager = class CoreRenderManager {
     document.addEventListener('change', function (e) {
         if (e.target.classList && e.target.classList.contains('vf-fx-zoom-in')) applyFxGeom();
     });
+    function onFxChange(e) {
+        const sel = e.target;
+        if (!sel || !sel.classList) return;
+        if (sel.dataset && sel.dataset.auStyle === '1') {
+            if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setMusicTheme) {
+                volumeControlsManager.setMusicTheme(parseInt(sel.value, 10));
+            }
+            fillFxPlate();
+            return;
+        }
+        if (sel.classList.contains('vf-fx-voice') && sel.dataset.voiceCh != null) {
+            const ch = Number(sel.dataset.voiceCh);
+            if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
+                volumeControlsManager.setChannelVoice(ch, sel.value || 'default');
+            }
+            return;
+        }
+    }
     function onFxInput(e) {
         const inp = e.target;
         if (inp.classList && inp.classList.contains('vf-fx-zoom-in')) {
@@ -25453,6 +26158,19 @@ var CoreRenderManager = class CoreRenderManager {
             applyFrameStyle();
             return;
         }
+        if (inp.dataset.voiceCh != null && inp.classList && inp.classList.contains('vf-fx-voice')) {
+            const ch = Number(inp.dataset.voiceCh);
+            const ids = String(inp.dataset.voiceIds || '').split('|');
+            const labels = String(inp.dataset.voiceLabels || '').split('|');
+            const i = Math.max(0, Math.min(ids.length - 1, Number(inp.value) || 0));
+            inp.style.setProperty('--look-fill', (i / Math.max(1, ids.length - 1) * 100) + '%');
+            const nameOut = inp.nextElementSibling;
+            if (nameOut) nameOut.textContent = labels[i] || ids[i] || 'DEFAULT';
+            if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
+                volumeControlsManager.setChannelVoice(ch, ids[i] || 'default');
+            }
+            return;
+        }
         if (inp.dataset.ix) {
             const opts = inp.dataset.opts.split('|');
             const v = opts[+inp.value];
@@ -25478,7 +26196,9 @@ var CoreRenderManager = class CoreRenderManager {
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
         inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
-        inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
+        if (!(parts[0] === 'au' && parts[1] === 'jungle')) {
+            inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
+        }
         if (parts[0] === 'fx') ui.setFx(parts[1], v + '%');
         else if (parts[0] === 'sz') {
             ui.setSizePx(parts[1], parts[2], v);
@@ -25499,8 +26219,31 @@ var CoreRenderManager = class CoreRenderManager {
             applyFrameStyle();
         }
         else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
-            if (parts[1] === 'speed' && volumeControlsManager.setMusicSpeed) {
-                volumeControlsManager.setMusicSpeed(Math.max(0.5, Math.min(4, v)));
+            if ((parts[1] === 'bpm' || parts[1] === 'speed') && volumeControlsManager.setMusicBpm) {
+                // au:bpm is absolute; legacy au:speed was a × multiplier.
+                if (parts[1] === 'speed' && v <= 4) {
+                    volumeControlsManager.setMusicBpm(Math.round(v * (volumeControlsManager.referenceBpm || 132)));
+                } else {
+                    volumeControlsManager.setMusicBpm(Math.max(60, Math.min(600, v)));
+                }
+            } else if (parts[1] === 'jungle' && volumeControlsManager.setJungleAmount) {
+                volumeControlsManager.setJungleAmount(Math.max(0, Math.min(100, v)) / 100);
+                const out = inp.nextElementSibling;
+                if (out) out.textContent = v === 0 ? 'OFF' : v + '%';
+            } else if (parts[1] === 'theme' && volumeControlsManager.setMusicTheme) {
+                // Legacy THEME slider (pre-dropdown) — keep wiring alive.
+                volumeControlsManager.setMusicTheme(v);
+            } else if (parts[1] === 'xfade') {
+                const sec = Math.max(0.2, Math.min(3, v));
+                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = sec;
+                if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = sec;
+                try { localStorage.setItem('vf_musicCrossfade', String(sec)); } catch (err) { /* ignore */ }
+            } else if (parts[1] === 'bass' || parts[1] === 'lead' || parts[1] === 'arp' || parts[1] === 'drums') {
+                // Legacy volume mix sliders (kept for older plate HTML).
+                const chMap = { bass: 0, lead: 1, arp: 2, drums: 3 };
+                const ch = chMap[parts[1]];
+                const mul = Math.max(0, Math.min(2, v / 100));
+                if (volumeControlsManager.setChannelVolume) volumeControlsManager.setChannelVolume(ch, mul);
             } else {
                 const pct = Math.max(0, Math.min(100, v)) / 100;
                 if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);
@@ -25647,6 +26390,40 @@ var CoreRenderManager = class CoreRenderManager {
     }
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
+    }
+    /** Voice dropdown + channel volume slider (BASS / LEAD / ARP / DRUMS). */
+    function fxVoiceSelect(label, ch, current, volPct) {
+        const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
+            ? VFTrackerVoices.optionsFor(ch)
+            : [{ id: 'default', label: 'DEFAULT' }];
+        const cur = String(current || 'default');
+        const keys = ['bass', 'lead', 'arp', 'drums'];
+        const pct = Math.max(0, Math.min(200, Math.round(Number(volPct) || 100)));
+        const html = opts.map(function (o) {
+            return '<option value="' + o.id + '"' + (o.id === cur ? ' selected' : '') + '>' + o.label + '</option>';
+        }).join('');
+        return '<label class="vf-fx-row vf-fx-voice-row"><span>' + label + '</span>' +
+            '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
+            '<input type="range" class="vf-fx-voice-vol" min="0" max="200" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
+            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%">' +
+            '<output>' + pct + '%</output></label>';
+    }
+    /** Music STYLE dropdown + AMOUNT slider on one row (same layout as MUSIC VOICES). */
+    function fxStyleSelect(currentIdx, junglePct, jungleLabel) {
+        const list = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list)
+            ? VFTrackerThemes.list
+            : [{ id: 'planet', label: 'PLANET' }];
+        const cur = Math.max(0, Math.min(list.length - 1, Math.round(Number(currentIdx) || 0)));
+        const pct = Math.max(0, Math.min(100, Math.round(Number(junglePct) || 0)));
+        const shown = jungleLabel == null ? (pct === 0 ? 'OFF' : pct + '%') : jungleLabel;
+        const html = list.map(function (o, i) {
+            return '<option value="' + i + '"' + (i === cur ? ' selected' : '') + '>' + o.label + '</option>';
+        }).join('');
+        return '<label class="vf-fx-row vf-fx-voice-row"><span>STYLE</span>' +
+            '<select class="vf-fx-voice vf-fx-style" data-au-style="1" title="Music style">' + html + '</select>' +
+            '<input type="range" min="0" max="100" step="1" value="' + pct + '" data-sl="au:jungle"' +
+            ' data-unit="" style="--look-fill:' + pct + '%">' +
+            '<output>' + shown + '</output></label>';
     }
     // Fleet colours (hull / edge / accent / engine of the faction's ships): HUE continuous,
     // SAT / LIGHT in three steps. Slider moves are unsaved drafts shown live; SAVE keeps them.
@@ -25901,17 +26678,43 @@ var CoreRenderManager = class CoreRenderManager {
             const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
             const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
             const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
-            const musicSpeed = vol && vol.getMusicSpeed
-                ? Math.round(vol.getMusicSpeed() * 100) / 100
-                : 3.5;
+            const musicBpm = vol && vol.getMusicBpm
+                ? Math.round(vol.getMusicBpm())
+                : (vol && vol.getMusicSpeed ? Math.round(vol.getMusicSpeed() * 132) : 462);
+            const jungleAmt = vol && vol.getJungleAmount ? Number(vol.getJungleAmount()) : 0;
+            const junglePct = Math.round(Math.max(0, Math.min(1, Math.abs(jungleAmt) || 0)) * 100);
+            const jungleLabel = junglePct === 0 ? 'OFF' : junglePct + '%';
+            const themeMax = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+                ? VFTrackerThemes.count() - 1
+                : 6;
+            const themeIdx = vol && vol.getMusicTheme != null
+                ? Math.max(0, Math.min(themeMax, Math.round(vol.getMusicTheme())))
+                : 0;
+            const voiceOf = function (i) {
+                return vol && vol.getChannelVoice ? vol.getChannelVoice(i) : 'default';
+            };
+            const chVolOf = function (i) {
+                const v = vol && vol.getChannelVolume ? vol.getChannelVolume(i) : 1;
+                return Math.round(Math.max(0, Math.min(2, Number(v) || 1)) * 100);
+            };
+            const xfade = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.crossfadeSeconds != null)
+                ? Math.round(Number(vfTrackerManager.crossfadeSeconds) * 100) / 100
+                : 1.4;
             const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
             const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
             h += '<div class="vf-fx-title">VOLUME</div>' +
                 fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
                 fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
                 fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
-                '<div class="vf-fx-title">SPEED</div>' +
-                fxSlider('MUSIC SPEED', 'au:speed', 0.5, 4, 0.02, musicSpeed, '×') +
+                '<div class="vf-fx-title">MUSIC VOICES</div>' +
+                fxVoiceSelect('BASS', 0, voiceOf(0), chVolOf(0)) +
+                fxVoiceSelect('LEAD', 1, voiceOf(1), chVolOf(1)) +
+                fxVoiceSelect('ARP', 2, voiceOf(2), chVolOf(2)) +
+                fxVoiceSelect('DRUMS', 3, voiceOf(3), chVolOf(3)) +
+                '<div class="vf-fx-title">MUSIC PLAYBACK</div>' +
+                fxSlider('MUSIC BPM', 'au:bpm', 60, 600, 1, musicBpm, ' BPM') +
+                fxStyleSelect(themeIdx, junglePct, jungleLabel) +
+                fxSlider('CROSSFADE', 'au:xfade', 0.2, 3, 0.05, xfade, 's') +
                 '<div class="vf-fx-title">TOGGLES</div>' +
                 '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
                 '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +
@@ -25954,7 +26757,7 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
@@ -26090,6 +26893,11 @@ var CoreRenderManager = class CoreRenderManager {
                 placeResPlate();
             },
             fx: function () { setFxOpen(!vfs.fxOpen); },
+            mute: function (btn) {
+                vfs.volOpen = !vfs.volOpen;
+                btn.classList.toggle('is-open', vfs.volOpen);
+                placeVolPlate();
+            },
             fs: function () {
                 const src = document.querySelector('#vfFullscreenBtn') || document.querySelector('.home-station-overlay .hs-fullscreen-btn');
                 if (src) src.click();
@@ -26129,7 +26937,8 @@ var CoreRenderManager = class CoreRenderManager {
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
-            res: ['Resolution', RES_ICON], fx: ['Visual settings', FX_ICON], fs: ['Fullscreen', FS_OFF], logout: ['Logout', POWER]
+            res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], fs: ['Fullscreen', FS_OFF],
+            fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
         // only wires them. Built here as a fallback if the markup is missing.
@@ -26176,6 +26985,31 @@ var CoreRenderManager = class CoreRenderManager {
             else tools.appendChild(feBtn);
             tools.dataset.wired = '0';
         }
+        // Older saves / markup without the mute key: inject it just before fullscreen.
+        if (!tools.querySelector('[data-tool="mute"]') && meta.mute) {
+            const muteBtn = document.createElement('button');
+            muteBtn.type = 'button';
+            muteBtn.dataset.tool = 'mute';
+            muteBtn.title = meta.mute[0];
+            muteBtn.setAttribute('aria-label', meta.mute[0]);
+            muteBtn.innerHTML = meta.mute[1];
+            const fsSlot = tools.querySelector('[data-tool="fs"]');
+            if (fsSlot) tools.insertBefore(muteBtn, fsSlot);
+            else tools.appendChild(muteBtn);
+            tools.dataset.wired = '0';
+        }
+        // Settings remote sits to the right of fullscreen (mute → fs → fx → logout).
+        const fxSlot = tools.querySelector('[data-tool="fx"]');
+        const fsAfter = tools.querySelector('[data-tool="fs"]');
+        if (fxSlot && fsAfter && fsAfter.nextElementSibling !== fxSlot) {
+            tools.insertBefore(fxSlot, fsAfter.nextSibling);
+        }
+        if (fxSlot && fxSlot.dataset.icon !== 'remote') {
+            fxSlot.dataset.icon = 'remote';
+            fxSlot.innerHTML = FX_ICON;
+            fxSlot.title = meta.fx[0];
+            fxSlot.setAttribute('aria-label', meta.fx[0]);
+        }
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
@@ -26187,7 +27021,7 @@ var CoreRenderManager = class CoreRenderManager {
             });
             const fxb = tools.querySelector('[data-tool="fx"]');
             if (fxb) fxb.setAttribute('data-fx-toggle', '');
-            requestAnimationFrame(function () { placeResPlate(); placeFxPlate(); });
+            requestAnimationFrame(function () { placeResPlate(); placeFxPlate(); placeVolPlate(); });
         }
         const q = function (k) { return tools.querySelector('[data-tool="' + k + '"]'); };
         const setOff = function (btn, off) {
@@ -26196,6 +27030,18 @@ var CoreRenderManager = class CoreRenderManager {
         };
         q('res').classList.toggle('is-open', vfs.resOpen);
         q('fx').classList.toggle('is-open', vfs.fxOpen);
+        const muteBtn = q('mute');
+        if (muteBtn) {
+            muteBtn.classList.toggle('is-open', vfs.volOpen);
+            const vol = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager.getMasterVolume() : 0.75;
+            const isMuted = vol <= 0;
+            if (muteBtn.dataset.state !== (isMuted ? '1' : '0')) {
+                muteBtn.dataset.state = isMuted ? '1' : '0';
+                muteBtn.innerHTML = isMuted ? MUTE_OFF : MUTE_ON;
+                muteBtn.title = isMuted ? 'Unmute' : 'Volume';
+                muteBtn.setAttribute('aria-label', muteBtn.title);
+            }
+        }
         const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
         const fsBtn = q('fs');
         setOff(fsBtn, !fsOk);
@@ -26285,6 +27131,28 @@ var CoreRenderManager = class CoreRenderManager {
         plate.style.top = Math.round(r.top + (r.height - hh) / 2) + 'px';
         plate.style.left = Math.round(r.left - 8 - plate.offsetWidth) + 'px';
     }
+
+    // The volume plate unfolds as a dropdown under the mute key (not to the side, like RES/FX).
+    function placeVolPlate() {
+        const plate = ensureVolPlate();
+        const btn = document.querySelector('.vf-bezel-tools [data-tool="mute"]');
+        if (!plate) return;
+        plate.style.display = vfs.volOpen && btn ? 'inline-flex' : 'none';
+        if (!vfs.volOpen || !btn) return;
+        plate.dispatchEvent(new Event('vf-vol-sync'));
+        const r = btn.getBoundingClientRect();
+        plate.style.top = Math.round(r.bottom + 8) + 'px';
+        plate.style.left = Math.round(r.right - plate.offsetWidth) + 'px';
+    }
+    // Close the dropdown on an outside click, like the FX panel's own Escape/outside handling.
+    document.addEventListener('click', function (e) {
+        if (!vfs.volOpen) return;
+        if (e.target.closest('#vf-vol') || e.target.closest('.vf-bezel-tools [data-tool="mute"]')) return;
+        vfs.volOpen = false;
+        const btn = document.querySelector('.vf-bezel-tools [data-tool="mute"]');
+        if (btn) btn.classList.remove('is-open');
+        placeVolPlate();
+    });
 
     // Pilot display in the bezel's top strip: crest, name, resources of the active pilot,
     // or an "empty screen" graphic when none is selected.
@@ -28719,15 +29587,54 @@ extendClass(SoundManager, {
         // Intro already owning the bus — don't clobber it with combat yet.
         if (this._introPlaying) return;
 
-        this.stopPlanetAmbientNodesOnly();
+        if (!this._currentHostileFaction && this._resolveHostileFaction) {
+            this._currentHostileFaction = this._resolveHostileFaction(id);
+        }
+        const combatKeys = this.combatTrackKeys
+            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+            : [id];
+        if (combatKeys.indexOf(id) === -1) combatKeys.push(id);
 
-        // Leaving hub: kill menu sources so they can't mask planet music.
+        // Same song already going — check BEFORE stop, or we always restart.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying) {
+            const keepKey = typeof vfTrackerManager.firstPlayableKey === 'function'
+                ? vfTrackerManager.firstPlayableKey(combatKeys)
+                : null;
+            if (keepKey && vfTrackerManager.isPlaying(keepKey)) {
+                this.clearPendingMusic();
+                return;
+            }
+            for (let i = 0; i < combatKeys.length; i++) {
+                if (vfTrackerManager.isPlaying(combatKeys[i])) {
+                    this.clearPendingMusic();
+                    return;
+                }
+            }
+        }
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.hasPlanetTrack
+            && youtubeSoundtrackManager.hasPlanetTrack(id)
+            && youtubeSoundtrackManager.mode === 'planet'
+            && youtubeSoundtrackManager.currentKey === id
+            && youtubeSoundtrackManager.enabled) {
+            this.clearPendingMusic();
+            return;
+        }
+
+        // Fade drone only — tracker/local crossfade inside their play()/fadeOut().
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true, keepLocal: true });
+
+        // Leaving hub: fade menu sources so they can't mask planet music.
         if (typeof localAudioManager !== 'undefined' && localAudioManager.currentKey === 'menu') {
-            localAudioManager.stop();
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
         }
 
         if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.hasPlanetTrack(id)) {
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
             if (!this.musicEnabled) {
                 youtubeSoundtrackManager.setEnabled(false);
                 if (typeof beatSyncManager !== 'undefined') beatSyncManager.start(id);
@@ -28758,18 +29665,14 @@ extendClass(SoundManager, {
 
         // Prefer coded vftrack: planet×faction (and boss) over the old drone.
         if (typeof vfTrackerManager !== 'undefined') {
-            if (!this._currentHostileFaction) {
-                this._currentHostileFaction = this._resolveHostileFaction
-                    ? this._resolveHostileFaction(id) : '';
+            if (typeof localAudioManager !== 'undefined' && localAudioManager.el
+                && !localAudioManager.el.paused) {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
             }
-            const keys = this.combatTrackKeys
-                ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
-                : [id];
-            // Always include bare planet as last-ditch playable key.
-            if (keys.indexOf(id) === -1) keys.push(id);
             vfTrackerManager.setEnabled(true);
             vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
-            const played = vfTrackerManager.playFirst(keys);
+            const played = vfTrackerManager.playFirst(combatKeys);
             if (played) {
                 this.clearPendingMusic();
                 return;
@@ -28824,8 +29727,16 @@ extendClass(SoundManager, {
         }
     },
 
-    stopPlanetAmbientNodesOnly() {
-        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+    stopPlanetAmbientNodesOnly(opts) {
+        const keepTracker = opts && opts.keepTracker;
+        const keepLocal = opts && opts.keepLocal;
+        if (!keepTracker && typeof vfTrackerManager !== 'undefined') {
+            if (opts && opts.fade && vfTrackerManager.fadeOut) vfTrackerManager.fadeOut(opts.fade);
+            else vfTrackerManager.stop();
+        }
+        if (!keepLocal && typeof localAudioManager !== 'undefined' && opts && opts.fadeLocal) {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut(opts.fadeLocal);
+        }
         if (!this.ambientNodes) return;
         const nodes = this.ambientNodes;
         const ctx = this.audioContext;
@@ -28870,14 +29781,18 @@ extendClass(SoundManager, {
             if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             return;
         }
-        this.stopPlanetAmbientNodesOnly();
+        // Keep tracker for combat→menu crossfade; only kill the soft drone bus.
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         this.ambientPlanetId = null;
 
         const menuTrack = (typeof soundtrackConfigManager !== 'undefined')
             ? soundtrackConfigManager.getMenuTrack() : null;
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
             if (typeof localAudioManager !== 'undefined') {
                 localAudioManager.setVolume(this.musicBusVolume());
                 localAudioManager.play('menu', menuTrack.localAudioData);
@@ -28887,11 +29802,16 @@ extendClass(SoundManager, {
         }
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.trackerData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
             if (!this.ensureContext()) return;
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.setVolume(this.musicBusVolume());
-                if (vfTrackerManager.play('menu', menuTrack.trackerData)) this.clearPendingMusic();
+                if (vfTrackerManager.play('menu', menuTrack.trackerData, { force: true })) {
+                    this.clearPendingMusic();
+                }
             }
             return;
         }
@@ -28903,13 +29823,19 @@ extendClass(SoundManager, {
             youtubeSoundtrackManager.setVolume(this.musicBusVolume());
             youtubeSoundtrackManager.setEnabled(!!this.musicEnabled);
             if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.youtubeUrl) {
-                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                if (typeof vfTrackerManager !== 'undefined') {
+                    if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                    else vfTrackerManager.stop();
+                }
                 youtubeSoundtrackManager.playUrl('menu-override', menuTrack.youtubeUrl);
                 this.clearPendingMusic();
                 return;
             }
             if (youtubeSoundtrackManager.hasMenuTrack()) {
-                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+                if (typeof vfTrackerManager !== 'undefined') {
+                    if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                    else vfTrackerManager.stop();
+                }
                 youtubeSoundtrackManager.playMenu();
                 this.clearPendingMusic();
                 return;
@@ -29427,6 +30353,16 @@ var LocalAudioManager = class LocalAudioManager {
         this.currentKey = null;
         this.volume = 0.2;
         this.playbackRate = 1;
+        this.crossfadeSeconds = 1.4;
+        try {
+            const xf = localStorage.getItem('vf_musicCrossfade');
+            if (xf != null && Number.isFinite(parseFloat(xf))) {
+                this.crossfadeSeconds = Math.max(0.2, Math.min(3, parseFloat(xf)));
+            }
+        } catch (e) { /* ignore */ }
+        this._currentDataUrl = null;
+        this._fadeTimer = null;
+        this._outgoing = [];
     }
 
     ensureEl() {
@@ -29440,15 +30376,85 @@ var LocalAudioManager = class LocalAudioManager {
         return el;
     }
 
+    _makeEl() {
+        const el = document.createElement('audio');
+        el.loop = true;
+        el.style.display = 'none';
+        document.body.appendChild(el);
+        return el;
+    }
+
+    _rampVolume(el, from, to, seconds, onDone) {
+        if (!el) {
+            if (onDone) onDone();
+            return;
+        }
+        const dur = Math.max(0.05, Number(seconds) || this.crossfadeSeconds);
+        const start = Math.max(0, Math.min(1, from));
+        const end = Math.max(0, Math.min(1, to));
+        const t0 = performance.now();
+        el.volume = start;
+        const step = () => {
+            const u = Math.min(1, (performance.now() - t0) / (dur * 1000));
+            el.volume = start + (end - start) * u;
+            if (u < 1) {
+                requestAnimationFrame(step);
+            } else if (onDone) {
+                onDone();
+            }
+        };
+        requestAnimationFrame(step);
+    }
+
+    _retireEl(el, fadeSec) {
+        if (!el) return;
+        this._outgoing.push(el);
+        this._rampVolume(el, el.volume, 0, fadeSec, () => {
+            try {
+                el.pause();
+                el.removeAttribute('src');
+                el.load();
+                if (el.parentNode) el.parentNode.removeChild(el);
+            } catch (e) { /* ignore */ }
+            this._outgoing = this._outgoing.filter((x) => x !== el);
+        });
+    }
+
     play(key, dataUrl) {
         if (!dataUrl) return false;
+        const fade = this.crossfadeSeconds;
+        // Same audio payload already looping — keep position even if the logical key changed.
+        if (this.el && !this.el.paused && this._currentDataUrl === dataUrl) {
+            this.currentKey = key;
+            return true;
+        }
+        if (this.currentKey === key && this.el && !this.el.paused) return true;
+
+        const wasPlaying = !!(this.el && !this.el.paused && this.el.src);
+        if (wasPlaying && fade > 0) {
+            const old = this.el;
+            this.el = null;
+            this._retireEl(old, fade);
+        } else if (this.el) {
+            try {
+                this.el.pause();
+                this.el.removeAttribute('src');
+                this.el.load();
+            } catch (e) { /* ignore */ }
+        }
+
         const el = this.ensureEl();
-        if (this.currentKey === key && !el.paused) return true;
         this.currentKey = key;
+        this._currentDataUrl = dataUrl;
         el.src = dataUrl;
-        el.volume = Math.max(0, Math.min(1, this.volume));
         el.playbackRate = Math.max(0.5, Math.min(4, Number(this.playbackRate) || 1));
-        el.play().catch(() => { /* needs a user gesture first — fine, next interaction retries */ });
+        if (wasPlaying && fade > 0) {
+            el.volume = 0;
+            el.play().then(() => this._rampVolume(el, 0, this.volume, fade)).catch(() => {});
+        } else {
+            el.volume = Math.max(0, Math.min(1, this.volume));
+            el.play().catch(() => { /* needs a user gesture first — fine, next interaction retries */ });
+        }
         return true;
     }
 
@@ -29457,12 +30463,30 @@ var LocalAudioManager = class LocalAudioManager {
         if (this.el) this.el.playbackRate = this.playbackRate;
     }
 
-    stop() {
+    stop(opts) {
+        const fade = opts && opts.fade != null ? Number(opts.fade) : 0;
+        if (this._fadeTimer) {
+            clearTimeout(this._fadeTimer);
+            this._fadeTimer = null;
+        }
+        if (fade > 0 && this.el && !this.el.paused) {
+            const old = this.el;
+            this.el = null;
+            this.currentKey = null;
+            this._currentDataUrl = null;
+            this._retireEl(old, fade);
+            return;
+        }
         if (!this.el) return;
         this.el.pause();
         this.el.removeAttribute('src');
         this.el.load();
         this.currentKey = null;
+        this._currentDataUrl = null;
+    }
+
+    fadeOut(seconds) {
+        this.stop({ fade: seconds != null ? seconds : this.crossfadeSeconds });
     }
 
     setVolume(volume) {
@@ -29791,17 +30815,210 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this._rowIndex = 0;
         this._channels = [];
         this._noiseBuffer = null;
-        this.lookahead = 0.08;
-        this.scheduleAhead = 0.25;
-        /** Playback speed vs authored BPM (>1 = faster). */
+        // Wilson-style lookahead: short wake + enough scheduleAhead to survive
+        // combat-frame stalls without dumping overdue notes in a burst.
+        this.lookahead = 0.025;
+        this.scheduleAhead = 0.55;
+        /** Playback speed vs authored BPM (>1 = faster). Used when playbackBpm is unset. */
         this.tempoScale = 3.5;
+        /** Absolute playback tempo (BPM). When set, overrides authored×scale. */
+        this.playbackBpm = null;
         /**
          * Per-channel mix (bass / lead / arp / drums).
          * Lead (ch1) is ducked so square pulse doesn't bury the rest.
          */
-        this.channelMix = [1.1, 0.42, 1.45, 1.25];
+        this.channelMixBase = [1.1, 0.42, 2.4, 1.25];
+        /** Jungle mix: chopped, drums dominate, lead almost gone. */
+        this.channelMixJungle = [1.75, 0.06, 0.95, 2.85];
+        /** DnB mix: heavy sub, controlled kit, sparse lead. */
+        this.channelMixDnb = [2.15, 0.1, 0.75, 1.95];
+        /** Jungle DnB hybrid: big sub + Amen kit pressure. */
+        this.channelMixJungleDnb = [1.95, 0.08, 0.85, 2.4];
+        /** Dark minimal techno: heavy sub+kick, quiet delayed lead, present ticks. */
+        this.channelMixElektro = [2.05, 0.16, 1.05, 1.95];
+        /** Liquid: soft drums, floating lead/arp. */
+        this.channelMixLiquid = [1.45, 0.28, 1.65, 1.35];
+        /** NIGHTRUN (darksynth): huge lead + bass, driving kit. */
+        this.channelMixNightrun = [1.85, 0.72, 0.95, 2.05];
+        this.channelMix = this.channelMixBase.slice();
+        /** User-facing fine-tune on top of channelMix (0 = mute, 1 = authored level). */
+        this.channelUserMix = [1, 1, 1, 1];
+        /**
+         * Style intensity 0..1 (how far into the selected STYLE).
+         * Deadzone near 0 has no effect.
+         */
+        this.jungleAmount = 0;
+        /** Melody / style index — see VFTrackerThemes.list. */
+        this.themeIndex = 0;
+        /** Per-channel voice ids: bass / lead / arp / drums (`default` = authored). */
+        this.channelVoices = ['default', 'default', 'default', 'default'];
         this._onEnded = null;
         this._endedFired = false;
+        this._channelBus = [];
+        this._fadeOutTimer = null;
+        /** Default crossfade length when swapping tracks (seconds). */
+        this.fadeSeconds = 1.4;
+        /**
+         * Amen-chop 16-step break (Jungle / right).
+         * k=kick(inst5), s=snare/noise(inst4), h=hat(inst4 soft), r=half-row roll.
+         */
+        this._jungleBreak = [
+            { k: 1 }, { h: 0.45, r: 0.55 }, { h: 0.75 }, { k: 0.55 },
+            { s: 1 }, { h: 0.4 }, { s: 0.65, r: 0.8 }, { k: 0.7 },
+            { h: 0.55 }, { k: 0.6 }, { s: 1, r: 0.7 }, { h: 0.6 },
+            { k: 1 }, { s: 0.8, r: 0.9 }, { h: 0.75 }, { s: 1 }
+        ];
+        /**
+         * Two-step / rolling DnB break (left): spaced kick-snare, steady hats, few chops.
+         */
+        this._dnbBreak = [
+            { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
+            { s: 1 }, { h: 0.45 }, { k: 0.6, h: 0.35 }, { h: 0.55 },
+            { h: 0.4 }, { h: 0.6 }, { s: 0.95 }, { h: 0.45 },
+            { k: 1 }, { h: 0.5 }, { h: 0.4 }, { s: 0.8 }
+        ];
+        /** NIGHTRUN 4/4 drive kit. */
+        this._driveBreak = [
+            { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+            { k: 1 }, { h: 0.45 }, { s: 0.95, h: 0.3 }, { h: 0.4 },
+            { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+            { k: 1 }, { h: 0.5 }, { s: 1, h: 0.35 }, { h: 0.45 }
+        ];
+    }
+
+    setThemeIndex(index) {
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 8;
+        this.themeIndex = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
+        // Re-apply mix target for the newly selected style at current intensity.
+        this.setJungleAmount(this.jungleAmount);
+        return this.themeIndex;
+    }
+
+    _mixTargetForStyle() {
+        const base = this.channelMixBase || [1.1, 0.42, 2.4, 1.25];
+        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(this.themeIndex)
+            : { mix: 'base' };
+        const key = meta.mix || 'base';
+        if (key === 'jungle') return this.channelMixJungle || [1.75, 0.06, 0.95, 2.85];
+        if (key === 'dnb') return this.channelMixDnb || [2.15, 0.1, 0.75, 1.95];
+        if (key === 'jungle_dnb') return this.channelMixJungleDnb || [1.95, 0.08, 0.85, 2.4];
+        if (key === 'elektro') return this.channelMixElektro || [2.05, 0.16, 1.05, 1.95];
+        if (key === 'liquid') return this.channelMixLiquid || [1.45, 0.28, 1.65, 1.35];
+        if (key === 'nightrun') return this.channelMixNightrun || [1.85, 0.72, 0.95, 2.05];
+        return base;
+    }
+
+    /** Style intensity morph: 0 off · 1 full selected STYLE. */
+    setJungleAmount(amount) {
+        let t = Math.max(0, Math.min(1, Number(amount) || 0));
+        if (t < 0.03) t = 0;
+        this.jungleAmount = t;
+        // Soft morph — never crush lead/arp so section songs stay distinct.
+        const mag = t * 0.55;
+        const base = this.channelMixBase || [1.1, 0.42, 2.4, 1.25];
+        const target = mag > 0 ? this._mixTargetForStyle() : base;
+        this.channelMix = base.map((b, i) => {
+            let v = b + ((target[i] != null ? target[i] : b) - b) * mag;
+            // Lead / arp keep audible song identity under every STYLE.
+            if (i === 1 || i === 2) v = Math.max(b * 0.72, v);
+            return v;
+        });
+        if (this._channelBus && this.ctx) {
+            const now = this.ctx.currentTime;
+            for (let i = 0; i < this._channelBus.length; i++) {
+                const bus = this._channelBus[i];
+                if (!bus) continue;
+                try {
+                    bus.gain.cancelScheduledValues(now);
+                    bus.gain.linearRampToValueAtTime(this._busGain(i), now + 0.08);
+                } catch (e) { /* ignore */ }
+            }
+        }
+        return t;
+    }
+
+    /** Absolute style pressure 0..1. */
+    _styleMag() {
+        return Math.max(0, Math.min(1, Number(this.jungleAmount) || 0));
+    }
+
+    /** 'jungle' | 'dnb' | 'elektro' | 'hybrid' | 'drive' | 'off' */
+    _styleSide() {
+        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(this.themeIndex)
+            : null;
+        const side = meta && meta.breakSide ? meta.breakSide : 'off';
+        // Style colour only when AMOUNT is up — picking a STYLE alone must not
+        // flood every section with the same break kit.
+        if (this._styleMag() < 0.03) return 'off';
+        if (Number(this.themeIndex) > 0 && side && side !== 'off') return side;
+        return side === 'off' ? 'off' : side;
+    }
+
+    _busGain(ch) {
+        const base = (this.channelMix && this.channelMix[ch] != null) ? Number(this.channelMix[ch]) : 1;
+        const user = (this.channelUserMix && this.channelUserMix[ch] != null) ? Number(this.channelUserMix[ch]) : 1;
+        const b = Number.isFinite(base) && base > 0 ? base : 1;
+        const u = Number.isFinite(user) && user >= 0 ? user : 1;
+        return Math.max(0.0001, b * u);
+    }
+
+    _ensureChannelBus(ch) {
+        if (!this.ctx || !this.masterGain) return null;
+        if (!this._channelBus[ch]) {
+            const bus = this.ctx.createGain();
+            bus.gain.value = this._busGain(ch);
+            bus.connect(this.masterGain);
+            this._channelBus[ch] = bus;
+        }
+        return this._channelBus[ch];
+    }
+
+    /** Live per-channel volume fine-tune. ch: 0=bass,1=lead,2=arp,3=drums. v: 0-2. */
+    setChannelVolume(ch, v) {
+        const idx = Number(ch);
+        if (!Number.isFinite(idx) || idx < 0) return;
+        const vol = Math.max(0, Math.min(2, Number(v)));
+        if (!this.channelUserMix) this.channelUserMix = [1, 1, 1, 1];
+        this.channelUserMix[idx] = Number.isFinite(vol) ? vol : 1;
+        const bus = this._channelBus[idx];
+        if (bus && this.ctx) {
+            const now = this.ctx.currentTime;
+            bus.gain.cancelScheduledValues(now);
+            bus.gain.linearRampToValueAtTime(this._busGain(idx), now + 0.05);
+        }
+    }
+
+    /** Live per-channel instrument voice. ch: 0=bass,1=lead,2=arp,3=drums. */
+    setChannelVoice(ch, voiceId) {
+        const idx = Number(ch);
+        if (!Number.isFinite(idx) || idx < 0 || idx > 3) return 'default';
+        if (!this.channelVoices) this.channelVoices = ['default', 'default', 'default', 'default'];
+        const id = String(voiceId || 'default');
+        const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
+            ? VFTrackerVoices.optionsFor(idx)
+            : [{ id: 'default' }];
+        let ok = false;
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].id === id) { ok = true; break; }
+        }
+        this.channelVoices[idx] = ok ? id : 'default';
+        return this.channelVoices[idx];
+    }
+
+    _resolveInstrument(ch, cellInst) {
+        const track = this.track;
+        const base = (track && track.instrumentById && track.instrumentById[cellInst])
+            || (track && track.instruments && track.instruments[0])
+            || null;
+        const voiceId = (this.channelVoices && this.channelVoices[ch]) || 'default';
+        if (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.resolve) {
+            return VFTrackerVoices.resolve(ch, voiceId, base) || base;
+        }
+        return base;
     }
 
     ensureContext(externalCtx) {
@@ -29830,14 +31047,30 @@ var VFTrackerPlayer = class VFTrackerPlayer {
 
     setVolume(v) {
         this.volume = Math.max(0, Math.min(1, Number(v) || 0));
-        if (this.masterGain && this.ctx) {
-            const now = this.ctx.currentTime;
-            this.masterGain.gain.cancelScheduledValues(now);
-            this.masterGain.gain.linearRampToValueAtTime(Math.max(0.0001, this.volume), now + 0.05);
+        if (!this.masterGain || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const target = Math.max(0.0001, this.volume);
+        // Don't yank a live crossfade — retarget the ramp end instead.
+        if (this._fadeOutTimer) return;
+        if (this._fadeInUntil && now < this._fadeInUntil) {
+            try {
+                this.masterGain.gain.linearRampToValueAtTime(target, this._fadeInUntil);
+            } catch (e) { /* ignore */ }
+            return;
         }
+        try {
+            const cur = Math.max(0.0001, this.masterGain.gain.value);
+            this.masterGain.gain.cancelScheduledValues(now);
+            this.masterGain.gain.setValueAtTime(cur, now);
+            this.masterGain.gain.linearRampToValueAtTime(target, now + 0.08);
+        } catch (e) { /* ignore */ }
     }
 
     effectiveBpm() {
+        const abs = Number(this.playbackBpm);
+        if (Number.isFinite(abs) && abs > 0) {
+            return Math.max(60, Math.min(960, abs));
+        }
         if (!this.track) return 0;
         const scale = Number(this.tempoScale);
         const mul = Number.isFinite(scale) && scale > 0 ? scale : 1;
@@ -29851,6 +31084,10 @@ var VFTrackerPlayer = class VFTrackerPlayer {
     }
 
     play(track, opts) {
+        if (this._fadeOutTimer) {
+            clearTimeout(this._fadeOutTimer);
+            this._fadeOutTimer = null;
+        }
         const normalized = VFTrackerParse.normalize(track);
         // Soft stop channels/timer but keep the master bus; hard-mute made
         // immediate restarts come back silent when setVolume raced the ramp.
@@ -29867,14 +31104,24 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this._orderIndex = 0;
         this._rowIndex = 0;
         this._channels = [];
+        this._channelBus = [];
         for (let i = 0; i < normalized.channels; i++) {
             this._channels.push({ gain: null, source: null, release: 0.1 });
         }
         const vol = opts && opts.volume != null ? opts.volume : this.volume;
         this.volume = Math.max(0.0001, Math.min(1, Number(vol) || 0.2));
+        const fadeIn = opts && opts.fadeIn != null
+            ? Math.max(0, Number(opts.fadeIn) || 0)
+            : 0;
+        this._fadeInUntil = fadeIn > 0 ? (ctx.currentTime + fadeIn) : 0;
         try {
             this.masterGain.gain.cancelScheduledValues(ctx.currentTime);
-            this.masterGain.gain.setValueAtTime(this.volume, ctx.currentTime);
+            if (fadeIn > 0) {
+                this.masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
+                this.masterGain.gain.linearRampToValueAtTime(this.volume, ctx.currentTime + fadeIn);
+            } else {
+                this.masterGain.gain.setValueAtTime(this.volume, ctx.currentTime);
+            }
         } catch (e) { /* ignore */ }
         this._nextRowTime = ctx.currentTime + 0.02;
         this._timer = setInterval(() => this._tick(), this.lookahead * 1000);
@@ -29882,23 +31129,108 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         return normalized;
     }
 
+    /**
+     * Ramp master bus to silence while the sequence keeps running, then stop.
+     * Used as the outgoing leg of a track crossfade.
+     */
+    fadeOut(seconds) {
+        const dur = Math.max(0.05, Number(seconds) || this.fadeSeconds || 1.4);
+        if (!this.masterGain || !this.ctx) {
+            this.stop(true);
+            return dur;
+        }
+        const now = this.ctx.currentTime;
+        try {
+            const g = this.masterGain.gain;
+            g.cancelScheduledValues(now);
+            g.setValueAtTime(Math.max(0.0001, g.value), now);
+            g.linearRampToValueAtTime(0.0001, now + dur);
+        } catch (e) { /* ignore */ }
+        if (this._fadeOutTimer) clearTimeout(this._fadeOutTimer);
+        this._fadeOutTimer = setTimeout(() => {
+            this._fadeOutTimer = null;
+            this.stop(true);
+        }, dur * 1000 + 40);
+        return dur;
+    }
+
     _stopChannel(ch, when) {
         const slot = this._channels[ch];
-        if (!slot) return;
+        if (!slot || !slot.gain) return;
+        const t = Math.max(when, this.ctx ? this.ctx.currentTime : when);
+        // Soft cut — never read live .value for future-scheduled notes (causes gaps).
+        const rowDur = this.track ? this.rowDuration() : 0.1;
+        const rel = Math.max(0.06, Math.min(0.22, (slot.release || 0.1) * 1.4, rowDur * 0.45));
+        const peak = Math.max(0.0001, slot.peak || 0.2);
         try {
-            if (slot.gain) {
-                const t = when;
-                const rel = slot.release || 0.08;
-                slot.gain.gain.cancelScheduledValues(t);
-                slot.gain.gain.setValueAtTime(Math.max(0.0001, slot.gain.gain.value), t);
-                slot.gain.gain.exponentialRampToValueAtTime(0.0001, t + rel);
-                if (slot.source) {
-                    try { slot.source.stop(t + rel + 0.02); } catch (e) { /* already stopped */ }
-                }
+            const g = slot.gain.gain;
+            g.cancelScheduledValues(t);
+            g.setValueAtTime(peak, t);
+            g.exponentialRampToValueAtTime(0.0001, t + rel);
+            if (slot.source) {
+                try { slot.source.stop(t + rel + 0.03); } catch (e) { /* already stopped */ }
             }
         } catch (e) { /* ignore */ }
         slot.gain = null;
         slot.source = null;
+        slot.peak = 0;
+    }
+
+    /**
+     * Fire-and-forget hit (jungle breaks) — does NOT steal monophonic channel slots,
+     * so authored drums/bass keep sustaining without hard cuts.
+     */
+    _oneshot(ch, cell, when, gateSec) {
+        const track = this.track;
+        if (!cell || !cell.note || cell.note === 'OFF' || !this.ctx) return;
+        const freq = VFTrackerParse.noteToFreq(cell.note);
+        if (!freq || freq === 'OFF') return;
+        const inst = this._resolveInstrument(ch, cell.inst);
+        if (!inst) return;
+
+        const ctx = this.ctx;
+        const gain = ctx.createGain();
+        let filter = null;
+        if (inst.filter && inst.wave !== 'noise') {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(inst.filter, when);
+            filter.Q.setValueAtTime(0.7, when);
+        }
+        let source;
+        if (inst.wave === 'noise') {
+            source = ctx.createBufferSource();
+            source.buffer = this._noiseBuffer;
+            source.loop = true;
+        } else {
+            source = ctx.createOscillator();
+            source.type = inst.wave;
+            source.frequency.setValueAtTime(Math.max(20, freq), when);
+        }
+        const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
+        const peak = Math.max(0.0001, inst.volume * vol64);
+        const a = Math.max(0.001, inst.attack);
+        const d = Math.max(0.001, inst.decay);
+        const s = Math.max(0.0001, peak * inst.sustain);
+        const r = Math.max(0.04, inst.release || 0.08);
+        const gate = Math.max(a + d + 0.04, Number(gateSec) || 0.09);
+
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.exponentialRampToValueAtTime(peak, when + a);
+        gain.gain.exponentialRampToValueAtTime(s, when + a + d);
+        gain.gain.setValueAtTime(s, when + Math.max(a + d, gate - r));
+        gain.gain.exponentialRampToValueAtTime(0.0001, when + gate);
+
+        if (filter) {
+            source.connect(filter);
+            filter.connect(gain);
+        } else {
+            source.connect(gain);
+        }
+        const bus = this._ensureChannelBus(ch) || this.masterGain;
+        gain.connect(bus);
+        source.start(when);
+        try { source.stop(when + gate + 0.04); } catch (e) { /* ignore */ }
     }
 
     _trigger(ch, cell, when) {
@@ -29911,7 +31243,7 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const freq = VFTrackerParse.noteToFreq(cell.note);
         if (!freq || freq === 'OFF') return;
 
-        const inst = track.instrumentById[cell.inst] || track.instruments[0];
+        const inst = this._resolveInstrument(ch, cell.inst);
         if (!inst) return;
 
         this._stopChannel(ch, when);
@@ -29938,13 +31270,11 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         }
 
         const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
-        const mix = (this.channelMix && this.channelMix[ch] != null) ? Number(this.channelMix[ch]) : 1;
-        const chMul = Number.isFinite(mix) && mix > 0 ? mix : 1;
-        const peak = Math.max(0.0001, inst.volume * vol64 * chMul);
-        const a = inst.attack;
-        const d = inst.decay;
+        const peak = Math.max(0.0001, inst.volume * vol64);
+        const a = Math.max(0.001, inst.attack);
+        const d = Math.max(0.001, inst.decay);
         const s = Math.max(0.0001, peak * inst.sustain);
-        const r = inst.release;
+        const r = Math.max(0.05, inst.release || 0.1);
 
         gain.gain.setValueAtTime(0.0001, when);
         gain.gain.exponentialRampToValueAtTime(peak, when + a);
@@ -29956,10 +31286,93 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         } else {
             source.connect(gain);
         }
-        gain.connect(this.masterGain);
+        const bus = this._ensureChannelBus(ch) || this.masterGain;
+        gain.connect(bus);
         source.start(when);
 
-        this._channels[ch] = { gain, source, release: r, filter };
+        // Twin osc: light STYLE colour on the authored note (AMOUNT-scaled, no floor).
+        const themeId = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.idOf)
+            ? VFTrackerThemes.idOf(this.themeIndex)
+            : '';
+        const styleMag = this._styleMag();
+        const styleSide = this._styleSide();
+        const wantTwin = ch === 0 && inst.wave !== 'noise' && styleMag > 0.03
+            && (themeId === 'reese' || themeId === 'amen' || themeId === 'neuro'
+                || themeId === 'jungle_dnb' || themeId === 'dnb' || themeId === 'nightrun'
+                || themeId === 'minimal_elektro'
+                || styleSide === 'dnb' || styleSide === 'jungle' || styleSide === 'hybrid'
+                || styleSide === 'drive');
+        // Lead octave twin for NIGHTRUN cinematic weight.
+        const wantLeadTwin = ch === 1 && themeId === 'nightrun' && inst.wave !== 'noise'
+            && styleMag > 0.03;
+        if ((wantTwin || wantLeadTwin) && typeof freq === 'number') {
+            try {
+                const osc2 = ctx.createOscillator();
+                const g2 = ctx.createGain();
+                osc2.type = styleSide === 'drive' || themeId === 'nightrun'
+                    ? 'sawtooth'
+                    : styleSide === 'dnb' || styleSide === 'hybrid'
+                        || themeId === 'reese' || themeId === 'neuro' || themeId === 'dnb'
+                        ? 'sawtooth'
+                        : styleSide === 'elektro'
+                            ? 'square'
+                            : (inst.wave === 'triangle' ? 'sawtooth' : inst.wave);
+                const detune = styleSide === 'drive' || themeId === 'nightrun' ? 0.988
+                    : styleSide === 'dnb' || styleSide === 'hybrid' ? 0.992
+                        : styleSide === 'elektro' ? 0.998 : 0.995;
+                const f2 = wantLeadTwin ? freq * 0.5 : freq * detune;
+                osc2.frequency.setValueAtTime(Math.max(20, f2), when);
+                const twinScale = (styleSide === 'drive' || themeId === 'nightrun'
+                    ? (wantLeadTwin ? 0.22 + styleMag * 0.28 : 0.28 + styleMag * 0.35)
+                    : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb'
+                        ? (0.22 + styleMag * 0.32)
+                        : styleSide === 'jungle'
+                            ? (0.14 + styleMag * 0.22)
+                            : styleSide === 'elektro'
+                                ? (0.1 + styleMag * 0.16)
+                                : (0.16 + styleMag * 0.22)) * styleMag;
+                const twinPeak = Math.max(0.0001, peak * twinScale);
+                const gate = Math.max(0.18, a + d + r
+                    + (styleSide === 'drive' || themeId === 'nightrun' ? 0.3
+                        : styleSide === 'dnb' || styleSide === 'hybrid' ? 0.22
+                            : styleSide === 'elektro' ? 0.28 : 0.12));
+                g2.gain.setValueAtTime(0.0001, when);
+                g2.gain.exponentialRampToValueAtTime(twinPeak, when + a);
+                g2.gain.exponentialRampToValueAtTime(Math.max(0.0001, twinPeak * inst.sustain), when + a + d);
+                g2.gain.setValueAtTime(Math.max(0.0001, twinPeak * inst.sustain), when + Math.max(a + d, gate - r));
+                g2.gain.exponentialRampToValueAtTime(0.0001, when + gate);
+                osc2.connect(g2);
+                g2.connect(bus);
+                osc2.start(when);
+                try { osc2.stop(when + gate + 0.04); } catch (e2) { /* ignore */ }
+            } catch (e) { /* ignore */ }
+        }
+
+        this._channels[ch] = { gain, source, release: r, filter, peak };
+    }
+
+    /** Advance song position by one row without scheduling audio. */
+    _advanceRowIndex() {
+        const track = this.track;
+        if (!track) return false;
+        const patId = track.order[this._orderIndex];
+        const pat = track.patternById[patId];
+        if (!pat) return false;
+        this._rowIndex += 1;
+        if (this._rowIndex >= pat.rows.length) {
+            this._rowIndex = 0;
+            this._orderIndex += 1;
+            if (this._orderIndex >= track.order.length) {
+                if (track.loop) {
+                    this._orderIndex = 0;
+                } else {
+                    this.playing = false;
+                    this._finishNonLoop();
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     _scheduleRow(when) {
@@ -29967,24 +31380,119 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const patId = track.order[this._orderIndex];
         const pat = track.patternById[patId];
         if (!pat) return;
-        const row = pat.rows[this._rowIndex];
+        const rowIndex = this._rowIndex;
+        const row = pat.rows[rowIndex];
+        const styleMag = this._styleMag();
+        const styleSide = this._styleSide();
+        const themeIdx = Number(this.themeIndex) || 0;
+        const themeMeta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(themeIdx)
+            : { themeBreak: 0 };
+        const themeBreak = Number(themeMeta.themeBreak) || 0;
+        // Always keep authored section notes (planet / menu / victory / lose / …).
         if (row) {
             for (let c = 0; c < track.channels; c++) {
-                if (row[c]) this._trigger(c, row[c], when);
+                const cell = row[c];
+                if (cell) this._trigger(c, cell, when);
             }
         }
-        this._rowIndex += 1;
-        if (this._rowIndex >= pat.rows.length) {
-            this._rowIndex = 0;
-            this._orderIndex += 1;
-            if (this._orderIndex >= track.order.length) {
-                if (track.loop) this._orderIndex = 0;
-                else {
-                    this.playing = false;
-                    this._finishNonLoop();
-                    return;
-                }
+        // Light break overlay only — AMOUNT scales it; no forced floor that
+        // makes every screen sound like the same kit.
+        const breakAmt = styleMag < 0.03 ? 0
+            : styleMag * (themeIdx > 0
+                ? (0.22 + Math.min(0.45, themeBreak) * 0.35)
+                : 0.55);
+        const breakSide = (styleSide !== 'off' ? styleSide : null)
+            || (themeMeta.breakSide && themeMeta.breakSide !== 'off' ? themeMeta.breakSide : null)
+            || 'jungle';
+        if (breakAmt > 0.02) this._scheduleJungleHits(when, rowIndex, breakAmt, breakSide);
+        this._advanceRowIndex();
+    }
+
+    /**
+     * Extra breakbeat pressure — Jungle / DnB / hybrid / minimal / NIGHTRUN drive.
+     * @param {number} [amountOverride]
+     * @param {'jungle'|'dnb'|'hybrid'|'elektro'|'drive'} [sideOverride]
+     */
+    _scheduleJungleHits(when, rowIndex, amountOverride, sideOverride) {
+        const amt = Math.max(0, Math.min(1, amountOverride != null
+            ? Number(amountOverride)
+            : this._styleMag()));
+        if (!(amt > 0)) return;
+        const side = sideOverride || this._styleSide() || 'jungle';
+        let bank;
+        if (side === 'dnb') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.dnbBreak)
+                ? VFTrackerThemes.dnbBreak
+                : this._dnbBreak;
+        } else if (side === 'hybrid') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.jungleDnbBreak)
+                ? VFTrackerThemes.jungleDnbBreak
+                : this._jungleBreak;
+        } else if (side === 'elektro') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.elektroBreak)
+                ? VFTrackerThemes.elektroBreak
+                : this._dnbBreak;
+        } else if (side === 'drive') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.driveBreak)
+                ? VFTrackerThemes.driveBreak
+                : this._driveBreak;
+        } else {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.amenBreak)
+                ? VFTrackerThemes.amenBreak
+                : this._jungleBreak;
+        }
+        const step = (bank || [])[rowIndex % 16];
+        if (!step) return;
+        const volScale = side === 'jungle' || side === 'hybrid'
+            ? (0.5 + amt * 0.95)
+            : side === 'drive'
+                ? (0.55 + amt * 0.8)
+                : side === 'elektro'
+                    ? (0.58 + amt * 0.72)
+                    : (0.45 + amt * 0.8);
+        const rowDur = this.rowDuration();
+        const gate = Math.max(0.045, Math.min(
+            side === 'jungle' || side === 'hybrid' ? 0.14
+                : side === 'drive' ? 0.16
+                    : side === 'elektro' ? 0.18 : 0.18,
+            rowDur * 0.85));
+        // Oneshots on drum bus — never call _trigger(3) (that cut authored notes).
+        const fire = (note, inst, vel, at, gateMul) => {
+            if (!(vel > 0.05)) return;
+            this._oneshot(3, {
+                note,
+                inst,
+                vol: Math.max(1, Math.min(64, Math.round(64 * vel * volScale)))
+            }, at, gate * (gateMul || 1));
+        };
+        if (step.k) fire('A-2', 5, step.k, when, side === 'dnb' || side === 'elektro' || side === 'drive' ? 1.35 : 1);
+        if (step.s) fire('A-4', 4, step.s * (side === 'elektro' ? 0.85 : side === 'drive' ? 1.05 : 1), when);
+        if (step.h) {
+            fire('A-5', 4, step.h * (side === 'elektro' ? 0.9
+                : side === 'dnb' ? 0.95
+                    : side === 'drive' ? 0.75 : 0.85), when, 0.7);
+        }
+
+        // Jungle / hybrid: half-row + micro chops. DnB: ghost snare.
+        // Elektro (dark minimal): offbeat hat pump under the 4/4.
+        if ((side === 'jungle' || side === 'hybrid') && step.r && amt > 0.18) {
+            const mid = when + rowDur * 0.5;
+            const rollVel = step.r * (0.6 + amt * 0.75);
+            fire('A-4', 4, rollVel, mid, 0.65);
+            if (amt > 0.45) {
+                fire('A-5', 4, rollVel * 0.55, when + rowDur * 0.25, 0.5);
+                fire('A-4', 4, rollVel * 0.75, when + rowDur * 0.75, 0.55);
             }
+        } else if (side === 'dnb' && amt > 0.3 && step.s) {
+            fire('A-5', 4, 0.28 + amt * 0.25, when + rowDur * 0.5, 0.55);
+        } else if (side === 'elektro' && amt > 0.15) {
+            fire('A-5', 4, 0.28 + amt * 0.28, when + rowDur * 0.5, 0.5);
+            if (amt > 0.55 && step.k) {
+                fire('A-2', 5, 0.35 + amt * 0.2, when + rowDur * 0.5, 0.85);
+            }
+        } else if (side === 'drive' && amt > 0.2) {
+            fire('A-5', 4, 0.2 + amt * 0.2, when + rowDur * 0.5, 0.5);
         }
     }
 
@@ -30005,14 +31513,28 @@ var VFTrackerPlayer = class VFTrackerPlayer {
     _tick() {
         if (!this.playing || !this.track || !this.ctx) return;
         const rowDur = this.rowDuration();
-        const horizon = this.ctx.currentTime + this.scheduleAhead;
+        if (!(rowDur > 0)) return;
+        const now = this.ctx.currentTime;
+        // Only drop rows that fell completely outside the lookahead window.
+        // Mildly late rows still play (slightly late) — skipping them made holes.
+        const dropBefore = now - this.scheduleAhead;
+        while (this.playing && this._nextRowTime < dropBefore) {
+            if (!this._advanceRowIndex()) return;
+            this._nextRowTime += rowDur;
+        }
+        const horizon = now + this.scheduleAhead;
         while (this.playing && this._nextRowTime < horizon) {
-            this._scheduleRow(this._nextRowTime);
+            const when = Math.max(this._nextRowTime, now + 0.008);
+            this._scheduleRow(when);
             this._nextRowTime += rowDur;
         }
     }
 
     stop(immediate) {
+        if (this._fadeOutTimer) {
+            clearTimeout(this._fadeOutTimer);
+            this._fadeOutTimer = null;
+        }
         if (this._timer) {
             clearInterval(this._timer);
             this._timer = null;
@@ -30060,7 +31582,7 @@ var VFTrackerDefaults = {
         return [
             { id: 1, name: 'wave', wave: 'triangle', volume: 0.7, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
             { id: 2, name: 'pulse1', wave: 'square', volume: 0.28, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
-            { id: 3, name: 'pulse2', wave: 'square', volume: 0.4, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05 },
+            { id: 3, name: 'pulse2', wave: 'square', volume: 0.58, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.05 },
             { id: 4, name: 'noise', wave: 'noise', volume: 0.32, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
             { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
         ];
@@ -30456,7 +31978,7 @@ var VFTrackerDefaults = {
                     pad(tx(ch[0], key)),
                     pad(tx(ch[1], key)),
                     pad(tx(ch[2], key)),
-                    pad(ch[3])
+                    pad(tx(ch[3], key))
                 ]
             };
         });
@@ -30516,6 +32038,457 @@ var VFTrackerDefaults = {
             'mars', 'jupiter', 'saturn', 'neptune', 'pluto',
             'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'
         ];
+    }
+};
+
+
+/* --- js/game/tracker/themes.js --- */
+"use strict";
+
+/**
+ * Selectable melody / bass Grundthemen for VF Tracker.
+ * Theme 0 = keep planet-authored channels. 1+ replace bass/lead/arp with
+ * style heads; break layer + mix morph are driven by STYLE AMOUNT (0..1).
+ *
+ * Indices 0–6 stay stable (renames only). New styles append at the end.
+ */
+var VFTrackerThemes = {
+    REF_BPM: 174,
+
+    /** UI / storage order — indices 0–6 must stay stable once shipped. */
+    list: [
+        { id: 'planet', label: 'PLANET' },
+        { id: 'jungle_dnb', label: 'JUNGLE' },
+        { id: 'minimal_elektro', label: 'MINIMAL' }, // dark minimal techno (Max Minimal–style)
+        { id: 'amen', label: 'AMEN' },
+        { id: 'reese', label: 'REESE' },
+        { id: 'neuro', label: 'NEURO' },
+        { id: 'liquid', label: 'LIQUID' },
+        { id: 'dnb', label: 'DNB' },
+        { id: 'nightrun', label: 'NIGHTRUN' }
+    ],
+
+    /**
+     * Per-style playback hints used by the tracker player / tempo morph.
+     * breakSide: 'jungle' | 'dnb' | 'elektro' | 'hybrid' | 'drive' | 'off'
+     */
+    _meta: {
+        planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0 },
+        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.42, themeBreak: 0.95 },
+        // Dark minimal techno: heavy 4/4 + sub — ref https://www.youtube.com/watch?v=mv8vJQaUpDU
+        minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.14, themeBreak: 0.92 },
+        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.32, themeBreak: 0.9 },
+        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.26, themeBreak: 0.78 },
+        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.68 },
+        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.14, themeBreak: 0.45 },
+        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.28, themeBreak: 0.92 },
+        nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.18, themeBreak: 0.88 }
+    },
+
+    count() {
+        return this.list.length;
+    },
+
+    labelOf(index) {
+        const i = Math.max(0, Math.min(this.list.length - 1, Math.round(Number(index) || 0)));
+        return this.list[i].label;
+    },
+
+    idOf(index) {
+        const i = Math.max(0, Math.min(this.list.length - 1, Math.round(Number(index) || 0)));
+        return this.list[i].id;
+    },
+
+    indexOfId(id) {
+        const key = String(id || '');
+        for (let i = 0; i < this.list.length; i++) {
+            if (this.list[i].id === key) return i;
+        }
+        return 0;
+    },
+
+    metaOf(indexOrId) {
+        const id = typeof indexOrId === 'string'
+            ? indexOrId
+            : this.idOf(indexOrId);
+        return this._meta[id] || this._meta.planet;
+    },
+
+    /** Three development patterns (P0 state / P1 sequence / P2 climax), 16 rows. */
+    _banks: {
+        // Classic jungle: chopped Amen bass, ragga hooks, open space for breaks.
+        jungle_dnb: [
+            {
+                bass: 'A-1:1:70 A-1:1:36 . E-1:1:52 A-1:1:28 . A-1:1:64 . E-1:1:44 . A-1:1:68 A-1:1:32 . E-1:1:48 . A-1:1:56 .',
+                lead: 'A-4:2:46 . . . C-5:2:34 . . . E-5:2:52 . . D-5:2:38 . . C-5:2:32 . A-4:2:40 .',
+                arp: 'E-3:3:20 . A-3:3:10 . . E-3:3:14 . . A-3:3:16 . E-3:3:12 . . A-3:3:10 . E-3:3:08 .'
+            },
+            {
+                bass: 'F-1:1:66 F-1:1:34 . C-1:1:48 F-1:1:26 . G-1:1:60 . D-1:1:42 . F-1:1:62 F-1:1:30 . C-1:1:44 . G-1:1:52 .',
+                lead: 'F-4:2:42 . . . A-4:2:30 . . . C-5:2:48 . . B-4:2:34 . . A-4:2:28 . G-4:2:36 .',
+                arp: 'C-3:3:18 . F-3:3:10 . . C-3:3:12 . . G-3:3:14 . D-3:3:10 . . F-3:3:08 . C-3:3:06 .'
+            },
+            {
+                bass: 'A-1:1:74 A-1:1:40 . E-1:1:56 A-1:1:66 . E-1:1:36 G-1:1:54 . A-1:1:72 A-1:1:38 . E-1:1:50 A-1:1:60 . E-1:1:42',
+                lead: 'A-5:2:54 . C-6:2:42 . . E-6:2:58 . D-6:2:46 . . C-6:2:44 . A-5:2:40 . G-5:2:38 . A-5:2:48',
+                arp: 'A-3:3:22 . E-3:3:14 A-3:3:18 . C-4:3:24 . E-3:3:12 . A-3:3:16 G-3:3:12 . E-3:3:10 . A-3:3:14'
+            }
+        ],
+        // Dark minimal techno (Max Minimal / dark techno set vibe):
+        // pumping 4/4 sub, delayed minor stabs, muted offbeat ticks — hypnotic, not empty.
+        minimal_elektro: [
+            {
+                bass: 'A-1:1:72 A-1:1:34 . A-1:1:50 A-1:1:68 A-1:1:30 . A-1:1:46 A-1:1:70 A-1:1:32 . A-1:1:48 A-1:1:66 A-1:1:28 . A-1:1:44',
+                lead: '. . A-3:2:38 . . . . E-3:2:28 . . . A-3:2:34 . . . E-3:2:24',
+                arp: 'E-4:3:18 . . E-4:3:10 . E-4:3:14 . . A-4:3:12 . E-4:3:10 . . E-4:3:12 . E-4:3:08'
+            },
+            {
+                bass: 'F-1:1:68 F-1:1:32 . F-1:1:46 F-1:1:64 F-1:1:28 . F-1:1:42 G-1:1:66 G-1:1:30 . G-1:1:44 C-1:1:58 C-1:1:26 . C-1:1:40',
+                lead: '. . F-3:2:34 . . . . C-3:2:24 . . . F-3:2:30 . . . Ab3:2:22',
+                arp: 'C-4:3:16 . . C-4:3:08 . C-4:3:12 . . F-4:3:10 . C-4:3:08 . . D-4:3:10 . C-4:3:06'
+            },
+            {
+                bass: 'A-1:1:76 A-1:1:36 A-1:1:52 . A-1:1:70 A-1:1:32 . E-1:1:60 E-1:1:34 . A-1:1:72 A-1:1:38 A-1:1:54 . A-1:1:66 A-1:1:30',
+                lead: '. A-3:2:42 . . E-3:2:30 . . A-3:2:36 . . C-4:2:40 . . A-3:2:32 . . E-3:2:26 .',
+                arp: 'A-4:3:20 . E-4:3:12 . A-4:3:16 . E-4:3:10 . A-4:3:18 . E-4:3:12 . C-5:3:14 . E-4:3:08'
+            }
+        ],
+        // Amen head (classic jungle hook bank).
+        amen: [
+            {
+                bass: 'A-1:1:62 A-1:1:40 . E-1:1:48 . A-1:1:58 A-1:1:36 . E-1:1:44 . A-1:1:60 . E-1:1:42 . A-1:1:50 . E-1:1:38',
+                lead: 'A-4:2:44 . . C-5:2:36 . . E-5:2:48 . D-5:2:40 . . C-5:2:38 . A-4:2:34 . . G-4:2:32 . A-4:2:40',
+                arp: 'E-3:3:18 . . . A-3:3:14 . . . E-3:3:16 . . . A-3:3:12 . . .'
+            },
+            {
+                bass: 'F-1:1:58 F-1:1:36 . C-1:1:44 . G-1:1:56 G-1:1:34 . D-1:1:42 . F-1:1:54 . C-1:1:40 . G-1:1:48 . D-1:1:36',
+                lead: 'F-4:2:40 . . A-4:2:32 . . C-5:2:44 . B-4:2:36 . . A-4:2:34 . G-4:2:30 . . E-4:2:28 . F-4:2:36',
+                arp: 'C-3:3:16 . . . F-3:3:12 . . . D-3:3:14 . . . G-3:3:10 . . .'
+            },
+            {
+                bass: 'A-1:1:66 A-1:1:44 . E-1:1:52 . A-1:1:62 A-1:1:40 . G-1:1:50 . A-1:1:64 . E-1:1:46 . A-1:1:54 . E-1:1:40',
+                lead: 'A-5:2:50 . C-6:2:40 . E-6:2:54 . D-6:2:46 . C-6:2:44 . A-5:2:38 . G-5:2:36 . A-5:2:42',
+                arp: 'A-3:3:20 . E-3:3:12 . E-3:3:12 A-3:3:18 . C-4:3:22 . E-3:3:12 A-3:3:16 . G-3:3:12 . E-3:3:10 .'
+            }
+        ],
+        // Dark Reese: long sub drones, almost no lead — pressure from bass + breaks.
+        reese: [
+            {
+                bass: 'A-1:1:70 . . . A-1:1:58 . . . A-1:1:66 . . . E-1:1:50 . . .',
+                lead: 'A-4:2:28 . . . . . E-4:2:22 . . . . . A-4:2:26 . . .',
+                arp: 'E-2:3:10 . . . . . . . A-2:3:08 . . . . . . .'
+            },
+            {
+                bass: 'F-1:1:66 . . . F-1:1:54 . . . G-1:1:62 . . . D-1:1:48 . . .',
+                lead: 'F-4:2:24 . . . . . C-4:2:20 . . . . . G-4:2:22 . . .',
+                arp: 'C-2:3:08 . . . . . . . D-2:3:06 . . . . . . .'
+            },
+            {
+                bass: 'A-1:1:74 . . A-1:1:50 . A-1:1:68 . . E-1:1:56 . A-1:1:72 . . A-1:1:52 . E-1:1:48 . .',
+                lead: 'A-5:2:36 . . E-5:2:28 . . C-5:2:30 . . A-4:2:32 . . E-4:2:24 . . A-4:2:34 .',
+                arp: 'A-2:3:14 . . . E-2:3:10 . . . A-2:3:12 . . . E-2:3:08 . . .'
+            }
+        ],
+        // Neuro: syncopated stabs, dissonant leaps, choppy bass.
+        neuro: [
+            {
+                bass: 'A-1:1:64 . A-1:1:30 A-1:1:48 . E-1:1:40 A-1:1:58 . A-1:1:28 . E-1:1:52 A-1:1:36 . A-1:1:44 . E-1:1:32',
+                lead: 'A-4:2:52 . . Eb5:2:40 . . A-4:2:46 . G-4:2:34 . . C-5:2:48 . . Bb4:2:36 . A-4:2:42 .',
+                arp: 'E-4:3:22 . . A-4:3:16 . . E-4:3:18 . . Bb3:3:14 . . E-4:3:16 . . A-4:3:12 .'
+            },
+            {
+                bass: 'Bb0:1:60 . Bb0:1:28 F-1:1:46 . Bb0:1:54 . F-1:1:26 . C-1:1:50 Bb0:1:34 . F-1:1:42 . C-1:1:30',
+                lead: 'Bb4:2:48 . . F-5:2:38 . . Eb5:2:42 . D-5:2:32 . . F-5:2:44 . . Eb5:2:34 . Bb4:2:40 .',
+                arp: 'F-4:3:20 . . Bb4:3:14 . . F-4:3:16 . . D-4:3:12 . . F-4:3:14 . . Bb4:3:10 .'
+            },
+            {
+                bass: 'A-1:1:68 A-1:1:34 . E-1:1:50 A-1:1:62 . E-1:1:32 A-1:1:56 . G-1:1:46 A-1:1:64 . E-1:1:38 A-1:1:52 .',
+                lead: 'A-5:2:56 . Eb6:2:44 . A-5:2:50 . G-5:2:40 . Eb6:2:52 . C-6:2:42 . Bb5:2:38 . A-5:2:46',
+                arp: 'A-4:3:24 . E-4:3:14 . Bb4:3:18 . E-4:3:12 A-4:3:20 . Eb4:3:16 . A-4:3:18 . E-4:3:10 .'
+            }
+        ],
+        // Liquid: smoother 7ths / floating arp, still break-friendly.
+        liquid: [
+            {
+                bass: 'A-1:1:54 . . E-1:1:42 . A-1:1:50 . . E-1:1:38 . A-1:1:52 . . E-1:1:40 . A-1:1:46 .',
+                lead: 'A-4:2:40 . C-5:2:34 . E-5:2:44 . G-5:2:36 . E-5:2:38 . C-5:2:32 . B-4:2:30 . A-4:2:36',
+                arp: 'E-4:3:14 C-4:3:10 . A-3:3:12 . E-4:3:12 C-4:3:08 . A-3:3:10 . E-4:3:12 C-4:3:08 . A-3:3:10 .'
+            },
+            {
+                bass: 'F-1:1:50 . . C-1:1:38 . G-1:1:48 . . D-1:1:36 . F-1:1:46 . . C-1:1:34 . G-1:1:42 .',
+                lead: 'F-4:2:36 . A-4:2:30 . C-5:2:40 . E-5:2:32 . D-5:2:34 . C-5:2:28 . A-4:2:26 . G-4:2:32',
+                arp: 'C-4:3:12 A-3:3:08 . F-3:3:10 . D-4:3:12 B-3:3:08 . G-3:3:10 . C-4:3:12 A-3:3:08 . F-3:3:10 .'
+            },
+            {
+                bass: 'A-1:1:58 . . E-1:1:44 . A-1:1:54 . . G-1:1:46 . A-1:1:56 . . E-1:1:42 . A-1:1:50 .',
+                lead: 'A-5:2:44 . C-6:2:38 . E-6:2:48 . G-6:2:40 . E-6:2:42 . C-6:2:36 . B-5:2:34 . A-5:2:40',
+                arp: 'A-4:3:16 E-4:3:12 . C-4:3:14 . A-4:3:14 E-4:3:10 . C-4:3:12 . A-4:3:14 E-4:3:10 . C-4:3:12 .'
+            }
+        ],
+        // Proper DnB: half-time sub, two-step space, sparse neuro stabs.
+        dnb: [
+            {
+                bass: 'A-1:1:72 . . . A-1:1:48 . . . A-1:1:68 . . E-1:1:52 . A-1:1:58 . . .',
+                lead: 'A-4:2:36 . . . . . . C-5:2:28 . . . . . E-4:2:32 . . .',
+                arp: 'E-3:3:14 . . . . . A-3:3:10 . . . . . E-3:3:12 . . .'
+            },
+            {
+                bass: 'F-1:1:68 . . . F-1:1:44 . . . G-1:1:64 . . D-1:1:48 . F-1:1:54 . . .',
+                lead: 'F-4:2:32 . . . . . . A-4:2:24 . . . . . C-4:2:28 . . .',
+                arp: 'C-3:3:12 . . . . . F-3:3:08 . . . . . D-3:3:10 . . .'
+            },
+            {
+                bass: 'A-1:1:76 . . A-1:1:42 . A-1:1:70 . . E-1:1:56 . A-1:1:74 . . A-1:1:46 . E-1:1:50 . .',
+                lead: 'A-5:2:44 . . Eb5:2:34 . . . A-4:2:38 . . G-4:2:30 . . C-5:2:36 . . A-4:2:40',
+                arp: 'A-3:3:16 . . E-3:3:10 . . A-3:3:14 . . E-3:3:08 . Bb3:3:12 . . E-3:3:08 .'
+            }
+        ],
+        // NIGHTRUN — darksynth / neon-highway (Carpenter Brut–adjacent, original name).
+        // Driving minor riffs, heavy octaves, cinematic lead, relentless pulse.
+        nightrun: [
+            {
+                bass: 'A-1:1:74 A-1:1:50 A-1:1:58 A-1:1:42 A-1:1:70 A-1:1:48 A-1:1:56 A-1:1:40 A-1:1:72 A-1:1:46 A-1:1:54 A-1:1:38 E-1:1:62 E-1:1:44 E-1:1:52 E-1:1:36',
+                lead: 'A-3:2:58 . C-4:2:48 . E-4:2:62 . D-4:2:52 . C-4:2:50 . A-3:2:44 . G-3:2:42 . A-3:2:54',
+                arp: 'A-4:3:28 E-4:3:18 . C-5:3:24 . A-4:3:22 E-4:3:14 . C-5:3:20 . A-4:3:18 E-4:3:12 . G-4:3:16'
+            },
+            {
+                bass: 'F-1:1:70 F-1:1:46 F-1:1:54 F-1:1:38 F-1:1:66 F-1:1:44 F-1:1:52 F-1:1:36 G-1:1:68 G-1:1:42 G-1:1:50 G-1:1:34 D-1:1:58 D-1:1:40 D-1:1:48 D-1:1:32',
+                lead: 'F-3:2:54 . Ab3:2:44 . C-4:2:58 . Bb3:2:48 . Ab3:2:46 . F-3:2:40 . Eb3:2:38 . F-3:2:50',
+                arp: 'F-4:3:26 C-4:3:16 . Ab4:3:22 . F-4:3:20 C-4:3:12 . Ab4:3:18 . F-4:3:16 C-4:3:10 . Eb4:3:14'
+            },
+            {
+                bass: 'A-1:1:78 A-1:1:54 A-1:1:62 A-1:1:46 A-1:1:74 A-1:1:52 E-1:1:66 E-1:1:44 A-1:1:76 A-1:1:50 A-1:1:60 A-1:1:42 G-1:1:64 G-1:1:46 E-1:1:58 E-1:1:40',
+                lead: 'A-4:2:64 . C-5:2:52 . E-5:2:68 . G-5:2:56 . E-5:2:58 . C-5:2:48 . B-4:2:46 . A-4:2:60',
+                arp: 'A-5:3:32 E-5:3:22 . C-6:3:28 . A-5:3:26 E-5:3:18 . C-6:3:24 . A-5:3:22 E-5:3:16 . G-5:3:20'
+            }
+        ]
+    },
+
+    /**
+     * Amen-chop 16-step break (Jungle) — denser ragga chops.
+     * k=kick, s=snare, h=hat, r=half-row roll.
+     */
+    amenBreak: [
+        { k: 1 }, { h: 0.5, r: 0.65 }, { h: 0.8 }, { k: 0.6, h: 0.35 },
+        { s: 1 }, { h: 0.45 }, { s: 0.7, r: 0.85 }, { k: 0.75 },
+        { h: 0.6 }, { k: 0.65, h: 0.3 }, { s: 1, r: 0.75 }, { h: 0.65 },
+        { k: 1 }, { s: 0.85, r: 0.95 }, { h: 0.8, r: 0.4 }, { s: 1 }
+    ],
+
+    /** Two-step / rolling DnB break — clear kick-snare, rolling hats. */
+    dnbBreak: [
+        { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
+        { s: 1 }, { h: 0.45 }, { k: 0.6, h: 0.35 }, { h: 0.55 },
+        { h: 0.4 }, { h: 0.6 }, { s: 0.95 }, { h: 0.45 },
+        { k: 1 }, { h: 0.5 }, { h: 0.4, r: 0.25 }, { s: 0.8 }
+    ],
+
+    /** Legacy hybrid map (kept for older callers). */
+    jungleDnbBreak: [
+        { k: 1 }, { h: 0.45, r: 0.5 }, { h: 0.65 }, { k: 0.5 },
+        { s: 1 }, { h: 0.4 }, { k: 0.55, r: 0.4 }, { h: 0.5 },
+        { h: 0.45 }, { k: 0.6 }, { s: 1, r: 0.6 }, { h: 0.55 },
+        { k: 0.95 }, { h: 0.45 }, { s: 0.75, r: 0.55 }, { s: 0.9 }
+    ],
+
+    /**
+     * Dark minimal techno kit: hard 4/4 kick, clap/snare on 2+4,
+     * rolling closed hats — club pressure, not sparse ticks.
+     */
+    elektroBreak: [
+        { k: 1 }, { h: 0.48 }, { h: 0.62 }, { h: 0.4 },
+        { k: 1, s: 0.78 }, { h: 0.45 }, { h: 0.58 }, { h: 0.38 },
+        { k: 1 }, { h: 0.5 }, { h: 0.65 }, { h: 0.42 },
+        { k: 0.98, s: 0.85 }, { h: 0.48 }, { h: 0.55 }, { h: 0.36 }
+    ],
+
+    /** NIGHTRUN drive: pounding 4/4, snare on 2/4, tight hats. */
+    driveBreak: [
+        { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+        { k: 1 }, { h: 0.45 }, { s: 0.95, h: 0.3 }, { h: 0.4 },
+        { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+        { k: 1 }, { h: 0.5 }, { s: 1, h: 0.35 }, { h: 0.45 }
+    ],
+
+    /**
+     * Resolve theme channel cell for patternIndex / row / channel (0 bass,1 lead,2 arp).
+     * Returns null to keep planet-authored cell (theme 0 / unknown).
+     */
+    cellAt(themeIndex, patternIndex, rowIndex, channel) {
+        const id = this.idOf(themeIndex);
+        if (!id || id === 'planet') return null;
+        const bank = this._banks[id];
+        if (!bank || !bank.length) return null;
+        const pat = bank[Math.abs(patternIndex | 0) % bank.length];
+        if (!pat) return null;
+        const key = channel === 0 ? 'bass' : channel === 1 ? 'lead' : channel === 2 ? 'arp' : null;
+        if (!key || !pat[key]) return null;
+        if (typeof VFTrackerParse === 'undefined' || !VFTrackerParse.expandChannelString) return null;
+        const padded = VFTrackerParse.padChannelString
+            ? VFTrackerParse.padChannelString(pat[key], 16)
+            : pat[key];
+        const cells = VFTrackerParse.expandChannelString(padded, 16);
+        return cells[rowIndex % 16] || null;
+    }
+};
+
+
+/* --- js/game/tracker/voices.js --- */
+"use strict";
+
+/**
+ * Per-channel voice presets for BASS / LEAD / ARP / DRUMS sliders.
+ * `default` keeps the track's authored instrument for that hit.
+ */
+var VFTrackerVoices = {
+    channels: [
+        {
+            id: 'bass',
+            label: 'BASS',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'wave', label: 'WAVE' },
+                { id: 'reese', label: 'REESE' },
+                { id: 'square', label: 'SQUARE' },
+                { id: 'sine', label: 'SINE' },
+                { id: 'sub', label: 'SUB' },
+                { id: 'saw', label: 'SAW' },
+                { id: 'grit', label: 'GRIT' },
+                { id: 'growl', label: 'GROWL' },
+                { id: 'deep', label: 'DEEP' }
+            ]
+        },
+        {
+            id: 'lead',
+            label: 'LEAD',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'pulse', label: 'PULSE' },
+                { id: 'square', label: 'SQUARE' },
+                { id: 'saw', label: 'SAW' },
+                { id: 'tri', label: 'TRI' },
+                { id: 'bell', label: 'BELL' },
+                { id: 'sine', label: 'SINE' },
+                { id: 'chip', label: 'CHIP' },
+                { id: 'soft', label: 'SOFT' },
+                { id: 'growl', label: 'GROWL' }
+            ]
+        },
+        {
+            id: 'arp',
+            label: 'ARP',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'pulse', label: 'PULSE' },
+                { id: 'square', label: 'SQUARE' },
+                { id: 'tri', label: 'TRI' },
+                { id: 'pluck', label: 'PLUCK' },
+                { id: 'soft', label: 'SOFT' },
+                { id: 'saw', label: 'SAW' },
+                { id: 'sine', label: 'SINE' },
+                { id: 'bell', label: 'BELL' },
+                { id: 'chirp', label: 'CHIRP' }
+            ]
+        },
+        {
+            id: 'drums',
+            label: 'DRUMS',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'kit', label: 'KIT' },
+                { id: 'noise', label: 'NOISE' },
+                { id: 'kick', label: 'KICK' },
+                { id: 'metal', label: 'METAL' },
+                { id: 'soft', label: 'SOFT' },
+                { id: 'click', label: 'CLICK' },
+                { id: 'snare', label: 'SNARE' },
+                { id: 'crunch', label: 'CRUNCH' },
+                { id: 'tight', label: 'TIGHT' }
+            ]
+        }
+    ],
+
+    _presets: {
+        bass: {
+            wave: { wave: 'triangle', volume: 0.72, attack: 0.001, decay: 0.04, sustain: 0.6, release: 0.08, filter: 1800 },
+            reese: { wave: 'sawtooth', volume: 0.62, attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.14, filter: 520 },
+            square: { wave: 'square', volume: 0.5, attack: 0.001, decay: 0.05, sustain: 0.55, release: 0.08, filter: 900 },
+            sine: { wave: 'sine', volume: 0.85, attack: 0.001, decay: 0.05, sustain: 0.75, release: 0.1, filter: 1200 },
+            sub: { wave: 'sine', volume: 0.95, attack: 0.002, decay: 0.06, sustain: 0.85, release: 0.16, filter: 280 },
+            saw: { wave: 'sawtooth', volume: 0.58, attack: 0.001, decay: 0.06, sustain: 0.62, release: 0.1, filter: 700 },
+            grit: { wave: 'square', volume: 0.48, attack: 0.001, decay: 0.07, sustain: 0.5, release: 0.09, filter: 640 },
+            growl: { wave: 'sawtooth', volume: 0.55, attack: 0.003, decay: 0.1, sustain: 0.68, release: 0.18, filter: 420 },
+            deep: { wave: 'triangle', volume: 0.9, attack: 0.002, decay: 0.08, sustain: 0.8, release: 0.2, filter: 360 }
+        },
+        lead: {
+            pulse: { wave: 'square', volume: 0.3, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
+            square: { wave: 'square', volume: 0.34, attack: 0.001, decay: 0.04, sustain: 0.36, release: 0.07, filter: 2800 },
+            saw: { wave: 'sawtooth', volume: 0.28, attack: 0.001, decay: 0.06, sustain: 0.3, release: 0.09, filter: 2200 },
+            tri: { wave: 'triangle', volume: 0.4, attack: 0.001, decay: 0.05, sustain: 0.4, release: 0.1, filter: 2600 },
+            bell: { wave: 'sine', volume: 0.45, attack: 0.001, decay: 0.12, sustain: 0.15, release: 0.18, filter: 3200 },
+            sine: { wave: 'sine', volume: 0.42, attack: 0.002, decay: 0.06, sustain: 0.38, release: 0.12, filter: 2800 },
+            chip: { wave: 'square', volume: 0.32, attack: 0.001, decay: 0.02, sustain: 0.28, release: 0.04, filter: 4000 },
+            soft: { wave: 'triangle', volume: 0.36, attack: 0.004, decay: 0.08, sustain: 0.34, release: 0.14, filter: 1800 },
+            growl: { wave: 'sawtooth', volume: 0.3, attack: 0.002, decay: 0.1, sustain: 0.28, release: 0.12, filter: 1400 }
+        },
+        arp: {
+            pulse: { wave: 'square', volume: 0.58, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.05 },
+            square: { wave: 'square', volume: 0.62, attack: 0.001, decay: 0.03, sustain: 0.42, release: 0.05, filter: 3600 },
+            tri: { wave: 'triangle', volume: 0.6, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.06, filter: 2800 },
+            pluck: { wave: 'square', volume: 0.58, attack: 0.001, decay: 0.08, sustain: 0.12, release: 0.04, filter: 3000 },
+            soft: { wave: 'sine', volume: 0.5, attack: 0.002, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2200 },
+            saw: { wave: 'sawtooth', volume: 0.52, attack: 0.001, decay: 0.04, sustain: 0.34, release: 0.05, filter: 3200 },
+            sine: { wave: 'sine', volume: 0.48, attack: 0.001, decay: 0.04, sustain: 0.3, release: 0.07, filter: 2600 },
+            bell: { wave: 'sine', volume: 0.54, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.12, filter: 3800 },
+            chirp: { wave: 'square', volume: 0.5, attack: 0.001, decay: 0.015, sustain: 0.08, release: 0.03, filter: 4500 }
+        },
+        drums: {
+            kit: null,
+            noise: { wave: 'noise', volume: 0.36, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+            kick: { wave: 'triangle', volume: 0.82, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 380 },
+            metal: { wave: 'noise', volume: 0.4, attack: 0.001, decay: 0.015, sustain: 0.02, release: 0.03, filter: 5000 },
+            soft: { wave: 'noise', volume: 0.22, attack: 0.002, decay: 0.04, sustain: 0.01, release: 0.05 },
+            click: { wave: 'noise', volume: 0.28, attack: 0.001, decay: 0.008, sustain: 0.01, release: 0.015, filter: 6000 },
+            snare: { wave: 'noise', volume: 0.42, attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.04, filter: 3200 },
+            crunch: { wave: 'noise', volume: 0.38, attack: 0.001, decay: 0.05, sustain: 0.03, release: 0.05, filter: 2200 },
+            tight: { wave: 'triangle', volume: 0.7, attack: 0.001, decay: 0.03, sustain: 0.02, release: 0.02, filter: 520 }
+        }
+    },
+
+    optionsFor(ch) {
+        const row = this.channels[ch];
+        return row ? row.options : [{ id: 'default', label: 'DEFAULT' }];
+    },
+
+    labelOf(ch, voiceId) {
+        const opts = this.optionsFor(ch);
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].id === voiceId) return opts[i].label;
+        }
+        return 'DEFAULT';
+    },
+
+    indexOf(ch, voiceId) {
+        const opts = this.optionsFor(ch);
+        const id = String(voiceId || 'default');
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].id === id) return i;
+        }
+        return 0;
+    },
+
+    /**
+     * Resolve instrument for a channel voice. Returns authored `base` for default/kit.
+     */
+    resolve(ch, voiceId, base) {
+        const key = ch === 0 ? 'bass' : ch === 1 ? 'lead' : ch === 2 ? 'arp' : 'drums';
+        const id = String(voiceId || 'default');
+        if (id === 'default' || id === 'kit') return base || null;
+        const bank = this._presets[key];
+        const preset = bank && bank[id];
+        if (!preset) return base || null;
+        const out = Object.assign({ id: (base && base.id) || (ch + 1), name: id }, preset);
+        return out;
     }
 };
 
@@ -31049,14 +33022,63 @@ var VFTrackerManager = class VFTrackerManager {
         this.currentKey = null;
         this.enabled = true;
         this.volume = 0.2;
+        /** Crossfade length when swapping distinct tracks (seconds). */
+        this.crossfadeSeconds = 1.4;
+        this._outgoing = [];
+        /** Manager-owned mixer state — survives fadeOut/stop player swaps. */
+        this._themeIndex = 0;
+        this._jungleAmount = 0;
         this.loadLibrary();
-        // Pick up persisted AUDIO → MUSIC SPEED (volumeControls may load earlier).
-        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicSpeed) {
-            this.setTempoScale(volumeControlsManager.getMusicSpeed());
+        /** Typical authored combat BPM — local-audio rate is musicBpm / this. */
+        this.referenceBpm = 132;
+        // Pick up persisted AUDIO → MUSIC BPM (volumeControls may load earlier).
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicBpm) {
+            this.setPlaybackBpm(volumeControlsManager.getMusicBpm());
+        } else if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicSpeed) {
+            this.setPlaybackBpm(volumeControlsManager.getMusicSpeed() * this.referenceBpm);
         } else {
             try {
-                const saved = localStorage.getItem('vf_musicSpeed');
-                if (saved != null) this.setTempoScale(parseFloat(saved));
+                const savedBpm = localStorage.getItem('vf_musicBpm');
+                if (savedBpm != null) this.setPlaybackBpm(parseFloat(savedBpm));
+                else {
+                    const saved = localStorage.getItem('vf_musicSpeed');
+                    if (saved != null) this.setPlaybackBpm(parseFloat(saved) * this.referenceBpm);
+                }
+            } catch (e) { /* ignore */ }
+        }
+        try {
+            const xf = localStorage.getItem('vf_musicCrossfade');
+            if (xf != null && Number.isFinite(parseFloat(xf))) {
+                this.crossfadeSeconds = Math.max(0.2, Math.min(3, parseFloat(xf)));
+            }
+        } catch (e) { /* ignore */ }
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getJungleAmount) {
+            this.setJungleAmount(volumeControlsManager.getJungleAmount());
+        } else {
+            try {
+                const j = localStorage.getItem('vf_musicJungle');
+                if (j != null) this.setJungleAmount(parseFloat(j));
+            } catch (e) { /* ignore */ }
+        }
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicTheme != null) {
+            this.setThemeIndex(volumeControlsManager.getMusicTheme());
+        } else {
+            try {
+                const th = localStorage.getItem('vf_musicTheme');
+                if (th != null) this.setThemeIndex(parseInt(th, 10));
+            } catch (e) { /* ignore */ }
+        }
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.applyChannelVoices) {
+            volumeControlsManager.applyChannelVoices();
+        } else {
+            try {
+                const raw = localStorage.getItem('vf_channelVoices');
+                if (raw) {
+                    const arr = JSON.parse(raw);
+                    if (Array.isArray(arr) && arr.length === 4) {
+                        for (let i = 0; i < 4; i++) this.setChannelVoice(i, arr[i]);
+                    }
+                }
             } catch (e) { /* ignore */ }
         }
     }
@@ -31176,22 +33198,188 @@ var VFTrackerManager = class VFTrackerManager {
         this.player.setVolume(this.volume);
     }
 
+    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-2 user fine-tune multiplier. */
+    setChannelVolume(ch, v) {
+        if (this.player && this.player.setChannelVolume) this.player.setChannelVolume(ch, v);
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setChannelVolume) p.setChannelVolume(ch, v);
+        });
+    }
+
+    getChannelVolume(ch) {
+        const mix = this.player && this.player.channelUserMix && this.player.channelUserMix[ch];
+        return Number.isFinite(mix) ? mix : 1;
+    }
+
+    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. voiceId from VFTrackerVoices. */
+    setChannelVoice(ch, voiceId) {
+        let id = 'default';
+        if (this.player && this.player.setChannelVoice) {
+            id = this.player.setChannelVoice(ch, voiceId);
+        } else if (this.player) {
+            if (!this.player.channelVoices) this.player.channelVoices = ['default', 'default', 'default', 'default'];
+            this.player.channelVoices[ch] = String(voiceId || 'default');
+            id = this.player.channelVoices[ch];
+        }
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setChannelVoice) p.setChannelVoice(ch, voiceId);
+            else if (p) {
+                if (!p.channelVoices) p.channelVoices = ['default', 'default', 'default', 'default'];
+                p.channelVoices[ch] = String(voiceId || 'default');
+            }
+        });
+        return id;
+    }
+
+    getChannelVoice(ch) {
+        const v = this.player && this.player.channelVoices && this.player.channelVoices[ch];
+        return v || 'default';
+    }
+
     getTempoScale() {
+        const bpm = this.getPlaybackBpm();
+        const ref = this.referenceBpm || 132;
+        return Math.max(0.5, Math.min(4, bpm / ref));
+    }
+
+    getPlaybackBpm() {
+        if (Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0) {
+            return this._basePlaybackBpm;
+        }
+        const b = Number(this.player && this.player.playbackBpm);
+        if (Number.isFinite(b) && b > 0) return b;
         const s = Number(this.player && this.player.tempoScale);
-        return Number.isFinite(s) && s > 0 ? s : 1;
+        const ref = this.referenceBpm || 132;
+        if (Number.isFinite(s) && s > 0) return Math.round(ref * s);
+        return Math.round(ref * 3.5);
+    }
+
+    /** Absolute playback tempo in BPM (game clock + tracker). */
+    setPlaybackBpm(bpm) {
+        const b = Math.max(60, Math.min(600, Math.round(Number(bpm) || 120)));
+        this._basePlaybackBpm = b;
+        return this._applyPlaybackTempo();
+    }
+
+    getJungleAmount() {
+        if (Number.isFinite(this._jungleAmount)) return this._jungleAmount;
+        const a = Number(this.player && this.player.jungleAmount);
+        return Number.isFinite(a) ? a : 0;
+    }
+
+    /**
+     * Style intensity 0..1 — how far into the selected STYLE
+     * (break layer + mix morph + relative tempo boost on top of MUSIC BPM).
+     */
+    setJungleAmount(amount) {
+        let t = Math.max(0, Math.min(1, Number(amount) || 0));
+        if (t < 0.03) t = 0;
+        this._jungleAmount = t;
+        if (this.player && this.player.setJungleAmount) this.player.setJungleAmount(t);
+        else if (this.player) this.player.jungleAmount = t;
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setJungleAmount) p.setJungleAmount(t);
+            else if (p) p.jungleAmount = t;
+        });
+        this._applyPlaybackTempo();
+        return t;
+    }
+
+    getThemeIndex() {
+        if (Number.isFinite(this._themeIndex)) return this._themeIndex;
+        return Number(this.player && this.player.themeIndex) || 0;
+    }
+
+    /** Melody / style index — see VFTrackerThemes.list (dropdown). */
+    setThemeIndex(index) {
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 6;
+        const i = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
+        this._themeIndex = i;
+        if (this.player && this.player.setThemeIndex) this.player.setThemeIndex(i);
+        else if (this.player) this.player.themeIndex = i;
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setThemeIndex) p.setThemeIndex(i);
+            else if (p) p.themeIndex = i;
+        });
+        this._applyPlaybackTempo();
+        return i;
+    }
+
+    /**
+     * Re-assert THEME / STYLE / channel mix from volume UI (or manager memory)
+     * so every planet / menu / intro / combat swap keeps the selected head.
+     */
+    _reassertMixerSettings() {
+        if (typeof volumeControlsManager !== 'undefined') {
+            if (volumeControlsManager.getMusicTheme != null) {
+                this.setThemeIndex(volumeControlsManager.getMusicTheme());
+            }
+            if (volumeControlsManager.getJungleAmount != null) {
+                this.setJungleAmount(volumeControlsManager.getJungleAmount());
+            }
+            if (volumeControlsManager.applyChannelVolumes) {
+                volumeControlsManager.applyChannelVolumes();
+            }
+            if (volumeControlsManager.applyChannelVoices) {
+                volumeControlsManager.applyChannelVoices();
+            }
+            return;
+        }
+        this.setThemeIndex(this.getThemeIndex());
+        this.setJungleAmount(this.getJungleAmount());
+    }
+
+    /**
+     * Effective sequencer BPM = MUSIC BPM × style/theme boost × AMOUNT.
+     * Style never ignores the BPM slider (no fixed 560 target).
+     */
+    _applyPlaybackTempo() {
+        const base = Number.isFinite(this._basePlaybackBpm)
+            ? this._basePlaybackBpm
+            : this.getPlaybackBpm();
+        const styleMag = Math.max(0, Math.min(1, Math.abs(this.getJungleAmount()) || 0));
+        const themeIdx = this.getThemeIndex();
+        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(themeIdx)
+            : { tempoBoost: 0 };
+        // Tempo tint scales with AMOUNT only — no forced floor that locks every
+        // section to the same feel when a non-PLANET STYLE is selected.
+        const themeBoost = themeIdx > 0 ? (Number(meta.tempoBoost) || 0) * styleMag : 0;
+        const side = meta.breakSide || 'off';
+        const styleBoost = side === 'jungle' || side === 'hybrid' ? styleMag * 0.35
+            : side === 'dnb' ? styleMag * 0.24
+                : side === 'drive' ? styleMag * 0.16
+                    : side === 'elektro' ? styleMag * 0.12
+                        : 0;
+        const rel = 1 + Math.max(styleBoost, themeBoost);
+        const b = Math.max(60, Math.min(600, Math.round(base * rel)));
+        const ref = this.referenceBpm || 132;
+        const scale = Math.max(0.5, Math.min(4, b / ref));
+        if (this.player) {
+            this.player.playbackBpm = b;
+            this.player.tempoScale = scale;
+        }
+        (this._outgoing || []).forEach((p) => {
+            if (!p) return;
+            p.playbackBpm = b;
+            p.tempoScale = scale;
+        });
+        if (this.player && this.player.isPlaying()
+            && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
+            beatSyncManager.setBpm(b);
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
+            localAudioManager.setPlaybackRate(scale);
+        }
+        return b;
     }
 
     setTempoScale(scale) {
-        const s = Math.max(0.5, Math.min(4, Number(scale) || 1));
-        if (this.player) this.player.tempoScale = s;
-        if (this.player && this.player.isPlaying()
-            && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
-            beatSyncManager.setBpm(this.player.bpm);
-        }
-        if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
-            localAudioManager.setPlaybackRate(s);
-        }
-        return s;
+        const ref = this.referenceBpm || 132;
+        this.setPlaybackBpm((Number(scale) || 1) * ref);
+        return this.getTempoScale();
     }
 
     setEnabled(on) {
@@ -31199,19 +33387,124 @@ var VFTrackerManager = class VFTrackerManager {
         if (!this.enabled) this.stop();
     }
 
+    _fingerprint(track) {
+        if (!track) return null;
+        try {
+            return JSON.stringify(VFTrackerParse.toCompact(VFTrackerParse.normalize(track)));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Coarse playback role for a library key. Keep-same only within a role —
+     * combat→menu (planet select) must always swap, even under a non-PLANET style.
+     */
+    _trackRole(key) {
+        const k = String(key || '').toLowerCase();
+        if (!k) return 'combat';
+        if (k === 'menu' || k === 'station' || k === 'hub') return 'menu';
+        if (k === 'intro' || k.indexOf('intro:') === 0) return 'intro';
+        if (k === 'victory' || k.indexOf('victory:') === 0) return 'victory';
+        if (k === 'lose' || k.indexOf('lose:') === 0) return 'lose';
+        return 'combat';
+    }
+
+    _syncPlayerSettings(target) {
+        if (!target) return;
+        const src = this.player;
+        const theme = this.getThemeIndex();
+        const jungle = this.getJungleAmount();
+        const tempoScale = (src && src.tempoScale) || this.getTempoScale();
+        const playbackBpm = (src && src.playbackBpm) || this.getPlaybackBpm();
+        target.tempoScale = tempoScale;
+        target.playbackBpm = playbackBpm;
+        target.jungleAmount = jungle;
+        target.themeIndex = theme;
+        target.channelMixBase = ((src && src.channelMixBase) || [1.1, 0.42, 2.4, 1.25]).slice();
+        target.channelMixJungle = ((src && src.channelMixJungle) || [1.75, 0.06, 0.95, 2.85]).slice();
+        target.channelMixDnb = ((src && src.channelMixDnb) || [2.15, 0.1, 0.75, 1.95]).slice();
+        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.95, 0.08, 0.85, 2.4]).slice();
+        target.channelMixElektro = ((src && src.channelMixElektro) || [2.05, 0.16, 1.05, 1.95]).slice();
+        target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.45, 0.28, 1.65, 1.35]).slice();
+        target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.85, 0.72, 0.95, 2.05]).slice();
+        target.channelMix = ((src && src.channelMix) || target.channelMixBase).slice();
+        target.channelUserMix = ((src && src.channelUserMix) || [1, 1, 1, 1]).slice();
+        target.channelVoices = ((src && src.channelVoices) || ['default', 'default', 'default', 'default']).slice();
+        target.fadeSeconds = this.crossfadeSeconds;
+        target.volume = this.volume;
+        if (target.setJungleAmount) target.setJungleAmount(jungle);
+        if (target.setThemeIndex) target.setThemeIndex(theme);
+        if (target.setChannelVoice && target.channelVoices) {
+            for (let i = 0; i < 4; i++) target.setChannelVoice(i, target.channelVoices[i]);
+        }
+    }
+
+    _retireOutgoing(oldPlayer, fadeSec) {
+        if (!oldPlayer) return;
+        this._outgoing.push(oldPlayer);
+        const dur = oldPlayer.fadeOut ? oldPlayer.fadeOut(fadeSec) : 0;
+        setTimeout(() => {
+            try { oldPlayer.stop(true); } catch (e) { /* ignore */ }
+            this._outgoing = this._outgoing.filter((p) => p !== oldPlayer);
+        }, Math.max(0.05, dur) * 1000 + 80);
+    }
+
     play(key, trackOverride, opts) {
         if (!this.enabled) return false;
         const k = String(key || 'mars');
         let track = trackOverride || this.getTrack(k);
         if (!track) return false;
+        // Theme / style belong on every song — reassert before keep-or-swap.
+        this._reassertMixerSettings();
+        // Same song already audible (even under a new key) — keep row position.
+        // Never keep across roles (combat↔menu/intro/end): style heads must not
+        // glue hub and in-game into one continuous loop (PLANET-style swaps).
+        if (!(opts && opts.force) && !(opts && opts.onEnded) && this.player.isPlaying()) {
+            const sameRole = this._trackRole(this.currentKey) === this._trackRole(k);
+            if (sameRole) {
+                const fp = this._fingerprint(track);
+                if ((fp && fp === this._currentFingerprint) || this.currentKey === k) {
+                    this.currentKey = k;
+                    if (fp) this._currentFingerprint = fp;
+                    return true;
+                }
+            }
+        }
         const ctx = (opts && opts.context)
             || (typeof soundManager !== 'undefined' && soundManager.ensureContext
                 ? soundManager.ensureContext() : null);
         if (!ctx) return false;
+
+        const fade = opts && opts.fade != null
+            ? Math.max(0, Number(opts.fade) || 0)
+            : this.crossfadeSeconds;
+        const wasPlaying = this.player.isPlaying();
+        const hasOutgoing = !!(this._outgoing && this._outgoing.length);
+        const doFade = fade > 0 && !(opts && opts.forceHard);
+
+        // Crossfade: outgoing player keeps sounding while the new one fades in.
+        if (wasPlaying && doFade) {
+            const incoming = new VFTrackerPlayer();
+            this._syncPlayerSettings(incoming);
+            this._retireOutgoing(this.player, fade);
+            this.player = incoming;
+        } else {
+            // Soft-stop left a blank player — stamp manager THEME onto it.
+            this._syncPlayerSettings(this.player);
+        }
+
         this.currentKey = k;
+        this._currentFingerprint = this._fingerprint(track);
+        // Always ease in when a fade is requested — covers intro→combat and
+        // source handoffs where the previous player already finished.
+        const fadeIn = opts && opts.fadeIn != null
+            ? Math.max(0, Number(opts.fadeIn) || 0)
+            : (doFade ? fade : 0);
         this.player.play(track, {
             context: ctx,
             volume: this.volume,
+            fadeIn: (wasPlaying || hasOutgoing || doFade) ? fadeIn : 0,
             onEnded: opts && opts.onEnded
         });
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.start) {
@@ -31233,7 +33526,10 @@ var VFTrackerManager = class VFTrackerManager {
         if (!track) return false;
         // Force non-loop even if a library override set loop:true.
         const oneShot = Object.assign({}, VFTrackerParse.toCompact(track), { loop: false });
-        return this.play(k, oneShot, { onEnded: opts && opts.onEnded });
+        return this.play(k, oneShot, {
+            onEnded: opts && opts.onEnded,
+            fade: opts && opts.fade != null ? opts.fade : this.crossfadeSeconds
+        });
     }
 
     playPlanet(planetId) {
@@ -31242,25 +33538,63 @@ var VFTrackerManager = class VFTrackerManager {
     }
 
     playMenu() {
-        return this.play('menu');
+        // Always restart hub music when entering planet select / station —
+        // same as PLANET (default) style song swaps, even with THEME heads on.
+        return this.play('menu', null, { force: true });
     }
 
-    /**
-     * Try keys in order; first playable wins.
-     */
-    playFirst(keys) {
+    /** First library/default key that would actually play from `keys`. */
+    firstPlayableKey(keys) {
         const list = Array.isArray(keys) ? keys : [keys];
         for (let i = 0; i < list.length; i++) {
             const k = list[i];
-            if (!k || !this.hasTrack(k)) continue;
-            if (this.play(k)) return k;
+            if (k && this.hasTrack(k)) return String(k);
         }
         return null;
     }
 
-    stop() {
-        this.player.stop(true);
+    /**
+     * Try keys in order; first playable wins.
+     * If that song is already playing, keep its position.
+     */
+    playFirst(keys) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        const target = this.firstPlayableKey(list);
+        if (!target) return null;
+        if (this.currentKey === target && this.player.isPlaying()) return target;
+        if (this.play(target)) return target;
+        return null;
+    }
+
+    stop(opts) {
+        const fade = opts && opts.fade != null ? Number(opts.fade) : 0;
+        if (fade > 0 && this.player && this.player.isPlaying()) {
+            this._retireOutgoing(this.player, fade);
+            this.player = new VFTrackerPlayer();
+            this._syncPlayerSettings(this.player);
+        } else {
+            this.player.stop(true);
+            (this._outgoing || []).forEach((p) => {
+                try { p.stop(true); } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
         this.currentKey = null;
+        this._currentFingerprint = null;
+    }
+
+    /** Soft stop used when handing the bus to local/YouTube audio. */
+    fadeOut(seconds) {
+        const fade = seconds != null ? Number(seconds) : this.crossfadeSeconds;
+        if (!(fade > 0) || !this.player.isPlaying()) {
+            this.stop();
+            return;
+        }
+        this._retireOutgoing(this.player, fade);
+        this.player = new VFTrackerPlayer();
+        this._syncPlayerSettings(this.player);
+        this.currentKey = null;
+        this._currentFingerprint = null;
     }
 
     isPlaying(key) {
@@ -31300,6 +33634,16 @@ extendClass(SoundManager, {
         this._currentPlanetId = planetId;
         this._currentStageId = stageId || null;
         this._currentHostileFaction = this._resolveHostileFaction(planetId);
+        const ambientKey = 'ambient:' + (planetId || 'mars')
+            + ':' + (stageId || '')
+            + ':' + (this._currentHostileFaction || '');
+        // Same combat song already playing (e.g. next stage, same planet) → keep position.
+        if (this._combatSongAlreadyPlaying(planetId) && !this._resolveSoundtrackOverride()) {
+            this._pendingMissionIntro = false;
+            this._introPlaying = false;
+            this._activeOverrideKey = ambientKey;
+            return;
+        }
         // Always re-bind combat music when a stage boots (don't trust stale keys).
         this._activeOverrideKey = null;
         // Fresh stage boot → play one-shot intro before the combat loop.
@@ -31307,6 +33651,29 @@ extendClass(SoundManager, {
         this._introPlaying = false;
         this._reevaluateMusic();
         this._ensureCombatMusicPlaying();
+    },
+
+    /** True when the vftrack that combat would pick is already audible. */
+    _combatSongAlreadyPlaying(planetId) {
+        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.isPlaying
+            || !vfTrackerManager.isPlaying()) {
+            return false;
+        }
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const keys = this.combatTrackKeys
+            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+            : [id];
+        if (keys.indexOf(id) === -1) keys.push(id);
+        const target = vfTrackerManager.firstPlayableKey
+            ? vfTrackerManager.firstPlayableKey(keys)
+            : null;
+        if (target && vfTrackerManager.isPlaying(target)) return true;
+        for (let i = 0; i < keys.length; i++) {
+            if (vfTrackerManager.isPlaying(keys[i])) return true;
+        }
+        return false;
     },
 
     introTrackKeys(planetId, factionId) {
@@ -31333,8 +33700,11 @@ extendClass(SoundManager, {
         }
         if (!this.ensureContext()) return false;
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly();
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
+        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         const keys = this.introTrackKeys(id, this._currentHostileFaction);
         vfTrackerManager.setEnabled(true);
         vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
@@ -31389,7 +33759,11 @@ extendClass(SoundManager, {
         if (key === this._activeEnemyTypesKey) return;
         this._activeEnemyTypesKey = key;
         this._activeEnemyTypes = list;
+        // Only swap when the resolved override identity changes — spawn/despawn
+        // churn of untracked types must not restart the combat loop.
+        const before = this._activeOverrideKey;
         this._reevaluateMusic();
+        if (this._activeOverrideKey === before && this._musicActuallyPlaying()) return;
         this._ensureCombatMusicPlaying();
     },
 
@@ -31469,12 +33843,42 @@ extendClass(SoundManager, {
             + ':' + (this._currentStageId || '')
             + ':' + (this._currentHostileFaction || ''));
 
-        // Skip only when the same key is already audibly playing.
+        // Skip when the same logical slot is already playing.
         if (ambientKey === this._activeOverrideKey && this._musicActuallyPlaying()) return;
+
+        // Same actual song under a new slot (stage change, override key rename) → keep position.
+        if (!resolved && this._combatSongAlreadyPlaying(this._currentPlanetId)) {
+            this._activeOverrideKey = ambientKey;
+            return;
+        }
+        if (resolved && this.musicEnabled) {
+            const track = resolved.track;
+            if (track.localAudioData && typeof localAudioManager !== 'undefined'
+                && localAudioManager.el && !localAudioManager.el.paused
+                && localAudioManager._currentDataUrl === track.localAudioData) {
+                localAudioManager.currentKey = overrideKey;
+                this._activeOverrideKey = ambientKey;
+                return;
+            }
+            if (track.trackerData && typeof vfTrackerManager !== 'undefined'
+                && vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()
+                && (vfTrackerManager.isPlaying(overrideKey)
+                    || vfTrackerManager.currentKey === overrideKey)) {
+                this._activeOverrideKey = ambientKey;
+                return;
+            }
+            if (track.youtubeUrl && typeof youtubeSoundtrackManager !== 'undefined'
+                && youtubeSoundtrackManager.enabled
+                && youtubeSoundtrackManager.currentKey === overrideKey) {
+                this._activeOverrideKey = ambientKey;
+                return;
+            }
+        }
+
         this._activeOverrideKey = ambientKey;
 
         if (!resolved) {
-            // Don't pre-stop here — startPlanetAmbient stops/restarts cleanly.
+            // Don't pre-stop here — startPlanetAmbient keeps position if same song.
             this.startPlanetAmbient(this._currentPlanetId || 'mars');
             return;
         }
@@ -31488,25 +33892,43 @@ extendClass(SoundManager, {
             return;
         }
 
-        this.stopPlanetAmbientNodesOnly();
+        // Soft handoff between sources — play()/fadeOut crossfade the audible bus.
+        if (!track.localAudioData && !track.trackerData) {
+            this.stopPlanetAmbientNodesOnly({ fade: 0.85 });
+        } else if (track.localAudioData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
+        } else if (track.trackerData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
+        }
+
         const bus = this.musicBusVolume ? this.musicBusVolume() : (this.masterVolume * this.musicVolume);
         if (track.localAudioData) {
-            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (typeof localAudioManager !== 'undefined') {
                 localAudioManager.setVolume(bus);
                 localAudioManager.play(overrideKey, track.localAudioData);
             }
         } else if (track.trackerData) {
-            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.setVolume(bus);
                 vfTrackerManager.play(overrideKey, track.trackerData);
             }
         } else if (track.youtubeUrl) {
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
             if (typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.setEnabled(true);
                 youtubeSoundtrackManager.setVolume(bus);
@@ -31526,7 +33948,8 @@ extendClass(SoundManager, {
         this._pendingMissionIntro = false;
         this._introPlaying = false;
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+        // Leave the tracker bus up so startMenuMusic can crossfade combat→menu
+        // (hard-stop made non-PLANET styles feel like the same loop continued).
     }
 });
 
@@ -32437,10 +34860,10 @@ var PlayerManager = class PlayerManager {
             const dp = difficultyConfigManager.profiles[difficultyConfigManager.current];
             if (dp && dp.playerSpeedMul > 0) diffSpeedMul = dp.playerSpeedMul;
         }
-        // Power-ups (power-crates.js): AFTERBURNER speeds up, FREEZE trap locks the ship.
+        // Power-ups (power-crates.js): AFTERBURNER speeds up, FREEZE trap only chills (slow).
         let perkMul = 1;
         if (typeof pickupManager !== 'undefined' && pickupManager.getMoveSpeedMul) {
-            perkMul = pickupManager.isFrozen() ? 0 : pickupManager.getMoveSpeedMul();
+            perkMul = pickupManager.getMoveSpeedMul();
             const repair = pickupManager.getRepairPerSec(this.maxHealth);
             if (repair > 0 && this.health > 0) this.health = Math.min(this.maxHealth, this.health + repair * dt);
         }
@@ -33724,8 +36147,7 @@ extendClass(BulletManager, {
         infoElement.textContent = `CHARGE ${pct}% [${'#'.repeat(bars)}${'-'.repeat(10 - bars)}] ×${this.getChargeMultiplier().toFixed(1)}`;
     },
     shoot(playerPosition, options) {
-        // FREEZE trap (power-crates.js): guns are locked too.
-        if (typeof pickupManager !== 'undefined' && pickupManager.isFrozen && pickupManager.isFrozen()) return false;
+        // FREEZE trap only slows movement — guns stay free.
         const opts = Object.assign({}, options || {});
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
             const beatOpts = beatSyncManager.getShotOptions();
@@ -33883,6 +36305,8 @@ extendClass(BulletManager, {
             for (let i = firstNew; i < this.bullets.length; i++) {
                 const b = this.bullets[i];
                 b.weaponId = slot.id;
+                // Only weapons with EQUIPMENT → REFLECT purchased clash with enemy fire.
+                b.reflectiveShots = !!cfg.reflectiveShots;
                 // 0..1 brightness boost from the charge / beat bonus.
                 if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
                 if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
@@ -34583,6 +37007,9 @@ extendClass(BulletManager, {
         for (let i = before; i < this.enemyBullets.length; i++) {
             this.enemyBullets[i].weaponId = defaultWeapon;
             this.enemyBullets[i].isEnemyShot = true;
+            // Spawn-frame collisions run before the next bullet.update sweep.
+            if (this.enemyBullets[i]._sweepDx == null) this.enemyBullets[i]._sweepDx = 0;
+            if (this.enemyBullets[i]._sweepDy == null) this.enemyBullets[i]._sweepDy = 0;
         }
         this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), defaultWeapon);
         this.applyShotSizeSetting(this.enemyBullets, before,
@@ -34602,6 +37029,9 @@ extendClass(BulletManager, {
             ) * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1))),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
+            isEnemyShot: true,
+            _sweepDx: 0,
+            _sweepDy: 0,
             // Lighting properties
             lightRadius: 14,
             lightIntensity: 1.0,
@@ -34622,6 +37052,9 @@ extendClass(BulletManager, {
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
+            isEnemyShot: true,
+            _sweepDx: 0,
+            _sweepDy: 0,
             // Lighting properties
             lightRadius: 18,
             lightIntensity: 1.2,
@@ -34654,6 +37087,9 @@ extendClass(BulletManager, {
                 angle: angle,
                 color: '#808080', // Grayscale base - will be colored by render system
                 type: 'enemy_spread',
+                isEnemyShot: true,
+                _sweepDx: 0,
+                _sweepDy: 0,
                 // Lighting properties
                 lightRadius: 14,
                 lightIntensity: 1.0,
@@ -34678,6 +37114,9 @@ extendClass(BulletManager, {
                 damage: config.damage,
                 color: '#808080', // Grayscale base - will be colored by render system
                 type: 'enemy_rapid',
+                isEnemyShot: true,
+                _sweepDx: 0,
+                _sweepDy: 0,
                 // Lighting properties
                 lightRadius: 12,
                 lightIntensity: 0.9,
@@ -34697,6 +37136,9 @@ extendClass(BulletManager, {
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_plasma',
+            isEnemyShot: true,
+            _sweepDx: 0,
+            _sweepDy: 0,
             // Lighting properties
             lightRadius: 22,
             lightIntensity: 1.5,
@@ -35644,6 +38086,15 @@ extendClass(EnemyManager, {
         if (this.sideEnemies.length >= this.sideEnemyCap) {
             return null;
         }
+        // Tube/sluice runs: only one craft of a given class in the field at once, so the
+        // sidebar's single enemy card (image + bars) always shows the class actually in play.
+        if (this.levelMods && this.levelMods.transit) {
+            const wantedClass = String(entry.enemyClass || 'assault').toLowerCase();
+            const classBusy = this.sideEnemies.some((e) => e
+                && !e.fleeing
+                && String(e.enemyClass || 'assault').toLowerCase() === wantedClass);
+            if (classBusy) return null;
+        }
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);
@@ -36005,7 +38456,13 @@ extendClass(EnemyManager, {
         // Transit stages have no champion: the side craft are the whole stage.
         const transit = !!(this.levelMods && this.levelMods.transit);
         const transitDone = transit && typeof objectiveManager !== 'undefined' && objectiveManager.completed;
-        if (this.sideEnemies.length && (transit ? transitDone : !mainAlive)) {
+        // Fire the flee a few seconds before the exit gate scrolls in, so side craft
+        // are visibly peeling off and gone by the time the player reaches it, instead
+        // of vanishing the instant the run completes.
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        const nearingGoal = transit && om && om.objective && !om.goal
+            && om.elapsedMs >= (Number(om.objective.seconds) || 0) * 1000 - 3500;
+        if (this.sideEnemies.length && (transit ? (transitDone || nearingGoal) : !mainAlive)) {
             this.beginSideEnemyFlee(gameState);
         }
         const pendingCluster = this.pendingChampionEntry
@@ -36040,7 +38497,7 @@ extendClass(EnemyManager, {
                 e.lifetimeMs = 12000 + Math.random() * 7000;
             }
 
-            if (gateFloor != null) {
+            if (gateFloor != null && !this.sideFleeing) {
                 const waiting = (e.chain && !e.chain.entered) || (e.pass && !e.pass.entered);
                 if (waiting) { this.sideEnemies.splice(i, 1); continue; }
                 if (e.chain || e.pass || e.fleeing || e.lifetimeMs != null) {
@@ -36994,6 +39451,9 @@ extendClass(EnemyManager, {
         if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossWeaponKit && isBossLvl) {
             this.enemy.weaponId = difficultyConfigManager.getBossWeaponKit(champFaction).primary;
             this.enemy.bossWeaponKit = difficultyConfigManager.getBossWeaponKit(champFaction);
+            if (difficultyConfigManager.getBossBehaviorKit) {
+                this.enemy.bossBehavior = difficultyConfigManager.getBossBehaviorKit(champFaction);
+            }
         } else if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons) {
             const kit = factionShipStyles.getFactionDefaultWeapons(champFaction);
             this.enemy.weaponId = (kit && kit[0]) || 'laser';
@@ -37170,7 +39630,7 @@ extendClass(EnemyManager, {
 "use strict";
 
 // EnemyManager methods: planet difficulty curve and boss fights
-// (phases, attack patterns, escort calls, HP bar).
+// (phases, faction doctrines, attack patterns, escort calls, HP bar).
 
 /** Per planet tier (EASY .. NIGHTMARE): early planets forgiving, late ones brutal. */
 var PLANET_TIER_MODS = [
@@ -37242,6 +39702,18 @@ extendClass(EnemyManager, {
         return { fan: 'spread', aimed: 'burst', sweep: 'rapid', primary: 'spread' };
     },
 
+    bossBehaviorFor(e) {
+        if (e && e.bossBehavior) return e.bossBehavior;
+        if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossBehaviorKit) {
+            return difficultyConfigManager.getBossBehaviorKit(e && e.faction);
+        }
+        return {
+            style: 'erratic', label: 'BOSS', patterns: ['fan', 'aimed', 'sweep'],
+            intervalMul: 1, speedMul: 1, verticalMul: 1, trackPlayer: 0.1,
+            evasionMul: 1, escortMul: 1, phaseSpeedMul: 1.3, sweepArc: 0.8, sweepStepMul: 1
+        };
+    },
+
     /** Called at the end of spawnEnemy for boss levels. */
     initBoss() {
         const e = this.enemy;
@@ -37262,26 +39734,94 @@ extendClass(EnemyManager, {
             this.shield = this.shieldMax;
         }
         e.bossTierMul = mods.boss;
-        // Heavy hull: dodges rarely, briefly and slowly (it's meant to be hit).
-        this.evasionSpeed = (this.evasionSpeed || 2) * 0.3;
-        this.evasionCooldown = Math.max(4000, (this.evasionCooldown || 5000) * 2.5);
-        this.evasionDuration = (this.evasionDuration || 1000) * 0.5;
-        this.evasionChance = (this.evasionChance != null ? this.evasionChance : 1) * 0.35;
+        e.bossWeaponKit = this.bossWeaponKitFor(e);
+        e.bossBehavior = this.bossBehaviorFor(e);
+        const beh = e.bossBehavior;
+        // Heavy hull: dodges rarely, briefly and slowly — faction still shades it.
+        const eva = beh.evasionMul != null ? beh.evasionMul : 1;
+        this.evasionSpeed = (this.evasionSpeed || 2) * 0.3 * Math.max(0.6, eva);
+        this.evasionCooldown = Math.max(2500, (this.evasionCooldown || 5000) * 2.5 / Math.max(0.7, eva));
+        this.evasionDuration = (this.evasionDuration || 1000) * 0.5 * Math.max(0.7, Math.min(1.4, eva));
+        this.evasionChance = (this.evasionChance != null ? this.evasionChance : 1) * 0.35 * eva;
         e.bossPhase = 1;
         e.bossAttackTimer = 1500;
         e.bossPattern = 0;
         e.bossSweep = null;
+        e.bossSpecial = null;
+        e.bossMoveTimer = 0;
         e.bossBaseSpeed = Math.abs(e.speed) || 0.4;
-        e.bossWeaponKit = this.bossWeaponKitFor(e);
+        e.bossBaseVertical = Math.abs(e.verticalSpeed) || e.bossBaseSpeed * 0.6;
+        const spd = e.bossBaseSpeed * (beh.speedMul != null ? beh.speedMul : 1);
+        e.speed = Math.sign(e.speed || 1) * spd;
+        e.verticalSpeed = Math.sign(e.verticalSpeed || 1)
+            * e.bossBaseVertical * (beh.verticalMul != null ? beh.verticalMul : 1);
         e.weaponId = e.bossWeaponKit.primary || e.weaponId || 'laser';
         e.attackRateMul = e.attackRateMul != null ? e.attackRateMul : 1;
         this.bossFlash = 0;
-        this.announceBoss('BOSS INCOMING');
+        this.announceBoss(beh.label ? ('BOSS — ' + beh.label) : 'BOSS INCOMING');
     },
 
     announceBoss(text) {
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
             levelInfoManager.showLootNotice(text);
+        }
+    },
+
+    /** Faction movement doctrine — runs every boss tick. */
+    updateBossMovement(e, dt) {
+        const beh = this.bossBehaviorFor(e);
+        const style = beh.style || 'patrol';
+        e.bossMoveTimer = (e.bossMoveTimer || 0) + dt;
+
+        let px = null;
+        if (typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            const p = playerManager.getPosition();
+            if (p) px = p.x + (p.width || 0) / 2;
+        }
+        const track = beh.trackPlayer != null ? beh.trackPlayer : 0;
+        if (px != null && track > 0 && !e.bossSpecial) {
+            const cx = e.x + e.width / 2;
+            if (Math.abs(px - cx) > 8) {
+                e.speed = Math.sign(px - cx) * Math.abs(e.speed || e.bossBaseSpeed || 0.4);
+                // Soft pull toward player X without overriding bounce physics.
+                e.x += Math.sign(px - cx) * track * 0.35 * (dt / 16.67);
+            }
+        }
+
+        if (e.bossGridResume != null) {
+            e.bossGridResume -= dt;
+            if (e.bossGridResume <= 0) {
+                e.bossGridResume = null;
+                e.verticalSpeed = Math.sign(Math.random() - 0.5)
+                    * e.bossBaseVertical * (beh.verticalMul || 1);
+            }
+        }
+
+        if (style === 'erratic' && e.bossMoveTimer > 700) {
+            e.bossMoveTimer = 0;
+            if (Math.random() < 0.45) e.speed = -e.speed;
+            if (Math.random() < 0.35) e.verticalSpeed = -e.verticalSpeed;
+            const burst = 1 + Math.random() * 0.55;
+            e.speed = Math.sign(e.speed || 1) * e.bossBaseSpeed * (beh.speedMul || 1) * burst;
+        } else if (style === 'grid' && e.bossMoveTimer > 1100) {
+            e.bossMoveTimer = 0;
+            // Mechanical lane-step: pause vertical, flip lane, resume after a beat.
+            e.verticalSpeed = 0;
+            e.speed = -Math.sign(e.speed || 1) * e.bossBaseSpeed * (beh.speedMul || 1);
+            e.bossGridResume = 280;
+        } else if (style === 'hunter' && e.bossMoveTimer > 900) {
+            e.bossMoveTimer = 0;
+            // Push lower into the lane while hunting.
+            if (e.maxY != null) {
+                e.y = Math.min(e.maxY, e.y + 4 + e.bossPhase * 2);
+            }
+            e.verticalSpeed = Math.abs(e.verticalSpeed || e.bossBaseVertical) * (Math.random() < 0.5 ? 1 : -1);
+        } else if (style === 'patrol' && e.bossMoveTimer > 1600) {
+            e.bossMoveTimer = 0;
+            // Steady drill — keep speed magnitude locked.
+            const mag = e.bossBaseSpeed * (beh.speedMul || 1) * (1 + 0.12 * (e.bossPhase - 1));
+            e.speed = Math.sign(e.speed || 1) * mag;
+            e.verticalSpeed = Math.sign(e.verticalSpeed || 1) * mag * 0.45;
         }
     },
 
@@ -37295,6 +39835,14 @@ extendClass(EnemyManager, {
         const ratio = this.maxHealth > 0 ? this.health / this.maxHealth : 1;
         const phase = ratio > 0.66 ? 1 : ratio > 0.33 ? 2 : 3;
         if (phase > e.bossPhase) this.enterBossPhase(phase, gameState);
+
+        this.updateBossMovement(e, dt);
+
+        // Active special (dive / blink / salvo delay) takes the tick.
+        if (e.bossSpecial) {
+            this.tickBossSpecial(e, dt);
+            return;
+        }
 
         // Sweep in progress: one shot per tick along an arc.
         if (e.bossSweep) {
@@ -37313,36 +39861,185 @@ extendClass(EnemyManager, {
 
         e.bossAttackTimer -= dt;
         if (e.bossAttackTimer > 0) return;
+        const beh = this.bossBehaviorFor(e);
         const rate = Math.max(0.45, Number(e.attackRateMul) || 1);
         const interval = [3200, 2400, 1700][e.bossPhase - 1];
-        e.bossAttackTimer = (interval / Math.sqrt(e.bossTierMul || 1) / rate)
+        const iMul = beh.intervalMul != null ? beh.intervalMul : 1;
+        e.bossAttackTimer = (interval / Math.sqrt(e.bossTierMul || 1) / rate * iMul)
             * (0.85 + Math.random() * 0.3);
 
         const kit = this.bossWeaponKitFor(e);
-        const pattern = e.bossPattern++ % 3;
-        if (pattern === 0) this.bossFan(e, kit.fan);
-        else if (pattern === 1) this.bossAimed(e, kit.aimed);
-        else this.bossStartSweep(e, kit.sweep);
+        const seq = (beh.patterns && beh.patterns.length) ? beh.patterns : ['fan', 'aimed', 'sweep'];
+        const pattern = seq[e.bossPattern++ % seq.length];
+        this.runBossPattern(e, pattern, kit);
+    },
+
+    runBossPattern(e, pattern, kit) {
+        const id = String(pattern || 'fan');
+        if (id === 'fan') this.bossFan(e, kit.fan);
+        else if (id === 'aimed') this.bossAimed(e, kit.aimed);
+        else if (id === 'sweep') this.bossStartSweep(e, kit.sweep);
+        else if (id === 'barrage') this.bossBarrage(e, kit);
+        else if (id === 'scatter') this.bossScatter(e, kit);
+        else if (id === 'dive') this.bossStartDive(e, kit);
+        else if (id === 'salvo') this.bossStartSalvo(e, kit);
+        else if (id === 'ring') this.bossRing(e, kit);
+        else if (id === 'blink') this.bossStartBlink(e, kit);
+        else this.bossFan(e, kit.fan);
     },
 
     enterBossPhase(phase, gameState) {
         const e = this.enemy;
+        const beh = this.bossBehaviorFor(e);
         e.bossPhase = phase;
         this.bossFlash = 450;
-        const sp = e.bossBaseSpeed * (1 + 0.3 * (phase - 1));
+        const pMul = beh.phaseSpeedMul != null ? beh.phaseSpeedMul : 1.3;
+        const sp = e.bossBaseSpeed * (beh.speedMul || 1) * (1 + (pMul - 1) * (phase - 1) / 2);
         e.speed = Math.sign(e.speed || 1) * sp;
-        e.verticalSpeed = Math.sign(e.verticalSpeed || 1) * sp * 0.6;
-        e.bossAttackTimer = 600;
-        this.announceBoss(phase === 3 ? 'BOSS ENRAGED' : 'BOSS PHASE ' + phase);
+        e.verticalSpeed = Math.sign(e.verticalSpeed || 1)
+            * e.bossBaseVertical * (beh.verticalMul || 1) * (1 + 0.2 * (phase - 1));
+        e.bossAttackTimer = 500;
+        const tag = beh.label || 'BOSS';
+        this.announceBoss(phase === 3 ? (tag + ' ENRAGED') : (tag + ' PHASE ' + phase));
         if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
             try { explosionSystem.play('small_pop', e.x + e.width / 2, e.y + e.height / 2); } catch (err) { /* optional fx */ }
         }
-        // Call in escorts: one in phase 2, two when enraged.
-        const escorts = phase - 1;
+        // Escorts scaled by faction doctrine (machine floods, kronax fights alone).
+        const escortMul = beh.escortMul != null ? beh.escortMul : 1;
+        const escorts = Math.max(0, Math.round((phase - 1) * escortMul));
         const cap = this.sideEnemyCap;
         this.sideEnemyCap = Math.max(cap, this.sideEnemies.length + escorts);
         for (let i = 0; i < escorts; i++) this.spawnSideEnemy(gameState || (typeof game !== 'undefined' ? game : null));
         this.sideEnemyCap = Math.max(cap, 3, this.sideEnemies.length);
+
+        // Faction phase flourish.
+        const kit = this.bossWeaponKitFor(e);
+        if (phase === 3) {
+            if (beh.style === 'blink') this.bossRing(e, kit);
+            else if (beh.style === 'hunter') this.bossStartDive(e, kit);
+            else if (beh.style === 'grid') this.bossStartSalvo(e, kit);
+            else if (beh.style === 'erratic') this.bossScatter(e, kit);
+            else this.bossBarrage(e, kit);
+        }
+    },
+
+    tickBossSpecial(e, dt) {
+        const s = e.bossSpecial;
+        if (!s) return;
+        s.timer -= dt;
+        if (s.kind === 'barrage') {
+            if (s.timer <= 0) {
+                const kit = s.kit || this.bossWeaponKitFor(e);
+                this.bossFan(e, kit.fan || 'laser');
+                e.bossSpecial = null;
+                e.bossAttackTimer = 350;
+            }
+        } else if (s.kind === 'dive') {
+            // Surge toward player X while dropping; fire claw fan on impact.
+            if (typeof playerManager !== 'undefined' && playerManager.getPosition) {
+                const p = playerManager.getPosition();
+                if (p) {
+                    const px = p.x + (p.width || 0) / 2;
+                    const cx = e.x + e.width / 2;
+                    e.x += Math.sign(px - cx) * 1.8 * (dt / 16.67);
+                }
+            }
+            e.y += 1.1 * (dt / 16.67);
+            if (s.timer <= 0) {
+                this.bossFan(e, s.weapon || 'claw_beam');
+                e.bossSpecial = null;
+                e.bossAttackTimer = 400;
+            }
+        } else if (s.kind === 'blink') {
+            if (s.timer <= 0) {
+                const host = (typeof game !== 'undefined' && game) ? game : null;
+                const W = host && (host.internalWidth || host.baseWidth || host.width) || 200;
+                e.x = Math.max(0, Math.min(W - e.width, Math.random() * (W - e.width)));
+                e.y = Math.max(e.minY || 20, Math.min(e.maxY || 80, (e.minY || 20) + Math.random() * 30));
+                this.bossRing(e, s.kit || this.bossWeaponKitFor(e));
+                e.bossSpecial = null;
+                e.bossAttackTimer = 500;
+                this.bossFlash = 280;
+            }
+        } else if (s.kind === 'salvo') {
+            s.pulse = (s.pulse || 0) - dt;
+            if (s.pulse <= 0 && s.left > 0) {
+                const kit = s.kit || this.bossWeaponKitFor(e);
+                const cols = 3 + e.bossPhase;
+                const angles = [];
+                for (let i = 0; i < cols; i++) {
+                    angles.push((i - (cols - 1) / 2) * 0.18 + (Math.random() - 0.5) * 0.04);
+                }
+                this.bossFire(e, angles, 0.9 + e.bossPhase * 0.1, kit.fan || 'missile');
+                s.left--;
+                s.pulse = 140;
+            }
+            if (s.left <= 0 && s.timer <= 0) {
+                e.bossSpecial = null;
+                e.bossAttackTimer = 600;
+            }
+        } else {
+            e.bossSpecial = null;
+        }
+    },
+
+    /** Terran: stacked pierce + laser volley. */
+    bossBarrage(e, kit) {
+        this.bossAimed(e, kit.aimed || 'pierce');
+        e.bossSpecial = {
+            kind: 'barrage',
+            timer: 220,
+            kit: kit
+        };
+    },
+
+    /** Pirate: chaotic shotgun spray. */
+    bossScatter(e, kit) {
+        const id = String((kit && kit.fan) || 'spread');
+        const n = 5 + e.bossPhase * 2;
+        const angles = [];
+        for (let i = 0; i < n; i++) angles.push((Math.random() - 0.5) * 1.4);
+        this.bossFire(e, angles, 1.2 + e.bossPhase * 0.15, id);
+    },
+
+    /** Kronax: dive then claw fan. */
+    bossStartDive(e, kit) {
+        e.bossSpecial = {
+            kind: 'dive',
+            timer: 420,
+            weapon: (kit && kit.fan) || 'claw_beam'
+        };
+        e.speed = Math.sign(e.speed || 1) * e.bossBaseSpeed * 1.8;
+    },
+
+    /** Machine: delayed missile grid. */
+    bossStartSalvo(e, kit) {
+        e.bossSpecial = {
+            kind: 'salvo',
+            timer: 520 + e.bossPhase * 80,
+            pulse: 0,
+            left: 2 + e.bossPhase,
+            kit: kit
+        };
+        this.bossFlash = 200;
+    },
+
+    /** Voidborn: circular nova/wave ring. */
+    bossRing(e, kit) {
+        const id = String((kit && (kit.aimed || kit.fan)) || 'nova');
+        const n = 8 + e.bossPhase * 2;
+        const angles = [];
+        for (let i = 0; i < n; i++) {
+            // Map ring to downward-ish cone with wrap (atan-style boss angles).
+            angles.push(-1.1 + (2.2 * i) / (n - 1));
+        }
+        this.bossFire(e, angles, 1.05 + e.bossPhase * 0.12, id);
+    },
+
+    /** Voidborn: rift jump then ring. */
+    bossStartBlink(e, kit) {
+        e.bossSpecial = { kind: 'blink', timer: 280, kit: kit };
+        this.bossFlash = 320;
     },
 
     /** Fan of bullets straight down, wider each phase — faction fan weapon. */
@@ -37378,9 +40075,19 @@ extendClass(EnemyManager, {
     },
 
     bossStartSweep(e) {
+        const beh = this.bossBehaviorFor(e);
+        const arc = beh.sweepArc != null ? beh.sweepArc : 0.8;
+        const stepMul = beh.sweepStepMul != null ? beh.sweepStepMul : 1;
         const total = 5 + e.bossPhase * 2;
         const dir = Math.random() < 0.5 ? 1 : -1;
-        e.bossSweep = { from: -0.8 * dir, to: 0.8 * dir, total, left: total, step: 90 - e.bossPhase * 15, timer: 0 };
+        e.bossSweep = {
+            from: -arc * dir,
+            to: arc * dir,
+            total,
+            left: total,
+            step: Math.max(40, (90 - e.bossPhase * 15) * stepMul),
+            timer: 0
+        };
     },
 
     bossFire(e, angles, speed, weaponId) {
@@ -37410,6 +40117,7 @@ extendClass(EnemyManager, {
                 speed: spd, damage: dmg, angle: a,
                 color: color, type: shot.type,
                 weaponId: id, isEnemyShot: true, isBossShot: true,
+                _sweepDx: 0, _sweepDy: 0,
                 lightRadius: shot.light * Math.max(0.7, Math.sqrt(sizeMul)),
                 lightIntensity: 1.15, lightColor: color
             });
@@ -38505,10 +41213,12 @@ var ObstacleManager = class ObstacleManager {
             // the top in airy layers spaced by scrolled distance.
             this.updateScrollLayers(deltaTime, gameState);
         } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
+            const level = this.getCurrentLevel();
+            const bossArena = !!(level && level.isBoss);
             if (this.hasDefs()) {
-                // Mostly shaped pattern waves; the authored cluster waves stay
-                // in the mix so planet-specific groupings still show up.
-                if (Math.random() < 0.8) {
+                // Boss arenas: pattern waves only (clusters dump whole groups
+                // and pack a static field). Scroll stages keep the mix.
+                if (bossArena || Math.random() < 0.8) {
                     this.spawnPatternWave(gameState);
                 } else {
                     this.spawnClusterWave(gameState);
@@ -38520,7 +41230,10 @@ var ObstacleManager = class ObstacleManager {
             }
             // Jitter the next wave so the rhythm isn't a metronome; the
             // pause shortens as the run's intensity ramps up.
-            const pace = 1.1 - this.patternIntensity() * 0.35;
+            // Boss: keep a longer breather between waves in the static arena.
+            const pace = bossArena
+                ? 1.35 - this.patternIntensity() * 0.15
+                : 1.1 - this.patternIntensity() * 0.35;
             gameState.obstacleSpawnTimer = -gameState.obstacleSpawnInterval * (pace * (0.8 + Math.random() * 0.5) - 1);
         }
 
@@ -38621,6 +41334,9 @@ var ObstacleManager = class ObstacleManager {
 
     spawnClusterWave(gameState = null) {
         if (!this.hasDefs()) return;
+        const alive = this.obstacles.filter((o) => !o.isFog).length;
+        const maxAlive = this.obstacleMaxAlive ? this.obstacleMaxAlive() : 48;
+        if (alive >= maxAlive) return;
         const clusters = {};
         this.obstacleDefs.forEach((d) => {
             const c = d.cluster || 'alpha';
@@ -38636,8 +41352,9 @@ var ObstacleManager = class ObstacleManager {
         const direction = lead.direction || 'ltr';
         const speeds = this.directionToSpeed(direction, lead.speed != null ? lead.speed : 0.8);
         const baseOrigin = this.spawnOriginForDirection(direction, lead.width, lead.height, gameState);
+        const budget = Math.max(0, maxAlive - alive);
 
-        members.forEach((def, i) => {
+        members.slice(0, budget).forEach((def, i) => {
             const col = i % 3;
             const row = Math.floor(i / 3);
             const ox = col * ((def.width || 18) * 0.95);
@@ -38964,6 +41681,7 @@ var OBSTACLE_PATTERNS = [
     { id: 'stream', weight: 2 }
 ];
 var OBSTACLE_MAX_ALIVE = 48;
+var OBSTACLE_MAX_ALIVE_BOSS = 14; // static arena — keep room to dodge the boss
 var OBSTACLE_RAMP_MS = 90000; // density ramps up over the first 90 s
 var OBSTACLE_SCROLL_SPEED = 0.55; // px/frame the level scrolls in regular stages
 var TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel', 'terraces', 'bulges', 'zigzag', 'gorge',
@@ -38977,33 +41695,45 @@ var TERRAIN_MATERIALS = {
     crystal: { id: 'crystal', hp: 1, score: 4 },
     magma: { id: 'magma', hp: 2, score: 3 }
 };
-var TERRAIN_SILL_ROWS = 5;
-var TERRAIN_JITTER_ROWS = 4; // wall-depth jitter holds this many rows (no 1-row slivers)
+var TERRAIN_SILL_ROWS = 3;
+var TERRAIN_JITTER_ROWS = 10; // wall-depth jitter holds this many rows (soft silhouette, no comb spikes)
 var TERRAIN_OPENING_PX = 34; // height of a hangar opening side craft launch from     // rows of the threshold at an area change
 // Visual marker only — keep the upper flight band open (was 0.13 and stacked
 // with the gate, which sealed the passage).
-var TERRAIN_SILL_REACH = 0.05; // how far it juts in from each side (x W)
+var TERRAIN_SILL_REACH = 0.028; // how far it juts in from each side (x W)
 var OBSTACLE_LAYER_SPACING = 160; // px of scroll between obstacle rows
-// Areas that squeeze or stab into the passage; later stages favour them.
+// Areas that squeeze or stab into the passage; later stages lean gently toward them.
 var TERRAIN_HARSH_ZONES = ['narrows', 'teeth', 'zigzag', 'gorge', 'spires', 'icefall', 'ribs', 'chasm', 'funnel'];
-var TERRAIN_CALM_ZONES = ['canyon', 'open', 'delta', 'winding'];
+var TERRAIN_CALM_ZONES = ['canyon', 'open', 'delta', 'winding', 'bulges', 'reef', 'terraces'];
+var TERRAIN_BLEND_START = 0.72; // fraction of a zone before wall/floor softens into the next
 
 extendClass(ObstacleManager, {
     /**
-     * Stage danger 0..1: stage 1 = 0, the last stage and the boss = 1.
-     * Later stages start denser and get harsher areas (kept moderate).
+     * Stage danger 0..1: stage 1 = 0, the last stage = 1.
+     * Boss arenas stay moderate — they don't scroll, so max danger packed
+     * the field with obstacles that never drain off-screen.
      */
     stageDanger() {
         const level = this.getCurrentLevel();
         if (!level) return 0;
         const n = Math.max(2, Number(level.stagesPerPlanet) || 3);
-        if (level.isBoss) return 1;
+        if (level.isBoss) return 0.35;
         const i = Math.max(1, Number(level.stageIndex) || 1);
         return Math.max(0, Math.min(1, (i - 1) / (n - 1)));
+    },
+    /** Alive-obstacle budget; boss arenas use a tighter cap. */
+    obstacleMaxAlive() {
+        const level = this.getCurrentLevel();
+        return (level && level.isBoss) ? OBSTACLE_MAX_ALIVE_BOSS : OBSTACLE_MAX_ALIVE;
     },
     /** 0..1 intensity that grows over the run (later stages start higher). */
     patternIntensity() {
         const ramp = (this.runTime || 0) / OBSTACLE_RAMP_MS;
+        const level = this.getCurrentLevel();
+        // Boss: soft floor only — don't ramp the static arena into a debris landfill.
+        if (level && level.isBoss) {
+            return Math.max(0, Math.min(0.45, Math.max(ramp * 0.35, this.stageDanger() * 0.35)));
+        }
         return Math.max(0, Math.min(1, Math.max(ramp, this.stageDanger() * 0.35)));
     },
     pickPattern() {
@@ -39022,7 +41752,8 @@ extendClass(ObstacleManager, {
     spawnPatternWave(gameState) {
         if (!this.hasDefs()) return;
         const alive = this.obstacles.filter((o) => !o.isFog).length;
-        if (alive >= OBSTACLE_MAX_ALIVE) return;
+        const maxAlive = this.obstacleMaxAlive();
+        if (alive >= maxAlive) return;
 
         const lead = this.pickWeightedDef();
         if (!lead) return;
@@ -39065,7 +41796,7 @@ extendClass(ObstacleManager, {
             this.buildPatternPoints(pattern, across, intensity),
             { vx: vx, vy: vy, py: py, cy: cy, H: H, intensity: intensity }
         );
-        const budget = OBSTACLE_MAX_ALIVE - alive;
+        const budget = maxAlive - alive;
         pts.slice(0, budget).forEach((pt) => {
             const def = pt.big ? (palette.slice().sort((a, b) => (b.width || 10) - (a.width || 10))[0])
                 : this.pickWeightedDef(palette);
@@ -39267,7 +41998,8 @@ extendClass(ObstacleManager, {
         // End of the level: the field only drains, no new layers.
         if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         const alive = this.obstacles.filter((o) => !o.isFog).length;
-        if (alive >= OBSTACLE_MAX_ALIVE) return;
+        const maxAlive = this.obstacleMaxAlive();
+        if (alive >= maxAlive) return;
         // Every so often leave a breather layer empty.
         if (Math.random() < 0.2) return;
 
@@ -39292,7 +42024,7 @@ extendClass(ObstacleManager, {
         const minHole = Math.max(72, 96 - intensity * 18);
         let cursor = Math.random() * 20;
         let spawned = 0;
-        while (cursor < trainLen && alive + spawned < OBSTACLE_MAX_ALIVE) {
+        while (cursor < trainLen && alive + spawned < maxAlive) {
             const groupSize = 1 + Math.floor(Math.random() * (1.2 + intensity * 0.8));
             // A minority of groups also drift down/up slightly while flying across.
             const vSpeed = Math.random() < 0.25
@@ -39367,9 +42099,9 @@ extendClass(ObstacleManager, {
         const env = this.getEnvironment();
         // Planet look: only its own areas appear.
         const zoneBias = env.zones || null;
-        // Later stages lean towards harsh areas (within the planet's own set).
-        const zoneMul = (z) => TERRAIN_HARSH_ZONES.includes(z) ? 1 + 1.5 * danger
-            : (TERRAIN_CALM_ZONES.includes(z) ? 1 - 0.5 * danger : 1);
+        // Later stages lean gently towards harsh areas (within the planet's own set).
+        const zoneMul = (z) => TERRAIN_HARSH_ZONES.includes(z) ? 1 + 0.45 * danger
+            : (TERRAIN_CALM_ZONES.includes(z) ? 1 + 0.25 * (1 - danger) : 1);
         const zones = TERRAIN_ZONES.map((z, i) => ({
             id: z,
             weight: (zoneBias ? (zoneBias[z] ? zoneBias[z] : 0) : 0.3 + r(50 + i) * 1.4) * zoneMul(z)
@@ -39402,19 +42134,20 @@ extendClass(ObstacleManager, {
         const materials = mw.map((v) => (acc += v / tot));
         this._terrainProfile = {
             pid, stage, danger, env, seed, zones, materials, zoneMats, zoneFloors,
-            // ~12-17 s per area at the base scroll speed: long, coherent stretches.
-            zoneRows: Math.round(170 + r(1) * 70),
+            // ~14-20 s per area at the base scroll speed: long, coherent stretches.
+            zoneRows: Math.round(200 + r(1) * 80),
             // Thicker walls on later stages (narrower passage, still flyable).
             // Kept modest so the flyable corridor stays wide without stretching art.
-            width: (0.45 + this.terrainHash(pseed % 100003, 2) * 0.35) * (env.width || 1) * (1 + 0.12 * danger),
-            freq: 0.6 + r(7) * 1.0,
+            width: (0.42 + this.terrainHash(pseed % 100003, 2) * 0.28) * (env.width || 1) * (1 + 0.08 * danger),
+            // Lower spatial frequency → rolling canyon lips instead of comb spikes.
+            freq: 0.35 + r(7) * 0.55,
             phase: r(8) * 100
         };
         return this._terrainProfile;
     },
     /**
      * Flight area at world row `wr`: zones follow each other along the run
-     * and blend over a few rows. Returns wall offsets as fractions of W,
+     * and blend over a long soft ramp. Returns wall offsets as fractions of W,
      * a depth multiplier and whether faction structures show.
      */
     terrainZoneAt(wr, prof) {
@@ -39422,16 +42155,18 @@ extendClass(ObstacleManager, {
         const idx = Math.floor(wr / len);
         const t = (wr - idx * len) / len;
         const a = this.terrainZoneShape(this.terrainZoneId(idx, prof), wr, t);
-        // Blend into the next zone over the last 15% of this one.
-        if (t < 0.85) return a;
+        // Blend into the next zone over the last ~28% of this one.
+        if (t < TERRAIN_BLEND_START) return a;
         const b = this.terrainZoneShape(this.terrainZoneId(idx + 1, prof), wr, 0);
-        const k = (t - 0.85) / 0.15;
-        const m = (x, y) => x + (y - x) * k;
-        return { left: m(a.left, b.left), right: m(a.right, b.right), mul: m(a.mul, b.mul), structures: k < 0.5 ? a.structures : b.structures };
+        const k = (t - TERRAIN_BLEND_START) / (1 - TERRAIN_BLEND_START);
+        // Smoothstep so the seam doesn't read as a hard kink.
+        const s = k * k * (3 - 2 * k);
+        const m = (x, y) => x + (y - x) * s;
+        return { left: m(a.left, b.left), right: m(a.right, b.right), mul: m(a.mul, b.mul), structures: s < 0.5 ? a.structures : b.structures };
     },
     /**
      * Threshold between two areas: rows from the zone seam (0 = seam row),
-     * or null when not near one. The gate spans 7 rows centred on it.
+     * or null when not near one. The gate spans 5 rows centred on it.
      */
     terrainGateRow(wr, prof) {
         const p = prof || this.terrainProfile();
@@ -39439,7 +42174,7 @@ extendClass(ObstacleManager, {
         const idx = Math.round(wr / len);
         if (idx <= 0) return null;
         const d = wr - idx * len;
-        return Math.abs(d) <= 3 ? d : null;
+        return Math.abs(d) <= 2 ? d : null;
     },
     terrainZoneIndex(wr, prof) {
         return Math.floor(wr / (prof || this.terrainProfile()).zoneRows);
@@ -39450,7 +42185,14 @@ extendClass(ObstacleManager, {
         const len = prof.zoneRows;
         const idx = Math.floor(wr / len);
         const t = (wr - idx * len) / len;
-        return prof.zoneFloors[this.terrainZoneId(idx, prof)] || 'craters';
+        const a = prof.zoneFloors[this.terrainZoneId(idx, prof)] || 'craters';
+        if (t < TERRAIN_BLEND_START) return a;
+        const b = prof.zoneFloors[this.terrainZoneId(idx + 1, prof)] || a;
+        if (a === b) return a;
+        // Irregular spatial dither — no hard horizontal cut between biomes.
+        const k = (t - TERRAIN_BLEND_START) / (1 - TERRAIN_BLEND_START);
+        const n = this.terrainHash(Math.floor(wr / 2), ((cx | 0) * 17 + 41) | 0);
+        return n < k * k * (3 - 2 * k) ? b : a;
     },
 });
 
@@ -39480,81 +42222,87 @@ extendClass(ObstacleManager, {
         return 'canyon';
     },
     terrainZoneShape(id, wr, t) {
-        // Envelope: shapes ramp in from the zone start so edges stay smooth.
-        const env = Math.min(1, t / 0.15);
+        // Envelope: shapes ramp in slowly so area starts don't look like hard cuts.
+        const env = Math.min(1, t / 0.28);
         switch (id) {
             case 'narrows': // walls close in: a tight squeeze
-                return { left: 0.17 * env, right: 0.17 * env, mul: 1, structures: false };
+                return { left: 0.13 * env, right: 0.13 * env, mul: 1, structures: false };
             case 'open': // the canyon opens up into an open field
                 return { left: 0, right: 0, mul: 1 - 0.65 * env, structures: false };
             case 'winding': { // corridor snakes left and right
-                const s = Math.sin(wr * 0.035) * 0.22 * env;
+                const s = Math.sin(wr * 0.028) * 0.16 * env;
                 return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.8, structures: false };
             }
-            case 'teeth': { // alternating jagged spurs from each side
-                const p = ((wr % 36) + 36) % 36;
-                const spur = p < 12 ? (1 - Math.abs(p - 6) / 6) * 0.26 * env : 0;
-                const left = Math.floor(wr / 36) % 2 ? spur : 0;
+            case 'teeth': { // rounded spurs, not needle teeth
+                const p = ((wr % 48) + 48) % 48;
+                const spur = p < 18 ? Math.sin((p / 18) * Math.PI) * 0.14 * env : 0;
+                const left = Math.floor(wr / 48) % 2 ? spur : 0;
                 return { left, right: spur - left, mul: 0.9, structures: false };
             }
-            case 'funnel': { // walls slowly close in, then snap open at the end
-                const k = (t < 0.85 ? t / 0.85 : (1 - t) / 0.15) * env;
-                return { left: 0.19 * k, right: 0.19 * k, mul: 1, structures: false };
+            case 'funnel': { // walls slowly close in, then ease open at the end
+                const k = (t < 0.78 ? t / 0.78 : (1 - t) / 0.22) * env;
+                return { left: 0.15 * k, right: 0.15 * k, mul: 1, structures: false };
             }
             case 'terraces': { // stepped shelves, offset per side
-                const step = (o) => (Math.floor((((wr + o) % 48) + 48) % 48 / 12)) * 0.055 * env;
-                return { left: step(0), right: step(24), mul: 0.85, structures: true };
+                const step = (o) => (Math.floor((((wr + o) % 56) + 56) % 56 / 14)) * 0.045 * env;
+                return { left: step(0), right: step(28), mul: 0.85, structures: true };
             }
             case 'bulges': { // round boulders bulging out of both walls
-                const b = (o) => Math.max(0, Math.sin((wr + o) * 0.11)) ** 2 * 0.2 * env;
-                return { left: b(0), right: b(14), mul: 0.9, structures: false };
+                const b = (o) => Math.max(0, Math.sin((wr + o) * 0.09)) ** 2 * 0.18 * env;
+                return { left: b(0), right: b(17), mul: 0.9, structures: false };
             }
-            case 'zigzag': { // sharp diagonal switchbacks
-                const p = (((wr % 40) + 40) % 40) / 40;
-                const tri = (p < 0.5 ? p * 2 : 2 - p * 2) * 2 - 1;
-                const s = tri * 0.2 * env;
-                return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.75, structures: false };
+            case 'zigzag': { // soft diagonal switchbacks
+                const s = Math.sin(wr * 0.04) * 0.14 * env;
+                return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.8, structures: false };
             }
-            case 'gorge': { // deep narrow cut with alcoves to dodge into
-                const alcove = ((((wr % 30) + 30) % 30) < 8) ? 0.1 : 0;
-                const side = Math.floor(wr / 30) % 2;
-                const n = 0.16 * env;
-                return { left: n - (side ? 0 : alcove * env), right: n - (side ? alcove * env : 0), mul: 1.15, structures: false };
+            case 'gorge': { // deep narrow cut with soft alcoves to dodge into
+                const alcove = Math.max(0, Math.sin((((wr % 36) + 36) % 36) / 36 * Math.PI * 2)) * 0.08;
+                const side = Math.floor(wr / 36) % 2;
+                const n = 0.12 * env;
+                return { left: n - (side ? 0 : alcove * env), right: n - (side ? alcove * env : 0), mul: 1.1, structures: false };
             }
-            case 'spires': { // thin needle spikes stabbing in from both sides
-                const sp = (o) => { const p = (((wr + o) % 16) + 16) % 16; return p < 4 ? (1 - Math.abs(p - 1.5) / 2.5) * 0.24 * env : 0; };
-                return { left: sp(0), right: sp(8), mul: 0.8, structures: false };
+            case 'spires': { // broad soft knolls instead of needle spikes
+                const sp = (o) => {
+                    const p = (((wr + o) % 28) + 28) % 28;
+                    return p < 10 ? Math.sin((p / 10) * Math.PI) * 0.12 * env : 0;
+                };
+                return { left: sp(0), right: sp(14), mul: 0.85, structures: false };
             }
-            case 'ruins': { // collapsed blocks: stepped, square-edged chunks
-                const blk = (o) => Math.floor(this.terrainHash(Math.floor((wr + o) / 14), 503 + o) * 4) * 0.05 * env;
-                return { left: blk(0), right: blk(7), mul: 0.9, structures: true };
+            case 'ruins': { // collapsed blocks: stepped chunks with longer runs
+                const blk = (o) => Math.floor(this.terrainHash(Math.floor((wr + o) / 18), 503 + o) * 3) * 0.045 * env;
+                return { left: blk(0), right: blk(9), mul: 0.9, structures: true };
             }
             case 'reef': { // lumpy organic growth
-                const lump = (o) => Math.max(0, Math.sin((wr + o) * 0.21) * 0.08 + Math.sin((wr + o) * 0.07) * 0.09 + 0.03) * env;
+                const lump = (o) => Math.max(0, Math.sin((wr + o) * 0.16) * 0.07 + Math.sin((wr + o) * 0.055) * 0.09 + 0.02) * env;
                 return { left: lump(0), right: lump(31), mul: 0.85, structures: false };
             }
-            case 'chasm': { // one cliff juts far out, the other side falls away
-                const side = Math.floor(wr / 60) % 2;
-                const c = 0.28 * env * Math.min(1, Math.min((((wr % 60) + 60) % 60), 60 - (((wr % 60) + 60) % 60)) / 8);
-                return { left: side ? c : 0, right: side ? 0 : c, mul: side ? 1.2 : 0.5, structures: false };
+            case 'chasm': { // one cliff swells out, the other side falls away
+                const side = Math.floor(wr / 72) % 2;
+                const local = (((wr % 72) + 72) % 72);
+                const c = 0.2 * env * Math.sin(Math.min(1, Math.min(local, 72 - local) / 14) * Math.PI);
+                return { left: side ? c : 0, right: side ? 0 : c, mul: side ? 1.15 : 0.55, structures: false };
             }
-            case 'icefall': { // sawtooth icicles, sharp tip pointing downstream
-                const saw = (o) => ((((wr + o) % 12) + 12) % 12) / 12 * 0.17 * env;
-                return { left: saw(0), right: saw(6), mul: 0.9, structures: false };
+            case 'icefall': { // soft cascading shelves, not sawtooth needles
+                const saw = (o) => {
+                    const p = (((wr + o) % 20) + 20) % 20;
+                    return Math.sin((p / 20) * Math.PI) * 0.11 * env;
+                };
+                return { left: saw(0), right: saw(10), mul: 0.9, structures: false };
             }
-            case 'pipes': { // conduits reaching across in flat bands
-                const p = ((wr % 24) + 24) % 24;
-                const band = p < 3 ? 0.22 * env : 0.03 * env;
-                const left = Math.floor(wr / 24) % 2 ? band : 0.03 * env;
-                return { left, right: left === band ? 0.03 * env : band, mul: 1, structures: true };
+            case 'pipes': { // conduits reaching across in soft bands
+                const p = ((wr % 28) + 28) % 28;
+                const band = p < 5 ? 0.16 * env * Math.sin((p / 5) * Math.PI) : 0.02 * env;
+                const left = Math.floor(wr / 28) % 2 ? band : 0.02 * env;
+                return { left, right: left === band ? 0.02 * env : band, mul: 1, structures: true };
             }
-            case 'ribs': { // dense thin ribs like a skeleton
-                const rb = ((((wr % 6) + 6) % 6) < 2 ? 0.09 : 0.02) * env;
+            case 'ribs': { // soft ribbing, spaced so it doesn't read as a comb
+                const p = ((wr % 12) + 12) % 12;
+                const rb = (p < 4 ? 0.06 * Math.sin((p / 4) * Math.PI) : 0.015) * env;
                 return { left: rb, right: rb, mul: 0.85, structures: false };
             }
             case 'delta': { // slow braided channel: walls swell and recede out of phase
-                const a = (0.5 + 0.5 * Math.sin(wr * 0.05)) * 0.18 * env;
-                const b = (0.5 + 0.5 * Math.sin(wr * 0.05 + 2.4)) * 0.18 * env;
+                const a = (0.5 + 0.5 * Math.sin(wr * 0.04)) * 0.15 * env;
+                const b = (0.5 + 0.5 * Math.sin(wr * 0.04 + 2.4)) * 0.15 * env;
                 return { left: a, right: b, mul: 0.7, structures: false };
             }
             default: // canyon: the regular look with faction structures
@@ -39584,10 +42332,20 @@ extendClass(ObstacleManager, {
         const seg = Math.floor(wr / TERRAIN_SEGMENT_ROWS);
         const prof = this.terrainProfile();
         // Each area has its own wall material (fixed per planet + zone);
-        // now and then a segment breaks the pattern for variety.
+        // near the seam, dither into the next zone so color bands don't hard-cut.
+        const len = prof.zoneRows;
         const zi = this.terrainZoneIndex(wr, prof);
-        const zoneMat = prof.zoneMats[this.terrainZoneId(zi, prof)];
-        if (zoneMat && this.terrainHash(seg * 2 + side, 881) > 0.04) return TERRAIN_MATERIALS[zoneMat];
+        const t = (wr - zi * len) / len;
+        let zoneId = this.terrainZoneId(zi, prof);
+        if (t >= TERRAIN_BLEND_START) {
+            const k = (t - TERRAIN_BLEND_START) / (1 - TERRAIN_BLEND_START);
+            const s = k * k * (3 - 2 * k);
+            if (this.terrainHash(Math.floor(wr / 3), side + 907) < s) {
+                zoneId = this.terrainZoneId(zi + 1, prof);
+            }
+        }
+        const zoneMat = prof.zoneMats[zoneId];
+        if (zoneMat && this.terrainHash(seg * 2 + side, 881) > 0.08) return TERRAIN_MATERIALS[zoneMat];
         const h = this.terrainHash(seg * 2 + side, 4099 + prof.seed % 997);
         const w = prof.materials;
         if (h < w[0]) return TERRAIN_MATERIALS.rock;
@@ -39605,17 +42363,23 @@ extendClass(ObstacleManager, {
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
         const maxCells = Math.floor((W * 0.38) / cell);
-        // Build wall extents at an arbitrary world row (used for natural edges
-        // and for the shared lip of a carved block band).
-        const buildAt = (row) => {
-            const zone = this.terrainZoneAt(row, prof);
-            const gd = this.terrainGateRow(row, prof);
+        // Undamaged silhouette is pure (wr, W, style, profile) — cache it and only
+        // re-apply crater cuts below. Collision + draw hit this many times per frame.
+        let silCache = this._wallSilCache;
+        if (!silCache || silCache.W !== W || silCache.cell !== cell
+            || silCache.style !== style || silCache.prof !== prof) {
+            silCache = this._wallSilCache = { W, cell, style, prof, rows: new Map() };
+        }
+        let fullOf = silCache.rows.get(wr);
+        if (!fullOf) {
+            const zone = this.terrainZoneAt(wr, prof);
+            const gd = this.terrainGateRow(wr, prof);
             const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
             const outcrop = (side) => {
-                const slot = Math.floor(row / 70);
+                const slot = Math.floor(wr / 70);
                 if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
                 if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
-                const t = (row - slot * 70 - 10) / 44;
+                const t = (wr - slot * 70 - 10) / 44;
                 if (t < 0 || t > 1) return 0;
                 const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
                 return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
@@ -39623,29 +42387,29 @@ extendClass(ObstacleManager, {
             const depth = (side, mat) => {
                 const s = side * 37.1 + prof.phase;
                 const f = prof.freq;
-                const n = Math.sin(row * 0.05 * f + s) * 0.5 + Math.sin(row * 0.11 * f + s * 2) * 0.3
-                    + Math.sin(row * 0.23 * f + s * 3) * 0.2;
-                let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
+                // Low-frequency rolling noise — high bands made every planet look like the same comb.
+                const n = Math.sin(wr * 0.035 * f + s) * 0.62 + Math.sin(wr * 0.07 * f + s * 2) * 0.28
+                    + Math.sin(wr * 0.13 * f + s * 3) * 0.1;
+                let d = (W * (0.028 + 0.02 * (n + 1) / 2) * prof.width * zone.mul
                     + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
                     + gate;
-                // Material jitter changes in blocks of rows, never per single
-                // row: per-row noise left 1-row slivers that read as strata.
-                const jr = Math.floor(row / TERRAIN_JITTER_ROWS);
+                // Material jitter in long blocks so lips stay soft, not spiky.
+                const jr = Math.floor(wr / TERRAIN_JITTER_ROWS);
                 if (mat.id === 'metal') {
-                    d = Math.round(d / 2) * 2 + (this.terrainHash(jr, side + 19) < 0.4 ? 1 : 0);
+                    d = Math.round(d / 2) * 2 + (this.terrainHash(jr, side + 19) < 0.35 ? 1 : 0);
                 } else if (mat.id === 'crystal') {
-                    d += 1 + this.terrainHash(jr, side + 31) * 3;
+                    d += 0.5 + this.terrainHash(jr, side + 31) * 1.6;
                 } else if (mat.id === 'rock') {
-                    d += Math.floor(this.terrainHash(jr, side + 7) * 3) - 1;
+                    d += Math.floor(this.terrainHash(jr, side + 7) * 2) - 0.5;
                 } else {
-                    d += (this.terrainHash(jr, side + 47) - 0.5) * 3;
+                    d += (this.terrainHash(jr, side + 47) - 0.5) * 1.6;
                 }
                 return Math.max(2, Math.round(d));
             };
             const structure = (side) => {
-                const slot = Math.floor(row / 36);
+                const slot = Math.floor(wr / 36);
                 if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
-                const t = (row - slot * 36 - 10) / 14;
+                const t = (wr - slot * 36 - 10) / 14;
                 if (t < 0 || t > 1) return 0;
                 let v;
                 switch (style) {
@@ -39657,26 +42421,26 @@ extendClass(ObstacleManager, {
                 }
                 return Math.round((W * v) / cell);
             };
-            const zi = this.terrainZoneIndex(row, prof);
-            const local = row - zi * prof.zoneRows;
+            const zi = this.terrainZoneIndex(wr, prof);
+            const local = wr - zi * prof.zoneRows;
             let sill = 0;
             if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
                 const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
                 sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
             }
             const sides = [0, 1].map((side) => {
-                let mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
+                let mat = this.terrainMaterial(wr, side) || { id: 'rock', hp: 1 };
                 let base = depth(side, mat);
                 let full = base + sill + (zone.structures && !sill ? structure(side) : 0);
                 // Hangar opening side craft fly out of: open slot, metal jambs around it.
-                const hatch = gd == null && !sill ? this.terrainOpeningInfo(row, side) : null;
+                const hatch = gd == null && !sill ? this.terrainOpeningInfo(wr, side) : null;
                 let tunnel = 0;
                 let lip = 0;
                 if (hatch && hatch.kind === 'gap') {
                     tunnel = full;
                     full = base = 0;
                 } else if (hatch) {
-                    lip = this.terrainOpeningLip(style, hatch, row);
+                    lip = this.terrainOpeningLip(style, hatch, wr);
                     if (style === 'tech') mat = TERRAIN_MATERIALS.metal;
                     full += lip;
                 }
@@ -39690,12 +42454,16 @@ extendClass(ObstacleManager, {
                     f.base = Math.min(f.base, f.full);
                 });
             }
-            return sides;
-        };
+            fullOf = sides;
+            silCache.rows.set(wr, fullOf);
+            if (silCache.rows.size > 900) {
+                const lo = wr - 500, hi = wr + 200;
+                silCache.rows.forEach((_, k) => { if (k < lo || k > hi) silCache.rows.delete(k); });
+            }
+        }
         // Each row keeps its natural silhouette until a crater cuts into it: the cut is an absolute
         // depth (cells from the screen edge), so a crater bites through the outline instead of
         // shifting the whole jagged edge outward.
-        const fullOf = buildAt(wr);
         const out = {};
         for (let side = 0; side < 2; side++) {
             const key = side + ':' + wr;
@@ -39845,10 +42613,10 @@ extendClass(ObstacleManager, {
             // Crack-only chip (no cell removed).
             soundManager.playRockHit(0.6);
         }
-        // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
+        // Force only the wall/overlay lattice to rebuild (floor parallax stays cached).
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
         if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {
-            renderManager._terrainLayerKey = null;
+            renderManager._terrainLayerKey.dmg = -1;
         }
         if (this.terrainDamage.size > 4000) {
             const cutoff = wr - 1200;
@@ -40572,6 +43340,9 @@ extendClass(ObstacleManager, {
     damageObstacle(index, amount, hitX, hitY) {
         const o = this.obstacles[index];
         if (!o || o.isFog || !o.isDestructible) return false;
+        // Shooting a crate disarms BOMB — opened crates drop perks, never boom.
+        // Untouched bomb crates still blast on ram (removeObstacle → spawnPowerUp).
+        if (o.isCrate && this.disarmCrateBomb) this.disarmCrateBomb(o);
         const before = o.health;
         o.health -= Math.max(1, amount);
         if (o.health <= 0) {
@@ -41500,13 +44271,26 @@ var CRATE_SIZE = 12;
 var POWER_SHOT_MS = 12000;
 var POWER_SHOT_DAMAGE = 1.6;
 var POWER_SHOT_SIZE = 1.3;
+var OVERCHARGE_DAMAGE = 2.0;
+var OVERCHARGE_SIZE = 1.15;
+var FOCUS_DAMAGE = 1.35;
+var FOCUS_SIZE = 1.55;
 var RAPID_FIRE_MUL = 0.6;      // cooldown × (fires ~1.7× as fast)
+var SPRAY_MUL = 0.48;          // cooldown × (fires ~2.1× as fast)
 var BARRIER_DAMAGE_MUL = 0.5;  // damage taken ×
+var AEGIS_DAMAGE_MUL = 0.7;    // damage taken ×
 var SPEED_BOOST_MUL = 1.45;    // move speed ×
+var TURBO_MUL = 1.25;          // move speed ×
+var FREEZE_SLOW_MUL = 0.4;     // freeze trap: crawl, do not lock
 var MAGNET_RADIUS_MUL = 1.8;   // collect radius ×
 var MAGNET_BONUS = 3;          // extra magnet strength
+var SCRAPPER_RADIUS_MUL = 1.35;
+var SCRAPPER_MAGNET_BONUS = 2;
 var DOUBLE_LOOT_MUL = 2;       // resource yield ×
+var SCRAPPER_LOOT_MUL = 1.5;
 var REPAIR_PER_SEC = 0.04;     // share of max hull healed per second
+var STIM_PER_SEC = 0.025;
+var STIM_BURST = 0.2;          // share of max hull healed on pickup
 
 /**
  * Temporary power-ups a crate can drop. Each has its own colour, silhouette
@@ -41519,18 +44303,26 @@ var POWER_UPS = {
     speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'triangle', glyph: 'chevrons' },
     magnet:      { label: 'MAGNET',      ms: 12000, color: '#ff5ce0', light: '#ffd0f6', shape: 'square', glyph: 'magnet' },
     double_loot: { label: 'DOUBLE LOOT', ms: 15000, color: '#c49a4a', light: '#f0dca8', shape: 'hex', glyph: 'dots' },
-    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'dots' }
+    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'dots' },
+    overcharge:  { label: 'OVERCHARGE',  ms: 9000,  color: '#ff3a3a', light: '#ffb0b0', shape: 'diamond', glyph: 'cross' },
+    focus:       { label: 'FOCUS BEAM',  ms: 10000, color: '#a78bfa', light: '#e4d4ff', shape: 'triangle', glyph: 'arrow' },
+    spray:       { label: 'SPRAY FIRE',  ms: 9000,  color: '#5ad0ff', light: '#d0f4ff', shape: 'hex', glyph: 'chevrons' },
+    aegis:       { label: 'AEGIS',       ms: 11000, color: '#7ec8ff', light: '#d8ecff', shape: 'circle', glyph: 'cross' },
+    turbo:       { label: 'TURBO',       ms: 8000,  color: '#ffb347', light: '#ffe0b0', shape: 'triangle', glyph: 'chevrons' },
+    scrapper:    { label: 'SCRAPPER',    ms: 14000, color: '#d4a574', light: '#f0e0c8', shape: 'square', glyph: 'magnet' },
+    stim:        { label: 'STIM PACK',   ms: 7000,  color: '#ff6b9d', light: '#ffd0e0', shape: 'circle', glyph: 'dots' }
 };
 var POWER_UP_IDS = Object.keys(POWER_UPS);
 
 /**
  * Fake crates / perks. Look like the real thing except for a flickering red
- * warning pixel. BOMB blasts nearby hull, FREEZE locks the ship briefly.
+ * warning pixel. BOMB blasts on contact (shooting the crate disarms it).
+ * FREEZE only slows the ship — guns stay free.
  */
 var FAKE_CRATE_CHANCE = 0.25;  // share of drifting supply crates that are fake
 var TRAP_BLAST_RADIUS = 36;
 var TRAP_BLAST_DAMAGE = 0.2;   // share of max hull at the centre
-var TRAP_FREEZE_MS = 1600;
+var TRAP_FREEZE_MS = 2200;
 var TRAP_IDS = ['bomb', 'freeze'];
 var TRAP_WARN = '#ff2a2a';
 
@@ -41598,6 +44390,19 @@ extendClass(ObstacleManager, {
             entering: !placed,
             age: 0
         });
+    },
+
+    /**
+     * Shooting a crate disarms BOMB traps — opened crates never explode.
+     * Touching an untouched bomb crate still blasts via spawnPowerUp.
+     */
+    disarmCrateBomb(o) {
+        if (!o || !o.isCrate || o.trap !== 'bomb') return false;
+        o.trap = null;
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('BOMB DISARMED');
+        }
+        return true;
     },
 
     /** Pixel-art supply crate (baked once). */
@@ -41671,7 +44476,8 @@ extendClass(ObstacleManager, {
 extendClass(PickupManager, {
     /**
      * Crate broke open: drop a random power-up at its centre. A BOMB crate
-     * blows up instead; a FREEZE crate drops a disguised freeze perk.
+     * (untouched — usually from ramming) blows up instead; FREEZE drops a
+     * disguised chill perk.
      */
     spawnPowerUp(o) {
         if (o && o.trap === 'bomb') {
@@ -41720,6 +44526,7 @@ extendClass(PickupManager, {
         // Stacking extends the timer (capped at twice the base duration).
         this.powerUntil[id] = Math.min(now + def.ms * 2, cur + def.ms);
         if (id === 'power_shot') this.powerShotUntil = this.powerUntil[id];
+        if (id === 'stim') this.applyStimBurst();
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
             levelInfoManager.showLootNotice(def.label + ' ' + Math.round((this.powerUntil[id] - now) / 1000) + 's');
         }
@@ -41733,6 +44540,17 @@ extendClass(PickupManager, {
         return true;
     },
 
+    /** STIM PACK: instant hull burst on pickup. */
+    applyStimBurst() {
+        if (typeof playerManager === 'undefined') return;
+        const maxHp = playerManager.getMaxHealth ? playerManager.getMaxHealth()
+            : (playerManager.maxHealth || 100);
+        const cur = playerManager.health != null ? playerManager.health
+            : (playerManager.getHealth ? playerManager.getHealth() : 0);
+        if (!(maxHp > 0) || !(cur > 0)) return;
+        playerManager.health = Math.min(maxHp, cur + maxHp * STIM_BURST);
+    },
+
     /** Fake perk picked up: spring its trap on the player. */
     triggerTrap(p) {
         if (p.trap === 'bomb') {
@@ -41742,7 +44560,7 @@ extendClass(PickupManager, {
         if (!this.powerUntil) this.powerUntil = {};
         this.powerUntil.freeze = Date.now() + TRAP_FREEZE_MS;
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-            levelInfoManager.showLootNotice('FAKE! FROZEN');
+            levelInfoManager.showLootNotice('FAKE! CHILLED');
         }
         if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
             graphicsManager.createHitEffect(p.x, p.y, 8, '#9fdcff');
@@ -41782,26 +44600,38 @@ extendClass(PickupManager, {
         return { left, total: id === 'freeze' ? TRAP_FREEZE_MS : POWER_UPS[id].ms };
     },
 
-    /** FREEZE trap: ship can neither move nor fire. */
+    /** FREEZE trap: ship is chilled (slow), not locked. */
     isFrozen() {
         return !!this.getPowerUp('freeze');
     },
 
-    /** Move speed multiplier (AFTERBURNER). */
+    /** Move speed multiplier (AFTERBURNER / TURBO / FREEZE chill). */
     getMoveSpeedMul() {
-        return this.getPowerUp('speed_boost') ? SPEED_BOOST_MUL : 1;
+        let mul = 1;
+        if (this.getPowerUp('speed_boost')) mul *= SPEED_BOOST_MUL;
+        if (this.getPowerUp('turbo')) mul *= TURBO_MUL;
+        if (this.getPowerUp('freeze')) mul *= FREEZE_SLOW_MUL;
+        return mul;
     },
 
-    /** Hull healed per second (REPAIR). */
+    /** Hull healed per second (REPAIR / STIM). */
     getRepairPerSec(maxHealth) {
-        return this.getPowerUp('repair') ? (Number(maxHealth) || 0) * REPAIR_PER_SEC : 0;
+        let rate = 0;
+        if (this.getPowerUp('repair')) rate += REPAIR_PER_SEC;
+        if (this.getPowerUp('stim')) rate += STIM_PER_SEC;
+        return (Number(maxHealth) || 0) * rate;
     },
 
-    /** Applies MAGNET / DOUBLE LOOT to collect stats in place. */
+    /** Applies MAGNET / SCRAPPER / DOUBLE LOOT to collect stats in place. */
     applyCollectPerks(stats) {
         if (this.getPowerUp('magnet')) {
             stats.radius *= MAGNET_RADIUS_MUL;
             stats.magnet += MAGNET_BONUS;
+        }
+        if (this.getPowerUp('scrapper')) {
+            stats.radius *= SCRAPPER_RADIUS_MUL;
+            stats.magnet += SCRAPPER_MAGNET_BONUS;
+            stats.yieldMul *= SCRAPPER_LOOT_MUL;
         }
         if (this.getPowerUp('double_loot')) stats.yieldMul *= DOUBLE_LOOT_MUL;
         return stats;
@@ -41809,18 +44639,49 @@ extendClass(PickupManager, {
 
     /** Current shot multipliers from active power-ups. */
     getPowerShot() {
-        const s = this.getPowerUp('power_shot');
-        return s ? Object.assign(s, { damage: POWER_SHOT_DAMAGE, size: POWER_SHOT_SIZE }) : null;
+        let damage = 1;
+        let size = 1;
+        let left = 0;
+        let total = POWER_SHOT_MS;
+        if (this.getPowerUp('power_shot')) {
+            damage *= POWER_SHOT_DAMAGE;
+            size *= POWER_SHOT_SIZE;
+            const s = this.getPowerUp('power_shot');
+            left = Math.max(left, s.left);
+            total = Math.max(total, s.total);
+        }
+        if (this.getPowerUp('overcharge')) {
+            damage *= OVERCHARGE_DAMAGE;
+            size *= OVERCHARGE_SIZE;
+            const s = this.getPowerUp('overcharge');
+            left = Math.max(left, s.left);
+            total = Math.max(total, s.total);
+        }
+        if (this.getPowerUp('focus')) {
+            damage *= FOCUS_DAMAGE;
+            size *= FOCUS_SIZE;
+            const s = this.getPowerUp('focus');
+            left = Math.max(left, s.left);
+            total = Math.max(total, s.total);
+        }
+        if (damage <= 1 && size <= 1) return null;
+        return { left: left || 1, total, damage, size };
     },
 
-    /** Weapon cooldown multiplier (RAPID FIRE). */
+    /** Weapon cooldown multiplier (RAPID FIRE / SPRAY). */
     getFireRateMul() {
-        return this.getPowerUp('rapid_fire') ? RAPID_FIRE_MUL : 1;
+        let mul = 1;
+        if (this.getPowerUp('rapid_fire')) mul *= RAPID_FIRE_MUL;
+        if (this.getPowerUp('spray')) mul *= SPRAY_MUL;
+        return mul;
     },
 
-    /** Incoming damage multiplier (BARRIER). */
+    /** Incoming damage multiplier (BARRIER / AEGIS). */
     getDamageTakenMul() {
-        return this.getPowerUp('barrier') ? BARRIER_DAMAGE_MUL : 1;
+        let mul = 1;
+        if (this.getPowerUp('barrier')) mul *= BARRIER_DAMAGE_MUL;
+        if (this.getPowerUp('aegis')) mul *= AEGIS_DAMAGE_MUL;
+        return mul;
     },
 
     drawPowerUp(ctx, p, x, y) {
@@ -42422,6 +45283,9 @@ var CollisionManager = class CollisionManager {
                 if (this.shotsCrossed(playerBullets[i], enemyBullets[j])) {
                     const pb = playerBullets[i];
                     const eb = enemyBullets[j];
+                    // Reflective shots is a per-weapon EQUIPMENT unlock — without it,
+                    // player and enemy fire pass through each other.
+                    if (!pb.reflectiveShots) continue;
                     const playerBulletX = pb.x + pb.width / 2;
                     const playerBulletY = pb.y + pb.height / 2;
                     const enemyBulletX = eb.x + eb.width / 2;
@@ -42668,14 +45532,37 @@ extendClass(CollisionManager, {
         }
     },
 
-    /** Bullets set _sweepDx/_sweepDy every frame; ships/obstacles do not. */
+    /**
+     * Bullets set _sweepDx/_sweepDy every frame; ships/obstacles do not.
+     * Spawn-frame enemy shots (created after bullet.update) have no sweep yet —
+     * still treat them as shots so sparse hull masks cannot swallow the hit.
+     */
     isShotEntity(obj) {
-        return !!(obj && (obj._sweepDx != null || obj._sweepDy != null));
+        if (!obj) return false;
+        if (obj._sweepDx != null || obj._sweepDy != null) return true;
+        if (obj.isEnemyShot || obj.isBossShot || obj._isShot) return true;
+        // Untagged projectile: has shot stats, no hull HP.
+        if (obj.damage != null && obj.speed != null && obj.health == null && obj.maxHealth == null
+            && !obj.collision) {
+            return true;
+        }
+        return false;
     },
 
     isColliding(obj1, obj2) {
-        const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1);
-        const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2);
+        const shot1 = this.isShotEntity(obj1);
+        const shot2 = this.isShotEntity(obj2);
+        const anyShot = shot1 || shot2;
+        // Shots vs hull: use the full entity footprint the sprite is fitted into.
+        // Tight mask insets were shrinking the AABB below the visible ship.
+        const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1, {
+            ignoreInsets: anyShot && !shot1,
+            matchVoxelDraw: shot1
+        });
+        const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2, {
+            ignoreInsets: anyShot && !shot2,
+            matchVoxelDraw: shot2
+        });
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
                                b1.y < b2.y + b2.height &&
@@ -42684,10 +45571,19 @@ extendClass(CollisionManager, {
         if (!basicCollision) {
             // Fast shots: also test the strip swept since last frame so they cannot jump over a target.
             const sx = obj1 && obj1._sweepDx, sy = obj1 && obj1._sweepDy;
-            if (!(sx || sy) || (obj2 && obj2._mask)) return false;
+            if (!(sx || sy)) return false;
             const x0 = Math.min(b1.x, b1.x - sx), x1 = Math.max(b1.x + b1.width, b1.x + b1.width - sx);
             const y0 = Math.min(b1.y, b1.y - sy), y1 = Math.max(b1.y + b1.height, b1.y + b1.height - sy);
-            return x0 < b2.x + b2.width && x1 > b2.x && y0 < b2.y + b2.height && y1 > b2.y;
+            const sweptHit = x0 < b2.x + b2.width && x1 > b2.x && y0 < b2.y + b2.height && y1 > b2.y;
+            if (!sweptHit) return false;
+            // Carved rocks: confirm the swept strip still touches remaining pixels
+            // (previously skipped entirely → shots tunneled through thin lips).
+            if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
+                const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+                if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, swept)) return false;
+                if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, swept)) return false;
+            }
+            return true;
         }
         // Carved boulders: only their remaining pixels are solid.
         if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
@@ -42699,7 +45595,7 @@ extendClass(CollisionManager, {
         // sparse after VOXEL bake and were letting clear overlaps register as misses
         // (and an exception in the mask path aborted the whole collision pass,
         // which also killed terrain wall hits in the same frame).
-        if (this.isShotEntity(obj1) || this.isShotEntity(obj2)) {
+        if (anyShot) {
             return true;
         }
 
@@ -42718,14 +45614,15 @@ extendClass(CollisionManager, {
         return true;
     },
 
-    getCollisionBounds(obj, out) {
+    getCollisionBounds(obj, out, opts) {
         const o = out || { x: 0, y: 0, width: 0, height: 0 };
         if (!obj) {
             o.x = 0; o.y = 0; o.width = 0; o.height = 0;
             return o;
         }
+        const ignoreInsets = !!(opts && opts.ignoreInsets);
         const c = obj.collision;
-        if (c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
+        if (!ignoreInsets && c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
             const insetL = c.insetL || 0;
             const insetT = c.insetT || 0;
             const insetR = c.insetR || 0;
@@ -42734,12 +45631,31 @@ extendClass(CollisionManager, {
             o.y = obj.y + insetT;
             o.width = Math.max(1, obj.width - insetL - insetR);
             o.height = Math.max(1, obj.height - insetT - insetB);
-            return o;
+        } else {
+            o.x = obj.x;
+            o.y = obj.y;
+            o.width = obj.width;
+            o.height = obj.height;
         }
-        o.x = obj.x;
-        o.y = obj.y;
-        o.width = obj.width;
-        o.height = obj.height;
+        // VOXEL draw path snaps/quantizes shots; collision must use the same box
+        // or glancing hits look solid on screen but never register.
+        if (opts && opts.matchVoxelDraw
+            && typeof renderManager !== 'undefined'
+            && renderManager.getCombatVoxelCell) {
+            const cell = renderManager.getCombatVoxelCell();
+            if (cell != null && cell > 0) {
+                const snap = renderManager.snapCombat
+                    ? (v) => renderManager.snapCombat(v, cell)
+                    : (v) => Math.round(v / cell) * cell;
+                const quant = renderManager.quantizeCombatSize
+                    ? (s) => renderManager.quantizeCombatSize(s, cell)
+                    : (s) => Math.max(cell, Math.round(s / cell) * cell);
+                o.x = snap(o.x);
+                o.y = snap(o.y);
+                o.width = quant(o.width);
+                o.height = quant(o.height);
+            }
+        }
         return o;
     },
 
@@ -42995,11 +45911,24 @@ extendClass(CollisionManager, {
                             this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
+                        const hx = bulletX + (bullet.width || 0) / 2;
+                        const hy = bulletY + (bullet.height || 0) / 2;
+                        // Bomb crates: detonate immediately on shot contact.
+                        if (obstacle.isCrate && obstacle.trap === 'bomb') {
+                            bulletManager.removeBullet(i);
+                            if (typeof pickupManager !== 'undefined' && pickupManager.trapBlast) {
+                                pickupManager.trapBlast(hx, hy);
+                            }
+                            // Spent: removeObstacle → spawnPowerUp must not drop loot or re-blast.
+                            obstacle._trapSpent = true;
+                            obstacle.trap = null;
+                            obstacleManager.removeObstacle(j);
+                            game.score += 10;
+                            break;
+                        }
                         // Weapon-scaled damage plus splash to nearby rocks.
                         const rockDmg = obstacleManager.bulletRockDamage(bullet);
                         const splash = obstacleManager.bulletSplashRadius(bullet);
-                        const hx = bulletX + (bullet.width || 0) / 2;
-                        const hy = bulletY + (bullet.height || 0) / 2;
                         const destroyed = obstacleManager.damageObstacle(j, rockDmg, hx, hy);
                         obstacleManager.splashObstacles(hx, hy, splash, Math.max(1, Math.ceil(rockDmg * 0.6)), destroyed ? null : obstacle);
                         if (destroyed) {
@@ -43074,6 +46003,18 @@ extendClass(CollisionManager, {
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
                         }
                     } else if (obstacle.isDestructible) {
+                        const hx = bulletX + (bullet.width || 0) / 2;
+                        const hy = bulletY + (bullet.height || 0) / 2;
+                        if (obstacle.isCrate && obstacle.trap === 'bomb') {
+                            bulletManager.removeEnemyBullet(i);
+                            if (typeof pickupManager !== 'undefined' && pickupManager.trapBlast) {
+                                pickupManager.trapBlast(hx, hy);
+                            }
+                            obstacle._trapSpent = true;
+                            obstacle.trap = null;
+                            obstacleManager.removeObstacle(j);
+                            break;
+                        }
                         // Destroy obstacle
                         obstacle.health--;
                         if (obstacle.health <= 0) {
@@ -44398,6 +47339,24 @@ Object.assign(IconSprites, {
         [15,12,0,0,12,15,15,8,8,15,15,12,0,0,12,15],
         [15,12,0,0,12,15,15,8,8,15,15,12,0,0,12,15],
         [8,15,8,0,0,12,15,15,15,15,12,0,0,8,15,8],
+        [0,8,15,8,0,0,12,15,15,12,0,0,8,15,8,0],
+        [0,0,8,15,8,0,0,12,12,0,0,8,15,8,0,0],
+        [0,0,0,8,15,8,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,8,15,8,0,0,8,15,8,0,0,0,0],
+        [0,0,0,0,0,8,12,15,15,12,8,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    ability_capacitor_shield: [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,8,12,15,15,12,8,0,0,0,0,0],
+        [0,0,0,0,8,15,8,0,0,8,15,8,0,0,0,0],
+        [0,0,0,8,15,8,0,0,0,0,8,15,8,0,0,0],
+        [0,0,8,15,8,0,0,12,12,0,0,8,15,8,0,0],
+        [0,8,15,8,0,0,12,15,15,12,0,0,8,15,8,0],
+        [8,15,8,0,15,15,15,15,15,15,15,15,0,8,15,8],
+        [15,12,0,0,0,0,0,8,8,0,0,0,0,0,12,15],
+        [15,12,0,0,0,0,0,8,8,0,0,0,0,0,12,15],
+        [8,15,8,0,15,15,15,15,15,15,15,15,0,8,15,8],
         [0,8,15,8,0,0,12,15,15,12,0,0,8,15,8,0],
         [0,0,8,15,8,0,0,12,12,0,0,8,15,8,0,0],
         [0,0,0,8,15,8,0,0,0,0,8,15,8,0,0,0],
@@ -48047,7 +51006,9 @@ var UiTooltipManager = class UiTooltipManager {
         const tip = document.createElement('div');
         tip.className = 'ui-tooltip';
         tip.setAttribute('role', 'tooltip');
-        document.body.appendChild(tip);
+        // Mount on <html>, not <body>: body carries overflow:clip + bezel clip-path
+        // and stage scale, which shears tips that open near the rim (bezel tools).
+        document.documentElement.appendChild(tip);
         this.el = tip;
         return tip;
     }
@@ -48406,6 +51367,18 @@ var UiTooltipManager = class UiTooltipManager {
         });
     }
 
+    /** Keep a viewport box fully inside the window with a pad. */
+    clampBox(left, top, tw, th, pad) {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const maxL = Math.max(pad, vw - tw - pad);
+        const maxT = Math.max(pad, vh - th - pad);
+        return {
+            left: Math.max(pad, Math.min(left, maxL)),
+            top: Math.max(pad, Math.min(top, maxT))
+        };
+    }
+
     position(anchor, tip) {
         if (!anchor || !tip || !anchor.isConnected) {
             this.hide();
@@ -48416,70 +51389,65 @@ var UiTooltipManager = class UiTooltipManager {
             this.hide();
             return;
         }
-        // Work in visual px; convert when writing (the tip may sit inside a
-        // zoomed container, see zoom-rect-fix.js).
-        const tz = window.vfEffectiveZoom ? window.vfEffectiveZoom(tip) : 1;
-        // <body> carries the stage scale transform: a fixed tip lives in body space, not the viewport.
-        const br = document.body.getBoundingClientRect();
-        const bs = (br.width / (document.body.offsetWidth || br.width)) || 1;
-        const toCss = (v, axis) => (window.vfToCssPx ? window.vfToCssPx(tip, (v - (axis === 'y' ? br.top : br.left)) / bs) : (v - (axis === 'y' ? br.top : br.left)) / bs);
-        const tw = tip.offsetWidth * tz * bs;
-        const th = tip.offsetHeight * tz * bs;
+        // Tip lives on <html> as position:fixed → true viewport pixels (no body scale).
+        const tw = tip.offsetWidth || tip.getBoundingClientRect().width || 0;
+        const th = tip.offsetHeight || tip.getBoundingClientRect().height || 0;
+        const pad = 8;
+        const gap = 10;
         tip.classList.remove('below', 'side-left', 'side-right');
+        const place = (left, top, sideClass) => {
+            const box = this.clampBox(left, top, tw, th, pad);
+            if (sideClass) tip.classList.add(sideClass);
+            tip.style.left = Math.round(box.left) + 'px';
+            tip.style.top = Math.round(box.top) + 'px';
+        };
         // Sidebars: open beside the panel (right of the left one, left of the
         // right one) instead of covering the neighbouring rows.
         // Slot-layout cells: right beside the cell itself.
         if (anchor.closest('.hs-slotview')) {
-            let sl = r.right + 10;
-            if (sl + tw > window.innerWidth - 8) sl = r.left - tw - 10;
-            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
-            tip.classList.add('side-right');
-            tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
-            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            let sl = r.right + gap;
+            if (sl + tw > window.innerWidth - pad) sl = r.left - tw - gap;
+            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
             return;
         }
         // Bay inventory: tuck beside the hovered cell (near the cursor), not the whole panel edge.
         const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
         if (invPanel) {
-            const gap = 8;
             let sl = r.right + gap;
-            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, r.left - tw - gap);
-            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
-            tip.classList.add('side-right');
-            tip.style.left = Math.round(toCss(sl, 'x')) + 'px';
-            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            if (sl + tw > window.innerWidth - pad) sl = Math.max(pad, r.left - tw - gap);
+            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
             return;
         }
         const leftBar = anchor.closest('.hs-hangar-list, [data-tip-side="right"]');
         const rightBar = !leftBar && anchor.closest('.hs-hangar-preview, [data-tip-side="left"]');
         if (leftBar || rightBar) {
             const b = (leftBar || rightBar).getBoundingClientRect();
-            let sl = leftBar ? b.right + 10 : b.left - tw - 10;
+            let sl = leftBar ? b.right + gap : b.left - tw - gap;
             // No room on that side: fall back to the other.
-            if (sl + tw > window.innerWidth - 8 || sl < 8) sl = leftBar ? r.left - tw - 10 : r.right + 10;
-            let st = r.top + r.height / 2 - th / 2;
-            st = Math.max(8, Math.min(st, window.innerHeight - th - 8));
-            tip.classList.add(leftBar ? 'side-right' : 'side-left');
-            tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
-            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            if (sl + tw > window.innerWidth - pad || sl < pad) {
+                sl = leftBar ? r.left - tw - gap : r.right + gap;
+            }
+            place(sl, r.top + r.height / 2 - th / 2, leftBar ? 'side-right' : 'side-left');
             return;
         }
+        // Bezel tools sit in the top rim — always open below so the tip never
+        // gets sheared by the stage clip / bezel band.
+        const bezelTool = !!anchor.closest('.vf-bezel-tools, .vf-bezel-res, .vf-bezel-vol, .vf-bezel-fx');
+        const spaceAbove = r.top - gap;
+        const spaceBelow = window.innerHeight - r.bottom - gap;
+        const preferBelow = bezelTool || (spaceAbove < th && spaceBelow >= spaceAbove);
         let left = r.left + (r.width / 2) - (tw / 2);
-        let top = r.top - th - 10;
-        // Not enough room above (near the top edge / header bar): flip below.
-        // Flip whenever below has strictly more room, not only when above is negative,
-        // so a tall tooltip never gets squeezed against the screen edge.
-        const spaceAbove = r.top - 10;
-        const spaceBelow = window.innerHeight - r.bottom - 10;
-        if (spaceAbove < th && spaceBelow > spaceAbove) {
-            top = r.bottom + 10;
+        let top = preferBelow ? (r.bottom + gap) : (r.top - th - gap);
+        if (preferBelow) tip.classList.add('below');
+        // If the preferred side still overflows, flip once more.
+        if (!preferBelow && top < pad && spaceBelow >= th) {
+            top = r.bottom + gap;
             tip.classList.add('below');
+        } else if (preferBelow && top + th > window.innerHeight - pad && spaceAbove >= th) {
+            top = r.top - th - gap;
+            tip.classList.remove('below');
         }
-        left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-        // Never past the bottom edge either (below-placement near the foot).
-        top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
-        tip.style.left = Math.round(toCss(left, 'x')) + 'px';
-        tip.style.top = Math.round(toCss(top, 'y')) + 'px';
+        place(left, top, null);
     }
 
     hide() {
@@ -62028,12 +64996,15 @@ var DifficultyEditorUI = class DifficultyEditorUI {
                     cfg[key] = value / (tierCfg[key] || 1);
                 }));
             });
-        // Show this faction's boss kit so designers see the weapon split.
+        // Show this faction's boss kit so designers see the weapon + doctrine split.
         const kit = manager.getBossWeaponKit ? manager.getBossWeaponKit(faction) : null;
+        const beh = manager.getBossBehaviorKit ? manager.getBossBehaviorKit(faction) : null;
         if (kit) {
             const note = document.createElement('p');
             note.className = 'de-kit-note';
-            note.textContent = `Boss kit — fan: ${kit.fan} · aimed: ${kit.aimed} · sweep: ${kit.sweep}`;
+            const seq = beh && beh.patterns ? beh.patterns.join(' → ') : 'fan → aimed → sweep';
+            const style = beh && beh.style ? beh.style : '?';
+            note.textContent = `Boss kit — ${style} · fan: ${kit.fan} · aimed: ${kit.aimed} · sweep: ${kit.sweep} · ${seq}`;
             aiRoot.appendChild(note);
         }
         root.appendChild(aiRoot);
@@ -63710,6 +66681,9 @@ extendClass(RenderManager, {
 // faction structures. Environment comes from obstacleManager.getEnvironment().
 // Fog cells thinner than this stay open (higher = sparser fog).
 var FOG_MIN_DENSITY = 0.3;
+// Fog animation quantised to this step (seconds) so corridor stages don't
+// re-noise every cloud every frame.
+var FOG_ANIM_STEP = 0.12;
 // Ground scroll speed relative to the walls (parallax depth).
 var GROUND_PARALLAX = 0.5;
 
@@ -64068,49 +67042,73 @@ extendClass(RenderManager, {
         };
         const rowsN = Math.ceil(H / cell) + 3;
 
-        // The lattice layers only change when the scroll crosses a cell boundary (or the palette, width or
-        // stage changes); in between they are re-blitted at the new sub-cell phase without being rebuilt.
+        // Floor and wall lattices invalidate independently: floor only cares about
+        // parallax row / palette, walls about scroll row + crater epoch. Wall chips
+        // must not rebuild the whole floor, and parallax advances half as often.
         const gOffC = offset * GROUND_PARALLAX;
-        const lc = this._terrainLayerKey;
+        const gPhase = gOffC % cell;
+        const gBase = Math.floor(gOffC / cell);
+        const lc = this._terrainLayerKey || (this._terrainLayerKey = {});
         const dmgEpoch = obstacleManager._terrainDamageEpoch || 0;
-        const sameLayers = !!lc && lc.baseRow === baseRow && lc.gBase === Math.floor(gOffC / cell) && lc.cols === cols
-            && lc.rowsN === rowsN && lc.cell === cell && lc.W === W && lc.key === this._terrainKey
-            && lc.prof === obstacleManager._terrainProfile && lc.pal === pal && lc.dmg === dmgEpoch
-            && !!this._terrainWallBuf;
+        const sharedOk = lc.cols === cols && lc.rowsN === rowsN && lc.cell === cell && lc.W === W
+            && lc.key === this._terrainKey && lc.prof === obstacleManager._terrainProfile && lc.pal === pal;
+        const groundSame = sharedOk && lc.gBase === gBase && !!this._terrainBuf;
+        const wallSame = sharedOk && lc.baseRow === baseRow && lc.dmg === dmgEpoch
+            && !!this._terrainWallBuf && !!this._terrainOverlayBuf;
         let groundLayer, overlayLayer, wallLayer;
-        if (sameLayers) {
-            groundLayer = { canvas: this._terrainBuf, y: (gOffC % cell) - cell };
-            overlayLayer = { canvas: this._terrainOverlayBuf, y: phase - cell };
-            wallLayer = { canvas: this._terrainWallBuf, y: phase - cell };
+
+        const pushRunInto = (batch, curPhase, col, x, y, w, h) => {
+            if (!col || !(w > 0) || !(h > 0)) return;
+            let a = batch[col];
+            if (!a) batch[col] = a = [];
+            // y is r * cell + phase with r starting at -1 → row index r + 1.
+            a.push(Math.round(x / cell), Math.round((y - curPhase) / cell) + 1,
+                Math.max(1, Math.round(w / cell)), Math.max(1, Math.round(h / cell)));
+        };
+        const flushBatch = (target, into) => {
+            for (const col in target) {
+                if (!Object.prototype.hasOwnProperty.call(target, col)) continue;
+                into.fillStyle = col;
+                const a = target[col];
+                for (let i = 0; i < a.length; i += 4) {
+                    into.fillRect(a[i], a[i + 1], a[i + 2], a[i + 3]);
+                }
+            }
+        };
+        const layer = (name, target, dy, opaque, px) => {
+            let c = this[name];
+            if (!c) c = this[name] = document.createElement('canvas');
+            if (c.width !== cols || c.height !== rowsN) {
+                c.width = cols;
+                c.height = rowsN;
+            }
+            const lctx = c.getContext('2d', { alpha: !opaque });
+            if (!lctx) return null;
+            lctx.setTransform(1, 0, 0, 1, 0, 0);
+            lctx.globalAlpha = 1;
+            lctx.globalCompositeOperation = 'source-over';
+            lctx.imageSmoothingEnabled = false;
+            // Ground and walls paint every cell once with opaque colours: write the pixels directly
+            // (one putImageData) instead of thousands of single-cell fillRects.
+            if (px && this.flushBatchPixels(target, lctx, cols, rowsN, opaque ? '#0a0c10' : null)) {
+                return { canvas: c, y: dy - cell };
+            }
+            if (opaque) {
+                lctx.fillStyle = '#0a0c10';
+                lctx.fillRect(0, 0, cols, rowsN);
+            } else {
+                lctx.clearRect(0, 0, cols, rowsN);
+            }
+            flushBatch(target, lctx);
+            return { canvas: c, y: dy - cell };
+        };
+
+        if (groundSame) {
+            groundLayer = { canvas: this._terrainBuf, y: gPhase - cell };
         } else {
             // color → flat [x,y,w,h,…] runs (horizontal RLE) in lattice cells.
-            // Layers are painted at one pixel per voxel and scaled up, so every
-            // voxel is exactly the same size no matter the scroll phase.
-            // Ground, slope shading and walls stay in separate batches so
-            // obstacles can sit between them or on top of the walls.
             const groundBatch = Object.create(null);
-            const overlayBatch = Object.create(null);
-            const wallBatch = Object.create(null);
-            let batch = groundBatch;
-            let curPhase = 0;
-            const pushRun = (col, x, y, w, h) => {
-                if (!col || !(w > 0) || !(h > 0)) return;
-                let a = batch[col];
-                if (!a) batch[col] = a = [];
-                // y is r * cell + phase with r starting at -1 → row index r + 1.
-                a.push(Math.round(x / cell), Math.round((y - curPhase) / cell) + 1,
-                    Math.max(1, Math.round(w / cell)), Math.max(1, Math.round(h / cell)));
-            };
-            const flushBatch = (target, into) => {
-                for (const col in target) {
-                    if (!Object.prototype.hasOwnProperty.call(target, col)) continue;
-                    into.fillStyle = col;
-                    const a = target[col];
-                    for (let i = 0; i < a.length; i += 4) {
-                        into.fillRect(a[i], a[i + 1], a[i + 2], a[i + 3]);
-                    }
-                }
-            };
+            const rowCols = new Array(cols);
             const flushRow = (colsArr, y) => {
                 let runCol = null;
                 let runX = 0;
@@ -64120,28 +67118,20 @@ extendClass(RenderManager, {
                     if (col === runCol) {
                         runW += cell;
                     } else {
-                        if (runCol) pushRun(runCol, runX, y, runW, cell);
+                        if (runCol) pushRunInto(groundBatch, gPhase, runCol, runX, y, runW, cell);
                         runCol = col;
                         runX = cx * cell;
                         runW = cell;
                     }
                 }
-                if (runCol) pushRun(runCol, runX, y, runW, cell);
+                if (runCol) pushRunInto(groundBatch, gPhase, runCol, runX, y, runW, cell);
             };
-
-            // Ground: a far layer, scrolls at half speed (parallax under the walls).
-            const gOff = offset * GROUND_PARALLAX;
-            const gPhase = gOff % cell;
-            curPhase = gPhase;
-            const gBase = Math.floor(gOff / cell);
-            const rowCols = new Array(cols);
             for (let r = -1; r * cell + gPhase < H; r++) {
                 const y = r * cell + gPhase;
                 const wr = gBase - r;
-                // The floor type only depends on the row; noise and craters are pure per cell, so both are
-                // computed once per world row (cached while it scrolls past) instead of every frame.
-                const floor = obstacleManager.terrainFloorAt
-                    ? obstacleManager.terrainFloorAt(baseRow - r, 0) : 'craters';
+                // Floor type can dither per cell near biome seams; noise/craters stay row-cached.
+                const floorAt = obstacleManager.terrainFloorAt
+                    ? (cx) => obstacleManager.terrainFloorAt(wr, cx) : () => 'craters';
                 const rc = this.terrainRowCache(wr, cols);
                 for (let cx = 0; cx < cols; cx++) {
                     // Large lighter / darker patches (macro noise) shift the fine noise, so the floor
@@ -64150,6 +67140,7 @@ extendClass(RenderManager, {
                     let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
                     // Surface veins (ice / lava / …) follow coarse noise: connected seams, not confetti specks.
                     if (pal.special && Math.abs(rc.v[cx] - 0.5) < (env.planetStyle ? 0.035 : 0.018) * pal.veinMul) col = pal.special;
+                    const floor = floorAt(cx);
                     if (floor === 'craters') {
                         let c = rc.hits[cx];
                         if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
@@ -64169,15 +67160,23 @@ extendClass(RenderManager, {
                 }
                 flushRow(rowCols, y);
             }
-            // Canyon slope
-            batch = overlayBatch;
-            curPhase = phase;
+            groundLayer = layer('_terrainBuf', groundBatch, gPhase, true, true);
+            lc.gBase = gBase;
+        }
+
+        if (wallSame) {
+            overlayLayer = { canvas: this._terrainOverlayBuf, y: phase - cell };
+            wallLayer = { canvas: this._terrainWallBuf, y: phase - cell };
+        } else {
+            const overlayBatch = Object.create(null);
+            const wallBatch = Object.create(null);
+            let batch = overlayBatch;
+            const pushRun = (col, x, y, w, h) => pushRunInto(batch, phase, col, x, y, w, h);
             // Light veil: keep ships readable without washing out floor doctrine.
-            curPhase = gPhase;
-            for (let r = -1; r * cell + gPhase < H; r++) {
-                pushRun('rgba(2,6,8,0.28)', 0, r * cell + gPhase, cols * cell, cell);
+            // Painted in wall-scroll phase so it shares the overlay buffer with slope/hatch.
+            for (let r = -1; r * cell + phase < H; r++) {
+                pushRun('rgba(2,6,8,0.4)', 0, r * cell + phase, cols * cell, cell);
             }
-            curPhase = phase;
             const slope = [0.62, 0.45, 0.3, 0.18, 0.1];
             for (let r = -1; r * cell + phase < H; r++) {
                 const y = r * cell + phase;
@@ -64194,7 +67193,6 @@ extendClass(RenderManager, {
             }
             // Walls (own batch → drawn after under-wall obstacles)
             batch = wallBatch;
-            curPhase = phase;
             const mats = this.terrainMaterialPalettes(env, pal);
             for (let r = -1; r * cell + phase < H; r++) {
                 const y = r * cell + phase;
@@ -64262,40 +67260,22 @@ extendClass(RenderManager, {
                     flushWall();
                 }
             }
-
-            const layer = (name, target, dy, opaque, px) => {
-                let c = this[name];
-                if (!c) c = this[name] = document.createElement('canvas');
-                if (c.width !== cols || c.height !== rowsN) {
-                    c.width = cols;
-                    c.height = rowsN;
-                }
-                const lc = c.getContext('2d', { alpha: !opaque });
-                if (!lc) return null;
-                lc.setTransform(1, 0, 0, 1, 0, 0);
-                lc.globalAlpha = 1;
-                lc.globalCompositeOperation = 'source-over';
-                lc.imageSmoothingEnabled = false;
-                // Ground and walls paint every cell once with opaque colours: write the pixels directly
-                // (one putImageData) instead of thousands of single-cell fillRects.
-                if (px && this.flushBatchPixels(target, lc, cols, rowsN, opaque ? '#0a0c10' : null)) {
-                    return { canvas: c, y: dy - cell };
-                }
-                if (opaque) {
-                    lc.fillStyle = '#0a0c10';
-                    lc.fillRect(0, 0, cols, rowsN);
-                } else {
-                    lc.clearRect(0, 0, cols, rowsN);
-                }
-                flushBatch(target, lc);
-                return { canvas: c, y: dy - cell };
-            };
-            groundLayer = layer('_terrainBuf', groundBatch, gPhase, true, true);
             overlayLayer = layer('_terrainOverlayBuf', overlayBatch, phase, false);
             wallLayer = layer('_terrainWallBuf', wallBatch, phase, false, true);
-            this._terrainLayerKey = { baseRow, gBase: Math.floor(gOffC / cell), cols, rowsN, cell, W, key: this._terrainKey,
-                prof: obstacleManager._terrainProfile, pal, dmg: dmgEpoch };
+            lc.baseRow = baseRow;
+            lc.dmg = dmgEpoch;
         }
+
+        lc.cols = cols;
+        lc.rowsN = rowsN;
+        lc.cell = cell;
+        lc.W = W;
+        lc.key = this._terrainKey;
+        lc.prof = obstacleManager._terrainProfile;
+        lc.pal = pal;
+        if (lc.gBase == null) lc.gBase = gBase;
+        if (lc.baseRow == null) lc.baseRow = baseRow;
+        if (lc.dmg == null) lc.dmg = dmgEpoch;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
         // Fill the strip the shifted layers leave uncovered at the edges.
@@ -64701,7 +67681,9 @@ extendClass(RenderManager, {
             ? renderManager.getCombatVoxelCell()
             : null;
         const cell = (shared != null && shared > 0) ? shared : this.planetPixelSize(W);
-        const t = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+        const rawT = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+        // Quantise time so the living cloud only re-samples a few times per second.
+        const t = Math.floor(rawT / FOG_ANIM_STEP) * FOG_ANIM_STEP;
         if (o._fogSeed == null) o._fogSeed = Math.random() * 1000;
         const seed = o._fogSeed;
         // Structure scale per cloud: 0 = broad soft banks, 1 = fine wisps.
@@ -64724,39 +67706,60 @@ extendClass(RenderManager, {
         const gx1 = Math.ceil((cx + hw) / cell);
         const gy0 = Math.floor((cy - hh) / cell);
         const gy1 = Math.ceil((cy + hh) / cell);
-        const breathe = 1 + Math.sin(t * 0.9 + seed) * 0.06;
         const alphaMul = o.opacity != null ? o.opacity : 1;
-        const fills = [[], [], []];
-        for (let gy = gy0; gy < gy1; gy++) {
-            for (let gx = gx0; gx < gx1; gx++) {
-                // Position relative to the cloud (moves with it, smoothly).
-                const lx = (gx + 0.5) * cell - cx;
-                const ly = (gy + 0.5) * cell - cy;
-                const nx = lx / hw;
-                const ny = ly / hh;
-                const a = Math.atan2(ny, nx);
-                const edge = (0.8 + 0.1 * Math.sin(a * 3 + t * 0.6 + seed)
-                    + 0.05 * Math.sin(a * 5 - t * 0.9 + seed * 2)) * breathe;
-                const rad = Math.hypot(nx, ny) / edge;
-                if (rad >= 1.1) continue;
-                // Noise in cloud space (cell units): three slow layers drifting apart.
-                const sx = lx / cell, sy = ly / cell;
-                const n1 = this.envNoise(sx * 0.9 * fq + t * 1.2 + seed, sy * 0.9 * fq + t * 0.4);
-                const n2 = this.envNoise(sx * 1.4 * fq - t * 0.9 + seed * 3, sy * 1.4 * fq - t * 0.7 + 40);
-                const n3 = this.envNoise(sx * 0.5 + t * 0.3 + 90, sy * 0.5 - t * 0.5 + seed);
-                // Fine detail: stretched, fast streaks that split thick areas
-                // into threads (weighted by the cloud's fineness).
-                const n4 = this.envNoise(sx * 3.2 * fq + t * 2 + seed * 7, sy * 1.6 * fq - t * 0.8 + 13);
-                // Patchy: a slow mask carves drifting gaps, so only a few
-                // pockets get thick and the rest is thin haze or open.
-                const holes = this.envNoise(sx * 0.35 - t * 0.25 + seed * 5, sy * 0.35 + t * 0.2 + 7);
-                const body = n1 * 0.45 + n2 * 0.3 + n3 * 0.25;
-                const detail = 1 - fine * 0.7 + fine * 0.7 * (n4 * 1.6 - 0.3);
-                const d = body * detail * (1.1 - rad) * 1.6
-                    * Math.max(0, (holes - 0.25) * 1.8);
-                if (d < FOG_MIN_DENSITY) continue;
-                fills[d > 0.8 ? 2 : d > 0.5 ? 1 : 0].push(gx, gy);
+        // Reuse last density fills while the cloud sits on the same grid cells
+        // and the animation step hasn't advanced (corridor stages often have
+        // several large clouds; full re-noise was the main frame hitch).
+        // Snap cloud centre to the art grid so a sub-cell drift reuses fills.
+        const qcx = Math.round(cx / cell);
+        const qcy = Math.round(cy / cell);
+        const cache = o._fogFillCache;
+        const sameGrid = cache && cache.qcx === qcx && cache.qcy === qcy
+            && cache.gx0 === gx0 && cache.gx1 === gx1
+            && cache.gy0 === gy0 && cache.gy1 === gy1 && cache.t === t
+            && cache.cell === cell && cache.seed === seed;
+        let fills;
+        if (sameGrid) {
+            fills = cache.fills;
+        } else {
+            const breathe = 1 + Math.sin(t * 0.9 + seed) * 0.06;
+            fills = [[], [], []];
+            // One cheap octave for fog (look stays cloudy; corridor stages stay playable).
+            const fogNoise = (x, y) => {
+                const ix = Math.floor(x), iy = Math.floor(y);
+                const tx = x - ix, ty = y - iy;
+                const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+                const a = this.envHash(ix, iy), b = this.envHash(ix + 1, iy);
+                const c = this.envHash(ix, iy + 1), d = this.envHash(ix + 1, iy + 1);
+                return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
+            };
+            for (let gy = gy0; gy < gy1; gy++) {
+                for (let gx = gx0; gx < gx1; gx++) {
+                    // Position relative to the cloud (moves with it, smoothly).
+                    const lx = (gx + 0.5) * cell - cx;
+                    const ly = (gy + 0.5) * cell - cy;
+                    const nx = lx / hw;
+                    const ny = ly / hh;
+                    const a = Math.atan2(ny, nx);
+                    const edge = (0.8 + 0.1 * Math.sin(a * 3 + t * 0.6 + seed)
+                        + 0.05 * Math.sin(a * 5 - t * 0.9 + seed * 2)) * breathe;
+                    const rad = Math.hypot(nx, ny) / edge;
+                    if (rad >= 1.1) continue;
+                    const sx = lx / cell, sy = ly / cell;
+                    const n1 = fogNoise(sx * 0.1 * fq + t * 1.2 + seed, sy * 0.1 * fq + t * 0.4);
+                    const n2 = fogNoise(sx * 0.16 * fq - t * 0.9 + seed * 3, sy * 0.16 * fq - t * 0.7 + 40);
+                    const n4 = fine > 0.35
+                        ? fogNoise(sx * 0.35 * fq + t * 2 + seed * 7, sy * 0.18 * fq - t * 0.8 + 13) : 0.5;
+                    const holes = fogNoise(sx * 0.04 - t * 0.25 + seed * 5, sy * 0.04 + t * 0.2 + 7);
+                    const body = n1 * 0.6 + n2 * 0.4;
+                    const detail = 1 - fine * 0.7 + fine * 0.7 * (n4 * 1.6 - 0.3);
+                    const d = body * detail * (1.1 - rad) * 1.6
+                        * Math.max(0, (holes - 0.25) * 1.8);
+                    if (d < FOG_MIN_DENSITY) continue;
+                    fills[d > 0.8 ? 2 : d > 0.5 ? 1 : 0].push(gx, gy);
+                }
             }
+            o._fogFillCache = { qcx, qcy, gx0, gx1, gy0, gy1, t, cell, seed, fills };
         }
         // Batched per density step: one fillStyle/alpha change each.
         const colors = [dark, base, light];
@@ -79300,9 +82303,39 @@ var LevelInfoManager = class LevelInfoManager {
         this.under = document.getElementById('giUnderStage');
         this.loadoutSide = document.getElementById('giLoadoutSide');
         this.missionSide = document.getElementById('giMissionSide');
+        this.transitMap = document.getElementById('giTransitMap');
         this.panel.style.display = 'flex';
         this.startUpdateLoop();
         this.updateLevelData(this.collectLevelData());
+    }
+    /** Tube/sluice levels: vertical progress track to the exit gate, under the LOADOUT card. */
+    updateTransitMap() {
+        const el = this.transitMap;
+        if (!el) return;
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        const isTransit = !!(om && om.objective && om.objective.type === 'reachGoal');
+        el.hidden = !isTransit;
+        if (!isTransit) return;
+        const seconds = Math.max(1, Number(om.objective.seconds) || 1);
+        const elapsed = Math.max(0, Number(om.elapsedMs) || 0);
+        const arrived = !!om.goal;
+        const pct = (om.completed || om.won || arrived)
+            ? 100
+            : Math.max(0, Math.min(100, Math.round((elapsed / (seconds * 1000)) * 100)));
+        el.style.setProperty('--vf-transit-pct', pct + '%');
+        el.classList.toggle('gi-transit-arrived', arrived);
+        if (!el.firstElementChild) {
+            el.innerHTML = '<div class="gi-transit-track">' +
+                '<div class="gi-transit-gate">GATE</div>' +
+                '<div class="gi-transit-fill"></div>' +
+                '<div class="gi-transit-ship"></div>' +
+                '</div>';
+        }
+        const gateEl = el.querySelector('.gi-transit-gate');
+        if (gateEl) {
+            gateEl.classList.toggle('is-visible', arrived);
+            gateEl.textContent = arrived && om.goal.kind === 'warp' ? 'WARP' : 'GATE';
+        }
     }
     showPanel() {
         if (this.panel) {
@@ -79317,6 +82350,7 @@ var LevelInfoManager = class LevelInfoManager {
         if (this.missionSide) {
             this.missionSide.hidden = false;
         }
+        this.updateTransitMap();
     }
     hidePanel() {
         if (this.panel) {
@@ -79331,6 +82365,9 @@ var LevelInfoManager = class LevelInfoManager {
         }
         if (this.missionSide) {
             this.missionSide.hidden = true;
+        }
+        if (this.transitMap) {
+            this.transitMap.hidden = true;
         }
     }
     /** Show HUD + refresh content without starting the combat clock. */
@@ -79597,6 +82634,7 @@ var LevelInfoManager = class LevelInfoManager {
         this.updateElement('levelDifficulty', this.levelData.difficulty || 'NORMAL');
         this.updatePlanetIcon();
         this.renderBody();
+        this.updateTransitMap();
     }
     resolvePlanetId() {
         const raw = (this.levelData && (this.levelData.planetId || this.levelData.background || this.levelData.name)) || 'mars';
@@ -79826,6 +82864,9 @@ extendClass(LevelInfoManager, {
                 const seconds = this.stats.levelTime % 60;
                 this._timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                 this.updateElement('levelTime', this._timeString);
+            }
+            if (typeof objectiveManager !== 'undefined') {
+                this.updateTransitMap();
             }
             if (typeof objectiveManager !== 'undefined' || typeof dailyTracker !== 'undefined') {
                 const objVal = document.getElementById('objectiveHudValue');
@@ -82846,7 +85887,7 @@ var GalaxyMapManager = class GalaxyMapManager {
         return this.setInputActive(true);
     }
     disarmInput() {
-        this.clearActionFocus();
+        this.clearCardFocus();
         return this.setInputActive(false);
     }
     /** Start/confirm buttons of the selected planet card, enabled only. */
@@ -82859,6 +85900,25 @@ var GalaxyMapManager = class GalaxyMapManager {
     hasActionFocus() {
         return this._actionFocus != null && this.getActionButtons().length > 0;
     }
+    /** Cleared / replayable / dev-pick stage tiles in the planet card. */
+    getStageFocusables() {
+        if (!this.overlay) return [];
+        return Array.from(this.overlay.querySelectorAll(
+            '#gmStageStepper .gm-sector-stage[data-replay-stage], #gmStageStepper .gm-sector-stage[data-dev-stage]'
+        ));
+    }
+    hasStageFocus() {
+        return this._stageFocus != null && this.getStageFocusables().length > 0;
+    }
+    hasCardFocus() {
+        return this.hasActionFocus() || this.hasStageFocus();
+    }
+    /** Keep the station footer tip in sync when map card focus changes. */
+    syncHostNavHint() {
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.syncNavHint) {
+            homeStationUI.syncNavHint();
+        }
+    }
     /** Highlight one action button (defaults to the main CONTINUE/START one). */
     focusActionButton(index) {
         const list = this.getActionButtons();
@@ -82866,6 +85926,7 @@ var GalaxyMapManager = class GalaxyMapManager {
             this._actionFocus = null;
             return false;
         }
+        this.clearStageFocus();
         let i = index;
         if (i == null) {
             const main = list.findIndex((b) => b.id === 'gmConfirm');
@@ -82875,6 +85936,10 @@ var GalaxyMapManager = class GalaxyMapManager {
         this._actionFocus = i;
         list.forEach((b, idx) => b.classList.toggle('nav-focused', idx === i));
         try { list[i].focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+        if (typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(list[i]);
+        }
+        this.syncHostNavHint();
         return true;
     }
     clearActionFocus() {
@@ -82884,15 +85949,57 @@ var GalaxyMapManager = class GalaxyMapManager {
             if (document.activeElement === b) b.blur();
         });
     }
+    focusStage(index) {
+        const list = this.getStageFocusables();
+        if (!list.length) {
+            this._stageFocus = null;
+            return false;
+        }
+        this.clearActionFocus();
+        let i = index;
+        if (i == null) {
+            const cur = list.findIndex((el) => el.classList.contains('is-current'));
+            i = cur >= 0 ? cur : 0;
+        }
+        i = (i + list.length) % list.length;
+        this._stageFocus = i;
+        list.forEach((el, idx) => el.classList.toggle('nav-focused', idx === i));
+        if (typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(list[i]);
+        }
+        this.syncHostNavHint();
+        return true;
+    }
+    clearStageFocus() {
+        this._stageFocus = null;
+        this.getStageFocusables().forEach((el) => el.classList.remove('nav-focused'));
+    }
+    clearCardFocus() {
+        this.clearActionFocus();
+        this.clearStageFocus();
+        this.syncHostNavHint();
+    }
+    /** Drop from the map into the planet card: stages first, else action buttons. */
+    focusCardPanel() {
+        if (this.focusStage()) return true;
+        return this.focusActionButton();
+    }
     /**
      * ENTER / SPACE inside the map: first press moves focus from the map to
-     * the planet card's start button, the next press activates it.
+     * the planet card, the next press activates the focused control.
      */
     confirmKey() {
-        if (!this.hasActionFocus()) {
-            if (this.focusActionButton()) return true;
-            this.confirm('resume');
+        if (this.hasStageFocus()) {
+            const el = this.getStageFocusables()[this._stageFocus];
+            this.clearStageFocus();
+            if (el) el.click();
             return true;
+        }
+        if (!this.hasActionFocus()) {
+            // Liberated / locked: focus stages (replay) or do nothing — never
+            // force-start a mission when the card has no enabled action.
+            if (this.focusCardPanel()) return true;
+            return false;
         }
         const btn = this.getActionButtons()[this._actionFocus];
         this.clearActionFocus();
@@ -87418,6 +90525,30 @@ extendClass(GalaxyMapManager, {
             this._panAnchor = null;
             apply();
         });
+        // Right-click a planet / station: select it and fly straight there (no menu, no combat start).
+        svg.addEventListener('contextmenu', (e) => {
+            const target = e.composedPath().find((el) => el && el.classList
+                && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node')));
+            if (!target) return;
+            e.preventDefault();
+            if (this._flight || this._ambush) return;
+            const pid = target.getAttribute('data-planet');
+            const postId = target.getAttribute('data-post');
+            if (postId) {
+                const post = this.getTradingPosts().find((p) => p.id === postId);
+                if (!post || !profileManager.isTradingPostUnlocked(post)) return;
+                const willFly = !this.isShipAt('post', post.id);
+                this.markUserPicked();
+                this.selectPost(postId, { noCamera: willFly });
+                if (willFly) this.flyTo('post', post.id);
+                return;
+            }
+            if (!pid || !this.isUnlocked(pid)) return;
+            const willFly = !this.isShipAt('planet', pid);
+            this.markUserPicked();
+            this.selectPlanet(pid, { noCamera: willFly });
+            if (willFly) this.flyTo('planet', pid);
+        });
         // The map SVG is re-rendered often: bind the window handlers once.
         if (this._mapDragBound) return;
         this._mapDragBound = true;
@@ -88488,11 +91619,32 @@ extendClass(GalaxyMapManager, {
             if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                 e.preventDefault();
                 e.stopPropagation();
+                if (this.hasStageFocus()) {
+                    // Stage row: ←/→ pick, ↑ map, ↓ action buttons.
+                    if (e.key === 'ArrowLeft') this.focusStage(this._stageFocus - 1);
+                    else if (e.key === 'ArrowRight') this.focusStage(this._stageFocus + 1);
+                    else if (e.key === 'ArrowUp') {
+                        this.clearStageFocus();
+                        this.syncHostNavHint && this.syncHostNavHint();
+                    } else if (e.key === 'ArrowDown') {
+                        this.clearStageFocus();
+                        if (!this.focusActionButton()) this.syncHostNavHint && this.syncHostNavHint();
+                    }
+                    return;
+                }
                 if (this.hasActionFocus()) {
-                    // On the start buttons: ←/→ pick one, ↑ back to the map.
+                    // Action buttons: ←/→ pick, ↑ stages (or map), no ↓.
                     if (e.key === 'ArrowLeft') this.focusActionButton(this._actionFocus - 1);
                     else if (e.key === 'ArrowRight') this.focusActionButton(this._actionFocus + 1);
-                    else if (e.key === 'ArrowUp') this.clearActionFocus();
+                    else if (e.key === 'ArrowUp') {
+                        this.clearActionFocus();
+                        if (!this.focusStage()) this.clearCardFocus();
+                    }
+                    return;
+                }
+                // Map: arrows hop planets/posts. ↓ with nothing below drops into the card.
+                if (e.key === 'ArrowDown') {
+                    if (!this.navigateByArrow(e.key)) this.focusCardPanel();
                     return;
                 }
                 this.navigateByArrow(e.key);
@@ -88505,8 +91657,8 @@ extendClass(GalaxyMapManager, {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (this.hasActionFocus()) {
-                    this.clearActionFocus();
+                if (this.hasCardFocus()) {
+                    this.clearCardFocus();
                     return;
                 }
                 if (this._mountEl) {
@@ -88563,9 +91715,21 @@ extendClass(GalaxyMapManager, {
      * anchors). From a post: its anchor planets, their linked planets and
      * the other posts sharing an anchor.
      */
+    /**
+     * Trading posts at resting coords (no orbit). Arrow nav must stay stable —
+     * orbiting display positions made ←/→ pick different posts every few seconds.
+     */
+    getNavTradingPosts() {
+        if (typeof profileManager === 'undefined' || !profileManager.getTradingPosts) return [];
+        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        return (profileManager.getTradingPosts(this.galaxyId) || []).filter((p) => dev
+            || (p.anchors || [p.planetId]).some((id) => this.nodeById && this.nodeById[id] && this.isUnlocked(id)));
+    },
     getArrowTargets() {
-        const posts = this.getTradingPosts();
-        const current = this.getSelectedPost();
+        const posts = this.getNavTradingPosts();
+        const current = this.selectedPostId
+            ? posts.find((p) => p.id === this.selectedPostId) || null
+            : null;
         const anchorsOf = (p) => p.anchors || [p.planetId];
         const origin = current ? anchorsOf(current) : [this.selectedPlanetId];
         const out = [];
@@ -88602,21 +91766,25 @@ extendClass(GalaxyMapManager, {
         }
         return out;
     },
+    /** Move map selection by arrow. Returns true when a neighbour was selected. */
     navigateByArrow(key) {
-        if (this._flight || this._ambush) return;
-        if (!this.selectedPlanetId) return;
-        const post = this.getSelectedPost();
+        if (this._flight || this._ambush) return false;
+        if (!this.selectedPlanetId) return false;
+        const posts = this.getNavTradingPosts();
+        const post = this.selectedPostId
+            ? posts.find((p) => p.id === this.selectedPostId) || null
+            : null;
         const cur = post || this.nodeById[this.selectedPlanetId];
-        if (!cur) return;
+        if (!cur) return false;
         const targets = this.getArrowTargets();
-        if (!targets.length) return;
+        if (!targets.length) return false;
 
         // Compare in map pixels (the map is ~544×224), not normalised 0..1
         // units, so left/right and up/down weigh distances the way they look.
         const SX = 544;
         const SY = 224;
         const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
-        if (!dir) return;
+        if (!dir) return false;
         let best = null;
         let bestScore = Infinity;
         targets.forEach((t) => {
@@ -88635,13 +91803,14 @@ extendClass(GalaxyMapManager, {
                 best = t;
             }
         });
-        if (!best) return;
+        if (!best) return false;
         if (best.kind === 'post') this.selectPost(best.id);
         else this.selectPlanet(best.id);
         // The camera follows: selection and ship stay in view, zooming out with the distance.
         if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        return true;
     },
-    selectPlanet(planetId) {
+    selectPlanet(planetId, opts) {
         this.selectedPostId = null;
         this.selectedBorder = null;
         this.selectedPlanetId = planetId;
@@ -88649,7 +91818,10 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        // A flight about to start frames its own camera; reframing to the
+        // selection first would jump the view, then jump again into the flight.
+        const skipCam = this._flight || (opts && opts.noCamera);
+        if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     /**
      * Select a border checkpoint (route from open → shut). The card shows
@@ -88751,7 +91923,7 @@ extendClass(GalaxyMapManager, {
         return this.getTradingPosts().find((p) => p.id === this.selectedPostId) || null;
     },
     /** Select a trading post; its anchor planet stays the arrow-nav origin. */
-    selectPost(postId) {
+    selectPost(postId, opts) {
         const post = this.getTradingPosts().find((p) => p.id === postId);
         if (!post) return;
         this.selectedBorder = null;
@@ -88761,7 +91933,8 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        const skipCam = this._flight || (opts && opts.noCamera);
+        if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;
@@ -88885,7 +92058,7 @@ extendClass(GalaxyMapManager, {
         const info = this.getPlanetInfo(this.selectedPlanetId);
         const backBtn = actions.querySelector('#gmBack');
         const backHtml = backBtn ? backBtn.outerHTML : '';
-        this._actionFocus = null; // buttons are rebuilt; focus returns to the map
+        this.clearCardFocus && this.clearCardFocus(); // card rebuilt; focus returns to the map
         if (this.selectedBorder) {
             // Checkpoint: nothing to start here — one button jumps to the
             // planet whose clearing opens it.
@@ -89403,6 +92576,13 @@ extendClass(GalaxyMapManager, {
         this._zoomAnim = null;
         if (svg && this.adoptViewBoxZoom) this.adoptViewBoxZoom(svg);
         const originalViewBox = svg && svg.getAttribute('viewBox');
+        // Camera starts wherever it already was (e.g. still framing the selection) and
+        // eases onto the ship instead of snapping to it the instant the flight begins.
+        const camFrom = (() => {
+            const vb = (originalViewBox || '').trim().split(/\s+/).map(Number);
+            return (vb.length === 4 && vb.every(Number.isFinite))
+                ? { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2 } : null;
+        })();
         const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!from || !to || !svg || reduced) {
             this.commitFlight(kind, id);
@@ -89435,7 +92615,8 @@ extendClass(GalaxyMapManager, {
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
         const duration = Math.max(1800, Math.min(5000, dist * 12));
         this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
-            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox };
+            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox,
+            camFrom: camFrom };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
             if (stopAt < 1) this.showAmbush();
@@ -89449,6 +92630,9 @@ extendClass(GalaxyMapManager, {
         const start = performance.now();
         const span = Math.max(1, f.duration * (t1 - t0));
         const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+        // Only the flight's opening leg eases the camera in from wherever it was; a
+        // resumed leg (post-ambush) is already following the ship, so it just continues.
+        const camBlendDur = t0 === 0 && f.camFrom ? Math.min(600, span) : 0;
         const step = (now) => {
             if (this._flight !== f) return;
             const local = Math.min(1, (now - start) / span);
@@ -89461,7 +92645,13 @@ extendClass(GalaxyMapManager, {
             f.ship.setAttribute('transform', `translate(${sat.x},${sat.y})`);
             const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
             if (vb.length === 4 && vb.every(Number.isFinite)) {
-                f.svg.setAttribute('viewBox', `${at.x - vb[2] / 2} ${at.y - vb[3] / 2} ${vb[2]} ${vb[3]}`);
+                let cx = at.x, cy = at.y;
+                if (camBlendDur > 0) {
+                    const camK = ease(Math.min(1, (now - start) / camBlendDur));
+                    cx = f.camFrom.x + (at.x - f.camFrom.x) * camK;
+                    cy = f.camFrom.y + (at.y - f.camFrom.y) * camK;
+                }
+                f.svg.setAttribute('viewBox', `${cx - vb[2] / 2} ${cy - vb[3] / 2} ${vb[2]} ${vb[3]}`);
             }
             if (f.heading) f.heading.setAttribute('transform', `rotate(${at.angle})`);
             // Trail: the path's corners passed so far, then the ship.
@@ -98630,11 +101820,11 @@ extendClass(HomeStationUI, {
         if (this.tab !== 'play') this._travelModal = false;
         // A rebuild replaces the body, so an embedded WIKI viewer ends here.
         if (this._embeddedViewer) this.closeEmbeddedViewer();
-        // A trading-post visit ends as soon as another tab is shown.
-        if (this.tab !== 'shop' && this.visitPostId) {
-            this.visitPostId = null;
-            if (this._shopCategoryBeforeDock) this.shopCategory = this._shopCategoryBeforeDock;
-            this._shopCategoryBeforeDock = null;
+        // Trading-post modal owns overlay while open — restore HS shell first.
+        if (this.restoreTradingPostHomeOverlay) this.restoreTradingPostHomeOverlay();
+        // Leaving PLAY while docked closes the trader modal.
+        if (this.tab !== 'play' && this._tpsModalOpen && this.undockTradingPost) {
+            this.undockTradingPost();
         }
         this.stopHangarPreview();
         const scrollState = this.captureScrollState();
@@ -99227,6 +102417,10 @@ extendClass(HomeStationUI, {
         if (['factions', 'ffleet', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
         this.restoreScrollState(scrollState);
         this.applyPendingFlash();
+        // Buys from the trader call setStatus→createUI; remount the modal on top.
+        if (this._tpsModalOpen && this.visitPostId && this.mountTradingPostModal) {
+            this.mountTradingPostModal();
+        }
         // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
         if (soft) {
             requestAnimationFrame(() => {
@@ -99583,6 +102777,21 @@ extendClass(HomeStationUI, {
                     this.playButtonResult(btn, false, res.reason === 'DRIVE'
                         ? 'NEED WARP L' + (res.requireWarp || 1) + ' OR BUY PORTAL'
                         : (res.reason || 'FAILED'));
+                }
+            });
+        });
+        wrap.querySelectorAll('[data-install-portal]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const gid = btn.getAttribute('data-install-portal');
+                const res = profileManager.installPortal
+                    ? profileManager.installPortal(gid)
+                    : { ok: false, reason: 'FAILED' };
+                if (res.ok) {
+                    const name = String(gid).replace(/_/g, ' ').toUpperCase();
+                    this.statusMsg = 'PORTAL INSTALLED: ' + name;
+                    this.mountTravelControls(mount);
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
                 }
             });
         });
@@ -99943,9 +103152,16 @@ extendClass(HomeStationUI, {
         const level = this.getNavLevel();
         if (this.tab === 'play') {
             if (this.isPlayMapActive()) {
-                hint.setAttribute('data-ui-tip', '[MAP] ARROWS Planets | ENTER Start Mission | ESC/BACKSPACE Back to Tabs');
+                const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+                if (gm && gm.hasStageFocus && gm.hasStageFocus()) {
+                    hint.setAttribute('data-ui-tip', '[STAGES] ←→ Pick | ENTER Replay | ↑ Map | ↓ Actions | ESC Back');
+                } else if (gm && gm.hasActionFocus && gm.hasActionFocus()) {
+                    hint.setAttribute('data-ui-tip', '[CARD] ←→ Actions | ENTER Confirm | ↑ Stages/Map | ESC Back');
+                } else {
+                    hint.setAttribute('data-ui-tip', '[MAP] ←→↑↓ Planets | ↓/ENTER Card | ESC Tabs');
+                }
             } else {
-                hint.setAttribute('data-ui-tip', '[TABS] ←→ Switch | ENTER Enter Map | ESC/BACKSPACE Menu');
+                hint.setAttribute('data-ui-tip', '[TABS] ←→ Switch | ↓/ENTER Enter Map | ESC/BACKSPACE Menu');
             }
             return;
         }
@@ -102488,12 +105704,9 @@ extendClass(HomeStationUI, {
         const ids = (typeof planetConfigManager !== 'undefined')
             ? planetConfigManager.getGalaxyIds()
             : ['milky_way', 'andromeda'];
-        const cards = ids.filter((gid) => {
-            if (gid === current) return true;
-            return (typeof profileManager !== 'undefined')
-                ? profileManager.canTravelToGalaxy(gid, profile).ok
-                : gid === 'milky_way';
-        }).map((gid) => {
+        // Always list every galaxy. Locked rows keep NEED WARP / INSTALL PORTAL
+        // so destinations do not vanish after travelling home with Warp L0.
+        const cards = ids.map((gid) => {
             const g = (typeof planetConfigManager !== 'undefined')
                 ? planetConfigManager.getGalaxy(gid)
                 : { id: gid, name: gid.toUpperCase() };
@@ -102504,6 +105717,9 @@ extendClass(HomeStationUI, {
             const req = (typeof economyConfig !== 'undefined')
                 ? economyConfig.getGalaxyWarpRequirement(gid, current)
                 : 0;
+            const portalReady = (typeof profileManager !== 'undefined' && profileManager.hasPortalInInventory)
+                ? profileManager.hasPortalInInventory(gid, profile)
+                : false;
             // Map nodes = the galaxy's real planets (planetIds can hold strays).
             const gmap = (typeof planetConfigManager !== 'undefined') ? planetConfigManager.getGalaxyMap(gid) : null;
             const planetCount = (gmap && gmap.nodes && gmap.nodes.length) || 0;
@@ -102516,10 +105732,12 @@ extendClass(HomeStationUI, {
             let action = '';
             if (here) {
                 action = '<span class="hs-muted hs-line-action">CURRENT</span>';
-            } else if (!travel.ok) {
-                action = `<span class="hs-muted hs-line-action">NEED WARP L${req} OR PORTAL</span>`;
-            } else {
+            } else if (travel.ok) {
                 action = `<button class="action-button hs-line-action" data-travel="${gid}">TRAVEL HERE</button>`;
+            } else if (portalReady) {
+                action = `<button class="action-button hs-line-action" data-install-portal="${gid}">INSTALL PORTAL</button>`;
+            } else {
+                action = `<span class="hs-muted hs-line-action">NEED WARP L${req} OR PORTAL</span>`;
             }
             const ctl = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControl) ? planetConfigManager.getGalaxyControl(gid) : null;
             const held = !ctl || ctl.control !== 'contested';
@@ -102548,7 +105766,7 @@ extendClass(HomeStationUI, {
 
         return `<div class="hs-section hs-panel">` +
             `${this.panelTitle('hsTravel', 'GALAXY TRAVEL')}` +
-            `<p class="hs-muted hs-hint">Move the home station between galaxies. First travel into a foreign galaxy charts faction-matched planets and icons immediately. START only shows planets in the current galaxy. Unlock destinations with WARP DRIVE or buy a PORTAL in the shop.</p>` +
+            `<p class="hs-muted hs-hint">Move the home station between galaxies. Buy portal modules in the shop — they go into inventory. Install them here to unlock that galaxy route. Warp Drive can also unlock destinations by level.</p>` +
             `<p class="hs-line">CURRENT: <strong>${String(current).replace(/_/g, ' ').toUpperCase()}</strong> · WARP L${levels.warp_drive || 0}</p>` +
             `<div class="hs-tab-fill">${cards}</div>` +
             `</div>`;
@@ -103091,6 +106309,48 @@ extendClass(HomeStationUI, {
         return [[1, 1], [1, 2], [2, 2]][lv];
     },
 
+    /** Part/module footprint for vendor stock (S/M/L → 1×1 / 1×2 / 2×2). */
+    shopPartSpan(kind, id) {
+        const bucket = kind === 'weapon' ? 'weapons'
+            : (kind === 'defense' ? 'defenses'
+                : (kind === 'energy' ? 'energy' : 'abilities'));
+        return this._storageItemSpan(bucket, id);
+    },
+
+    /**
+     * Pack vendor stock cells that may span multiple slots. `cellSpecs` entries
+     * are `{ html, span:[w,h] }` with `__SPAN__` in the style attribute.
+     * Grows rows until the dense footprint fits the shop bag.
+     */
+    packShopStockGrid(cellSpecs, cols, minRows, cs, gap, extraClass) {
+        const specs = (cellSpecs || []).map((c) => {
+            const w = Math.max(1, Math.min(cols, (c.span && c.span[0]) || 1));
+            const h = Math.max(1, (c.span && c.span[1]) || 1);
+            return { html: c.html, span: [w, h] };
+        });
+        let used = specs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        let rows = Math.max(minRows | 0, Math.ceil(Math.max(used, 1) / cols));
+        // Tall M/L parts need at least their own height.
+        specs.forEach((c) => { if (c.span[1] > rows) rows = c.span[1]; });
+        while (used > cols * rows) rows += 1;
+        const cells = specs.map((c) => {
+            const [w, h] = c.span;
+            return c.html.replace('__SPAN__', `grid-column: span ${w}; grid-row: span ${h};`);
+        });
+        const pad = Math.max(0, cols * rows - used);
+        for (let i = 0; i < pad; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return `<div class="hs-storage-grid ${extraClass || ''}" data-inv-cols="${cols}" data-inv-rows="${rows}" ` +
+            `style="--cs:${cs}px;--hs-gap:${gap}px;grid-auto-flow:row dense;` +
+            `grid-template-columns:repeat(${cols},${cs}px);` +
+            `grid-template-rows:repeat(${rows},${cs}px);` +
+            `width:calc(${cols}*${cs}px + ${cols - 1}*${gap}px);` +
+            `height:calc(${rows}*${cs}px + ${rows - 1}*${gap}px)">` +
+            cells.join('') +
+            `</div>`;
+    },
+
     /** Grid shape (cols x rows) for a ship's storage — the same shape the hangar bay-inventory grid uses for that hull. */
     _storageGrid(shipId) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
@@ -103178,9 +106438,10 @@ extendClass(HomeStationUI, {
         const targetCell = this.STORAGE_CELL_PX;
         const targetGap = this.STORAGE_GAP_PX;
         let best = { cell: targetCell, gap: Math.max(2, targetGap), err: Infinity };
+        const minCell = Math.max(20, Math.min(40, targetCell - 8));
         for (let gap = 2; gap <= 6; gap++) {
             for (let cell = targetCell - 8; cell <= targetCell + 8; cell++) {
-                if (cell < 40) continue;
+                if (cell < minCell) continue;
                 const step = cell + gap;
                 const gapErr = Math.abs(gap * z - Math.round(gap * z));
                 const stepErr = Math.abs(step * z - Math.round(step * z));
@@ -103321,7 +106582,7 @@ extendClass(HomeStationUI, {
         opts = opts || {};
         const selectMode = opts.selectKey !== undefined;
         const selectKey = opts.selectKey || null;
-        const grid = this._storageGrid(shipId);
+        let grid = this._storageGrid(shipId);
         if (!shipId) return this._storageGridHtml([], grid);
         const entry = profileManager.getShipStorageEntry(profile, shipId);
         const rawEntries = [];
@@ -103426,6 +106687,7 @@ extendClass(HomeStationUI, {
             const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
             // data-part-kind/-id: see renderStationStorage above — same reason, needed here too
             // since this is the function the hangar bay-inventory grid actually calls.
+            // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
             const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
             const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
@@ -103435,6 +106697,19 @@ extendClass(HomeStationUI, {
                 `</button>`;
             return { html, span, pos: pinnedPos };
         });
+        // Shop / trading-post bags may clamp hangar width to the vendor bag so
+        // multi-slot parts still fit (rows grow) without spilling past DETAIL.
+        if (opts.maxCols != null) {
+            const maxCols = Math.max(1, opts.maxCols | 0);
+            if (grid.cols > maxCols) {
+                const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+                const capacity = Math.max(grid.cols * grid.rows, used);
+                grid = {
+                    cols: maxCols,
+                    rows: Math.max(grid.rows, Math.ceil(capacity / maxCols))
+                };
+            }
+        }
         // opts.extraGridClass: the hangar bay-inventory grid (physical-item.js bayInventoryHtml)
         // calls this same function for its item set/positions/grid size — one source of truth —
         // and tags the result with its own class for CSS/selector hooks (.hs-pick-grid) that
@@ -103736,8 +107011,11 @@ extendClass(HomeStationUI, {
             const tier = (typeof economyConfig !== 'undefined' && economyConfig.getPortalTier)
                 ? economyConfig.getPortalTier(gid)
                 : 1;
-            const owned = (typeof profileManager !== 'undefined')
+            const installed = (typeof profileManager !== 'undefined')
                 ? profileManager.ownsPortal(gid, profile)
+                : false;
+            const inInv = (typeof profileManager !== 'undefined' && profileManager.hasPortalInInventory)
+                ? profileManager.hasPortalInInventory(gid, profile)
                 : false;
             const meta = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta)
                 ? planetConfigManager.getFactionMeta(factionId)
@@ -103752,7 +107030,9 @@ extendClass(HomeStationUI, {
                 tier: tier,
                 cost: cost,
                 costTotal: this.costTotal(cost),
-                owned: owned
+                owned: installed || inInv,
+                installed: installed,
+                inInv: inInv
             };
         }).filter(Boolean);
 
@@ -103765,9 +107045,14 @@ extendClass(HomeStationUI, {
         }
         return entries.map((e) => {
             const afford = this.canAffordCost(wallet, e.cost, profile);
-            const action = e.owned
-                ? '<span class="hs-muted hs-line-action">OWNED</span>'
-                : `<button class="action-button hs-line-action" data-buy-portal="${e.id}" ${afford ? '' : 'disabled'}>BUY</button>`;
+            let action = '';
+            if (e.installed) {
+                action = '<span class="hs-muted hs-line-action">INSTALLED</span>';
+            } else if (e.inInv) {
+                action = '<span class="hs-muted hs-line-action">IN INVENTORY</span>';
+            } else {
+                action = `<button class="action-button hs-line-action" data-buy-portal="${e.id}" ${afford ? '' : 'disabled'}>BUY</button>`;
+            }
             const galaxyIcon = e.id === 'andromeda' ? 'galaxyAndromeda'
                 : (e.id === 'milky_way' ? 'galaxyMilkyWay' : 'galaxyDefault');
             return `<div class="hs-line hs-shop-line">` +
@@ -103777,8 +107062,9 @@ extendClass(HomeStationUI, {
                 `<strong>PORTAL: ${e.name}</strong>` +
                 `<span class="hs-line-meta">` +
                 `<span class="hs-shop-ctrl-icon">${this.iconHtml(e.factionIcon, 20, 'hs-pixel hs-pixel-20')}</span>` +
-                `${this.factionTagHtml(e.faction)} · WARP L${e.tier}</span>` +
+                `${this.factionTagHtml(e.faction)} · PORTAL MODULE · WARP L${e.tier}</span>` +
                 (e.lore ? `<span class="hs-line-lore">${e.lore}</span>` : '') +
+                `<span class="hs-line-lore">Buy → inventory. Install in STATION → TRAVEL to unlock the route.</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}${action}</div>`;
         }).join('');
@@ -103959,7 +107245,7 @@ extendClass(HomeStationUI, {
         const galaxyName = String(galaxyId).replace(/_/g, ' ').toUpperCase();
         let stockHint = '';
         if (this.shopCategory === 'portals') {
-            stockHint = `<p class="hs-muted hs-hint">Buy portals only for factions you have already met in combat. Filter by discovered faction.</p>`;
+            stockHint = `<p class="hs-muted hs-hint">Portal modules go into inventory when bought. Install them in STATION → TRAVEL to unlock that galaxy. Only factions you have met in combat are listed.</p>`;
         } else if (this.shopCategory === 'resources') {
             stockHint = `<p class="hs-muted hs-hint">CREDITS = money (uncapped). SCRAP / ORE / CRYSTAL / VOLTEX = materials. Buy &amp; sell materials for credits from STATION or CARGO.</p>`;
         } else if (this.shopCategory === 'styles') {
@@ -104393,21 +107679,46 @@ extendClass(HomeStationUI, {
 /* --- js/ui/home-station/trading-post-shop.js?v=pull-1 --- */
 "use strict";
 
-// HomeStationUI methods: docking at a galaxy trading post. While docked the
-// SHOP tab shows that post's own categories (parts = its mixed-faction
-// stock) instead of the home station catalog. The first dock unlocks the
-// trader: its categories are sold at the home station from then on.
-// Leaving the shop tab or UNDOCK ends the visit.
+// HomeStationUI methods: docking at a galaxy trading post. Dock opens a
+// fullscreen victory-trader modal (#vf-trading-post-shop) over the play map —
+// portrait, wallet, stock grids, ship/station bags, detail pane, per-category
+// skins. The first dock unlocks the trader for the home station shop. UNDOCK /
+// Escape closes the modal.
 extendClass(HomeStationUI, {
+    TPS_CELL_PX: 48,
+    TPS_GAP_PX: 2,
+    TPS_STOCK_COLS: 6,
+    TPS_CELL_MIN_PX: 32,
+    TPS_CELL_MAX_PX: 120,
+
+    /** This post's vendor bag — wealth + seed decide cols/rows for multi-slot stock. */
+    tradingPostStockBag() {
+        const post = this.getVisitedTradingPost && this.getVisitedTradingPost();
+        if (post && typeof profileManager !== 'undefined' && profileManager.getTradingPostStockGrid) {
+            return profileManager.getTradingPostStockGrid(post);
+        }
+        return { cols: this.TPS_STOCK_COLS, rows: 3, minRows: 2 };
+    },
+
+    /** Keep the docked shop panel filling the glass host (1:1 CSS, no shrink zoom). */
+    fitTradingPostPanel(host) {
+        if (!host) return;
+        const panel = host.querySelector('.vf-iss-panel');
+        if (!panel) return;
+        panel.style.width = '100%';
+        panel.style.height = '100%';
+        panel.style.zoom = '';
+        panel.style.transform = '';
+    },
+
     getVisitedTradingPost() {
-        if (!this.visitPostId || this.tab !== 'shop' || typeof profileManager === 'undefined') return null;
+        if (!this.visitPostId || !this._tpsModalOpen || typeof profileManager === 'undefined') return null;
         const post = profileManager.getTradingPost(this.visitPostId);
         return post && profileManager.isTradingPostUnlocked(post) ? post : null;
     },
 
     openTradingPost(post) {
         if (!post) return;
-        this.exitPlayMap();
         this.visitPostId = post.id;
         this._shopCategoryBeforeDock = this.shopCategory;
         const cats = post.categories || ['resources', 'parts'];
@@ -104416,22 +107727,119 @@ extendClass(HomeStationUI, {
         const isNew = typeof profileManager !== 'undefined' && profileManager.unlockTrader
             && profileManager.unlockTrader(post.id);
         this.shopFilter = 'all';
-        this.tab = 'shop';
-        this._navLevel = 'content';
-        this.focusIndex = 0;
-        this.statusMsg = 'DOCKED AT ' + post.name + (isNew ? ' · TRADER UNLOCKED AT HOME STATION' : '');
-        this.createUI();
+        this._tpsModalOpen = true;
+        this._tpsFitCellPx = null;
+        this._tpsFittingLock = false;
+        this.mountTradingPostModal();
+        const msg = 'DOCKED AT ' + post.name + (isNew ? ' · TRADER UNLOCKED AT HOME STATION' : '');
+        if (this.showStatusToast) this.showStatusToast(msg);
+        else this.statusMsg = msg;
     },
 
     undockTradingPost() {
+        this.closeTradingPostModal();
         this.visitPostId = null;
         if (this._shopCategoryBeforeDock) this.shopCategory = this._shopCategoryBeforeDock;
         this._shopCategoryBeforeDock = null;
-        this.tab = 'play';
-        this._navLevel = 'tabs';
         this.statusMsg = '';
-        this.persistTab();
-        this.createUI();
+    },
+
+    closeTradingPostModal() {
+        this._tpsModalOpen = false;
+        this._tpsFitCellPx = null;
+        this._tpsFittingLock = false;
+        if (this._tpsKeyHandler) {
+            document.removeEventListener('keydown', this._tpsKeyHandler, true);
+            this._tpsKeyHandler = null;
+        }
+        if (this._tpsOverlayPrev != null) {
+            this.overlay = this._tpsOverlayPrev;
+            this._tpsOverlayPrev = null;
+        }
+        const el = document.getElementById('vf-trading-post-shop');
+        if (el) el.remove();
+    },
+
+    /** Fullscreen trader modal — same chrome as the victory in-stage shop. */
+    mountTradingPostModal() {
+        if (!this.visitPostId || typeof profileManager === 'undefined') return;
+        const post = profileManager.getTradingPost(this.visitPostId);
+        if (!post || !profileManager.isTradingPostUnlocked(post)) {
+            this.undockTradingPost();
+            return;
+        }
+        this._tpsModalOpen = true;
+        const profile = this.getProfile();
+        let el = document.getElementById('vf-trading-post-shop');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'vf-trading-post-shop';
+            el.className = 'hs-tps vf-iss';
+            el.setAttribute('role', 'presentation');
+            document.body.appendChild(el);
+        }
+        el.innerHTML = this.renderTradingPostShop(profile, post);
+        el.dataset.faction = String(post.faction || 'terran').toLowerCase();
+        el.dataset.tpsCat = this.shopCategory || 'parts';
+        this.applyTradingPostTheme(el);
+        this.fitTradingPostPanel(el);
+        if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) {
+            voxelPortrait.scan(el);
+        }
+        if (this.shopCategory === 'styles' && this.renderStyleThumbs) {
+            this.renderStyleThumbs(el);
+        }
+        this.bindTradingPostModalEvents(el);
+        this.bindTradingPostDetailHover(el);
+        if (!this._tpsFittingLock) {
+            requestAnimationFrame(() => {
+                if (!this._tpsModalOpen) return;
+                const host = document.getElementById('vf-trading-post-shop');
+                if (host) this.fitTradingPostBagsToSpace(host);
+            });
+        }
+        if (!this._tpsKeyHandler) {
+            this._tpsKeyHandler = (e) => {
+                if (!this._tpsModalOpen) return;
+                if (e.key === 'Escape' || e.key === 'Backspace') {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    this.undockTradingPost();
+                }
+            };
+            document.addEventListener('keydown', this._tpsKeyHandler, true);
+        }
+    },
+
+    bindTradingPostModalEvents(root) {
+        if (!root) return;
+        const undock = root.querySelector('#hsUndock');
+        if (undock) undock.addEventListener('click', () => this.undockTradingPost());
+        root.querySelectorAll('[data-shop-cat]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const prev = this.shopCategory;
+                this.shopCategory = btn.getAttribute('data-shop-cat') || 'ships';
+                if (this.resetShopControlsIfNeeded) this.resetShopControlsIfNeeded(prev);
+                this.mountTradingPostModal();
+            });
+        });
+        // Point overlay at the modal so buy / bag-drag handlers resolve here.
+        // createUI restores the home-station overlay first, then remounts.
+        if (this.overlay && this.overlay.id !== 'vf-trading-post-shop') {
+            this._tpsOverlayPrev = this.overlay;
+        }
+        this.overlay = root;
+        if (this.bindStationEvents) this.bindStationEvents();
+        if (this.bindShopStyleEvents) this.bindShopStyleEvents();
+        if (this.bindShopSellEvents) this.bindShopSellEvents();
+    },
+
+    /** Restore the home-station overlay before createUI rebuilds the shell. */
+    restoreTradingPostHomeOverlay() {
+        if (this._tpsOverlayPrev) {
+            this.overlay = this._tpsOverlayPrev;
+            this._tpsOverlayPrev = null;
+        }
     },
 
     /** Parts hint while docked: where the post is and whose stock it carries. */
@@ -104449,10 +107857,957 @@ extendClass(HomeStationUI, {
         return `<p class="hs-muted hs-hint">Orbiting ${where}. Stock from ${factions.join(' · ')} — parts are refitted in your faction colours and mix freely on any ship.</p>`;
     },
 
+    /** Kept for bindShopEvents no-op when the modal is not inside the HS overlay. */
     bindTradingPostEvents() {
-        const undock = this.overlay && this.overlay.querySelector('#hsUndock');
-        if (undock) undock.addEventListener('click', () => this.undockTradingPost());
+        /* modal binds via bindTradingPostModalEvents */
     },
+
+    /** Victory-trader chrome for a docked post (faction skin + category skin). */
+    renderTradingPostShop(profile, post) {
+        this.ensureShopCategory();
+        const cat = this.shopCategory || 'parts';
+        const faction = String((post && post.faction) || 'terran').toLowerCase();
+        const factionLabel = faction.toUpperCase();
+        const catMeta = this._shopCatMeta[cat] || { label: String(cat).toUpperCase(), icon: 'hsShop' };
+        const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits)
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
+        const variant = this.tradingPostPortraitVariant(post);
+        return `<div class="vf-iss-panel" data-faction="${faction}" data-tps-cat="${cat}" role="dialog" aria-modal="true" aria-label="${post.name} shop">` +
+            `<header class="vf-iss-head">` +
+            `<div class="vf-iss-trader">` +
+            `<div class="vf-iss-portrait">${this.tradingPostPortraitHtml(faction, variant)}</div>` +
+            `<div class="vf-iss-trader-meta">` +
+            `<div class="vf-iss-trader-title">${String(post.name || 'TRADER').toUpperCase()}</div>` +
+            `<div class="vf-iss-trader-sub">${factionLabel} · ${catMeta.label} BAY</div>` +
+            `<div class="vf-iss-trader-cash">${credits}c ON HAND</div>` +
+            `</div></div>` +
+            `<button type="button" class="vf-iss-close" id="hsUndock" data-nav-item tabindex="-1">UNDOCK [ESC]</button>` +
+            `</header>` +
+            this.renderTradingPostWallet(profile) +
+            `<div class="hs-tps-cats vf-iss-note">${this.renderTradingPostCategoryTabs()}</div>` +
+            `<div class="vf-iss-note vf-iss-hint">${this.renderTradingPostCatHint(cat)}</div>` +
+            `<div class="vf-iss-body">` +
+            `<div class="vf-iss-main">` +
+            `<section class="vf-iss-col vf-iss-stock hs-tps-stock is-cat-${cat}">` +
+            `<h3 class="vf-iss-col-title">STOCK · ${catMeta.label}</h3>` +
+            this.renderTradingPostStock(profile, cat) +
+            `</section>` +
+            (cat === 'portals'
+                ? this.renderTradingPostPortalInventory(profile)
+                : this.renderTradingPostBags(profile)) +
+            `</div>` +
+            this.renderTradingPostDetailShell() +
+            `</div>` +
+            `</div>`;
+    },
+
+    renderTradingPostCatHint(cat) {
+        if (cat === 'portals') {
+            return 'CLICK stock to BUY · portal goes to INVENTORY · install in STATION → TRAVEL';
+        }
+        return 'CLICK stock to buy · bag cells drag between SHIP / STATION';
+    },
+
+    tradingPostPortraitVariant(post) {
+        const seed = String((post && post.id) || 'post');
+        let hash = 0;
+        for (let i = 0; i < seed.length; i++) hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+        return Math.abs(hash) % 16;
+    },
+
+    tradingPostPortraitHtml(faction, variant) {
+        if (typeof voxelPortrait !== 'undefined' && voxelPortrait.canvasHtml) {
+            return voxelPortrait.canvasHtml({ faction: faction, v: variant }, null, { state: 0 });
+        }
+        return `<canvas class="vf-iss-face-fallback" width="96" height="96" aria-hidden="true"></canvas>`;
+    },
+
+    /** Paint trader faction colours onto the docked shop root (same as victory shop). */
+    applyTradingPostTheme(root) {
+        if (!root) return;
+        const id = String(root.getAttribute('data-faction') || 'terran').toLowerCase();
+        root.dataset.faction = id;
+        let style = null;
+        if (typeof factionShipStyles !== 'undefined') {
+            if (factionShipStyles.getFactionStyle) style = factionShipStyles.getFactionStyle(id);
+            else if (factionShipStyles.getDefaultFactionStyle) style = factionShipStyles.getDefaultFactionStyle(id);
+        }
+        const hull = (style && style.hull) || '#3A6EA5';
+        const edge = (style && style.edge) || '#1a2a3a';
+        const accent = (style && style.accent)
+            || (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor
+                ? factionShipStyles.getFactionColor(id) : null)
+            || '#7ec8ff';
+        const set = (k, v) => {
+            root.style.setProperty(k, v);
+            const panel = root.querySelector('.vf-iss-panel');
+            if (panel) panel.style.setProperty(k, v);
+        };
+        set('--faction-hull', hull);
+        set('--faction-edge', edge);
+        set('--faction-accent', accent);
+        set('--color-primary', accent);
+        set('--color-secondary', hull);
+        set('--color-border', edge);
+        set('--iss-accent', accent);
+        set('--iss-hull', hull);
+        set('--iss-edge', edge);
+    },
+
+    renderTradingPostWallet(profile) {
+        const map = (profile && profile.resources) || {};
+        const ids = (typeof economyConfig !== 'undefined' && economyConfig.resourceIds)
+            ? economyConfig.resourceIds.slice()
+            : ['scrap', 'ore', 'crystal', 'voltex'];
+        const credits = (typeof profileManager !== 'undefined' && profileManager.getCredits)
+            ? profileManager.getCredits(profile)
+            : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
+        const chip = (id, amount, iconId) => {
+            const n = Math.max(0, Math.round(Number(amount) || 0));
+            const label = id === 'credits'
+                ? 'CREDITS'
+                : ((typeof economyConfig !== 'undefined' && economyConfig.getResourceLabel)
+                    ? economyConfig.getResourceLabel(id)
+                    : String(id).toUpperCase());
+            return `<span class="vf-iss-wallet-item${n <= 0 ? ' is-empty' : ''}" data-wallet="${id}">` +
+                `<span class="vf-iss-wallet-ico">${this.iconHtml(this.resourceIconKey(iconId || id), 20)}</span>` +
+                `<span class="vf-iss-wallet-meta"><span>${label}</span><b>${n}</b></span>` +
+                `</span>`;
+        };
+        return `<div class="vf-iss-wallet" aria-label="Resources">` +
+            chip('credits', credits, 'credits') +
+            ids.map((id) => chip(id, map[id] || 0, id)).join('') +
+            `</div>`;
+    },
+
+    renderTradingPostCategoryTabs() {
+        return this.getAvailableShopCategories().map((id) => {
+            const meta = this._shopCatMeta[id] || { label: id.toUpperCase(), icon: 'hsShop' };
+            const active = this.shopCategory === id;
+            return `<button type="button" class="hs-shop-cat hs-tps-cat is-cat-${id}${active ? ' active' : ''}" data-shop-cat="${id}" data-nav-item>` +
+                `<span class="hs-chip-icon">${this.iconHtml(meta.icon, 24, 'hs-pixel')}</span>` +
+                `<span>${meta.label}</span></button>`;
+        }).join('');
+    },
+
+    tradingPostSlotLayout() {
+        if (this._tpsFitCellPx) {
+            return {
+                cell: Math.max(this.TPS_CELL_MIN_PX, Math.min(this.TPS_CELL_MAX_PX, this._tpsFitCellPx | 0)),
+                gap: this.TPS_GAP_PX
+            };
+        }
+        let cell = this.TPS_CELL_PX;
+        const host = document.getElementById('vf-trading-post-shop')
+            || document.getElementById('vf-in-stage-shop');
+        const hostW = (host && host.clientWidth) || 0;
+        const hostH = (host && host.clientHeight) || 0;
+        if (hostW > 0) {
+            const usableW = Math.max(320, Math.floor(hostW * 0.58));
+            const usableH = Math.max(240, Math.floor(hostH * 0.62));
+            const cols = ((this.tradingPostStockBag() || {}).cols || this.TPS_STOCK_COLS) * 2;
+            const rows = 3 + 3;
+            const gap = this.TPS_GAP_PX;
+            const fromW = Math.floor((usableW - gap * (cols - 1) - 12) / cols);
+            const fromH = Math.floor((usableH - gap * (rows - 1) - 72) / rows);
+            cell = Math.max(
+                this.TPS_CELL_MIN_PX,
+                Math.min(this.TPS_CELL_MAX_PX, Math.min(fromW, fromH))
+            );
+        }
+        return { cell: cell, gap: this.TPS_GAP_PX };
+    },
+
+    applyTradingPostCellSize(host, cs) {
+        if (!host) return;
+        const gap = this.TPS_GAP_PX;
+        host.querySelectorAll(
+            '.vf-iss-stock-grid, .vf-iss-inv-grid, .vf-iss-station-grid, .vf-iss-queued-grid, ' +
+            '.vf-iss-ship-inv .hs-storage-grid, .vf-iss-station-inv .hs-storage-grid, ' +
+            '.hs-tps-stock .hs-storage-grid, .hs-tps .hs-storage-grid'
+        ).forEach((g) => {
+            const cols = Math.max(1, parseInt(g.getAttribute('data-inv-cols'), 10) || 1);
+            const rows = Math.max(1, parseInt(g.getAttribute('data-inv-rows'), 10) || 1);
+            g.style.setProperty('--cs', cs + 'px');
+            g.style.setProperty('--hs-gap', gap + 'px');
+            g.style.gridTemplateColumns = `repeat(${cols}, ${cs}px)`;
+            g.style.gridTemplateRows = `repeat(${rows}, ${cs}px)`;
+            g.style.width = (cols * cs + (cols - 1) * gap) + 'px';
+            g.style.height = (rows * cs + (rows - 1) * gap) + 'px';
+        });
+        host.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv').forEach((bag) => {
+            bag.style.maxHeight = 'none';
+            bag.style.overflow = 'visible';
+        });
+    },
+
+    measureTradingPostFitCellPx(host) {
+        const main = host && host.querySelector('.vf-iss-main');
+        if (!main) return this.TPS_CELL_PX;
+        const availW = main.clientWidth;
+        const availH = main.clientHeight;
+        if (availW < 80 || availH < 80) return this.TPS_CELL_PX;
+
+        const bags = host.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv');
+        const prevOverflow = main.style.overflow;
+        main.style.overflow = 'hidden';
+        bags.forEach((bag) => {
+            bag.style.maxHeight = 'none';
+            bag.style.overflow = 'visible';
+        });
+
+        let lo = this.TPS_CELL_MIN_PX;
+        let hi = this.TPS_CELL_MAX_PX;
+        let best = lo;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            this.applyTradingPostCellSize(host, mid);
+            void main.offsetHeight;
+            const fits = main.scrollHeight <= availH + 2 && main.scrollWidth <= availW + 2
+                && ![...bags].some((bag) => bag.scrollHeight > bag.clientHeight + 2);
+            if (fits) {
+                best = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        this.applyTradingPostCellSize(host, best);
+        main.style.overflow = prevOverflow;
+        return best;
+    },
+
+    fitTradingPostBagsToSpace(host) {
+        if (!host || this._tpsFittingLock) return;
+        const best = this.measureTradingPostFitCellPx(host);
+        if (!best) return;
+        if (this._tpsFitCellPx && Math.abs(this._tpsFitCellPx - best) <= 1) {
+            this.applyTradingPostCellSize(host, this._tpsFitCellPx);
+            return;
+        }
+        this._tpsFitCellPx = best;
+        this._tpsFittingLock = true;
+        try {
+            this.mountTradingPostModal();
+        } finally {
+            this._tpsFittingLock = false;
+        }
+    },
+
+    withTradingPostSlotSize(fn) {
+        const layout = this.tradingPostSlotLayout();
+        const prev = this.STORAGE_CELL_PX;
+        const prevGap = this.STORAGE_GAP_PX;
+        this.STORAGE_CELL_PX = layout.cell;
+        this.STORAGE_GAP_PX = layout.gap;
+        try {
+            return { layout, html: fn(layout) };
+        } finally {
+            this.STORAGE_CELL_PX = prev;
+            this.STORAGE_GAP_PX = prevGap;
+        }
+    },
+
+    tradingPostGridShell(cols, rows, cs, gap, extraClass, innerHtml) {
+        return `<div class="hs-storage-grid ${extraClass || ''}" data-inv-cols="${cols}" data-inv-rows="${rows}" ` +
+            `style="--cs:${cs}px;--hs-gap:${gap}px;grid-auto-flow:row dense;` +
+            `grid-template-columns:repeat(${cols},${cs}px);` +
+            `grid-template-rows:repeat(${rows},${cs}px);` +
+            `width:calc(${cols}*${cs}px + ${cols - 1}*${gap}px);` +
+            `height:calc(${rows}*${cs}px + ${rows - 1}*${gap}px)">` +
+            innerHtml +
+            `</div>`;
+    },
+
+    padTradingPostCells(cells, cols, rows) {
+        const pad = Math.max(0, cols * rows - cells.length);
+        for (let i = 0; i < pad; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return cells;
+    },
+
+    /** Compact cost label for a stock cell (credits preferred). */
+    tradingPostCostLabel(cost) {
+        if (!cost) return '0c';
+        const credits = Math.max(0, Math.round(Number(cost.credits) || 0));
+        if (credits > 0) return credits + 'c';
+        const ids = (typeof economyConfig !== 'undefined' && economyConfig.resourceIds)
+            ? economyConfig.resourceIds
+            : ['scrap', 'ore', 'crystal', 'voltex'];
+        for (let i = 0; i < ids.length; i++) {
+            const n = Math.max(0, Math.round(Number(cost[ids[i]]) || 0));
+            if (n > 0) return n + ' ' + String(ids[i]).slice(0, 3).toUpperCase();
+        }
+        return '0c';
+    },
+
+    tradingPostStockVisual(kind, id, cs, color, span) {
+        const sw = Math.max(1, (span && span[0]) || 1);
+        const sh = Math.max(1, (span && span[1]) || 1);
+        const boxW = Math.max(28, sw * (cs | 0) - 6);
+        const boxH = Math.max(28, sh * (cs | 0) - 6);
+        const box = Math.min(boxW, boxH);
+        if (kind === 'ship') {
+            const src = this.shipThumbSrc ? this.shipThumbSrc(id, Math.max(24, Math.floor(box * 0.85))) : '';
+            if (src) {
+                return `<img class="hs-tps-ship-thumb" src="${src}" width="${box}" height="${box}" alt="" draggable="false">`;
+            }
+            return this.iconHtml('hsShip', Math.floor(box * 0.55), 'vf-iss-icon', null, color);
+        }
+        if (kind === 'resource') {
+            return `<span class="hs-storage-cell-icon">${this.iconHtml(this.resourceIconKey(id), Math.floor(box * 0.5), 'vf-iss-icon')}</span>`;
+        }
+        if (kind === 'portal') {
+            const galaxyIcon = id === 'andromeda' ? 'galaxyAndromeda'
+                : (id === 'milky_way' ? 'galaxyMilkyWay' : 'galaxyDefault');
+            return `<span class="hs-storage-cell-icon">${this.iconHtml(galaxyIcon, Math.floor(box * 0.5), 'vf-iss-icon')}</span>`;
+        }
+        if (kind === 'style') {
+            return `<span class="hs-tps-style-thumb"><canvas width="48" height="36" ${id}></canvas></span>`;
+        }
+        let inner = '';
+        const physKind = (kind === 'weapon' || kind === 'defense' || kind === 'energy' || kind === 'ability')
+            ? kind
+            : 'ability';
+        if (physKind === 'weapon' && typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml) {
+            inner = `<span class="hs-storage-cell-icon">${iconRenderer.weaponImgHtml(id, Math.max(18, Math.floor(box * 0.42)), 'vf-iss-icon', false)}</span>`;
+        }
+        if (typeof physicalItem !== 'undefined' && physicalItem.wrap) {
+            return physicalItem.wrap(physKind, id, boxW, boxH, color, inner);
+        }
+        return inner || this.iconHtml('hsShop', Math.floor(box * 0.55), 'vf-iss-icon', null, color);
+    },
+
+    /** Returns { html, span } so packShopStockGrid can place multi-slot parts. */
+    tradingPostStockCell(opts) {
+        const cs = opts.cs || this.TPS_CELL_PX;
+        const accent = opts.accent || '#c08cff';
+        const afford = opts.afford !== false;
+        const owned = !!opts.owned;
+        const span = opts.span || [1, 1];
+        const tag = opts.tag
+            ? `<span class="vf-iss-stock-tag${opts.temp ? ' is-temp' : ''}">${opts.tag}</span>`
+            : '';
+        const cost = opts.costLabel
+            ? `<span class="vf-iss-stock-cost">${opts.costLabel}</span>`
+            : '';
+        const tip = String(opts.tip || '').replace(/"/g, '&quot;');
+        const head = String(opts.head || 'ITEM').replace(/"/g, '&quot;');
+        const buyAttr = opts.buyAttr || '';
+        const kind = opts.kind ? String(opts.kind) : '';
+        const id = opts.id != null ? String(opts.id) : '';
+        const kindAttr = kind ? ` data-tps-kind="${kind.replace(/"/g, '')}"` : '';
+        const idAttr = id ? ` data-tps-id="${id.replace(/"/g, '')}"` : '';
+        const extraAttr = (opts.extraAttr || '') + kindAttr + idAttr;
+        const disabled = owned || (!afford && opts.lockUnaffordable);
+        const cls = [
+            'hs-storage-cell', 'vf-iss-stock-cell', 'hs-tps-cell',
+            opts.cellClass || '',
+            afford || owned ? '' : 'is-locked',
+            owned ? 'is-owned' : ''
+        ].filter(Boolean).join(' ');
+        const visual = opts.visual != null
+            ? opts.visual
+            : this.tradingPostStockVisual(kind, id, cs, accent, span);
+        let html;
+        if (owned && !opts.buyAttr) {
+            html = `<div class="${cls}" style="__SPAN__--pk-c:${accent}" data-ui-tip-compact data-ui-tip-head="${head}" data-ui-tip="${tip}" ${extraAttr}>` +
+                visual + tag + cost + `</div>`;
+        } else {
+            html = `<button type="button" class="${cls}" ${buyAttr} data-nav-item tabindex="-1" style="__SPAN__--pk-c:${accent}" ` +
+                `data-ui-tip-compact data-ui-tip-head="${head}" data-ui-tip="${tip}" ${extraAttr}` +
+                `${disabled ? ' disabled' : ''} aria-label="${head}">` +
+                visual + tag + cost +
+                `</button>`;
+        }
+        return { html, span };
+    },
+
+    renderTradingPostStock(profile, cat) {
+        if (cat === 'parts') return this.renderTradingPostPartsGrid(profile);
+        if (cat === 'ships') return this.renderTradingPostShipsGrid(profile);
+        if (cat === 'blueprints') return this.renderTradingPostBlueprintsGrid(profile);
+        if (cat === 'resources') return this.renderTradingPostResourcesGrid(profile);
+        if (cat === 'portals') return this.renderTradingPostPortalsGrid(profile);
+        if (cat === 'styles') return this.renderTradingPostStylesGrid(profile);
+        return this.emptyHtml('hsShop', 'EMPTY');
+    },
+
+    renderTradingPostPartsGrid(profile) {
+        const wallet = profile.resources || {};
+        const layout = this.tradingPostSlotLayout();
+        const cs = layout.cell;
+        const gap = layout.gap;
+        const bag = this.tradingPostStockBag();
+        const cols = bag.cols;
+        let entries = this.catalogPartListings().map((entry) => {
+            const cost = (typeof economyConfig !== 'undefined')
+                ? economyConfig.getPartCost(entry.kind, entry.item)
+                : { scrap: 100 };
+            const count = (typeof profileManager !== 'undefined')
+                ? profileManager.getPartCount(entry.kind, entry.id, profile)
+                : 0;
+            let accent = '#c08cff';
+            if (entry.kind === 'weapon') {
+                accent = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+                    ? (weaponConfigManager.getWeaponUiColor(entry.id) || '#ff6a4a')
+                    : '#ff6a4a';
+            } else if (this._storageBucketColor) {
+                const bucket = entry.kind === 'defense' ? 'defenses'
+                    : (entry.kind === 'energy' ? 'energy' : 'abilities');
+                accent = this._storageBucketColor(bucket);
+            }
+            return {
+                kind: entry.kind,
+                id: entry.id,
+                name: entry.name,
+                cost: cost,
+                costTotal: this.costTotal(cost),
+                count: count,
+                afford: this.canAffordCost(wallet, cost, profile),
+                accent: accent,
+                tip: (this.hangarModuleTip ? this.hangarModuleTip(entry.kind, entry.id) : entry.name)
+                    + '\n' + this.tradingPostCostLabel(cost)
+            };
+        });
+        if (this.shopFilter && this.shopFilter !== 'all') {
+            entries = entries.filter((e) => e.kind === this.shopFilter);
+        }
+        entries = this.sortShopEntries(entries);
+        const specs = entries.map((e) => {
+            const span = this.shopPartSpan ? this.shopPartSpan(e.kind, e.id) : [1, 1];
+            return this.tradingPostStockCell({
+                cs: cs,
+                accent: e.accent,
+                afford: e.afford,
+                lockUnaffordable: true,
+                kind: e.kind,
+                id: e.id,
+                span: span,
+                tag: e.count > 0 ? 'OWN' : e.kind.slice(0, 3).toUpperCase(),
+                costLabel: this.tradingPostCostLabel(e.cost),
+                head: e.name,
+                tip: e.tip,
+                buyAttr: `data-buy-part="${e.kind}:${e.id}"`,
+                cellClass: `is-part is-kind-${e.kind}`,
+                visual: this.tradingPostStockVisual(e.kind, e.id, cs, e.accent, span)
+            });
+        });
+        return this.packShopStockGrid(specs, cols, bag.minRows, cs, gap, 'vf-iss-stock-grid hs-tps-parts-grid');
+    },
+
+    renderTradingPostShipsGrid(profile) {
+        const wallet = profile.resources || {};
+        const layout = this.tradingPostSlotLayout();
+        const cs = Math.max(layout.cell, 48);
+        const gap = layout.gap;
+        const cols = 4;
+        let entries = this.catalogShipIds().map((id) => {
+            const cfg = (typeof shipConfigManager !== 'undefined')
+                ? shipConfigManager.getConfig(id)
+                : null;
+            const cost = (typeof economyConfig !== 'undefined')
+                ? economyConfig.getShopCost(cfg)
+                : { scrap: 120 };
+            const owned = profile.ownedShipIds.indexOf(id) !== -1;
+            return {
+                id: id,
+                name: this.shipName(id),
+                modelClass: this.shipModelClass(id, cfg),
+                tier: (cfg && cfg.tier != null) ? Number(cfg.tier) : 1,
+                cost: cost,
+                costTotal: this.costTotal(cost),
+                owned: owned,
+                afford: !owned && this.canAffordCost(wallet, cost, profile),
+                accent: '#f2c14e'
+            };
+        });
+        if (this.shopFilter && this.shopFilter !== 'all') {
+            entries = entries.filter((e) => e.modelClass === this.shopFilter);
+        }
+        entries = this.sortShopEntries(entries);
+        const rows = Math.max(2, Math.ceil(Math.max(entries.length, 1) / cols));
+        const cells = this.padTradingPostCells(entries.map((e) => this.tradingPostStockCell({
+            cs: cs,
+            accent: e.accent,
+            afford: e.afford,
+            owned: e.owned,
+            lockUnaffordable: true,
+            kind: 'ship',
+            id: e.id,
+            tag: e.owned ? 'OWNED' : ('T' + e.tier),
+            costLabel: e.owned ? '' : this.tradingPostCostLabel(e.cost),
+            head: e.name,
+            tip: e.name + '\n' + this.shipClassLabel(e.modelClass) + '\n' + this.tradingPostCostLabel(e.cost),
+            buyAttr: e.owned ? '' : `data-buy="${e.id}"`,
+            cellClass: 'is-ship',
+            visual: this.tradingPostStockVisual('ship', e.id, cs, e.accent)
+        }).html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;')), cols, rows);
+        return this.tradingPostGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid hs-tps-ships-grid', cells.join(''));
+    },
+
+    renderTradingPostBlueprintsGrid(profile) {
+        const wallet = profile.resources || {};
+        const layout = this.tradingPostSlotLayout();
+        const cs = layout.cell;
+        const gap = layout.gap;
+        const bag = this.tradingPostStockBag();
+        const cols = bag.cols;
+        let entries = this.catalogPartListings().map((e) => {
+            const key = e.kind + ':' + e.id;
+            if (!profileManager.parseBlueprintKey(key)) return null;
+            const cost = economyConfig.getBlueprintCost(e.kind, e.item);
+            return {
+                key: key,
+                kind: e.kind,
+                id: e.id,
+                name: profileManager.getBlueprintName(key),
+                cost: cost,
+                costTotal: this.costTotal(cost),
+                count: profile.blueprints[key] || 0,
+                afford: this.canAffordCost(wallet, cost, profile),
+                accent: '#7ec8ff'
+            };
+        }).filter(Boolean);
+        if (this.shopFilter && this.shopFilter !== 'all') {
+            entries = entries.filter((e) => e.kind === this.shopFilter);
+        }
+        entries = this.sortShopEntries(entries);
+        const specs = entries.map((e) => {
+            const span = this.shopPartSpan ? this.shopPartSpan(e.kind, e.id) : [1, 1];
+            return this.tradingPostStockCell({
+                cs: cs,
+                accent: e.accent,
+                afford: e.afford,
+                lockUnaffordable: true,
+                kind: e.kind,
+                id: e.id,
+                span: span,
+                tag: 'BP',
+                temp: true,
+                costLabel: this.tradingPostCostLabel(e.cost),
+                head: 'BP: ' + e.name,
+                tip: 'BLUEPRINT\n' + e.name + '\n' + this.tradingPostCostLabel(e.cost),
+                buyAttr: `data-buy-bp="${e.key}"`,
+                cellClass: 'is-blueprint',
+                visual: this.tradingPostStockVisual(e.kind, e.id, cs, e.accent, span)
+            });
+        });
+        return this.packShopStockGrid(specs, cols, bag.minRows, cs, gap, 'vf-iss-stock-grid hs-tps-bp-grid');
+    },
+
+    renderTradingPostResourcesGrid(profile) {
+        const bag = this.shopFilter === 'cargo' ? 'cargo' : 'station';
+        const qtyMode = this.shopResourceQty || 1;
+        const bagMap = bag === 'cargo'
+            ? ((profile.cargo && profile.cargo.resources) || {})
+            : (profile.resources || {});
+        const layout = this.tradingPostSlotLayout();
+        const cs = Math.max(layout.cell, 48);
+        const gap = layout.gap;
+        const cols = 4;
+        const ids = (typeof economyConfig !== 'undefined')
+            ? economyConfig.resourceIds
+            : ['scrap', 'ore', 'crystal', 'voltex'];
+        const accentMap = {
+            scrap: '#c8a060',
+            ore: '#8ab0d0',
+            crystal: '#5ad0ff',
+            voltex: '#c08cff'
+        };
+        const cells = ids.map((id) => {
+            const tradeable = (typeof economyConfig !== 'undefined')
+                ? economyConfig.isResourceTradeable(id)
+                : true;
+            const stock = Math.max(0, Math.round(Number(bagMap[id]) || 0));
+            let buyQty = tradeable ? this.resolveResourceTradeQty(profile, id, bag, 'buy') : 0;
+            if (qtyMode !== 'all') buyQty = Math.max(1, buyQty);
+            const buyCost = tradeable && buyQty > 0 && typeof economyConfig !== 'undefined'
+                ? economyConfig.getResourceBuyCost(id, buyQty)
+                : null;
+            const afford = buyCost ? this.canAffordCredits(buyCost, profile) : false;
+            const name = (typeof economyConfig !== 'undefined')
+                ? economyConfig.getResourceLabel(id)
+                : String(id).toUpperCase();
+            const accent = accentMap[id] || '#7ec8ff';
+            return this.tradingPostStockCell({
+                cs: cs,
+                accent: accent,
+                afford: afford,
+                lockUnaffordable: true,
+                kind: 'resource',
+                id: id,
+                tag: '×' + stock,
+                costLabel: buyCost ? this.tradingPostCostLabel(buyCost) : '—',
+                head: name,
+                tip: name + '\nSTOCK ' + stock + '\n' + (buyCost ? this.tradingPostCostLabel(buyCost) : 'LOCKED'),
+                buyAttr: buyCost ? `data-buy-res="${id}"` : '',
+                cellClass: `is-resource is-res-${id}`,
+                visual: this.tradingPostStockVisual('resource', id, cs, accent),
+                owned: !buyCost
+            }).html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;');
+        });
+        // Sell buttons row under resources — keep existing sell handlers.
+        const sellRow = ids.map((id) => {
+            const tradeable = (typeof economyConfig !== 'undefined')
+                ? economyConfig.isResourceTradeable(id)
+                : true;
+            const stock = Math.max(0, Math.round(Number(bagMap[id]) || 0));
+            let sellQty = tradeable ? this.resolveResourceTradeQty(profile, id, bag, 'sell') : 0;
+            if (qtyMode !== 'all') sellQty = Math.max(1, sellQty);
+            const canSell = stock >= 1 && sellQty > 0;
+            const sellPay = tradeable && sellQty > 0 && typeof economyConfig !== 'undefined'
+                ? economyConfig.getResourceSellPayout(id, sellQty)
+                : null;
+            return `<button type="button" class="hs-tps-res-sell" data-sell-res="${id}" data-nav-item ${canSell ? '' : 'disabled'}>` +
+                `SELL ${String(id).slice(0, 3).toUpperCase()}` +
+                (sellPay ? ` +${sellPay.credits || 0}c` : '') +
+                `</button>`;
+        }).join('');
+        const rows = 1;
+        return `<div class="hs-tps-res-block">` +
+            this.tradingPostGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid hs-tps-res-grid', cells.join('')) +
+            `<div class="hs-tps-res-sells">${sellRow}</div>` +
+            `<div class="hs-tps-toolbar-mini">${this.renderShopToolbar()}</div>` +
+            `</div>`;
+    },
+
+    renderTradingPostPortalsGrid(profile) {
+        const wallet = profile.resources || {};
+        const layout = this.tradingPostSlotLayout();
+        const cs = Math.max(layout.cell, 48);
+        const gap = layout.gap;
+        const cols = 4;
+        const discovered = {};
+        ((typeof profileManager !== 'undefined' && profileManager.getDiscoveredFactions)
+            ? profileManager.getDiscoveredFactions(profile)
+            : ['terran']).forEach((fid) => {
+            discovered[String(fid).toLowerCase()] = 1;
+        });
+        const ids = (typeof planetConfigManager !== 'undefined')
+            ? planetConfigManager.getGalaxyIds()
+            : ['milky_way', 'andromeda'];
+        let entries = ids.map((gid) => {
+            const g = (typeof planetConfigManager !== 'undefined')
+                ? planetConfigManager.getGalaxy(gid)
+                : { id: gid, name: String(gid).replace(/_/g, ' ').toUpperCase() };
+            const faction = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction)
+                ? planetConfigManager.getGalaxyFaction(gid)
+                : ((g && g.faction) || '');
+            const factionId = String(faction || '').toLowerCase();
+            if (factionId && !discovered[factionId]) return null;
+            const cost = (typeof economyConfig !== 'undefined' && economyConfig.getPortalCost)
+                ? economyConfig.getPortalCost(gid)
+                : null;
+            if (!cost) return null;
+            const installed = (typeof profileManager !== 'undefined')
+                ? profileManager.ownsPortal(gid, profile)
+                : false;
+            const inInv = (typeof profileManager !== 'undefined' && profileManager.hasPortalInInventory)
+                ? profileManager.hasPortalInInventory(gid, profile)
+                : false;
+            return {
+                id: gid,
+                name: String((g && g.name) || gid).replace(/_/g, ' ').toUpperCase(),
+                faction: factionId,
+                cost: cost,
+                costTotal: this.costTotal(cost),
+                owned: installed || inInv,
+                installed: installed,
+                inInv: inInv,
+                afford: !installed && !inInv && this.canAffordCost(wallet, cost, profile),
+                accent: '#a78bfa'
+            };
+        }).filter(Boolean);
+        if (this.shopFilter && this.shopFilter !== 'all') {
+            entries = entries.filter((e) => e.faction === this.shopFilter);
+        }
+        entries = this.sortShopEntries(entries);
+        const rows = Math.max(2, Math.ceil(Math.max(entries.length, 1) / cols));
+        const cells = this.padTradingPostCells(entries.map((e) => this.tradingPostStockCell({
+            cs: cs,
+            accent: e.accent,
+            afford: e.afford,
+            owned: e.owned,
+            lockUnaffordable: true,
+            kind: 'portal',
+            id: e.id,
+            tag: e.installed ? 'INSTALLED' : (e.inInv ? 'IN BAG' : 'PORTAL'),
+            costLabel: e.owned ? '' : this.tradingPostCostLabel(e.cost),
+            head: 'PORTAL: ' + e.name,
+            tip: e.name +
+                '\nPORTAL MODULE' +
+                '\nBuy → inventory · install in STATION → TRAVEL' +
+                (e.installed ? '\nINSTALLED ON STATION'
+                    : (e.inInv ? '\nIN INVENTORY — OPEN TRAVEL TO INSTALL'
+                        : ('\n' + this.tradingPostCostLabel(e.cost)))),
+            buyAttr: e.owned ? '' : `data-buy-portal="${e.id}"`,
+            cellClass: 'is-portal',
+            visual: this.tradingPostStockVisual('portal', e.id, cs, e.accent)
+        }).html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;')), cols, rows);
+        return this.tradingPostGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid hs-tps-portal-grid', cells.join(''));
+    },
+
+    /** Bought portals waiting in inventory (install happens in STATION → TRAVEL). */
+    renderTradingPostPortalInventory(profile) {
+        const layout = this.tradingPostSlotLayout();
+        const cs = Math.max(layout.cell, 48);
+        const gap = layout.gap;
+        const cols = 4;
+        const invIds = (typeof profileManager !== 'undefined' && profileManager.getPortalInventory)
+            ? profileManager.getPortalInventory(profile)
+            : ((profile && profile.homeStation && profile.homeStation.portalInventory) || []);
+        const cells = invIds.map((gid) => {
+            const id = String(gid || '').toLowerCase();
+            const g = (typeof planetConfigManager !== 'undefined')
+                ? planetConfigManager.getGalaxy(id)
+                : null;
+            const name = String((g && g.name) || id).replace(/_/g, ' ').toUpperCase();
+            return this.tradingPostStockCell({
+                cs: cs,
+                accent: '#a78bfa',
+                afford: true,
+                owned: true,
+                lockUnaffordable: false,
+                kind: 'portal',
+                id: id,
+                tag: 'IN BAG',
+                costLabel: '',
+                head: 'PORTAL: ' + name,
+                tip: name +
+                    '\nPORTAL MODULE' +
+                    '\nIn inventory · install in STATION → TRAVEL',
+                buyAttr: '',
+                cellClass: 'is-portal is-inventory',
+                visual: this.tradingPostStockVisual('portal', id, cs, '#a78bfa')
+            }).html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;');
+        });
+        const rows = Math.max(2, Math.ceil(Math.max(cells.length, 1) / cols));
+        const grid = this.tradingPostGridShell(
+            cols,
+            rows,
+            cs,
+            gap,
+            'vf-iss-stock-grid hs-tps-portal-grid hs-tps-portal-inv',
+            this.padTradingPostCells(cells, cols, rows).join('')
+        );
+        return `<div class="vf-iss-bags hs-tps-portal-bay">` +
+            `<section class="vf-iss-col vf-iss-station">` +
+            `<h3 class="vf-iss-col-title">INVENTORY · PORTALS</h3>` +
+            (cells.length
+                ? grid
+                : `<div class="vf-iss-note vf-iss-hint">No portal modules yet. Buy from STOCK, then install in STATION → TRAVEL.</div>`) +
+            `</section>` +
+            `</div>`;
+    },
+
+    renderTradingPostStylesGrid(profile) {
+        if (typeof profileManager === 'undefined' || !profileManager.getStyleGroups) {
+            return this.emptyHtml('hsShop', 'NO STYLES');
+        }
+        const wallet = profile.resources || {};
+        const layout = this.tradingPostSlotLayout();
+        const cs = Math.max(layout.cell, 52);
+        const gap = layout.gap;
+        const cols = 5;
+        const groups = profileManager.getStyleGroups()
+            .filter((g) => this.shopFilter === 'all' || this.shopFilter === g.id);
+        const entries = [];
+        groups.forEach((g) => {
+            const all = profileManager.getStyleGroupEntries(g.id);
+            all.forEach((style, index) => {
+                const cost = profileManager.getStyleCost(index);
+                if (!cost) return;
+                entries.push({
+                    groupId: g.id,
+                    groupLabel: g.label,
+                    style: style,
+                    cost: cost,
+                    owned: profileManager.isStyleUnlocked(g.id, style.id, profile),
+                    afford: this.canAffordCost(wallet, cost, profile),
+                    accent: '#ff8ab8',
+                    thumbAttrs: this.styleShopThumbAttrs(g.id, style.id)
+                });
+            });
+        });
+        if (this.shopSort === 'cost') {
+            entries.sort((a, b) => this.costTotal(a.cost) - this.costTotal(b.cost));
+        } else if (this.shopSort === 'name') {
+            entries.sort((a, b) => a.style.label.localeCompare(b.style.label));
+        }
+        const rows = Math.max(2, Math.ceil(Math.max(entries.length, 1) / cols));
+        const cells = this.padTradingPostCells(entries.map((e) => {
+            const key = `${e.groupId}|${e.style.id}`;
+            return this.tradingPostStockCell({
+                cs: cs,
+                accent: e.accent,
+                afford: e.afford || e.owned,
+                owned: e.owned,
+                lockUnaffordable: false,
+                tag: e.owned ? 'OWNED' : 'STYLE',
+                costLabel: e.owned ? '' : this.tradingPostCostLabel(e.cost),
+                head: e.style.label,
+                tip: e.style.label + '\n' + e.groupLabel + '\n' + this.tradingPostCostLabel(e.cost),
+                buyAttr: e.owned ? '' : `data-buy-style="${key}"`,
+                extraAttr: e.owned ? '' : (e.afford ? '' : 'data-short="1"'),
+                cellClass: 'is-style',
+                visual: this.tradingPostStockVisual('style', e.thumbAttrs, cs, e.accent)
+            }).html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;');
+        }), cols, rows);
+        return this.tradingPostGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid hs-tps-style-grid', cells.join(''));
+    },
+
+    renderTradingPostBags(profile) {
+        return `<div class="vf-iss-bags">` +
+            `<section class="vf-iss-col vf-iss-ship">` +
+            `<h3 class="vf-iss-col-title">SHIP</h3>` +
+            `<div class="vf-iss-ship-inv hs-slot-picker hs-tps-ship-inv">${this.renderTradingPostShipBag(profile)}</div>` +
+            `</section>` +
+            `<section class="vf-iss-col vf-iss-station">` +
+            `<h3 class="vf-iss-col-title">STATION</h3>` +
+            `<div class="vf-iss-station-inv hs-slot-picker hs-tps-station-inv">${this.renderTradingPostStationBag(profile)}</div>` +
+            `</section>` +
+            `</div>`;
+    },
+
+    renderTradingPostShipBag(profile) {
+        const shipId = profile && profile.activeShipId;
+        if (!profile || !shipId || !this.renderShipStorage) {
+            return this.tradingPostEmptyBag('SHIP EMPTY');
+        }
+        const bagCols = this.tradingPostStockBag().cols;
+        const { html } = this.withTradingPostSlotSize(() => this.renderShipStorage(profile, shipId, {
+            tipAction: false,
+            extraGridClass: 'vf-iss-inv-grid',
+            compactSpans: false,
+            maxCols: bagCols
+        }));
+        return html || this.tradingPostEmptyBag('SHIP EMPTY');
+    },
+
+    renderTradingPostStationBag(profile) {
+        if (!profile || !this.renderStationStorage) {
+            return this.tradingPostEmptyBag('STATION EMPTY');
+        }
+        const bagCols = this.tradingPostStockBag().cols;
+        const { html } = this.withTradingPostSlotSize(() => this.renderStationStorage(profile, {
+            tipAction: false,
+            compactSpans: false,
+            maxCols: bagCols
+        }));
+        if (!html) return this.tradingPostEmptyBag('STATION EMPTY');
+        return String(html).replace(
+            'class="hs-storage-grid',
+            'class="hs-storage-grid vf-iss-station-grid'
+        );
+    },
+
+    tradingPostEmptyBag(label) {
+        const layout = this.tradingPostSlotLayout();
+        const cols = this.tradingPostStockBag().cols;
+        const rows = 2;
+        const cells = [];
+        for (let i = 0; i < cols * rows; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return `<div class="vf-iss-empty-bag" data-empty-label="${label}">` +
+            this.tradingPostGridShell(cols, rows, layout.cell, layout.gap, 'vf-iss-station-grid', cells.join('')) +
+            `</div>`;
+    },
+
+    renderTradingPostDetailShell() {
+        return `<aside class="vf-iss-detail hs-tps-detail" id="hs-tps-detail" aria-live="polite">` +
+            `<h3 class="vf-iss-col-title">DETAIL</h3>` +
+            `<div class="vf-iss-detail-body">` +
+            `<div class="vf-iss-detail-empty">HOVER AN ITEM</div>` +
+            `<div class="vf-iss-detail-hint">Stats and cost show here.</div>` +
+            `</div></aside>`;
+    },
+
+    /** Large preview icon for the DETAIL pane (clone cell art or rebuild). */
+    tradingPostDetailVisual(cell) {
+        if (!cell) return '';
+        const previewCs = 64;
+        const accent = cell.style.getPropertyValue('--pk-c') || '#7ec8ff';
+        const kind = cell.getAttribute('data-tps-kind') || cell.getAttribute('data-part-kind') || '';
+        const id = cell.getAttribute('data-tps-id') || cell.getAttribute('data-part-id') || '';
+        if (kind && id) {
+            return this.tradingPostStockVisual(kind, id, previewCs, accent);
+        }
+        const body = cell.querySelector('.hs-item-body');
+        if (body) return body.outerHTML;
+        const thumb = cell.querySelector('.hs-tps-ship-thumb, .hs-tps-style-thumb, .hs-storage-cell-icon');
+        if (thumb) return thumb.outerHTML;
+        const img = cell.querySelector('img.vf-iss-icon, img');
+        return img ? img.outerHTML : '';
+    },
+
+    bindTradingPostDetailHover(root) {
+        if (!root) return;
+        root._tpsDetailBound = true;
+        const body = () => root.querySelector('#hs-tps-detail .vf-iss-detail-body');
+        const show = (payload) => {
+            const el = body();
+            if (!el) return;
+            if (!payload) {
+                el.innerHTML = `<div class="vf-iss-detail-empty">HOVER AN ITEM</div>` +
+                    `<div class="vf-iss-detail-hint">Stats and cost show here.</div>`;
+                return;
+            }
+            const previewCs = 64;
+            const title = String(payload.title || 'ITEM').replace(/</g, '&lt;');
+            const tag = payload.tag
+                ? `<span class="vf-iss-detail-badge${payload.temp ? ' is-temp' : ''}">${payload.tag}</span>`
+                : '';
+            const cost = payload.cost
+                ? `<div class="vf-iss-detail-price">${payload.cost}</div>`
+                : '';
+            const lines = (payload.lines || []).map((line, i) => {
+                const text = String(line || '');
+                const cls = i === 0 ? ' is-tag'
+                    : (/\d/.test(text) && /(c|SCR|ORE|CRY|VOL)/i.test(text) ? ' is-cost' : '');
+                const body = (typeof this.formatDetailStatLineHtml === 'function')
+                    ? this.formatDetailStatLineHtml(text)
+                    : text.replace(/</g, '&lt;');
+                return `<div class="vf-iss-detail-line${cls}">${body}</div>`;
+            }).join('');
+            const visual = payload.visualHtml || '';
+            el.innerHTML =
+                `<div class="vf-iss-detail-hero">` +
+                (visual
+                    ? `<div class="vf-iss-detail-preview" style="--cs:${previewCs}px">${visual}</div>`
+                    : '') +
+                `<div class="vf-iss-detail-meta">` +
+                `<div class="vf-iss-detail-name">${title}</div>` +
+                tag + cost +
+                `</div></div>` +
+                `<div class="vf-iss-detail-stats">${lines}</div>`;
+        };
+        root.addEventListener('mousemove', (e) => {
+            const cell = e.target.closest && e.target.closest('.hs-tps-cell, .hs-storage-cell[data-drag-key]');
+            if (!cell) return;
+            const head = cell.getAttribute('data-ui-tip-head') || 'ITEM';
+            const tip = String(cell.getAttribute('data-ui-tip') || '');
+            const lines = tip.split('\n').filter(Boolean);
+            const costLine = lines.find((l) => /\d/.test(l) && /(c|SCR|ORE|CRY|VOL)/i.test(l));
+            show({
+                title: head,
+                tag: cell.classList.contains('is-owned') ? 'OWNED'
+                    : (cell.classList.contains('is-blueprint') ? 'BLUEPRINT'
+                        : (cell.classList.contains('is-ship') ? 'SHIP'
+                            : (cell.classList.contains('is-portal') ? 'PORTAL'
+                                : (cell.classList.contains('is-style') ? 'STYLE'
+                                    : (cell.classList.contains('is-resource') ? 'RESOURCE' : 'STOCK'))))),
+                temp: cell.classList.contains('is-blueprint'),
+                cost: costLine || null,
+                lines: lines,
+                visualHtml: this.tradingPostDetailVisual(cell)
+            });
+        });
+    },
+
 });
 
 
@@ -110310,6 +114665,33 @@ extendClass(HomeStationUI, {
             `<span class="hs-hangar-weapon-stat" data-stat="energy" data-ui-tip="ENERGY RECOVERY PER SECOND">${this.iconHtml('statEnergy', 16, 'hs-pixel', false, this.hangarStatColor('energy'))}+${regen}/S</span>` +
             `</span>`;
     },
+    /**
+     * Tip/detail text → hangar-style icon chips with coloured values.
+     * Matches "DMG 10 · SPD 12 · 4.0/S" (optional rate / AMMO) and ability
+     * stat deltas like "+0.3 SPEED · +1 DAMAGE".
+     */
+    formatDetailStatLineHtml(line) {
+        const text = String(line || '');
+        const chip = (icon, val, type) =>
+            `<span class="hs-hangar-weapon-stat" data-stat="${type}">` +
+            `${this.iconHtml(icon, 14, 'hs-pixel', false, this.hangarStatColor(type))}` +
+            `<span>${String(val).replace(/</g, '&lt;')}</span></span>`;
+        const wrap = (html) => `<span class="hs-hangar-weapon-stats">${html}</span>`;
+        const sm = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
+        if (sm) {
+            let html = chip('statDamage', sm[1], 'damage') + chip('statSpeed', sm[2], 'shotspeed');
+            if (sm[3]) html += chip('shotRapid', sm[3], 'firerate');
+            if (sm[4]) html += chip('statWeapon', 'AMMO ' + sm[4], 'power');
+            return wrap(html);
+        }
+        const statIcon = { SPEED: 'statSpeed', DAMAGE: 'statDamage', ARMOR: 'statArmor', 'FIRE RATE': 'shotRapid' };
+        const statType = { SPEED: 'speed', DAMAGE: 'damage', ARMOR: 'armor', 'FIRE RATE': 'firerate' };
+        const parts = text.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
+        if (parts.length && parts.every(Boolean)) {
+            return wrap(parts.map((pm) => chip(statIcon[pm[2]], pm[1], statType[pm[2]])).join(''));
+        }
+        return text.replace(/</g, '&lt;');
+    },
     /** Compact DMG / SPD / fire-rate line for a weapon row. */
     hangarWeaponStatsHtml(id) {
         if (typeof weaponConfigManager === 'undefined') return '';
@@ -112719,7 +117101,7 @@ extendClass(HomeStationUI, {
         if (!btn || !btn.getAttribute) return null;
         const attrs = [
             'data-upgrade-node', 'data-upgrade', 'data-frame-up', 'data-area-up', 'data-mod-up',
-            'data-travel', 'data-unlock', 'data-buy', 'data-buy-bp', 'data-buy-part',
+            'data-travel', 'data-install-portal', 'data-unlock', 'data-buy', 'data-buy-bp', 'data-buy-part',
             'data-buy-portal', 'data-buy-style', 'data-sell-ship', 'data-sell-bp',
             'data-sell-part', 'data-sell-style', 'data-craft', 'data-activate-ship', 'data-toggle-mod',
             'data-hangar-slot-set', 'data-fire-mode', 'id'
@@ -113219,6 +117601,11 @@ extendClass(HomeStationUI, {
                 if (first) first.click();
                 return this.focusNavRow('area');
             }
+            // ↓ enters the galaxy map (same as ENTER / SPACE).
+            if (key === 'ArrowDown') {
+                this.enterPlayMap();
+                return true;
+            }
             return key === 'ArrowLeft' || key === 'ArrowUp';
         }
         // Logout sits in the wallet card right of the area row: ← goes back.
@@ -113239,8 +117626,12 @@ extendClass(HomeStationUI, {
                     return true;
                 }
                 if (hasSub) return this.focusNavRow('subnav');
-                // The galaxy map (PLAY) is only entered with ENTER / SPACE.
-                if (this.tab !== 'play') this.enterTabContent();
+                // LAUNCH / PLAY: ↓ enters the map like every other area enters content.
+                if (this.tab === 'play') {
+                    this.enterPlayMap();
+                    return true;
+                }
+                this.enterTabContent();
                 return true;
             }
             if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -113318,8 +117709,12 @@ extendClass(HomeStationUI, {
                 this.enterMenuContent();
                 return true;
             }
-            // The galaxy map (PLAY) is only entered with ENTER / SPACE.
-            if (this.tab !== 'play') this.enterTabContent();
+            // LAUNCH / PLAY: ↓ enters the map.
+            if (this.tab === 'play') {
+                this.enterPlayMap();
+                return true;
+            }
+            this.enterTabContent();
             return true;
         }
         if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -113398,6 +117793,10 @@ extendClass(HomeStationUI, {
                 if (e.key === 'Escape' || e.key === 'Backspace') {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (galaxyMapManager.hasCardFocus && galaxyMapManager.hasCardFocus()) {
+                        galaxyMapManager.clearCardFocus();
+                        return;
+                    }
                     if (galaxyMapManager.hasActionFocus()) {
                         galaxyMapManager.clearActionFocus();
                         return;
@@ -113907,9 +118306,26 @@ extendClass(HomeStationUI, {
                     const seeded = res.seeded
                         ? (' · ' + ((res.planetIds && res.planetIds.length) || 0) + ' PLANETS CHARTED')
                         : '';
-                    this.playButtonResult(btn, true, 'TRAVELLED TO ' + name + factionTag + seeded);
+                    this.statusMsg = 'TRAVELLED TO ' + name + factionTag + seeded;
+                    this.createUI();
                 } else if (res.reason === 'DRIVE') {
                     this.playButtonResult(btn, false, 'NEED WARP L' + (res.requireWarp || 1) + ' OR BUY PORTAL');
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-install-portal]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const gid = btn.getAttribute('data-install-portal');
+                const res = profileManager.installPortal
+                    ? profileManager.installPortal(gid)
+                    : { ok: false, reason: 'FAILED' };
+                if (res.ok) {
+                    const name = String(gid).replace(/_/g, ' ').toUpperCase();
+                    this.statusMsg = 'PORTAL INSTALLED: ' + name;
+                    this.createUI();
                 } else {
                     this.playButtonResult(btn, false, res.reason || 'FAILED');
                 }
@@ -114512,9 +118928,11 @@ extendClass(HomeStationUI, {
                 const res = profileManager.buyPortal(gid);
                 if (res.ok) {
                     const name = String(gid).replace(/_/g, ' ').toUpperCase();
-                    this.playButtonResult(btn, true, 'PORTAL UNLOCKED: ' + name);
+                    this.playButtonResult(btn, true, 'PORTAL BOUGHT: ' + name + ' · INSTALL IN TRAVEL');
                 } else if (res.reason === 'UNKNOWN FACTION') {
                     this.playButtonResult(btn, false, 'MEET THIS FACTION IN COMBAT FIRST');
+                } else if (res.reason === 'IN INVENTORY') {
+                    this.playButtonResult(btn, false, 'ALREADY IN INVENTORY — INSTALL IN TRAVEL');
                 } else {
                     this.playButtonResult(btn, false, res.reason || 'FAILED');
                 }
@@ -117461,8 +121879,18 @@ extendClass(StartScreenManager, {
                 fxKey: 'fxArea'
             },
             { name: 'Volume', type: 'volume' },
-            { name: 'Sound', value: 'ON', options: ['ON', 'OFF'] },
-            { name: 'Music', value: 'ON', options: ['ON', 'OFF'] },
+            {
+                name: 'Sound',
+                value: (typeof settingsManager !== 'undefined')
+                    ? (settingsManager.settings.soundEnabled ? 'ON' : 'OFF') : 'ON',
+                options: ['ON', 'OFF']
+            },
+            {
+                name: 'Music',
+                value: (typeof settingsManager !== 'undefined')
+                    ? (settingsManager.settings.musicEnabled ? 'ON' : 'OFF') : 'ON',
+                options: ['ON', 'OFF']
+            },
             {
                 name: 'Menu Soundtrack',
                 value: (typeof youtubeSoundtrackManager !== 'undefined')
@@ -122029,13 +126457,23 @@ extendClass(StartScreenManager, {
         }
 
         const soundSetting = this.settingsItems.find(item => item.name === 'Sound');
-        if (soundSetting && typeof soundManager !== 'undefined') {
-            soundManager.setSoundEnabled(soundSetting.value === 'ON');
+        if (soundSetting) {
+            const on = soundSetting.value === 'ON';
+            if (typeof soundManager !== 'undefined') soundManager.setSoundEnabled(on);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.soundEnabled = on;
+                settingsManager.saveMuteState('vf_soundEnabled', on);
+            }
         }
 
         const musicSetting = this.settingsItems.find(item => item.name === 'Music');
-        if (musicSetting && typeof soundManager !== 'undefined') {
-            soundManager.setMusicEnabled(musicSetting.value === 'ON');
+        if (musicSetting) {
+            const on = musicSetting.value === 'ON';
+            if (typeof soundManager !== 'undefined') soundManager.setMusicEnabled(on);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.musicEnabled = on;
+                settingsManager.saveMuteState('vf_musicEnabled', on);
+            }
         }
 
         const difficultySetting = this.settingsItems.find(item => item.name === 'Difficulty');
@@ -123386,8 +127824,22 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.masterVolume = 0.75;
         this.soundVolume = 0.5;
         this.musicVolume = 0.65;
-        /** Music tempo multiplier (1 = authored BPM). */
+        /**
+         * Absolute playback tempo (BPM). Default matches the old 3.5× feel
+         * against the typical authored combat BPM (132 → 462).
+         */
+        this.referenceBpm = 132;
+        this.musicBpm = 462;
+        /** @deprecated kept in sync as musicBpm / referenceBpm for older callers */
         this.musicSpeed = 3.5;
+        /** Per-channel music fine-tune: bass / lead / arp / drums (1 = authored level). */
+        this.channelVolumes = [1, 1, 1, 1];
+        /** Per-channel instrument voice ids (VFTrackerVoices). */
+        this.channelVoices = ['default', 'default', 'default', 'default'];
+        /** Style intensity 0..1 (how far into selected STYLE). */
+        this.jungleAmount = 0;
+        /** Style dropdown index — see VFTrackerThemes.list. */
+        this.musicTheme = 0;
         this.init();
     }
 
@@ -123412,6 +127864,81 @@ var VolumeControlsManager = class VolumeControlsManager {
         bind('masterVolume', 'masterVolume');
         bind('soundVolume', 'soundVolume');
         bind('musicVolume', 'musicVolume');
+
+        const bindChannel = (id, ch) => {
+            const slider = document.getElementById(id);
+            if (!slider) return;
+            slider.addEventListener('input', (e) => {
+                this.setChannelVolume(ch, parseInt(e.target.value, 10) / 100);
+            });
+        };
+        bindChannel('musicChannelBass', 0);
+        bindChannel('musicChannelLead', 1);
+        bindChannel('musicChannelArp', 2);
+        bindChannel('musicChannelDrums', 3);
+
+        const bindVoice = (id, valueId, ch) => {
+            const slider = document.getElementById(id);
+            if (!slider) return;
+            slider.addEventListener('input', (e) => {
+                const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
+                    ? VFTrackerVoices.optionsFor(ch)
+                    : [{ id: 'default', label: 'DEFAULT' }];
+                const max = Math.max(0, opts.length - 1);
+                slider.max = String(max);
+                const i = Math.max(0, Math.min(max, parseInt(e.target.value, 10) || 0));
+                const opt = opts[i] || opts[0];
+                this.setChannelVoice(ch, opt.id);
+                const nameEl = document.getElementById(valueId);
+                if (nameEl) nameEl.textContent = opt.label;
+                slider.style.setProperty('--vol-fill', (i / Math.max(1, max) * 100) + '%');
+            });
+        };
+        bindVoice('musicVoiceBass', 'musicVoiceBassValue', 0);
+        bindVoice('musicVoiceLead', 'musicVoiceLeadValue', 1);
+        bindVoice('musicVoiceArp', 'musicVoiceArpValue', 2);
+        bindVoice('musicVoiceDrums', 'musicVoiceDrumsValue', 3);
+
+        const bpmSlider = document.getElementById('musicBpm') || document.getElementById('musicSpeed');
+        if (bpmSlider) {
+            bpmSlider.addEventListener('input', (e) => {
+                const raw = parseInt(e.target.value, 10);
+                // musicBpm slider is absolute BPM; legacy musicSpeed was ×100 scale.
+                if (bpmSlider.id === 'musicSpeed' && raw <= 400 && bpmSlider.max <= 400) {
+                    this.setMusicBpm(Math.round((raw / 100) * this.referenceBpm));
+                } else {
+                    this.setMusicBpm(raw);
+                }
+                this.updateUI();
+            });
+        }
+
+        const jungleSlider = document.getElementById('musicJungle');
+        if (jungleSlider) {
+            jungleSlider.addEventListener('input', (e) => {
+                this.setJungleAmount(parseInt(e.target.value, 10) / 100);
+                this.updateUI();
+            });
+        }
+
+        const themeSelect = document.getElementById('musicTheme');
+        if (themeSelect) {
+            const syncThemeOptions = () => {
+                if (!themeSelect.options.length && typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list) {
+                    VFTrackerThemes.list.forEach((o, i) => {
+                        const opt = document.createElement('option');
+                        opt.value = String(i);
+                        opt.textContent = o.label;
+                        themeSelect.appendChild(opt);
+                    });
+                }
+            };
+            syncThemeOptions();
+            themeSelect.addEventListener('change', (e) => {
+                this.setMusicTheme(parseInt(e.target.value, 10));
+                this.updateUI();
+            });
+        }
     }
 
     updateUI() {
@@ -123429,6 +127956,105 @@ var VolumeControlsManager = class VolumeControlsManager {
         sync('masterVolume', 'masterVolumeValue', this.masterVolume);
         sync('soundVolume', 'soundVolumeValue', this.soundVolume);
         sync('musicVolume', 'musicVolumeValue', this.musicVolume);
+
+        if (this.channelVolumes) {
+            const syncChannel = (id, valueId, vol) => {
+                const pct = Math.round(Math.max(0, Math.min(2, Number(vol) || 0)) * 100);
+                const valueEl = document.getElementById(valueId);
+                if (valueEl) valueEl.textContent = pct + '%';
+                const slider = document.getElementById(id);
+                if (slider) {
+                    slider.value = pct;
+                    slider.style.setProperty('--vol-fill', Math.min(100, pct) + '%');
+                }
+            };
+            syncChannel('musicChannelBass', 'musicChannelBassValue', this.channelVolumes[0]);
+            syncChannel('musicChannelLead', 'musicChannelLeadValue', this.channelVolumes[1]);
+            syncChannel('musicChannelArp', 'musicChannelArpValue', this.channelVolumes[2]);
+            syncChannel('musicChannelDrums', 'musicChannelDrumsValue', this.channelVolumes[3]);
+        }
+
+        if (this.channelVoices) {
+            const syncVoice = (id, valueId, ch) => {
+                const slider = document.getElementById(id);
+                if (!slider) return;
+                const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
+                    ? VFTrackerVoices.optionsFor(ch)
+                    : [{ id: 'default', label: 'DEFAULT' }];
+                const max = Math.max(0, opts.length - 1);
+                slider.min = '0';
+                slider.max = String(max);
+                slider.step = '1';
+                const cur = this.channelVoices[ch] || 'default';
+                let i = 0;
+                for (let n = 0; n < opts.length; n++) {
+                    if (opts[n].id === cur) { i = n; break; }
+                }
+                slider.value = String(i);
+                slider.style.setProperty('--vol-fill', (i / Math.max(1, max) * 100) + '%');
+                const nameEl = document.getElementById(valueId);
+                if (nameEl) nameEl.textContent = (opts[i] && opts[i].label) || 'DEFAULT';
+            };
+            syncVoice('musicVoiceBass', 'musicVoiceBassValue', 0);
+            syncVoice('musicVoiceLead', 'musicVoiceLeadValue', 1);
+            syncVoice('musicVoiceArp', 'musicVoiceArpValue', 2);
+            syncVoice('musicVoiceDrums', 'musicVoiceDrumsValue', 3);
+        }
+
+        const bpm = Math.round(Math.max(60, Math.min(600, Number(this.musicBpm) || 462)));
+        const bpmSlider = document.getElementById('musicBpm');
+        if (bpmSlider) {
+            bpmSlider.value = bpm;
+            const min = Number(bpmSlider.min) || 60;
+            const max = Number(bpmSlider.max) || 600;
+            bpmSlider.style.setProperty('--vol-fill', ((bpm - min) / Math.max(1, max - min) * 100) + '%');
+        }
+        const bpmValue = document.getElementById('musicBpmValue') || document.getElementById('musicSpeedValue');
+        if (bpmValue) bpmValue.textContent = bpm + ' BPM';
+        // Legacy id still present in some overlays.
+        const legacySpeed = document.getElementById('musicSpeed');
+        if (legacySpeed && legacySpeed !== bpmSlider) {
+            legacySpeed.value = bpm;
+        }
+
+        const jungleAmt = Math.max(0, Math.min(1, Number(this.jungleAmount) || 0));
+        const junglePct = Math.round(jungleAmt * 100);
+        const jungleSlider = document.getElementById('musicJungle');
+        if (jungleSlider) {
+            if (Number(jungleSlider.min) < 0) {
+                jungleSlider.min = '0';
+                jungleSlider.max = '100';
+            }
+            jungleSlider.value = junglePct;
+            jungleSlider.style.setProperty('--vol-fill', junglePct + '%');
+        }
+        const jungleValue = document.getElementById('musicJungleValue');
+        if (jungleValue) {
+            jungleValue.textContent = junglePct === 0 ? 'OFF' : junglePct + '%';
+        }
+
+        const themeMax = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 8;
+        const themeIdx = Math.max(0, Math.min(themeMax, Math.round(Number(this.musicTheme) || 0)));
+        const themeSelect = document.getElementById('musicTheme');
+        if (themeSelect) {
+            if (!themeSelect.options.length && typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list) {
+                VFTrackerThemes.list.forEach((o, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(i);
+                    opt.textContent = o.label;
+                    themeSelect.appendChild(opt);
+                });
+            }
+            themeSelect.value = String(themeIdx);
+        }
+        const themeValue = document.getElementById('musicThemeValue');
+        if (themeValue) {
+            themeValue.textContent = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.labelOf)
+                ? VFTrackerThemes.labelOf(themeIdx)
+                : String(themeIdx);
+        }
 
         document.querySelectorAll('.volume-slider[data-volume]').forEach((slider) => {
             const key = slider.dataset.volume;
@@ -123465,7 +128091,11 @@ var VolumeControlsManager = class VolumeControlsManager {
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
             vfTrackerManager.setVolume(bus);
         }
-        this.applyMusicSpeed();
+        this.applyMusicBpm();
+        this.applyJungleAmount();
+        this.applyMusicTheme();
+        this.applyChannelVolumes();
+        this.applyChannelVoices();
 
         if (typeof soundConfig !== 'undefined') {
             soundConfig.masterVolume = this.masterVolume;
@@ -123474,17 +128104,86 @@ var VolumeControlsManager = class VolumeControlsManager {
         }
     }
 
-    applyMusicSpeed() {
-        const speed = Math.max(0.5, Math.min(4, Number(this.musicSpeed) || 1));
-        this.musicSpeed = speed;
-        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setTempoScale) {
-            vfTrackerManager.setTempoScale(speed);
-        } else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.player) {
-            vfTrackerManager.player.tempoScale = speed;
+    applyJungleAmount() {
+        let t = Math.max(0, Math.min(1, Number(this.jungleAmount) || 0));
+        if (t < 0.03) t = 0;
+        this.jungleAmount = t;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setJungleAmount) {
+            vfTrackerManager.setJungleAmount(t);
+        }
+    }
+
+    applyMusicTheme() {
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 8;
+        const i = Math.max(0, Math.min(max, Math.round(Number(this.musicTheme) || 0)));
+        this.musicTheme = i;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setThemeIndex) {
+            vfTrackerManager.setThemeIndex(i);
+        }
+    }
+
+    setChannelVolume(ch, v) {
+        const idx = Number(ch);
+        if (!Number.isFinite(idx) || idx < 0 || idx > 3) return;
+        if (!this.channelVolumes) this.channelVolumes = [1, 1, 1, 1];
+        this.channelVolumes[idx] = Math.max(0, Math.min(2, Number(v)));
+        this.updateUI();
+        this.applyChannelVolumes();
+        this.saveVolumes();
+    }
+
+    getChannelVolume(ch) {
+        return (this.channelVolumes && this.channelVolumes[ch] != null) ? this.channelVolumes[ch] : 1;
+    }
+
+    applyChannelVolumes() {
+        if (!this.channelVolumes) this.channelVolumes = [1, 1, 1, 1];
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setChannelVolume) {
+            for (let i = 0; i < 4; i++) vfTrackerManager.setChannelVolume(i, this.channelVolumes[i]);
+        }
+    }
+
+    setChannelVoice(ch, voiceId) {
+        const idx = Number(ch);
+        if (!Number.isFinite(idx) || idx < 0 || idx > 3) return;
+        if (!this.channelVoices) this.channelVoices = ['default', 'default', 'default', 'default'];
+        const id = String(voiceId || 'default');
+        this.channelVoices[idx] = id;
+        this.updateUI();
+        this.applyChannelVoices();
+        this.saveVolumes();
+    }
+
+    getChannelVoice(ch) {
+        return (this.channelVoices && this.channelVoices[ch]) || 'default';
+    }
+
+    applyChannelVoices() {
+        if (!this.channelVoices) this.channelVoices = ['default', 'default', 'default', 'default'];
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setChannelVoice) {
+            for (let i = 0; i < 4; i++) vfTrackerManager.setChannelVoice(i, this.channelVoices[i]);
+        }
+    }
+
+    applyMusicBpm() {
+        const bpm = Math.max(60, Math.min(600, Math.round(Number(this.musicBpm) || 462)));
+        this.musicBpm = bpm;
+        this.musicSpeed = bpm / this.referenceBpm;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setPlaybackBpm) {
+            vfTrackerManager.setPlaybackBpm(bpm);
+        } else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setTempoScale) {
+            vfTrackerManager.setTempoScale(this.musicSpeed);
         }
         if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
-            localAudioManager.setPlaybackRate(speed);
+            localAudioManager.setPlaybackRate(this.musicSpeed);
         }
+    }
+
+    /** @deprecated use applyMusicBpm */
+    applyMusicSpeed() {
+        this.applyMusicBpm();
     }
 
     saveVolumes() {
@@ -123492,7 +128191,15 @@ var VolumeControlsManager = class VolumeControlsManager {
             localStorage.setItem('vf_masterVolume', String(this.masterVolume));
             localStorage.setItem('vf_soundVolume', String(this.soundVolume));
             localStorage.setItem('vf_musicVolume', String(this.musicVolume));
+            localStorage.setItem('vf_musicBpm', String(this.musicBpm));
             localStorage.setItem('vf_musicSpeed', String(this.musicSpeed));
+            localStorage.setItem('vf_musicJungle', String(this.jungleAmount));
+            localStorage.setItem('vf_musicJungleBipolar', '1');
+            localStorage.setItem('vf_musicStyleAmount', '1');
+            localStorage.setItem('vf_musicTheme', String(this.musicTheme));
+            localStorage.setItem('vf_musicStyleSchema', '3');
+            localStorage.setItem('vf_channelVolumes', JSON.stringify(this.channelVolumes || [1, 1, 1, 1]));
+            localStorage.setItem('vf_channelVoices', JSON.stringify(this.channelVoices || ['default', 'default', 'default', 'default']));
             localStorage.setItem('vf_volumeSchema', '2');
         } catch (e) {
             console.warn('Could not save volume settings:', e);
@@ -123505,31 +128212,96 @@ var VolumeControlsManager = class VolumeControlsManager {
             const savedMaster = localStorage.getItem('vf_masterVolume');
             const savedSound = localStorage.getItem('vf_soundVolume');
             const savedMusic = localStorage.getItem('vf_musicVolume');
+            const savedBpm = localStorage.getItem('vf_musicBpm');
             const savedSpeed = localStorage.getItem('vf_musicSpeed');
-            const speedDefaultMark = localStorage.getItem('vf_musicSpeedDefault');
+            const bpmDefaultMark = localStorage.getItem('vf_musicBpmDefault');
+            const savedChannels = localStorage.getItem('vf_channelVolumes');
+            const savedVoices = localStorage.getItem('vf_channelVoices');
+            const savedJungle = localStorage.getItem('vf_musicJungle');
+            const savedTheme = localStorage.getItem('vf_musicTheme');
 
             if (savedMaster !== null) this.masterVolume = parseFloat(savedMaster);
             if (savedSound !== null) this.soundVolume = parseFloat(savedSound);
             if (savedMusic !== null) this.musicVolume = parseFloat(savedMusic);
+            if (savedJungle !== null) {
+                let j = parseFloat(savedJungle);
+                try {
+                    // New model: intensity 0..1. Migrate bipolar -1..+1 → abs.
+                    if (localStorage.getItem('vf_musicStyleAmount') !== '1') {
+                        if (Number.isFinite(j)) j = Math.abs(j);
+                        localStorage.setItem('vf_musicStyleAmount', '1');
+                    }
+                    localStorage.setItem('vf_musicJungleBipolar', '1');
+                } catch (e) { /* ignore */ }
+                this.jungleAmount = j;
+            }
+            if (savedTheme !== null) {
+                let th = parseInt(savedTheme, 10);
+                // Schema 3 inserts JUNGLE DNB + MINIMAL ELEKTRO after PLANET.
+                // Old 0..4 = PLANET/AMEN/REESE/NEURO/LIQUID → 0,3,4,5,6.
+                try {
+                    if (localStorage.getItem('vf_musicStyleSchema') !== '3'
+                        && Number.isFinite(th) && th >= 0 && th <= 4) {
+                        const map = [0, 3, 4, 5, 6];
+                        th = map[th];
+                        localStorage.setItem('vf_musicStyleSchema', '3');
+                        localStorage.setItem('vf_musicTheme', String(th));
+                    }
+                } catch (e) { /* ignore */ }
+                this.musicTheme = th;
+            }
 
-            // One-shot migrate: lock in 3.5× as the stored music speed.
-            if (speedDefaultMark !== '3.5') {
-                this.musicSpeed = 3.5;
-                localStorage.setItem('vf_musicSpeedDefault', '3.5');
-                localStorage.setItem('vf_musicSpeed', '3.5');
+            // Prefer absolute BPM; migrate old ×-speed once.
+            if (bpmDefaultMark !== '462') {
+                if (savedBpm != null && Number.isFinite(parseFloat(savedBpm))) {
+                    this.musicBpm = parseFloat(savedBpm);
+                } else if (savedSpeed != null && Number.isFinite(parseFloat(savedSpeed))) {
+                    this.musicBpm = parseFloat(savedSpeed) * this.referenceBpm;
+                } else {
+                    this.musicBpm = 462;
+                }
+                localStorage.setItem('vf_musicBpmDefault', '462');
+                localStorage.setItem('vf_musicBpm', String(Math.round(this.musicBpm)));
+            } else if (savedBpm !== null) {
+                this.musicBpm = parseFloat(savedBpm);
             } else if (savedSpeed !== null) {
-                this.musicSpeed = parseFloat(savedSpeed);
+                this.musicBpm = parseFloat(savedSpeed) * this.referenceBpm;
             }
 
             if (!Number.isFinite(this.masterVolume)) this.masterVolume = 0.75;
             if (!Number.isFinite(this.soundVolume)) this.soundVolume = 0.5;
             if (!Number.isFinite(this.musicVolume)) this.musicVolume = 0.65;
-            if (!Number.isFinite(this.musicSpeed)) this.musicSpeed = 3.5;
+            if (!Number.isFinite(this.musicBpm)) this.musicBpm = 462;
+
+            if (savedChannels) {
+                try {
+                    const arr = JSON.parse(savedChannels);
+                    if (Array.isArray(arr) && arr.length === 4) {
+                        this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(2, Number(v))) : 1));
+                    }
+                } catch (e) { /* ignore malformed value */ }
+            }
+
+            if (savedVoices) {
+                try {
+                    const arr = JSON.parse(savedVoices);
+                    if (Array.isArray(arr) && arr.length === 4) {
+                        this.channelVoices = arr.map((v) => String(v || 'default'));
+                    }
+                } catch (e) { /* ignore malformed value */ }
+            }
 
             this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
             this.soundVolume = Math.max(0, Math.min(1, this.soundVolume));
             this.musicVolume = Math.max(0, Math.min(1, this.musicVolume));
-            this.musicSpeed = Math.max(0.5, Math.min(4, this.musicSpeed));
+            this.musicBpm = Math.max(60, Math.min(600, Math.round(this.musicBpm)));
+            this.musicSpeed = this.musicBpm / this.referenceBpm;
+            this.jungleAmount = Math.max(0, Math.min(1, Number.isFinite(this.jungleAmount) ? Math.abs(this.jungleAmount) : 0));
+            if (this.jungleAmount < 0.03) this.jungleAmount = 0;
+            const themeMax = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+                ? VFTrackerThemes.count() - 1
+                : 8;
+            this.musicTheme = Math.max(0, Math.min(themeMax, Number.isFinite(this.musicTheme) ? this.musicTheme : 0));
 
             // Old schema used ~10%/5%/20% plus a hidden ×8 music bus — migrate up once.
             if (schema !== '2'
@@ -123549,7 +128321,10 @@ var VolumeControlsManager = class VolumeControlsManager {
     getMasterVolume() { return this.masterVolume; }
     getSoundVolume() { return this.soundVolume; }
     getMusicVolume() { return this.musicVolume; }
-    getMusicSpeed() { return this.musicSpeed; }
+    getMusicBpm() { return this.musicBpm; }
+    getMusicSpeed() { return this.musicBpm / this.referenceBpm; }
+    getJungleAmount() { return this.jungleAmount; }
+    getMusicTheme() { return this.musicTheme; }
 
     setMasterVolume(volume) {
         this.masterVolume = Math.max(0, Math.min(1, Number(volume) || 0));
@@ -123572,9 +128347,38 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.saveVolumes();
     }
 
+    setMusicBpm(bpm) {
+        this.musicBpm = Math.max(60, Math.min(600, Math.round(Number(bpm) || 120)));
+        this.musicSpeed = this.musicBpm / this.referenceBpm;
+        this.applyMusicBpm();
+        this.saveVolumes();
+    }
+
     setMusicSpeed(speed) {
-        this.musicSpeed = Math.max(0.5, Math.min(4, Number(speed) || 1));
-        this.applyMusicSpeed();
+        this.setMusicBpm((Number(speed) || 1) * this.referenceBpm);
+    }
+
+    setJungleAmount(amount) {
+        let t = Math.max(0, Math.min(1, Number(amount) || 0));
+        if (t < 0.03) t = 0;
+        this.jungleAmount = t;
+        this.applyJungleAmount();
+        this.saveVolumes();
+    }
+
+    setMusicTheme(index) {
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 8;
+        const next = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
+        const prev = this.musicTheme;
+        this.musicTheme = next;
+        // Picking a non-PLANET style with AMOUNT at 0 → audible default.
+        if (next > 0 && prev !== next && this.jungleAmount < 0.03) {
+            this.jungleAmount = 0.65;
+            this.applyJungleAmount();
+        }
+        this.applyMusicTheme();
         this.saveVolumes();
     }
 
@@ -123582,7 +128386,15 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.masterVolume = 0.75;
         this.soundVolume = 0.5;
         this.musicVolume = 0.65;
+        this.musicBpm = 462;
         this.musicSpeed = 3.5;
+        this.jungleAmount = 0;
+        this.musicTheme = 0;
+        this.channelVolumes = [1, 1, 1, 1];
+        this.channelVoices = ['default', 'default', 'default', 'default'];
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = 1.4;
+        if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = 1.4;
+        try { localStorage.setItem('vf_musicCrossfade', '1.4'); } catch (e) { /* ignore */ }
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -129214,6 +134026,7 @@ var GamepadManager = class GamepadManager {
             a: false,
             b: false
         };
+        this._wasCombat = false;
     }
 
     start() {
@@ -129229,7 +134042,10 @@ var GamepadManager = class GamepadManager {
     isButtonPressed(gamepad, index) {
         const b = gamepad.buttons[index];
         if (!b) return false;
-        return typeof b === 'number' ? b > 0.5 : !!b.pressed;
+        // Analog triggers (LT/RT) often expose value without pressed=true.
+        if (typeof b === 'number') return b > 0.5;
+        if (b.pressed) return true;
+        return typeof b.value === 'number' && b.value > 0.5;
     }
 
     /** Analog stick OR d-pad button, whichever reads "pressed" for that direction. */
@@ -129280,15 +134096,21 @@ var GamepadManager = class GamepadManager {
         // is already true there) but wants a discrete confirm press like a
         // menu, not held-key combat state, so it's special-cased here.
         if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
-            const fireHeld = this.isButtonPressed(gamepad, 0); // A, same button combat uses for shoot
+            const fireHeld = this.isButtonPressed(gamepad, 0) || this.isButtonPressed(gamepad, 7); // A / RT
             if (fireHeld && !this._menuState.a) missionStartManager.onFire();
             this._menuState.a = fireHeld;
             return;
         }
         if (this.isCombatMode()) {
+            // Drop the menu HUD frame the moment combat owns the surface.
+            if (!this._wasCombat && typeof gamepadCursor !== 'undefined' && gamepadCursor.markPointer) {
+                gamepadCursor.markPointer();
+            }
+            this._wasCombat = true;
             this.updateCombat(gamepad);
         } else {
-            const wasCombat = !!this._combatState.any;
+            const wasCombat = !!this._combatState.any || this._wasCombat;
+            this._wasCombat = false;
             this.resetCombatKeys();
             if (wasCombat) {
                 // A may still be physically held from firing in combat; sync
@@ -129327,8 +134149,9 @@ if (typeof window !== 'undefined') {
 
 // GamepadManager combat mapping: writes into the same inputHandler.keys map
 // the keyboard sets (js/core/input-handler/core.js), so playerManager /
-// bulletManager need zero changes. Buttons: A=shoot/charge, B/X/Y=fire
-// groups a/s/d, RB=boost (Shift), LB=switch shot type, Start=pause.
+// bulletManager need zero changes.
+// Shoulders: LB=a, RB=s, LT=d, RT=space (face A also space for fire-to-start).
+// Face X/Y/B still alias a/s/d. L3=boost (Shift), R3=switch shot, Start=pause.
 // K/S debug cheats are intentionally never mapped to a gamepad.
 extendClass(GamepadManager, {
     updateCombat(gamepad) {
@@ -129343,7 +134166,8 @@ extendClass(GamepadManager, {
         inputHandler.keys['ArrowLeft'] = dir.left;
         inputHandler.keys['ArrowRight'] = dir.right;
 
-        const spaceHeld = this.isButtonPressed(gamepad, 0); // A
+        // RT (front right) + face A → Space
+        const spaceHeld = this.isButtonPressed(gamepad, 7) || this.isButtonPressed(gamepad, 0);
         const wasSpaceHeld = !!this._combatState.space;
         inputHandler.keys[' '] = spaceHeld;
         inputHandler.keys['Space'] = spaceHeld;
@@ -129351,16 +134175,19 @@ extendClass(GamepadManager, {
         if (!spaceHeld && wasSpaceHeld) this.onSpaceRelease();
         this._combatState.space = spaceHeld;
 
-        const shiftHeld = this.isButtonPressed(gamepad, 5); // RB
+        // L3 → Charge Drive boost (was RB before shoulders took fire)
+        const shiftHeld = this.isButtonPressed(gamepad, 10);
         inputHandler.keys['Shift'] = shiftHeld;
         inputHandler.keys['ShiftLeft'] = shiftHeld;
         inputHandler.keys['ShiftRight'] = shiftHeld;
 
-        inputHandler.keys['a'] = this.isButtonPressed(gamepad, 2); // X -> fire group a
-        inputHandler.keys['s'] = this.isButtonPressed(gamepad, 3); // Y -> fire group s
-        inputHandler.keys['d'] = this.isButtonPressed(gamepad, 1); // B -> fire group d
+        // LB / RB (rear) + face X/Y; LT (front left) + face B
+        inputHandler.keys['a'] = this.isButtonPressed(gamepad, 4) || this.isButtonPressed(gamepad, 2);
+        inputHandler.keys['s'] = this.isButtonPressed(gamepad, 5) || this.isButtonPressed(gamepad, 3);
+        inputHandler.keys['d'] = this.isButtonPressed(gamepad, 6) || this.isButtonPressed(gamepad, 1);
 
-        const switchHeld = this.isButtonPressed(gamepad, 4); // LB
+        // R3 → switch shot type (was LB)
+        const switchHeld = this.isButtonPressed(gamepad, 11);
         if (switchHeld && !this._combatState.switchShot) {
             if (typeof bulletManager !== 'undefined') {
                 const newType = bulletManager.switchShotType();
@@ -129549,6 +134376,10 @@ var InStageShop = class InStageShop {
         this.cartBuys = new Set();
         /** Frozen permanent-part offer for this shop visit. */
         this._partsOffer = null;
+        /** Frozen temp-perk offer for this shop visit. */
+        this._perksOffer = null;
+        /** Frozen vendor bag size for this shop visit (rolled on open). */
+        this._visitBag = null;
         this._faceState = 0;
         this._faceUntil = 0;
         this.focusIndex = 0;
@@ -129571,9 +134402,19 @@ var InStageShop = class InStageShop {
                     stats: ['DMG TAKEN ×0.5', 'SHIELD HOLD · 90s', 'STACKS WITH SHIELD REGEN']
                 },
                 {
+                    id: 'aegis', label: 'AEGIS', cost: 75, ms: 80000,
+                    icon: 'ability_energy_shield',
+                    stats: ['DMG TAKEN ×0.7', 'DURATION 80s']
+                },
+                {
                     id: 'speed_boost', label: 'AFTERBURNER', cost: 55, ms: 75000,
                     icon: 'ability_high_speed',
                     stats: ['MOVE SPEED ×1.45', 'DURATION 75s']
+                },
+                {
+                    id: 'turbo', label: 'TURBO', cost: 40, ms: 60000,
+                    icon: 'ability_high_speed',
+                    stats: ['MOVE SPEED ×1.25', 'DURATION 60s']
                 },
                 {
                     id: 'power_shot', label: 'POWER SHOT', cost: 95, ms: 90000,
@@ -129581,9 +134422,24 @@ var InStageShop = class InStageShop {
                     stats: ['DAMAGE ×1.6', 'SHOT SIZE ×1.3', 'DURATION 90s']
                 },
                 {
+                    id: 'overcharge', label: 'OVERCHARGE', cost: 100, ms: 75000,
+                    icon: 'ability_powerful_cannon',
+                    stats: ['DAMAGE ×2.0', 'SHOT SIZE ×1.15', 'DURATION 75s']
+                },
+                {
+                    id: 'focus', label: 'FOCUS BEAM', cost: 90, ms: 80000,
+                    icon: 'ability_weapon_systems',
+                    stats: ['DAMAGE ×1.35', 'SHOT SIZE ×1.55', 'DURATION 80s']
+                },
+                {
                     id: 'rapid_fire', label: 'RAPID FIRE', cost: 90, ms: 75000,
                     icon: 'ability_versatile_weapons',
                     stats: ['FIRE RATE ×1.7', 'COOLDOWN ×0.6', 'DURATION 75s']
+                },
+                {
+                    id: 'spray', label: 'SPRAY FIRE', cost: 85, ms: 70000,
+                    icon: 'ability_versatile_weapons',
+                    stats: ['FIRE RATE ×2.1', 'COOLDOWN ×0.48', 'DURATION 70s']
                 },
                 {
                     id: 'repair', label: 'FIELD REPAIR', cost: 70, ms: 60000,
@@ -129591,9 +134447,24 @@ var InStageShop = class InStageShop {
                     stats: ['HULL REGEN 4%/s', 'DURATION 60s']
                 },
                 {
+                    id: 'stim', label: 'STIM PACK', cost: 60, ms: 50000,
+                    icon: 'ability_energy_shield',
+                    stats: ['INSTANT +20% HULL', 'REGEN 2.5%/s', 'DURATION 50s']
+                },
+                {
                     id: 'magnet', label: 'LOOT MAGNET', cost: 50, ms: 90000,
                     icon: 'ability_high_speed',
                     stats: ['PICKUP RADIUS ×1.8', 'DURATION 90s']
+                },
+                {
+                    id: 'scrapper', label: 'SCRAPPER', cost: 65, ms: 90000,
+                    icon: 'ability_high_speed',
+                    stats: ['PICKUP RADIUS ×1.35', 'LOOT ×1.5', 'DURATION 90s']
+                },
+                {
+                    id: 'double_loot', label: 'DOUBLE LOOT', cost: 80, ms: 90000,
+                    icon: 'ability_high_speed',
+                    stats: ['RESOURCE YIELD ×2', 'DURATION 90s']
                 }
             ],
             /** Temporary weapons — ammo depletes, then reverts. */
@@ -129623,13 +134494,82 @@ var InStageShop = class InStageShop {
     }
 
     flatPerks() {
-        const c = this.perkCatalog();
-        return c.buffs.map((i) => Object.assign({ kind: 'buff', stock: 'perk' }, i))
-            .concat(c.weapons.map((i) => Object.assign({ kind: 'weapon', stock: 'perk' }, i)));
+        return (this._perksOffer || this.buildPerksOffer()).slice();
     }
 
     flatParts() {
         return (this._partsOffer || this.buildPartsOffer()).slice();
+    }
+
+    /**
+     * Temp perk / weapon shelf for this visit — shuffled and capped by bag size
+     * (better faction standing → richer shelves).
+     */
+    buildPerksOffer() {
+        const c = this.perkCatalog();
+        const list = c.buffs.map((i) => Object.assign({ kind: 'buff', stock: 'perk' }, i))
+            .concat(c.weapons.map((i) => Object.assign({ kind: 'weapon', stock: 'perk' }, i)));
+        for (let i = list.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = list[i];
+            list[i] = list[j];
+            list[j] = tmp;
+        }
+        const bag = this.shopStockLayout();
+        const cap = Math.max(1, Math.min(list.length, bag.perkCap || list.length));
+        this._perksOffer = list.slice(0, cap);
+        return this._perksOffer;
+    }
+
+    /** Relation to the planet's resident faction (-100..100 + label). */
+    planetFactionRelation() {
+        const faction = String((this.planetContext().faction) || '').toLowerCase();
+        if (typeof factionManager !== 'undefined' && factionManager.getRelation) {
+            return factionManager.getRelation(faction);
+        }
+        return { score: 0, label: 'NEUTRAL', tone: 'neutral' };
+    }
+
+    /**
+     * Roll vendor bag size for this visit from alliance + luck.
+     * Allied residents stock deeper shelves; hostiles keep a thin stall.
+     */
+    rollVisitStockLayout() {
+        const rel = this.planetFactionRelation();
+        const score = Number(rel.score) || 0;
+        let minR = 0.08;
+        let maxR = 0.55;
+        if (score >= 90) {
+            minR = 0.55;
+            maxR = 1;
+        } else if (score >= 60) {
+            minR = 0.4;
+            maxR = 0.95;
+        } else if (score >= 40) {
+            minR = 0.28;
+            maxR = 0.8;
+        } else if (score <= -30) {
+            minR = 0;
+            maxR = 0.32;
+        } else if (score < 0) {
+            minR = 0.04;
+            maxR = 0.42;
+        }
+        const rich = minR + Math.random() * Math.max(0.01, maxR - minR);
+        let bag;
+        if (rich >= 0.78) {
+            bag = { cols: 10, rows: 4, minRows: 3, partCap: 16, perkCap: 9 };
+        } else if (rich >= 0.52) {
+            bag = { cols: 8, rows: 4, minRows: 3, partCap: 12, perkCap: 8 };
+        } else if (rich >= 0.28) {
+            bag = { cols: 7, rows: 3, minRows: 3, partCap: 10, perkCap: 6 };
+        } else {
+            bag = { cols: 5, rows: 3, minRows: 2, partCap: 7, perkCap: 4 };
+        }
+        bag.relation = rel;
+        bag.richness = rich;
+        this._visitBag = bag;
+        return bag;
     }
 
     flatStock() {
@@ -129696,12 +134636,20 @@ var InStageShop = class InStageShop {
         };
         list.sort((a, b) => factionScore(a) - factionScore(b) || a.cost - b.cost || a.label.localeCompare(b.label));
 
-        // Keep a tight stash: mix kinds, max 8.
+        // Offer size follows this planet's shop bag (modest → rich).
+        const bag = this.shopStockLayout();
+        const cap = bag.partCap || 8;
         const picked = [];
         const kindCount = { weapon: 0, defense: 0, ability: 0, energy: 0 };
-        const kindCap = { weapon: 3, defense: 2, ability: 2, energy: 1 };
+        const kindCap = bag.partCap >= 14
+            ? { weapon: 5, defense: 4, ability: 4, energy: 2 }
+            : (bag.partCap >= 10
+                ? { weapon: 4, defense: 3, ability: 3, energy: 2 }
+                : (bag.partCap <= 7
+                    ? { weapon: 2, defense: 2, ability: 2, energy: 1 }
+                    : { weapon: 3, defense: 2, ability: 2, energy: 1 }));
         list.forEach((e) => {
-            if (picked.length >= 8) return;
+            if (picked.length >= cap) return;
             if ((kindCount[e.partKind] || 0) >= (kindCap[e.partKind] || 1)) return;
             kindCount[e.partKind] = (kindCount[e.partKind] || 0) + 1;
             picked.push(e);
@@ -129758,6 +134706,12 @@ var InStageShop = class InStageShop {
         this.markedForSale.clear();
         this.cartBuys.clear();
         this._partsOffer = null;
+        this._perksOffer = null;
+        this._visitBag = null;
+        this._fitCellPx = null;
+        this._fittingLock = false;
+        this.rollVisitStockLayout();
+        this.buildPerksOffer();
         this.buildPartsOffer();
         if (!this.fromVictory
             && typeof game !== 'undefined'
@@ -129777,6 +134731,15 @@ var InStageShop = class InStageShop {
         this.isOpen = false;
         this.markedForSale.clear();
         this.cartBuys.clear();
+        this._partsOffer = null;
+        this._perksOffer = null;
+        this._visitBag = null;
+        this._fitCellPx = null;
+        this._fittingLock = false;
+        if (this._shopRo) {
+            try { this._shopRo.disconnect(); } catch (e) { /* ignore */ }
+            this._shopRo = null;
+        }
         this._unpatchHomeStation();
         if (this._faceRaf) cancelAnimationFrame(this._faceRaf);
         this._faceRaf = null;
@@ -129867,8 +134830,12 @@ var InStageShop = class InStageShop {
         const { dragKey } = this.parseSaleMarkKey(mark);
         const sep = dragKey.indexOf(':');
         const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
-        const id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+        let id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
         if (!id || typeof profileManager === 'undefined') return 0;
+        // Storage cells use instance keys (`defId#unit`); sell value is per def.
+        if (bucket !== 'blueprints' && profileManager.partDefId) {
+            id = profileManager.partDefId(id) || id;
+        }
         let raw = 0;
         if (bucket === 'blueprints') {
             raw = profileManager.getBlueprintSellValue
@@ -129999,8 +134966,28 @@ var InStageShop = class InStageShop {
         const shipId = cell.getAttribute('data-drag-ship') || '';
         if (!dragKey || !source) return false;
         const mark = this.saleMarkKey(source, shipId, dragKey);
-        if (this.markedForSale.has(mark)) this.markedForSale.delete(mark);
-        else this.markedForSale.add(mark);
+        if (this.markedForSale.has(mark)) {
+            this.markedForSale.delete(mark);
+        } else {
+            // Starter loadout copies (owned=0, filed only) cannot be sold.
+            if (typeof profileManager !== 'undefined' && profileManager._ownedStorageCount) {
+                const sep = dragKey.indexOf(':');
+                const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
+                const rawId = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+                if (bucket && bucket !== 'blueprints' && rawId) {
+                    const defId = profileManager.partDefId
+                        ? profileManager.partDefId(rawId)
+                        : rawId;
+                    const profile = this.getProfile();
+                    if (profile && profileManager._ownedStorageCount(profile, bucket, defId) <= 0) {
+                        this.flashFace('sad');
+                        this.lastMsg = 'STARTER PART';
+                        return false;
+                    }
+                }
+            }
+            this.markedForSale.add(mark);
+        }
         this.applySaleMarks();
         this.updateCompleteButton();
         this.updateWalletProjection();
@@ -130183,36 +135170,50 @@ var InStageShop = class InStageShop {
         const { source, shipId, dragKey } = this.parseSaleMarkKey(mark);
         const sep = dragKey.indexOf(':');
         const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
-        const id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
-        if (!bucket || !id) return { ok: false, reason: 'BAD KEY' };
+        const rawId = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+        if (!bucket || !rawId) return { ok: false, reason: 'BAD KEY' };
 
         if (bucket === 'blueprints') {
             return profileManager.sellBlueprint
-                ? profileManager.sellBlueprint(id)
+                ? profileManager.sellBlueprint(rawId)
                 : { ok: false, reason: 'NO API' };
         }
 
         const kind = this.bucketToSellKind(bucket);
         if (!kind) return { ok: false, reason: 'BAD BUCKET' };
 
+        // Inventory drag-keys are instance ids (`defId#unit`); ledgers use bare defId.
+        const parsed = profileManager.parsePartInstanceId
+            ? profileManager.parsePartInstanceId(rawId)
+            : { defId: rawId, unit: null };
+        const defId = parsed.defId || rawId;
+        if (!defId) return { ok: false, reason: 'BAD KEY' };
+
         // Equipped-only: refuse (marking already blocks, but re-check).
         if (source === 'ship' && shipId
             && typeof profileManager._equippedStorageCount === 'function'
-            && profileManager._equippedStorageCount(profile, shipId, bucket, id) > 0) {
+            && profileManager._equippedStorageCount(profile, shipId, bucket, defId) > 0) {
             const entry = (profile.shipStorage || {})[shipId];
-            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+            const filed = (entry && entry[bucket] && entry[bucket][defId]) || 0;
             if (filed <= 0) return { ok: false, reason: 'EQUIPPED' };
         }
+
+        // Starter loadout copies can sit filed with owned=0 — not sellable stock.
+        const owned = profileManager._ownedStorageCount
+            ? profileManager._ownedStorageCount(profile, bucket, defId)
+            : 0;
+        if (owned <= 0) return { ok: false, reason: 'STARTER' };
 
         // Filed ship cargo must leave the ship's ledger before ownership drops.
         if (source === 'ship' && shipId && profileManager.consumeFiledPart) {
             const entry = (profile.shipStorage || {})[shipId];
-            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
-            if (filed > 0) profileManager.consumeFiledPart(profile, shipId, bucket, id);
+            const filed = (entry && entry[bucket] && entry[bucket][defId]) || 0;
+            if (filed > 0) profileManager.consumeFiledPart(profile, shipId, bucket, defId);
         }
 
+        // Pass the instance id so sellPart can compact per-copy upgrades.
         return profileManager.sellPart
-            ? profileManager.sellPart(kind, id)
+            ? profileManager.sellPart(kind, rawId)
             : { ok: false, reason: 'NO API' };
     }
 
@@ -130339,9 +135340,14 @@ var InStageShop = class InStageShop {
         return map[id] || 'resScrap';
     }
 
-    /** Same generative casing the hangar bay uses — ability_* UI icons tint into blank blobs. */
-    stockVisualHtml(item, cellPx) {
-        const box = Math.max(28, (cellPx | 0) - 6);
+    /** Same generative casing the hangar bay uses — ability_* UI icons tint into blank blobs.
+     *  `span` is [w,h] slots so M/L parts fill their multi-cell footprint. */
+    stockVisualHtml(item, cellPx, span) {
+        const sw = Math.max(1, (span && span[0]) || 1);
+        const sh = Math.max(1, (span && span[1]) || 1);
+        const boxW = Math.max(16, sw * (cellPx | 0) - 4);
+        const boxH = Math.max(16, sh * (cellPx | 0) - 4);
+        const box = Math.min(boxW, boxH);
         let kind = 'ability';
         let color = '#c08cff';
         let inner = '';
@@ -130374,10 +135380,11 @@ var InStageShop = class InStageShop {
             }
         } else {
             const pu = (typeof POWER_UPS !== 'undefined') ? POWER_UPS[item.id] : null;
-            if (item.id === 'barrier' || item.id === 'repair') {
+            if (item.id === 'barrier' || item.id === 'aegis' || item.id === 'repair' || item.id === 'stim') {
                 kind = 'defense';
                 color = (pu && pu.color) || '#5cff7a';
-            } else if (item.id === 'speed_boost' || item.id === 'magnet') {
+            } else if (item.id === 'speed_boost' || item.id === 'turbo' || item.id === 'magnet'
+                || item.id === 'scrapper' || item.id === 'double_loot') {
                 kind = 'ability';
                 color = (pu && pu.color) || '#ff8a3a';
             } else {
@@ -130387,7 +135394,7 @@ var InStageShop = class InStageShop {
             inner = `<span class="hs-storage-cell-icon">${this.powerUpBadgeHtml(item.id, color, Math.max(16, Math.floor(box * 0.4)))}</span>`;
         }
         if (typeof physicalItem !== 'undefined' && physicalItem.wrap) {
-            return physicalItem.wrap(kind, physId, box, box, color, inner);
+            return physicalItem.wrap(kind, physId, boxW, boxH, color, inner);
         }
         return inner || this.iconHtml(item.icon || 'hsShop', Math.floor(box * 0.55), color);
     }
@@ -130466,7 +135473,10 @@ var InStageShop = class InStageShop {
         return (lines || []).map((line, i) => {
             const text = String(line || '');
             const cls = i === 0 ? ' is-tag' : (/\d+c$/.test(text.trim()) ? ' is-cost' : '');
-            return `<div class="vf-iss-detail-line${cls}">${text.replace(/</g, '&lt;')}</div>`;
+            const body = (typeof homeStationUI !== 'undefined' && homeStationUI.formatDetailStatLineHtml)
+                ? homeStationUI.formatDetailStatLineHtml(text)
+                : text.replace(/</g, '&lt;');
+            return `<div class="vf-iss-detail-line${cls}">${body}</div>`;
         }).join('');
     }
 
@@ -130738,7 +135748,7 @@ var InStageShop = class InStageShop {
                     ? economyConfig.getResourceLabel(id)
                     : String(id).toUpperCase());
             return `<span class="vf-iss-wallet-item${n <= 0 ? ' is-empty' : ''}">` +
-                `<span class="vf-iss-wallet-ico">${this.iconHtml(this.resourceIconKey(iconId || id), 28)}</span>` +
+                `<span class="vf-iss-wallet-ico">${this.iconHtml(this.resourceIconKey(iconId || id), 20)}</span>` +
                 `<span class="vf-iss-wallet-meta"><span>${label}</span><b>${n}</b></span>` +
                 `</span>`;
         };
@@ -130751,29 +135761,180 @@ var InStageShop = class InStageShop {
             `</div>`;
     }
 
-    /** Compact stash cells — room for the right-hand detail pane. */
-    SHOP_CELL_PX = 40;
+    /** Stash cells — fitted to the main column beside DETAIL (no vertical scroll). */
+    SHOP_CELL_PX = 48;
     SHOP_GAP_PX = 2;
-    /** Vendor stash footprint (empty pads give the Diablo bag feel). */
-    STOCK_COLS = 6;
-    STOCK_ROWS = 4;
+    SHOP_CELL_MIN_PX = 32;
+    SHOP_CELL_MAX_PX = 120;
+    /** Fallback vendor bag when planet context is missing. */
+    STOCK_COLS = 7;
+    STOCK_ROWS = 3;
+
+    /**
+     * Frozen vendor bag for this shop visit.
+     * Size is rolled on open from resident-faction standing + luck.
+     */
+    shopStockLayout() {
+        if (this._visitBag) return this._visitBag;
+        return this.rollVisitStockLayout();
+    }
+
+    /** S/M/L footprint for a stock listing (buffs stay 1×1). */
+    stockItemSpan(item) {
+        if (!item) return [1, 1];
+        if (item.kind === 'part' && item.partKind) {
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.shopPartSpan) {
+                return homeStationUI.shopPartSpan(item.partKind, item.id);
+            }
+        }
+        if (item.kind === 'weapon') {
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.shopPartSpan) {
+                return homeStationUI.shopPartSpan('weapon', item.id);
+            }
+        }
+        return [1, 1];
+    }
 
     slotLayout() {
-        if (typeof homeStationUI !== 'undefined' && homeStationUI._storageLayoutPx) {
-            const prev = homeStationUI.STORAGE_CELL_PX;
-            const prevGap = homeStationUI.STORAGE_GAP_PX;
-            homeStationUI.STORAGE_CELL_PX = this.SHOP_CELL_PX;
-            homeStationUI.STORAGE_GAP_PX = this.SHOP_GAP_PX;
-            let layout;
-            try {
-                layout = homeStationUI._storageLayoutPx();
-            } finally {
-                homeStationUI.STORAGE_CELL_PX = prev;
-                homeStationUI.STORAGE_GAP_PX = prevGap;
-            }
-            return layout;
+        // Fitted size is already measured at shop zoom 1 — do not re-snap via glass zoom.
+        if (this._fitCellPx) {
+            return {
+                cell: Math.max(this.SHOP_CELL_MIN_PX, Math.min(this.SHOP_CELL_MAX_PX, this._fitCellPx | 0)),
+                gap: this.SHOP_GAP_PX
+            };
         }
-        return { cell: this.SHOP_CELL_PX, gap: this.SHOP_GAP_PX };
+        let cell = this.SHOP_CELL_PX;
+        const host = document.getElementById('vf-in-stage-shop');
+        const hostW = (host && host.clientWidth) || 0;
+        const hostH = (host && host.clientHeight) || 0;
+        if (hostW > 0) {
+            // First paint guess: main column beside DETAIL (~1.6/2.5 of body).
+            const usableW = Math.max(320, Math.floor(hostW * 0.58));
+            const usableH = Math.max(240, Math.floor(hostH * 0.62));
+            const cols = Math.max(this.STOCK_COLS || 7, 8) * 2;
+            const rows = 3 + 3;
+            const gap = this.SHOP_GAP_PX;
+            const fromW = Math.floor((usableW - gap * (cols - 1) - 12) / cols);
+            const fromH = Math.floor((usableH - gap * (rows - 1) - 72) / rows);
+            cell = Math.max(
+                this.SHOP_CELL_MIN_PX,
+                Math.min(this.SHOP_CELL_MAX_PX, Math.min(fromW, fromH))
+            );
+        }
+        return { cell: cell, gap: this.SHOP_GAP_PX };
+    }
+
+    /** Apply one cell size to every shop bag grid (measure / final CSS). */
+    applyShopCellSize(host, cs) {
+        if (!host) return;
+        const gap = this.SHOP_GAP_PX;
+        host.querySelectorAll(
+            '.vf-iss-stock-grid, .vf-iss-inv-grid, .vf-iss-station-grid, .vf-iss-queued-grid, ' +
+            '.vf-iss-ship-inv .hs-storage-grid, .vf-iss-station-inv .hs-storage-grid'
+        ).forEach((g) => {
+            const cols = Math.max(1, parseInt(g.getAttribute('data-inv-cols'), 10) || 1);
+            const rows = Math.max(1, parseInt(g.getAttribute('data-inv-rows'), 10) || 1);
+            g.style.setProperty('--cs', cs + 'px');
+            g.style.setProperty('--hs-gap', gap + 'px');
+            g.style.gridTemplateColumns = `repeat(${cols}, ${cs}px)`;
+            g.style.gridTemplateRows = `repeat(${rows}, ${cs}px)`;
+            g.style.width = (cols * cs + (cols - 1) * gap) + 'px';
+            g.style.height = (rows * cs + (rows - 1) * gap) + 'px';
+        });
+        host.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv').forEach((bag) => {
+            bag.style.maxHeight = 'none';
+            bag.style.overflow = 'visible';
+        });
+    }
+
+    /**
+     * Largest cell that fills .vf-iss-main up to the DETAIL column without
+     * vertical (or horizontal) overflow/scroll.
+     */
+    measureFitCellPx(host) {
+        const main = host && host.querySelector('.vf-iss-main');
+        if (!main) return this.SHOP_CELL_PX;
+        const availW = main.clientWidth;
+        const availH = main.clientHeight;
+        if (availW < 80 || availH < 80) return this.SHOP_CELL_PX;
+
+        const bags = host.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv');
+        const prevBag = [];
+        bags.forEach((bag) => {
+            prevBag.push({
+                el: bag,
+                maxHeight: bag.style.maxHeight,
+                overflow: bag.style.overflow
+            });
+        });
+        const prevOverflow = main.style.overflow;
+        main.style.overflow = 'hidden';
+
+        let lo = this.SHOP_CELL_MIN_PX;
+        let hi = this.SHOP_CELL_MAX_PX;
+        let best = lo;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            this.applyShopCellSize(host, mid);
+            void main.offsetHeight;
+            const fits = main.scrollHeight <= availH + 2 && main.scrollWidth <= availW + 2
+                && ![...bags].some((bag) => bag.scrollHeight > bag.clientHeight + 2);
+            if (fits) {
+                best = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        this.applyShopCellSize(host, best);
+        main.style.overflow = prevOverflow;
+        prevBag.forEach((p) => {
+            p.el.style.maxHeight = p.maxHeight;
+            p.el.style.overflow = p.overflow;
+        });
+        return best;
+    }
+
+    /** Fit bags once after layout, then re-render so icons match the cell. */
+    fitBagsToSpace(host) {
+        if (!host || this._fittingLock) return;
+        const best = this.measureFitCellPx(host);
+        if (!best) return;
+        if (this._fitCellPx && Math.abs(this._fitCellPx - best) <= 1) {
+            this.applyShopCellSize(host, this._fitCellPx);
+            return;
+        }
+        this._fitCellPx = best;
+        this._fittingLock = true;
+        try {
+            this.renderDom();
+        } finally {
+            this._fittingLock = false;
+        }
+    }
+
+    bindShopResize(host) {
+        if (!host || typeof ResizeObserver === 'undefined') return;
+        if (this._shopRo) {
+            try { this._shopRo.disconnect(); } catch (e) { /* ignore */ }
+            this._shopRo = null;
+        }
+        let t = 0;
+        this._shopRo = new ResizeObserver(() => {
+            if (!this.isOpen || this._fittingLock) return;
+            clearTimeout(t);
+            t = setTimeout(() => {
+                if (!this.isOpen) return;
+                const el = document.getElementById('vf-in-stage-shop');
+                if (!el) return;
+                const next = this.measureFitCellPx(el);
+                if (!next || (this._fitCellPx && Math.abs(this._fitCellPx - next) <= 1)) return;
+                this._fitCellPx = next;
+                this._fittingLock = true;
+                try { this.renderDom(); } finally { this._fittingLock = false; }
+            }, 80);
+        });
+        this._shopRo.observe(host);
     }
 
     /** Run hangar storage renderers with shop cell size, then restore. */
@@ -130803,14 +135964,15 @@ var InStageShop = class InStageShop {
             `</div>`;
     }
 
-    /** Shared cell builder for perk / part vendor grids. */
-    stockCellHtml(item, cs) {
+    /** Shared cell builder for perk / part vendor grids. Returns { html, span }. */
+    stockCellHtml(item, cs, span) {
         const cost = Math.max(0, Math.round(Number(item.cost) || 0));
         item.cost = cost;
         const buyKey = this.stockBuyKey(item);
         const inCart = this.cartBuys.has(buyKey);
         const afford = inCart || this.canAffordCartItem(item);
         const isPart = item.kind === 'part';
+        const footprint = span || this.stockItemSpan(item);
         let accent = '#c08cff';
         if (isPart && item.partKind === 'weapon') {
             accent = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
@@ -130831,57 +135993,61 @@ var InStageShop = class InStageShop {
             : `<span class="vf-iss-stock-tag is-temp">TEMP</span>`;
         const cartBadge = inCart ? `<span class="vf-iss-cart-mark">CART</span>` : '';
         // Keep unaffordable cells clickable so the trader can flash "NOT ENOUGH CREDITS".
-        return `<button type="button" class="hs-storage-cell vf-iss-stock-cell${isPart ? ' is-part' : ' is-perk'}${afford ? '' : ' is-locked'}${inCart ? ' is-in-cart' : ''}" ` +
-            `data-shop-buy="${buyKey}" data-nav-item tabindex="-1" style="--pk-c:${accent}" ` +
+        const html = `<button type="button" class="hs-storage-cell vf-iss-stock-cell${isPart ? ' is-part' : ' is-perk'}${afford ? '' : ' is-locked'}${inCart ? ' is-in-cart' : ''}" ` +
+            `data-shop-buy="${buyKey}" data-nav-item tabindex="-1" style="__SPAN__--pk-c:${accent}" ` +
             `data-ui-tip-compact data-ui-tip-head="${head}" data-ui-tip="${tip}" ` +
             `aria-label="Add ${head} to cart for ${cost} credits">` +
-            this.stockVisualHtml(item, cs) +
+            this.stockVisualHtml(item, cs, footprint) +
             badge +
             cartBadge +
             `<span class="vf-iss-stock-cost">${cost}c</span>` +
             `</button>`;
-    }
-
-    /** Pad a cell list out to cols×rows empty slots. */
-    padStockCells(cells, cols, rows) {
-        const pad = Math.max(0, cols * rows - cells.length);
-        for (let i = 0; i < pad; i++) {
-            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
-        }
-        return cells;
+        return { html, span: footprint };
     }
 
     /** Temp perks / temp weapons for the next stage. */
     perkGridHtml() {
-        const items = this.flatPerks();
-        const cols = this.STOCK_COLS;
-        const rows = Math.max(2, Math.ceil(Math.max(items.length, 1) / cols));
+        const bag = this.shopStockLayout();
+        const cols = bag.cols;
         this._stockCols = cols;
         const layout = this.slotLayout();
         const cs = layout.cell;
         const gap = layout.gap;
-        const cells = this.padStockCells(items.map((item) => this.stockCellHtml(item, cs)), cols, rows);
-        return this.storageGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid', cells.join(''));
+        const specs = this.flatPerks().map((item) => this.stockCellHtml(item, cs));
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.packShopStockGrid) {
+            return homeStationUI.packShopStockGrid(specs, cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid');
+        }
+        return this.storageGridShell(cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid',
+            specs.map((s) => s.html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;')).join(''));
     }
 
     /** Permanent parts that go into ship/station storage. */
     partsGridHtml() {
-        const items = this.flatParts();
-        const cols = this.STOCK_COLS;
-        const rows = Math.max(2, Math.ceil(Math.max(items.length, 1) / cols));
+        const bag = this.shopStockLayout();
+        const cols = bag.cols;
         const layout = this.slotLayout();
         const cs = layout.cell;
         const gap = layout.gap;
-        const cells = this.padStockCells(items.map((item) => this.stockCellHtml(item, cs)), cols, rows);
-        return this.storageGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid', cells.join(''));
+        const specs = this.flatParts().map((item) => this.stockCellHtml(item, cs));
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.packShopStockGrid) {
+            return homeStationUI.packShopStockGrid(specs, cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid');
+        }
+        return this.storageGridShell(cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid',
+            specs.map((s) => s.html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;')).join(''));
     }
 
-    /** Both vendor grids under STOCK. */
+    /** Both vendor grids under STOCK — side by side, wrap when too wide. */
     stockGridsHtml() {
-        return `<h3 class="vf-iss-col-title vf-iss-sub-title">PERKS · NEXT STAGE</h3>` +
+        return `<div class="vf-iss-stock-row">` +
+            `<div class="vf-iss-stock-bay">` +
+            `<h3 class="vf-iss-col-title vf-iss-sub-title">PERKS · NEXT STAGE</h3>` +
             this.perkGridHtml() +
+            `</div>` +
+            `<div class="vf-iss-stock-bay">` +
             `<h3 class="vf-iss-col-title vf-iss-sub-title">PARTS · PERMANENT</h3>` +
-            this.partsGridHtml();
+            this.partsGridHtml() +
+            `</div>` +
+            `</div>`;
     }
 
     /** Ship cargo bay at shop slot size. */
@@ -130891,11 +136057,13 @@ var InStageShop = class InStageShop {
         if (!profile || !shipId || typeof homeStationUI === 'undefined' || !homeStationUI.renderShipStorage) {
             return this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
         }
+        const bagCols = this.shopStockLayout().cols;
         const { html } = this.withShopSlotSize(() => homeStationUI.renderShipStorage(profile, shipId, {
             tipAction: false,
             extraGridClass: 'vf-iss-inv-grid',
-            // Shop: one tile per part — hangar footprints make the trader bag look messy.
-            compactSpans: true
+            // Real S/M/L footprints — bag width follows this shop's offer size.
+            compactSpans: false,
+            maxCols: bagCols
         }));
         return html || this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
     }
@@ -130906,10 +136074,11 @@ var InStageShop = class InStageShop {
         if (!profile || typeof homeStationUI === 'undefined' || !homeStationUI.renderStationStorage) {
             return this.emptyBagHtml('STATION EMPTY');
         }
+        const bagCols = this.shopStockLayout().cols;
         const { html } = this.withShopSlotSize(() => homeStationUI.renderStationStorage(profile, {
             tipAction: false,
-            compactSpans: true,
-            maxCols: this.STOCK_COLS
+            compactSpans: false,
+            maxCols: bagCols
         }));
         if (!html) return this.emptyBagHtml('STATION EMPTY');
         // Tag for shop CSS (renderStationStorage has no extraGridClass hook).
@@ -130921,7 +136090,7 @@ var InStageShop = class InStageShop {
 
     emptyBagHtml(label) {
         const layout = this.slotLayout();
-        const cols = 6;
+        const cols = this.shopStockLayout().cols;
         const rows = 2;
         const cells = [];
         for (let i = 0; i < cols * rows; i++) {
@@ -131000,6 +136169,17 @@ var InStageShop = class InStageShop {
     }
 
     /** Paint shop chrome in the trader's faction colours (not the player's HUD theme). */
+    /** Keep the shop panel filling the glass host (1:1 CSS, no shrink zoom). */
+    fitPanelToHost(host) {
+        if (!host) return;
+        const panel = host.querySelector('.vf-iss-panel');
+        if (!panel) return;
+        panel.style.width = '100%';
+        panel.style.height = '100%';
+        panel.style.zoom = '';
+        panel.style.transform = '';
+    }
+
     applyTraderTheme(root, factionId) {
         if (!root) return;
         const id = String(factionId || 'terran').toLowerCase();
@@ -131086,6 +136266,8 @@ var InStageShop = class InStageShop {
         const ctx = this.planetContext();
         this.applyTraderTheme(el, ctx.faction);
         const factionLabel = String(ctx.faction || 'local').toUpperCase();
+        const rel = (this._visitBag && this._visitBag.relation) || this.planetFactionRelation();
+        const standLabel = String((rel && rel.label) || 'NEUTRAL').toUpperCase();
         const pendingNote = (this.pendingBuffs.length || this.pendingWeapons.length)
             ? `<div class="vf-iss-note">QUEUED FOR NEXT STAGE</div>`
             : '';
@@ -131097,7 +136279,7 @@ var InStageShop = class InStageShop {
             `<div class="vf-iss-portrait">${this.portraitHtml(ctx)}</div>` +
             `<div class="vf-iss-trader-meta">` +
             `<div class="vf-iss-trader-title">${ctx.name} LOCAL</div>` +
-            `<div class="vf-iss-trader-sub">${factionLabel} · PLANET TRADER</div>` +
+            `<div class="vf-iss-trader-sub">${factionLabel} · ${standLabel} · PLANET TRADER</div>` +
             `<div class="vf-iss-trader-cash">${this.getCredits()}c ON HAND</div>` +
             `</div></div>` +
             `<button type="button" class="vf-iss-close" data-shop-close data-nav-item tabindex="-1">CLOSE [E / B]</button>` +
@@ -131120,6 +136302,7 @@ var InStageShop = class InStageShop {
             `</footer></div>`;
         // Theme lives on the root; re-apply after innerHTML so dataset/vars stay.
         this.applyTraderTheme(el, ctx.faction);
+        this.fitPanelToHost(el);
         if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) {
             voxelPortrait.scan(el);
         }
@@ -131135,6 +136318,13 @@ var InStageShop = class InStageShop {
             this.showDetail(this.detailFromStockItem(
                 this.resolveBuyKey(focused.getAttribute('data-shop-buy'))
             ));
+        }
+        this.bindShopResize(el);
+        // Grow bags to fill main (beside DETAIL) without scrolling; re-renders once.
+        if (!this._fittingLock) {
+            requestAnimationFrame(() => {
+                if (this.isOpen) this.fitBagsToSpace(document.getElementById('vf-in-stage-shop'));
+            });
         }
         this.startFaceLoop();
     }
@@ -131776,7 +136966,8 @@ extendClass(ProfileManager, {
             return {
                 damageMul: 1 + ramp(trackLevel('dmg'), 0.05, 0.02),
                 cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('rof'), 0.04, 0.015)),
-                rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015)
+                rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015),
+                reflectiveShots: trackLevel('reflect') > 0
             };
         }
         if (bucket === 'defenses') {
@@ -132054,7 +137245,8 @@ extendClass(HomeStationUI, {
  */
 (function () {
     const PAD = 6;
-    const HIDE_MS = 280;
+    /** Class cleanup only — visual hide is instant via removing is-on. */
+    const HIDE_MS = 0;
     const LERP = 0.28;
     const SNAP = 0.6;
 
@@ -132106,16 +137298,16 @@ extendClass(HomeStationUI, {
     GamepadCursor.prototype.markGamepad = function () {
         this.active = true;
         if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = 0; }
-        const focused = document.querySelector('.nav-focused')
-            || (document.activeElement && document.activeElement !== document.body
-                ? document.activeElement : null);
+        const el = this.ensure();
+        el.classList.remove('is-out');
+        const focused = this._resolveTarget();
         if (focused) this.follow(focused);
-        else this._showIdle();
+        // No target yet: stay armed, but do not paint a floating ghost frame.
         this._kick();
     };
 
     GamepadCursor.prototype.markPointer = function () {
-        if (!this.active) return;
+        if (!this.active && !(this.el && this.el.classList.contains('is-on'))) return;
         this.active = false;
         this.target = null;
         this._fadeOut();
@@ -132125,28 +137317,30 @@ extendClass(HomeStationUI, {
         if (!el || !el.getBoundingClientRect) return;
         if (!this.active) return;
         this.target = el;
-        this.ensure().classList.add('is-on', 'is-jump');
+        if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = 0; }
+        const node = this.ensure();
+        node.classList.remove('is-out');
+        node.classList.add('is-on', 'is-jump');
         this._kick();
-    };
-
-    GamepadCursor.prototype._showIdle = function () {
-        const el = this.ensure();
-        el.classList.add('is-on');
-        el.classList.remove('is-jump');
     };
 
     GamepadCursor.prototype._fadeOut = function () {
         const el = this.el;
         if (!el) return;
-        el.classList.remove('is-jump');
+        // Drop is-on immediately so :not(.is-on) rules kill the frame this frame
+        // (no opacity linger — previous HIDE_MS/CSS fade felt a beat too late).
+        el.classList.remove('is-jump', 'is-on');
         el.classList.add('is-out');
+        el.style.width = '0px';
+        el.style.height = '0px';
+        this.hasPos = false;
+        this.target = null;
         const self = this;
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.hideTimer = setTimeout(function () {
             self.hideTimer = 0;
             if (self.active) return;
             el.classList.remove('is-on', 'is-out');
-            self.hasPos = false;
         }, HIDE_MS);
     };
 
@@ -132161,18 +137355,31 @@ extendClass(HomeStationUI, {
         });
     };
 
+    /** Menu screens that use .selected instead of (or as well as) .nav-focused. */
+    GamepadCursor.prototype._selectedFallback = function () {
+        return document.querySelector(
+            '#victoryOverlay .victory-button.selected, ' +
+            '#gameOver .victory-button.selected, ' +
+            '#gameOver .game-over-button.selected, ' +
+            '#pauseOverlay .pause-button.selected'
+        );
+    };
+
     GamepadCursor.prototype._resolveTarget = function () {
         if (this.target && document.body.contains(this.target)
-            && this.target.classList.contains('nav-focused')) {
+            && (this.target.classList.contains('nav-focused')
+                || this.target.classList.contains('selected'))) {
             return this.target;
         }
-        const focused = document.querySelector('.nav-focused');
+        const focused = document.querySelector('.nav-focused') || this._selectedFallback();
         if (focused) {
             this.target = focused;
             return focused;
         }
         const ae = document.activeElement;
-        if (ae && ae !== document.body && ae.getBoundingClientRect) {
+        if (ae && ae !== document.body && ae.getBoundingClientRect
+            && typeof ae.matches === 'function'
+            && ae.matches('button, [data-nav-item], [role="button"], a[href], input, select, textarea')) {
             this.target = ae;
             return ae;
         }
@@ -132181,11 +137388,35 @@ extendClass(HomeStationUI, {
 
     GamepadCursor.prototype._paint = function () {
         const el = this.ensure();
-        if (this.el.classList.contains('is-out') && !this.active) return;
+        if (el.classList.contains('is-out') && !this.active) return;
         const target = this._resolveTarget();
-        if (!target) return;
+        if (!target) {
+            // Target gone (screen swap / rebuild): clear the frame now, but stay
+            // armed — markGamepad may run before the key handler sets nav-focused.
+            if (this.hasPos || el.classList.contains('is-on')) {
+                el.classList.remove('is-jump', 'is-on');
+                el.classList.add('is-out');
+                el.style.width = '0px';
+                el.style.height = '0px';
+                this.hasPos = false;
+                this.target = null;
+            }
+            return;
+        }
         const r = target.getBoundingClientRect();
-        if (r.width <= 0 && r.height <= 0) return;
+        if (r.width <= 0 && r.height <= 0) {
+            if (this.hasPos || el.classList.contains('is-on')) {
+                el.classList.remove('is-jump', 'is-on');
+                el.classList.add('is-out');
+                el.style.width = '0px';
+                el.style.height = '0px';
+                this.hasPos = false;
+                this.target = null;
+            }
+            return;
+        }
+        el.classList.remove('is-out');
+        el.classList.add('is-on');
         const tx = r.left - PAD;
         const ty = r.top - PAD;
         const tw = r.width + PAD * 2;

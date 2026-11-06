@@ -310,6 +310,24 @@ extendClass(ProfileManager, {
     },
 
     /**
+     * Vendor bag footprint for a post — richer posts open wider/taller stashes
+     * so multi-slot parts have room. Seeded so two MODEST posts still differ.
+     * Returns { cols, rows, minRows }.
+     */
+    getTradingPostStockGrid(post) {
+        const eco = this.getTradingPostEconomy(post);
+        const h = this.tradingPostHash((post && post.id) + '|grid');
+        const jitter = h % 2;
+        if (eco.wealth === 'RICH') {
+            return { cols: 8 + jitter, rows: 5, minRows: 4 };
+        }
+        if (eco.wealth === 'PROSPEROUS') {
+            return { cols: 6 + jitter, rows: 4, minRows: 3 };
+        }
+        return { cols: 4 + jitter, rows: 3, minRows: 2 };
+    },
+
+    /**
      * Economic profile of a post for the map card:
      * { stockValue, wealth, sells: { weapon: n, ... }, seeks: [resourceId] }.
      * Wealth is graded on the credit value of the stock; each post seeks two

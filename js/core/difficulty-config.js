@@ -64,6 +64,82 @@ class DifficultyConfigManager {
             pirate:  { fan: 'spread',     aimed: 'burst',       sweep: 'rapid',  primary: 'spread' },
             machine: { fan: 'missile',    aimed: 'pierce',      sweep: 'ion',    primary: 'missile' }
         };
+        /**
+         * Boss combat doctrine per faction — movement, attack rotation, phase pressure.
+         * patterns cycle in order; specials are named attacks handled in boss.js.
+         */
+        this.bossBehaviorKits = {
+            terran: {
+                style: 'patrol',
+                label: 'LINE VOLLEY',
+                patterns: ['aimed', 'fan', 'aimed', 'sweep', 'barrage'],
+                intervalMul: 1.08,
+                speedMul: 0.92,
+                verticalMul: 0.55,
+                trackPlayer: 0.15,
+                evasionMul: 0.7,
+                escortMul: 1,
+                phaseSpeedMul: 1.2,
+                sweepArc: 0.7,
+                sweepStepMul: 1.1
+            },
+            pirate: {
+                style: 'erratic',
+                label: 'SCRAP STORM',
+                patterns: ['fan', 'scatter', 'sweep', 'aimed', 'fan'],
+                intervalMul: 0.82,
+                speedMul: 1.2,
+                verticalMul: 1.35,
+                trackPlayer: 0.05,
+                evasionMul: 1.15,
+                escortMul: 1.25,
+                phaseSpeedMul: 1.45,
+                sweepArc: 1,
+                sweepStepMul: 0.85
+            },
+            kronax: {
+                style: 'hunter',
+                label: 'CLAW RUSH',
+                patterns: ['aimed', 'dive', 'fan', 'aimed', 'sweep'],
+                intervalMul: 0.9,
+                speedMul: 1.35,
+                verticalMul: 1.2,
+                trackPlayer: 0.55,
+                evasionMul: 0.85,
+                escortMul: 0.5,
+                phaseSpeedMul: 1.6,
+                sweepArc: 0.55,
+                sweepStepMul: 0.95
+            },
+            machine: {
+                style: 'grid',
+                label: 'FORGE GRID',
+                patterns: ['salvo', 'aimed', 'fan', 'sweep', 'salvo'],
+                intervalMul: 1.18,
+                speedMul: 0.78,
+                verticalMul: 0.45,
+                trackPlayer: 0.1,
+                evasionMul: 0.55,
+                escortMul: 1.75,
+                phaseSpeedMul: 1.1,
+                sweepArc: 0.85,
+                sweepStepMul: 1.25
+            },
+            voidborn: {
+                style: 'blink',
+                label: 'VOID RIFT',
+                patterns: ['ring', 'fan', 'blink', 'aimed', 'sweep'],
+                intervalMul: 1,
+                speedMul: 1.05,
+                verticalMul: 1.1,
+                trackPlayer: 0.25,
+                evasionMul: 1.4,
+                escortMul: 0.85,
+                phaseSpeedMul: 1.35,
+                sweepArc: 0.95,
+                sweepStepMul: 1
+            }
+        };
         this.defaults = JSON.parse(JSON.stringify(this.profiles));
         this.current = 'normal';
         this.load();
@@ -176,6 +252,11 @@ class DifficultyConfigManager {
     getBossWeaponKit(factionId) {
         const id = String(factionId || 'pirate').toLowerCase();
         return this.bossWeaponKits[id] || this.bossWeaponKits.pirate;
+    }
+
+    getBossBehaviorKit(factionId) {
+        const id = String(factionId || 'pirate').toLowerCase();
+        return this.bossBehaviorKits[id] || this.bossBehaviorKits.pirate;
     }
 }
 

@@ -5,14 +5,30 @@ class SettingsManager {
     constructor(gameState) {
         this.gameState = gameState;
         this.settings = {
-            soundEnabled: true,
-            musicEnabled: true,
+            soundEnabled: this.getCachedMuteState('vf_soundEnabled'),
+            musicEnabled: this.getCachedMuteState('vf_musicEnabled'),
             difficulty: (typeof difficultyConfigManager !== 'undefined')
                 ? difficultyConfigManager.current : 'normal',
             colorPalette: this.getCachedAppTheme()
         };
-        
+
+        if (typeof soundManager !== 'undefined') {
+            if (soundManager.setSoundEnabled) soundManager.setSoundEnabled(this.settings.soundEnabled);
+            if (soundManager.setMusicEnabled) soundManager.setMusicEnabled(this.settings.musicEnabled);
+        }
+
         this.initializeColorTheme();
+    }
+
+    getCachedMuteState(key) {
+        try {
+            const saved = localStorage.getItem(key);
+            if (saved === '0') return false;
+            if (saved === '1') return true;
+        } catch (e) {
+            // localStorage unavailable
+        }
+        return true;
     }
 
     getCachedAppTheme() {
@@ -81,18 +97,28 @@ class SettingsManager {
     toggleSound() {
         this.settings.soundEnabled = !this.settings.soundEnabled;
         this.updateSettingsDisplay();
-        
+
         if (typeof soundManager !== 'undefined') {
             soundManager.setSoundEnabled(this.settings.soundEnabled);
         }
+        this.saveMuteState('vf_soundEnabled', this.settings.soundEnabled);
     }
 
     toggleMusic() {
         this.settings.musicEnabled = !this.settings.musicEnabled;
         this.updateSettingsDisplay();
-        
+
         if (typeof soundManager !== 'undefined') {
             soundManager.setMusicEnabled(this.settings.musicEnabled);
+        }
+        this.saveMuteState('vf_musicEnabled', this.settings.musicEnabled);
+    }
+
+    saveMuteState(key, enabled) {
+        try {
+            localStorage.setItem(key, enabled ? '1' : '0');
+        } catch (e) {
+            // localStorage unavailable
         }
     }
 

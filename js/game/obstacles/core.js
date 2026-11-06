@@ -264,10 +264,12 @@ class ObstacleManager {
             // the top in airy layers spaced by scrolled distance.
             this.updateScrollLayers(deltaTime, gameState);
         } else if (gameState.obstacleSpawnTimer >= gameState.obstacleSpawnInterval) {
+            const level = this.getCurrentLevel();
+            const bossArena = !!(level && level.isBoss);
             if (this.hasDefs()) {
-                // Mostly shaped pattern waves; the authored cluster waves stay
-                // in the mix so planet-specific groupings still show up.
-                if (Math.random() < 0.8) {
+                // Boss arenas: pattern waves only (clusters dump whole groups
+                // and pack a static field). Scroll stages keep the mix.
+                if (bossArena || Math.random() < 0.8) {
                     this.spawnPatternWave(gameState);
                 } else {
                     this.spawnClusterWave(gameState);
@@ -279,7 +281,10 @@ class ObstacleManager {
             }
             // Jitter the next wave so the rhythm isn't a metronome; the
             // pause shortens as the run's intensity ramps up.
-            const pace = 1.1 - this.patternIntensity() * 0.35;
+            // Boss: keep a longer breather between waves in the static arena.
+            const pace = bossArena
+                ? 1.35 - this.patternIntensity() * 0.15
+                : 1.1 - this.patternIntensity() * 0.35;
             gameState.obstacleSpawnTimer = -gameState.obstacleSpawnInterval * (pace * (0.8 + Math.random() * 0.5) - 1);
         }
 
@@ -380,6 +385,9 @@ class ObstacleManager {
 
     spawnClusterWave(gameState = null) {
         if (!this.hasDefs()) return;
+        const alive = this.obstacles.filter((o) => !o.isFog).length;
+        const maxAlive = this.obstacleMaxAlive ? this.obstacleMaxAlive() : 48;
+        if (alive >= maxAlive) return;
         const clusters = {};
         this.obstacleDefs.forEach((d) => {
             const c = d.cluster || 'alpha';
@@ -395,8 +403,9 @@ class ObstacleManager {
         const direction = lead.direction || 'ltr';
         const speeds = this.directionToSpeed(direction, lead.speed != null ? lead.speed : 0.8);
         const baseOrigin = this.spawnOriginForDirection(direction, lead.width, lead.height, gameState);
+        const budget = Math.max(0, maxAlive - alive);
 
-        members.forEach((def, i) => {
+        members.slice(0, budget).forEach((def, i) => {
             const col = i % 3;
             const row = Math.floor(i / 3);
             const ox = col * ((def.width || 18) * 0.95);

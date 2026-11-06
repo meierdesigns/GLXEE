@@ -46,6 +46,7 @@
         }, true);
         plate.addEventListener('click', onFxClick);
         plate.addEventListener('input', onFxInput);
+        plate.addEventListener('change', onFxChange);
         return plate;
     }
     /** Live performance snapshot for PERF / DEBUG tabs and console. */
@@ -394,6 +395,24 @@
     document.addEventListener('change', function (e) {
         if (e.target.classList && e.target.classList.contains('vf-fx-zoom-in')) applyFxGeom();
     });
+    function onFxChange(e) {
+        const sel = e.target;
+        if (!sel || !sel.classList) return;
+        if (sel.dataset && sel.dataset.auStyle === '1') {
+            if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setMusicTheme) {
+                volumeControlsManager.setMusicTheme(parseInt(sel.value, 10));
+            }
+            fillFxPlate();
+            return;
+        }
+        if (sel.classList.contains('vf-fx-voice') && sel.dataset.voiceCh != null) {
+            const ch = Number(sel.dataset.voiceCh);
+            if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
+                volumeControlsManager.setChannelVoice(ch, sel.value || 'default');
+            }
+            return;
+        }
+    }
     function onFxInput(e) {
         const inp = e.target;
         if (inp.classList && inp.classList.contains('vf-fx-zoom-in')) {
@@ -445,6 +464,19 @@
             applyFrameStyle();
             return;
         }
+        if (inp.dataset.voiceCh != null && inp.classList && inp.classList.contains('vf-fx-voice')) {
+            const ch = Number(inp.dataset.voiceCh);
+            const ids = String(inp.dataset.voiceIds || '').split('|');
+            const labels = String(inp.dataset.voiceLabels || '').split('|');
+            const i = Math.max(0, Math.min(ids.length - 1, Number(inp.value) || 0));
+            inp.style.setProperty('--look-fill', (i / Math.max(1, ids.length - 1) * 100) + '%');
+            const nameOut = inp.nextElementSibling;
+            if (nameOut) nameOut.textContent = labels[i] || ids[i] || 'DEFAULT';
+            if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
+                volumeControlsManager.setChannelVoice(ch, ids[i] || 'default');
+            }
+            return;
+        }
         if (inp.dataset.ix) {
             const opts = inp.dataset.opts.split('|');
             const v = opts[+inp.value];
@@ -470,7 +502,9 @@
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
         inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
-        inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
+        if (!(parts[0] === 'au' && parts[1] === 'jungle')) {
+            inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
+        }
         if (parts[0] === 'fx') ui.setFx(parts[1], v + '%');
         else if (parts[0] === 'sz') {
             ui.setSizePx(parts[1], parts[2], v);
@@ -491,8 +525,31 @@
             applyFrameStyle();
         }
         else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
-            if (parts[1] === 'speed' && volumeControlsManager.setMusicSpeed) {
-                volumeControlsManager.setMusicSpeed(Math.max(0.5, Math.min(4, v)));
+            if ((parts[1] === 'bpm' || parts[1] === 'speed') && volumeControlsManager.setMusicBpm) {
+                // au:bpm is absolute; legacy au:speed was a × multiplier.
+                if (parts[1] === 'speed' && v <= 4) {
+                    volumeControlsManager.setMusicBpm(Math.round(v * (volumeControlsManager.referenceBpm || 132)));
+                } else {
+                    volumeControlsManager.setMusicBpm(Math.max(60, Math.min(600, v)));
+                }
+            } else if (parts[1] === 'jungle' && volumeControlsManager.setJungleAmount) {
+                volumeControlsManager.setJungleAmount(Math.max(0, Math.min(100, v)) / 100);
+                const out = inp.nextElementSibling;
+                if (out) out.textContent = v === 0 ? 'OFF' : v + '%';
+            } else if (parts[1] === 'theme' && volumeControlsManager.setMusicTheme) {
+                // Legacy THEME slider (pre-dropdown) — keep wiring alive.
+                volumeControlsManager.setMusicTheme(v);
+            } else if (parts[1] === 'xfade') {
+                const sec = Math.max(0.2, Math.min(3, v));
+                if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = sec;
+                if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = sec;
+                try { localStorage.setItem('vf_musicCrossfade', String(sec)); } catch (err) { /* ignore */ }
+            } else if (parts[1] === 'bass' || parts[1] === 'lead' || parts[1] === 'arp' || parts[1] === 'drums') {
+                // Legacy volume mix sliders (kept for older plate HTML).
+                const chMap = { bass: 0, lead: 1, arp: 2, drums: 3 };
+                const ch = chMap[parts[1]];
+                const mul = Math.max(0, Math.min(2, v / 100));
+                if (volumeControlsManager.setChannelVolume) volumeControlsManager.setChannelVolume(ch, mul);
             } else {
                 const pct = Math.max(0, Math.min(100, v)) / 100;
                 if (parts[1] === 'master') volumeControlsManager.setMasterVolume(pct);

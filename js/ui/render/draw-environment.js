@@ -6,6 +6,9 @@
 // faction structures. Environment comes from obstacleManager.getEnvironment().
 // Fog cells thinner than this stay open (higher = sparser fog).
 const FOG_MIN_DENSITY = 0.3;
+// Fog animation quantised to this step (seconds) so corridor stages don't
+// re-noise every cloud every frame.
+const FOG_ANIM_STEP = 0.12;
 // Ground scroll speed relative to the walls (parallax depth).
 const GROUND_PARALLAX = 0.5;
 

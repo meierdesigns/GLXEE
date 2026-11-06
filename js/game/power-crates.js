@@ -8,13 +8,26 @@ const CRATE_SIZE = 12;
 const POWER_SHOT_MS = 12000;
 const POWER_SHOT_DAMAGE = 1.6;
 const POWER_SHOT_SIZE = 1.3;
+const OVERCHARGE_DAMAGE = 2.0;
+const OVERCHARGE_SIZE = 1.15;
+const FOCUS_DAMAGE = 1.35;
+const FOCUS_SIZE = 1.55;
 const RAPID_FIRE_MUL = 0.6;      // cooldown × (fires ~1.7× as fast)
+const SPRAY_MUL = 0.48;          // cooldown × (fires ~2.1× as fast)
 const BARRIER_DAMAGE_MUL = 0.5;  // damage taken ×
+const AEGIS_DAMAGE_MUL = 0.7;    // damage taken ×
 const SPEED_BOOST_MUL = 1.45;    // move speed ×
+const TURBO_MUL = 1.25;          // move speed ×
+const FREEZE_SLOW_MUL = 0.4;     // freeze trap: crawl, do not lock
 const MAGNET_RADIUS_MUL = 1.8;   // collect radius ×
 const MAGNET_BONUS = 3;          // extra magnet strength
+const SCRAPPER_RADIUS_MUL = 1.35;
+const SCRAPPER_MAGNET_BONUS = 2;
 const DOUBLE_LOOT_MUL = 2;       // resource yield ×
+const SCRAPPER_LOOT_MUL = 1.5;
 const REPAIR_PER_SEC = 0.04;     // share of max hull healed per second
+const STIM_PER_SEC = 0.025;
+const STIM_BURST = 0.2;          // share of max hull healed on pickup
 
 /**
  * Temporary power-ups a crate can drop. Each has its own colour, silhouette
@@ -27,18 +40,26 @@ const POWER_UPS = {
     speed_boost: { label: 'AFTERBURNER', ms: 9000,  color: '#ff8a3a', light: '#ffd8b8', shape: 'triangle', glyph: 'chevrons' },
     magnet:      { label: 'MAGNET',      ms: 12000, color: '#ff5ce0', light: '#ffd0f6', shape: 'square', glyph: 'magnet' },
     double_loot: { label: 'DOUBLE LOOT', ms: 15000, color: '#c49a4a', light: '#f0dca8', shape: 'hex', glyph: 'dots' },
-    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'dots' }
+    repair:      { label: 'REPAIR',      ms: 8000,  color: '#ff4a6a', light: '#ffc8d2', shape: 'circle', glyph: 'dots' },
+    overcharge:  { label: 'OVERCHARGE',  ms: 9000,  color: '#ff3a3a', light: '#ffb0b0', shape: 'diamond', glyph: 'cross' },
+    focus:       { label: 'FOCUS BEAM',  ms: 10000, color: '#a78bfa', light: '#e4d4ff', shape: 'triangle', glyph: 'arrow' },
+    spray:       { label: 'SPRAY FIRE',  ms: 9000,  color: '#5ad0ff', light: '#d0f4ff', shape: 'hex', glyph: 'chevrons' },
+    aegis:       { label: 'AEGIS',       ms: 11000, color: '#7ec8ff', light: '#d8ecff', shape: 'circle', glyph: 'cross' },
+    turbo:       { label: 'TURBO',       ms: 8000,  color: '#ffb347', light: '#ffe0b0', shape: 'triangle', glyph: 'chevrons' },
+    scrapper:    { label: 'SCRAPPER',    ms: 14000, color: '#d4a574', light: '#f0e0c8', shape: 'square', glyph: 'magnet' },
+    stim:        { label: 'STIM PACK',   ms: 7000,  color: '#ff6b9d', light: '#ffd0e0', shape: 'circle', glyph: 'dots' }
 };
 const POWER_UP_IDS = Object.keys(POWER_UPS);
 
 /**
  * Fake crates / perks. Look like the real thing except for a flickering red
- * warning pixel. BOMB blasts nearby hull, FREEZE locks the ship briefly.
+ * warning pixel. BOMB blasts on contact (shooting the crate disarms it).
+ * FREEZE only slows the ship — guns stay free.
  */
 const FAKE_CRATE_CHANCE = 0.25;  // share of drifting supply crates that are fake
 const TRAP_BLAST_RADIUS = 36;
 const TRAP_BLAST_DAMAGE = 0.2;   // share of max hull at the centre
-const TRAP_FREEZE_MS = 1600;
+const TRAP_FREEZE_MS = 2200;
 const TRAP_IDS = ['bomb', 'freeze'];
 const TRAP_WARN = '#ff2a2a';
 
@@ -106,6 +127,19 @@ extendClass(ObstacleManager, {
             entering: !placed,
             age: 0
         });
+    },
+
+    /**
+     * Shooting a crate disarms BOMB traps — opened crates never explode.
+     * Touching an untouched bomb crate still blasts via spawnPowerUp.
+     */
+    disarmCrateBomb(o) {
+        if (!o || !o.isCrate || o.trap !== 'bomb') return false;
+        o.trap = null;
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('BOMB DISARMED');
+        }
+        return true;
     },
 
     /** Pixel-art supply crate (baked once). */
@@ -179,7 +213,8 @@ extendClass(ObstacleManager, {
 extendClass(PickupManager, {
     /**
      * Crate broke open: drop a random power-up at its centre. A BOMB crate
-     * blows up instead; a FREEZE crate drops a disguised freeze perk.
+     * (untouched — usually from ramming) blows up instead; FREEZE drops a
+     * disguised chill perk.
      */
     spawnPowerUp(o) {
         if (o && o.trap === 'bomb') {
@@ -228,6 +263,7 @@ extendClass(PickupManager, {
         // Stacking extends the timer (capped at twice the base duration).
         this.powerUntil[id] = Math.min(now + def.ms * 2, cur + def.ms);
         if (id === 'power_shot') this.powerShotUntil = this.powerUntil[id];
+        if (id === 'stim') this.applyStimBurst();
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
             levelInfoManager.showLootNotice(def.label + ' ' + Math.round((this.powerUntil[id] - now) / 1000) + 's');
         }
@@ -241,6 +277,17 @@ extendClass(PickupManager, {
         return true;
     },
 
+    /** STIM PACK: instant hull burst on pickup. */
+    applyStimBurst() {
+        if (typeof playerManager === 'undefined') return;
+        const maxHp = playerManager.getMaxHealth ? playerManager.getMaxHealth()
+            : (playerManager.maxHealth || 100);
+        const cur = playerManager.health != null ? playerManager.health
+            : (playerManager.getHealth ? playerManager.getHealth() : 0);
+        if (!(maxHp > 0) || !(cur > 0)) return;
+        playerManager.health = Math.min(maxHp, cur + maxHp * STIM_BURST);
+    },
+
     /** Fake perk picked up: spring its trap on the player. */
     triggerTrap(p) {
         if (p.trap === 'bomb') {
@@ -250,7 +297,7 @@ extendClass(PickupManager, {
         if (!this.powerUntil) this.powerUntil = {};
         this.powerUntil.freeze = Date.now() + TRAP_FREEZE_MS;
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-            levelInfoManager.showLootNotice('FAKE! FROZEN');
+            levelInfoManager.showLootNotice('FAKE! CHILLED');
         }
         if (typeof graphicsManager !== 'undefined' && graphicsManager.createHitEffect) {
             graphicsManager.createHitEffect(p.x, p.y, 8, '#9fdcff');
@@ -290,26 +337,38 @@ extendClass(PickupManager, {
         return { left, total: id === 'freeze' ? TRAP_FREEZE_MS : POWER_UPS[id].ms };
     },
 
-    /** FREEZE trap: ship can neither move nor fire. */
+    /** FREEZE trap: ship is chilled (slow), not locked. */
     isFrozen() {
         return !!this.getPowerUp('freeze');
     },
 
-    /** Move speed multiplier (AFTERBURNER). */
+    /** Move speed multiplier (AFTERBURNER / TURBO / FREEZE chill). */
     getMoveSpeedMul() {
-        return this.getPowerUp('speed_boost') ? SPEED_BOOST_MUL : 1;
+        let mul = 1;
+        if (this.getPowerUp('speed_boost')) mul *= SPEED_BOOST_MUL;
+        if (this.getPowerUp('turbo')) mul *= TURBO_MUL;
+        if (this.getPowerUp('freeze')) mul *= FREEZE_SLOW_MUL;
+        return mul;
     },
 
-    /** Hull healed per second (REPAIR). */
+    /** Hull healed per second (REPAIR / STIM). */
     getRepairPerSec(maxHealth) {
-        return this.getPowerUp('repair') ? (Number(maxHealth) || 0) * REPAIR_PER_SEC : 0;
+        let rate = 0;
+        if (this.getPowerUp('repair')) rate += REPAIR_PER_SEC;
+        if (this.getPowerUp('stim')) rate += STIM_PER_SEC;
+        return (Number(maxHealth) || 0) * rate;
     },
 
-    /** Applies MAGNET / DOUBLE LOOT to collect stats in place. */
+    /** Applies MAGNET / SCRAPPER / DOUBLE LOOT to collect stats in place. */
     applyCollectPerks(stats) {
         if (this.getPowerUp('magnet')) {
             stats.radius *= MAGNET_RADIUS_MUL;
             stats.magnet += MAGNET_BONUS;
+        }
+        if (this.getPowerUp('scrapper')) {
+            stats.radius *= SCRAPPER_RADIUS_MUL;
+            stats.magnet += SCRAPPER_MAGNET_BONUS;
+            stats.yieldMul *= SCRAPPER_LOOT_MUL;
         }
         if (this.getPowerUp('double_loot')) stats.yieldMul *= DOUBLE_LOOT_MUL;
         return stats;
@@ -317,18 +376,49 @@ extendClass(PickupManager, {
 
     /** Current shot multipliers from active power-ups. */
     getPowerShot() {
-        const s = this.getPowerUp('power_shot');
-        return s ? Object.assign(s, { damage: POWER_SHOT_DAMAGE, size: POWER_SHOT_SIZE }) : null;
+        let damage = 1;
+        let size = 1;
+        let left = 0;
+        let total = POWER_SHOT_MS;
+        if (this.getPowerUp('power_shot')) {
+            damage *= POWER_SHOT_DAMAGE;
+            size *= POWER_SHOT_SIZE;
+            const s = this.getPowerUp('power_shot');
+            left = Math.max(left, s.left);
+            total = Math.max(total, s.total);
+        }
+        if (this.getPowerUp('overcharge')) {
+            damage *= OVERCHARGE_DAMAGE;
+            size *= OVERCHARGE_SIZE;
+            const s = this.getPowerUp('overcharge');
+            left = Math.max(left, s.left);
+            total = Math.max(total, s.total);
+        }
+        if (this.getPowerUp('focus')) {
+            damage *= FOCUS_DAMAGE;
+            size *= FOCUS_SIZE;
+            const s = this.getPowerUp('focus');
+            left = Math.max(left, s.left);
+            total = Math.max(total, s.total);
+        }
+        if (damage <= 1 && size <= 1) return null;
+        return { left: left || 1, total, damage, size };
     },
 
-    /** Weapon cooldown multiplier (RAPID FIRE). */
+    /** Weapon cooldown multiplier (RAPID FIRE / SPRAY). */
     getFireRateMul() {
-        return this.getPowerUp('rapid_fire') ? RAPID_FIRE_MUL : 1;
+        let mul = 1;
+        if (this.getPowerUp('rapid_fire')) mul *= RAPID_FIRE_MUL;
+        if (this.getPowerUp('spray')) mul *= SPRAY_MUL;
+        return mul;
     },
 
-    /** Incoming damage multiplier (BARRIER). */
+    /** Incoming damage multiplier (BARRIER / AEGIS). */
     getDamageTakenMul() {
-        return this.getPowerUp('barrier') ? BARRIER_DAMAGE_MUL : 1;
+        let mul = 1;
+        if (this.getPowerUp('barrier')) mul *= BARRIER_DAMAGE_MUL;
+        if (this.getPowerUp('aegis')) mul *= AEGIS_DAMAGE_MUL;
+        return mul;
     },
 
     drawPowerUp(ctx, p, x, y) {

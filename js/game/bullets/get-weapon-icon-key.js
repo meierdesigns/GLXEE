@@ -480,8 +480,7 @@ extendClass(BulletManager, {
         infoElement.textContent = `CHARGE ${pct}% [${'#'.repeat(bars)}${'-'.repeat(10 - bars)}] ×${this.getChargeMultiplier().toFixed(1)}`;
     },
     shoot(playerPosition, options) {
-        // FREEZE trap (power-crates.js): guns are locked too.
-        if (typeof pickupManager !== 'undefined' && pickupManager.isFrozen && pickupManager.isFrozen()) return false;
+        // FREEZE trap only slows movement — guns stay free.
         const opts = Object.assign({}, options || {});
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
             const beatOpts = beatSyncManager.getShotOptions();

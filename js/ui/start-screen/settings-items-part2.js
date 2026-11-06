@@ -117,8 +117,18 @@ extendClass(StartScreenManager, {
                 fxKey: 'fxArea'
             },
             { name: 'Volume', type: 'volume' },
-            { name: 'Sound', value: 'ON', options: ['ON', 'OFF'] },
-            { name: 'Music', value: 'ON', options: ['ON', 'OFF'] },
+            {
+                name: 'Sound',
+                value: (typeof settingsManager !== 'undefined')
+                    ? (settingsManager.settings.soundEnabled ? 'ON' : 'OFF') : 'ON',
+                options: ['ON', 'OFF']
+            },
+            {
+                name: 'Music',
+                value: (typeof settingsManager !== 'undefined')
+                    ? (settingsManager.settings.musicEnabled ? 'ON' : 'OFF') : 'ON',
+                options: ['ON', 'OFF']
+            },
             {
                 name: 'Menu Soundtrack',
                 value: (typeof youtubeSoundtrackManager !== 'undefined')

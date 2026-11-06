@@ -38,6 +38,81 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 72%, transparent), 0 0 0 4px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 48%, transparent), 0 0 0 6px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 30%, transparent), 0 0 0 8px color-mix(in srgb, color-mix(in srgb, var(--color-primary) 45%, transparent) 16%, transparent);
 }
 
+.volume-control.volume-voice-control {
+    display: grid;
+    grid-template-columns: 54px minmax(0, 1fr) 7ch minmax(0, 1fr) 3.5em;
+    align-items: center;
+    gap: clamp(6px, calc(1.2 * var(--sv-w)), 10px);
+}
+.volume-control.volume-voice-control:has(#musicTheme) {
+    grid-template-columns: 54px minmax(88px, 1.2fr) minmax(0, 1fr) 3.5em;
+}
+.volume-voice-control label {
+    flex: none;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.volume-voice-control .volume-voice-slider,
+.volume-voice-control .volume-slider {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+}
+.volume-voice-control .volume-voice-name {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 0.8em;
+    letter-spacing: 0.03em;
+}
+.volume-voice-control > span:not(.volume-voice-name) {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    text-align: right;
+}
+.volume-voice-select {
+    flex: none;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    padding: 3px 18px 3px 5px;
+    border: 2px solid var(--color-primary, #3dff6a);
+    border-radius: 0;
+    background-color: var(--color-primary, #3dff6a);
+    background-image: linear-gradient(45deg, transparent 50%, #0c0e12 50%),
+        linear-gradient(135deg, #0c0e12 50%, transparent 50%);
+    background-position: calc(100% - 9px) 50%, calc(100% - 5px) 50%;
+    background-size: 4px 4px, 4px 4px;
+    background-repeat: no-repeat;
+    color: #0c0e12;
+    font: inherit;
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.volume-voice-select option {
+    background: #0c0e12;
+    color: var(--color-primary, #3dff6a);
+    font-size: 1em;
+}
+
 .volume-control span {
     flex: 0 0 auto;
     min-width: clamp(32px, calc(8 * var(--sv-w)), 42px);
@@ -382,10 +457,15 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    min-height: 180px;
+    max-height: 320px;
+    overflow-y: auto;
 }
 
 .victory-loot-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     color: var(--color-primary);
     font-size: var(--font-text);
     font-weight: bold;
@@ -396,22 +476,87 @@
     border-bottom: var(--ui-border-width-thin) solid var(--ui-border);
 }
 
+.victory-loot-credits {
+    color: var(--color-secondary, var(--color-primary));
+    letter-spacing: 1px;
+}
+
 .victory-loot-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
-    justify-content: center;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 10px;
 }
 
 .victory-loot-row {
-    display: grid;
-    grid-template-columns: 32px 1fr auto;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 10px;
-    padding: 6px 8px;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 8px;
     border: var(--ui-border-width) solid transparent;
     background: rgba(0, 0, 0, 0.25);
+    text-align: center;
+}
+
+.victory-loot-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.victory-loot-row .victory-loot-label {
+    font-size: calc(var(--font-text) * 0.8);
+}
+
+.victory-loot-sell-btn {
+    background: var(--ui-surface);
+    color: var(--color-primary);
+    border: var(--ui-border-width-thin) solid var(--color-primary);
+    font-family: var(--ui-font-family);
+    font-size: calc(var(--font-text) * 0.85);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    cursor: pointer;
+}
+
+.victory-loot-sell-btn:hover {
+    background: var(--color-primary);
+    color: var(--ui-background);
+}
+
+.victory-loadout {
+    background: rgba(0, 0, 0, 0.3);
+    border: var(--ui-border-width) solid var(--color-border);
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.victory-loadout-bags {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    overflow-x: auto;
+}
+
+.victory-loadout-col {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.victory-loadout-col-title {
+    margin: 0;
+    color: var(--color-primary);
+    font-size: calc(var(--font-text) * 0.85);
+    font-weight: bold;
+    letter-spacing: 2px;
+    text-transform: uppercase;
 }
 
 .victory-loot-icon {
@@ -446,6 +591,22 @@
     letter-spacing: 1px;
 }
 
+.victory-loot-cell.is-draggable {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: grab;
+}
+
+.victory-loot-cell.is-dragging {
+    opacity: 0.4;
+}
+
+.hs-storage-grid.is-drag-over {
+    outline: 2px dashed var(--color-primary);
+    outline-offset: -2px;
+}
+
 .victory-loot-empty {
     color: var(--color-text-secondary);
     font-size: var(--font-text);
@@ -460,7 +621,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    align-items: stretch;
+    align-items: center;
     margin-top: 0;
 }
 
@@ -469,8 +630,8 @@
     color: var(--color-primary);
     border: var(--ui-border-width) solid var(--color-primary);
     border-radius: 0px;
-    padding: 12px 18px;
-    font-size: var(--font-h2);
+    padding: 18px 18px;
+    font-size: var(--font-h1);
     font-family: var(--ui-font-family);
     font-weight: bold;
     cursor: pointer;
@@ -480,6 +641,7 @@
     gap: 12px;
     min-width: 0;
     width: 100%;
+    max-width: 300px;
     justify-content: center;
     text-transform: uppercase;
     letter-spacing: 2px;

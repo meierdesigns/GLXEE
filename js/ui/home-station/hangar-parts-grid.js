@@ -290,6 +290,33 @@ extendClass(HomeStationUI, {
             `<span class="hs-hangar-weapon-stat" data-stat="energy" data-ui-tip="ENERGY RECOVERY PER SECOND">${this.iconHtml('statEnergy', 16, 'hs-pixel', false, this.hangarStatColor('energy'))}+${regen}/S</span>` +
             `</span>`;
     },
+    /**
+     * Tip/detail text → hangar-style icon chips with coloured values.
+     * Matches "DMG 10 · SPD 12 · 4.0/S" (optional rate / AMMO) and ability
+     * stat deltas like "+0.3 SPEED · +1 DAMAGE".
+     */
+    formatDetailStatLineHtml(line) {
+        const text = String(line || '');
+        const chip = (icon, val, type) =>
+            `<span class="hs-hangar-weapon-stat" data-stat="${type}">` +
+            `${this.iconHtml(icon, 14, 'hs-pixel', false, this.hangarStatColor(type))}` +
+            `<span>${String(val).replace(/</g, '&lt;')}</span></span>`;
+        const wrap = (html) => `<span class="hs-hangar-weapon-stats">${html}</span>`;
+        const sm = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
+        if (sm) {
+            let html = chip('statDamage', sm[1], 'damage') + chip('statSpeed', sm[2], 'shotspeed');
+            if (sm[3]) html += chip('shotRapid', sm[3], 'firerate');
+            if (sm[4]) html += chip('statWeapon', 'AMMO ' + sm[4], 'power');
+            return wrap(html);
+        }
+        const statIcon = { SPEED: 'statSpeed', DAMAGE: 'statDamage', ARMOR: 'statArmor', 'FIRE RATE': 'shotRapid' };
+        const statType = { SPEED: 'speed', DAMAGE: 'damage', ARMOR: 'armor', 'FIRE RATE': 'firerate' };
+        const parts = text.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
+        if (parts.length && parts.every(Boolean)) {
+            return wrap(parts.map((pm) => chip(statIcon[pm[2]], pm[1], statType[pm[2]])).join(''));
+        }
+        return text.replace(/</g, '&lt;');
+    },
     /** Compact DMG / SPD / fire-rate line for a weapon row. */
     hangarWeaponStatsHtml(id) {
         if (typeof weaponConfigManager === 'undefined') return '';

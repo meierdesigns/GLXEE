@@ -48,7 +48,9 @@ extendClass(RenderManager, {
             ? renderManager.getCombatVoxelCell()
             : null;
         const cell = (shared != null && shared > 0) ? shared : this.planetPixelSize(W);
-        const t = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+        const rawT = (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000;
+        // Quantise time so the living cloud only re-samples a few times per second.
+        const t = Math.floor(rawT / FOG_ANIM_STEP) * FOG_ANIM_STEP;
         if (o._fogSeed == null) o._fogSeed = Math.random() * 1000;
         const seed = o._fogSeed;
         // Structure scale per cloud: 0 = broad soft banks, 1 = fine wisps.
@@ -71,39 +73,60 @@ extendClass(RenderManager, {
         const gx1 = Math.ceil((cx + hw) / cell);
         const gy0 = Math.floor((cy - hh) / cell);
         const gy1 = Math.ceil((cy + hh) / cell);
-        const breathe = 1 + Math.sin(t * 0.9 + seed) * 0.06;
         const alphaMul = o.opacity != null ? o.opacity : 1;
-        const fills = [[], [], []];
-        for (let gy = gy0; gy < gy1; gy++) {
-            for (let gx = gx0; gx < gx1; gx++) {
-                // Position relative to the cloud (moves with it, smoothly).
-                const lx = (gx + 0.5) * cell - cx;
-                const ly = (gy + 0.5) * cell - cy;
-                const nx = lx / hw;
-                const ny = ly / hh;
-                const a = Math.atan2(ny, nx);
-                const edge = (0.8 + 0.1 * Math.sin(a * 3 + t * 0.6 + seed)
-                    + 0.05 * Math.sin(a * 5 - t * 0.9 + seed * 2)) * breathe;
-                const rad = Math.hypot(nx, ny) / edge;
-                if (rad >= 1.1) continue;
-                // Noise in cloud space (cell units): three slow layers drifting apart.
-                const sx = lx / cell, sy = ly / cell;
-                const n1 = this.envNoise(sx * 0.9 * fq + t * 1.2 + seed, sy * 0.9 * fq + t * 0.4);
-                const n2 = this.envNoise(sx * 1.4 * fq - t * 0.9 + seed * 3, sy * 1.4 * fq - t * 0.7 + 40);
-                const n3 = this.envNoise(sx * 0.5 + t * 0.3 + 90, sy * 0.5 - t * 0.5 + seed);
-                // Fine detail: stretched, fast streaks that split thick areas
-                // into threads (weighted by the cloud's fineness).
-                const n4 = this.envNoise(sx * 3.2 * fq + t * 2 + seed * 7, sy * 1.6 * fq - t * 0.8 + 13);
-                // Patchy: a slow mask carves drifting gaps, so only a few
-                // pockets get thick and the rest is thin haze or open.
-                const holes = this.envNoise(sx * 0.35 - t * 0.25 + seed * 5, sy * 0.35 + t * 0.2 + 7);
-                const body = n1 * 0.45 + n2 * 0.3 + n3 * 0.25;
-                const detail = 1 - fine * 0.7 + fine * 0.7 * (n4 * 1.6 - 0.3);
-                const d = body * detail * (1.1 - rad) * 1.6
-                    * Math.max(0, (holes - 0.25) * 1.8);
-                if (d < FOG_MIN_DENSITY) continue;
-                fills[d > 0.8 ? 2 : d > 0.5 ? 1 : 0].push(gx, gy);
+        // Reuse last density fills while the cloud sits on the same grid cells
+        // and the animation step hasn't advanced (corridor stages often have
+        // several large clouds; full re-noise was the main frame hitch).
+        // Snap cloud centre to the art grid so a sub-cell drift reuses fills.
+        const qcx = Math.round(cx / cell);
+        const qcy = Math.round(cy / cell);
+        const cache = o._fogFillCache;
+        const sameGrid = cache && cache.qcx === qcx && cache.qcy === qcy
+            && cache.gx0 === gx0 && cache.gx1 === gx1
+            && cache.gy0 === gy0 && cache.gy1 === gy1 && cache.t === t
+            && cache.cell === cell && cache.seed === seed;
+        let fills;
+        if (sameGrid) {
+            fills = cache.fills;
+        } else {
+            const breathe = 1 + Math.sin(t * 0.9 + seed) * 0.06;
+            fills = [[], [], []];
+            // One cheap octave for fog (look stays cloudy; corridor stages stay playable).
+            const fogNoise = (x, y) => {
+                const ix = Math.floor(x), iy = Math.floor(y);
+                const tx = x - ix, ty = y - iy;
+                const sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+                const a = this.envHash(ix, iy), b = this.envHash(ix + 1, iy);
+                const c = this.envHash(ix, iy + 1), d = this.envHash(ix + 1, iy + 1);
+                return (a + (b - a) * sx) + ((c + (d - c) * sx) - (a + (b - a) * sx)) * sy;
+            };
+            for (let gy = gy0; gy < gy1; gy++) {
+                for (let gx = gx0; gx < gx1; gx++) {
+                    // Position relative to the cloud (moves with it, smoothly).
+                    const lx = (gx + 0.5) * cell - cx;
+                    const ly = (gy + 0.5) * cell - cy;
+                    const nx = lx / hw;
+                    const ny = ly / hh;
+                    const a = Math.atan2(ny, nx);
+                    const edge = (0.8 + 0.1 * Math.sin(a * 3 + t * 0.6 + seed)
+                        + 0.05 * Math.sin(a * 5 - t * 0.9 + seed * 2)) * breathe;
+                    const rad = Math.hypot(nx, ny) / edge;
+                    if (rad >= 1.1) continue;
+                    const sx = lx / cell, sy = ly / cell;
+                    const n1 = fogNoise(sx * 0.1 * fq + t * 1.2 + seed, sy * 0.1 * fq + t * 0.4);
+                    const n2 = fogNoise(sx * 0.16 * fq - t * 0.9 + seed * 3, sy * 0.16 * fq - t * 0.7 + 40);
+                    const n4 = fine > 0.35
+                        ? fogNoise(sx * 0.35 * fq + t * 2 + seed * 7, sy * 0.18 * fq - t * 0.8 + 13) : 0.5;
+                    const holes = fogNoise(sx * 0.04 - t * 0.25 + seed * 5, sy * 0.04 + t * 0.2 + 7);
+                    const body = n1 * 0.6 + n2 * 0.4;
+                    const detail = 1 - fine * 0.7 + fine * 0.7 * (n4 * 1.6 - 0.3);
+                    const d = body * detail * (1.1 - rad) * 1.6
+                        * Math.max(0, (holes - 0.25) * 1.8);
+                    if (d < FOG_MIN_DENSITY) continue;
+                    fills[d > 0.8 ? 2 : d > 0.5 ? 1 : 0].push(gx, gy);
+                }
             }
+            o._fogFillCache = { qcx, qcy, gx0, gx1, gy0, gy1, t, cell, seed, fills };
         }
         // Batched per density step: one fillStyle/alpha change each.
         const colors = [dark, base, light];

@@ -18,6 +18,7 @@ class GamepadManager {
             a: false,
             b: false
         };
+        this._wasCombat = false;
     }
 
     start() {
@@ -33,7 +34,10 @@ class GamepadManager {
     isButtonPressed(gamepad, index) {
         const b = gamepad.buttons[index];
         if (!b) return false;
-        return typeof b === 'number' ? b > 0.5 : !!b.pressed;
+        // Analog triggers (LT/RT) often expose value without pressed=true.
+        if (typeof b === 'number') return b > 0.5;
+        if (b.pressed) return true;
+        return typeof b.value === 'number' && b.value > 0.5;
     }
 
     /** Analog stick OR d-pad button, whichever reads "pressed" for that direction. */
@@ -84,15 +88,21 @@ class GamepadManager {
         // is already true there) but wants a discrete confirm press like a
         // menu, not held-key combat state, so it's special-cased here.
         if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
-            const fireHeld = this.isButtonPressed(gamepad, 0); // A, same button combat uses for shoot
+            const fireHeld = this.isButtonPressed(gamepad, 0) || this.isButtonPressed(gamepad, 7); // A / RT
             if (fireHeld && !this._menuState.a) missionStartManager.onFire();
             this._menuState.a = fireHeld;
             return;
         }
         if (this.isCombatMode()) {
+            // Drop the menu HUD frame the moment combat owns the surface.
+            if (!this._wasCombat && typeof gamepadCursor !== 'undefined' && gamepadCursor.markPointer) {
+                gamepadCursor.markPointer();
+            }
+            this._wasCombat = true;
             this.updateCombat(gamepad);
         } else {
-            const wasCombat = !!this._combatState.any;
+            const wasCombat = !!this._combatState.any || this._wasCombat;
+            this._wasCombat = false;
             this.resetCombatKeys();
             if (wasCombat) {
                 // A may still be physically held from firing in combat; sync

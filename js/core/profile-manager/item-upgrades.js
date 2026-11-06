@@ -328,7 +328,8 @@ extendClass(ProfileManager, {
             return {
                 damageMul: 1 + ramp(trackLevel('dmg'), 0.05, 0.02),
                 cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('rof'), 0.04, 0.015)),
-                rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015)
+                rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015),
+                reflectiveShots: trackLevel('reflect') > 0
             };
         }
         if (bucket === 'defenses') {

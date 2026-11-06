@@ -112,6 +112,15 @@ extendClass(EnemyManager, {
         if (this.sideEnemies.length >= this.sideEnemyCap) {
             return null;
         }
+        // Tube/sluice runs: only one craft of a given class in the field at once, so the
+        // sidebar's single enemy card (image + bars) always shows the class actually in play.
+        if (this.levelMods && this.levelMods.transit) {
+            const wantedClass = String(entry.enemyClass || 'assault').toLowerCase();
+            const classBusy = this.sideEnemies.some((e) => e
+                && !e.fleeing
+                && String(e.enemyClass || 'assault').toLowerCase() === wantedClass);
+            if (classBusy) return null;
+        }
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);

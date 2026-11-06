@@ -126,9 +126,11 @@ extendClass(HomeStationUI, {
                 const res = profileManager.buyPortal(gid);
                 if (res.ok) {
                     const name = String(gid).replace(/_/g, ' ').toUpperCase();
-                    this.playButtonResult(btn, true, 'PORTAL UNLOCKED: ' + name);
+                    this.playButtonResult(btn, true, 'PORTAL BOUGHT: ' + name + ' · INSTALL IN TRAVEL');
                 } else if (res.reason === 'UNKNOWN FACTION') {
                     this.playButtonResult(btn, false, 'MEET THIS FACTION IN COMBAT FIRST');
+                } else if (res.reason === 'IN INVENTORY') {
+                    this.playButtonResult(btn, false, 'ALREADY IN INVENTORY — INSTALL IN TRAVEL');
                 } else {
                     this.playButtonResult(btn, false, res.reason || 'FAILED');
                 }

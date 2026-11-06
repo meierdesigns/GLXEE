@@ -2,8 +2,9 @@
 
 // GamepadManager combat mapping: writes into the same inputHandler.keys map
 // the keyboard sets (js/core/input-handler/core.js), so playerManager /
-// bulletManager need zero changes. Buttons: A=shoot/charge, B/X/Y=fire
-// groups a/s/d, RB=boost (Shift), LB=switch shot type, Start=pause.
+// bulletManager need zero changes.
+// Shoulders: LB=a, RB=s, LT=d, RT=space (face A also space for fire-to-start).
+// Face X/Y/B still alias a/s/d. L3=boost (Shift), R3=switch shot, Start=pause.
 // K/S debug cheats are intentionally never mapped to a gamepad.
 extendClass(GamepadManager, {
     updateCombat(gamepad) {
@@ -18,7 +19,8 @@ extendClass(GamepadManager, {
         inputHandler.keys['ArrowLeft'] = dir.left;
         inputHandler.keys['ArrowRight'] = dir.right;
 
-        const spaceHeld = this.isButtonPressed(gamepad, 0); // A
+        // RT (front right) + face A → Space
+        const spaceHeld = this.isButtonPressed(gamepad, 7) || this.isButtonPressed(gamepad, 0);
         const wasSpaceHeld = !!this._combatState.space;
         inputHandler.keys[' '] = spaceHeld;
         inputHandler.keys['Space'] = spaceHeld;
@@ -26,16 +28,19 @@ extendClass(GamepadManager, {
         if (!spaceHeld && wasSpaceHeld) this.onSpaceRelease();
         this._combatState.space = spaceHeld;
 
-        const shiftHeld = this.isButtonPressed(gamepad, 5); // RB
+        // L3 → Charge Drive boost (was RB before shoulders took fire)
+        const shiftHeld = this.isButtonPressed(gamepad, 10);
         inputHandler.keys['Shift'] = shiftHeld;
         inputHandler.keys['ShiftLeft'] = shiftHeld;
         inputHandler.keys['ShiftRight'] = shiftHeld;
 
-        inputHandler.keys['a'] = this.isButtonPressed(gamepad, 2); // X -> fire group a
-        inputHandler.keys['s'] = this.isButtonPressed(gamepad, 3); // Y -> fire group s
-        inputHandler.keys['d'] = this.isButtonPressed(gamepad, 1); // B -> fire group d
+        // LB / RB (rear) + face X/Y; LT (front left) + face B
+        inputHandler.keys['a'] = this.isButtonPressed(gamepad, 4) || this.isButtonPressed(gamepad, 2);
+        inputHandler.keys['s'] = this.isButtonPressed(gamepad, 5) || this.isButtonPressed(gamepad, 3);
+        inputHandler.keys['d'] = this.isButtonPressed(gamepad, 6) || this.isButtonPressed(gamepad, 1);
 
-        const switchHeld = this.isButtonPressed(gamepad, 4); // LB
+        // R3 → switch shot type (was LB)
+        const switchHeld = this.isButtonPressed(gamepad, 11);
         if (switchHeld && !this._combatState.switchShot) {
             if (typeof bulletManager !== 'undefined') {
                 const newType = bulletManager.switchShotType();

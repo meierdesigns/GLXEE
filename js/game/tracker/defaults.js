@@ -13,7 +13,7 @@ const VFTrackerDefaults = {
         return [
             { id: 1, name: 'wave', wave: 'triangle', volume: 0.7, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
             { id: 2, name: 'pulse1', wave: 'square', volume: 0.28, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
-            { id: 3, name: 'pulse2', wave: 'square', volume: 0.4, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05 },
+            { id: 3, name: 'pulse2', wave: 'square', volume: 0.58, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.05 },
             { id: 4, name: 'noise', wave: 'noise', volume: 0.32, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
             { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
         ];
@@ -409,7 +409,7 @@ const VFTrackerDefaults = {
                     pad(tx(ch[0], key)),
                     pad(tx(ch[1], key)),
                     pad(tx(ch[2], key)),
-                    pad(ch[3])
+                    pad(tx(ch[3], key))
                 ]
             };
         });

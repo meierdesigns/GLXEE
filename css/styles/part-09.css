@@ -1308,7 +1308,9 @@ button.hs-upg-node.nav-focused {
     position: fixed;
     left: 0;
     top: 0;
-    z-index: 100060;
+    /* Above bezel rim (9993), tools, remotes, and the stage clip — tip is a
+       child of <html>, so it is never cut by body overflow/clip-path. */
+    z-index: 100100;
     width: max-content;
     max-width: min(480px, calc(100vw - 32px));
     max-height: calc(100vh - 32px);

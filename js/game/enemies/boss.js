@@ -1,7 +1,7 @@
 "use strict";
 
 // EnemyManager methods: planet difficulty curve and boss fights
-// (phases, attack patterns, escort calls, HP bar).
+// (phases, faction doctrines, attack patterns, escort calls, HP bar).
 
 /** Per planet tier (EASY .. NIGHTMARE): early planets forgiving, late ones brutal. */
 const PLANET_TIER_MODS = [
@@ -73,6 +73,18 @@ extendClass(EnemyManager, {
         return { fan: 'spread', aimed: 'burst', sweep: 'rapid', primary: 'spread' };
     },
 
+    bossBehaviorFor(e) {
+        if (e && e.bossBehavior) return e.bossBehavior;
+        if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossBehaviorKit) {
+            return difficultyConfigManager.getBossBehaviorKit(e && e.faction);
+        }
+        return {
+            style: 'erratic', label: 'BOSS', patterns: ['fan', 'aimed', 'sweep'],
+            intervalMul: 1, speedMul: 1, verticalMul: 1, trackPlayer: 0.1,
+            evasionMul: 1, escortMul: 1, phaseSpeedMul: 1.3, sweepArc: 0.8, sweepStepMul: 1
+        };
+    },
+
     /** Called at the end of spawnEnemy for boss levels. */
     initBoss() {
         const e = this.enemy;
@@ -93,26 +105,94 @@ extendClass(EnemyManager, {
             this.shield = this.shieldMax;
         }
         e.bossTierMul = mods.boss;
-        // Heavy hull: dodges rarely, briefly and slowly (it's meant to be hit).
-        this.evasionSpeed = (this.evasionSpeed || 2) * 0.3;
-        this.evasionCooldown = Math.max(4000, (this.evasionCooldown || 5000) * 2.5);
-        this.evasionDuration = (this.evasionDuration || 1000) * 0.5;
-        this.evasionChance = (this.evasionChance != null ? this.evasionChance : 1) * 0.35;
+        e.bossWeaponKit = this.bossWeaponKitFor(e);
+        e.bossBehavior = this.bossBehaviorFor(e);
+        const beh = e.bossBehavior;
+        // Heavy hull: dodges rarely, briefly and slowly — faction still shades it.
+        const eva = beh.evasionMul != null ? beh.evasionMul : 1;
+        this.evasionSpeed = (this.evasionSpeed || 2) * 0.3 * Math.max(0.6, eva);
+        this.evasionCooldown = Math.max(2500, (this.evasionCooldown || 5000) * 2.5 / Math.max(0.7, eva));
+        this.evasionDuration = (this.evasionDuration || 1000) * 0.5 * Math.max(0.7, Math.min(1.4, eva));
+        this.evasionChance = (this.evasionChance != null ? this.evasionChance : 1) * 0.35 * eva;
         e.bossPhase = 1;
         e.bossAttackTimer = 1500;
         e.bossPattern = 0;
         e.bossSweep = null;
+        e.bossSpecial = null;
+        e.bossMoveTimer = 0;
         e.bossBaseSpeed = Math.abs(e.speed) || 0.4;
-        e.bossWeaponKit = this.bossWeaponKitFor(e);
+        e.bossBaseVertical = Math.abs(e.verticalSpeed) || e.bossBaseSpeed * 0.6;
+        const spd = e.bossBaseSpeed * (beh.speedMul != null ? beh.speedMul : 1);
+        e.speed = Math.sign(e.speed || 1) * spd;
+        e.verticalSpeed = Math.sign(e.verticalSpeed || 1)
+            * e.bossBaseVertical * (beh.verticalMul != null ? beh.verticalMul : 1);
         e.weaponId = e.bossWeaponKit.primary || e.weaponId || 'laser';
         e.attackRateMul = e.attackRateMul != null ? e.attackRateMul : 1;
         this.bossFlash = 0;
-        this.announceBoss('BOSS INCOMING');
+        this.announceBoss(beh.label ? ('BOSS — ' + beh.label) : 'BOSS INCOMING');
     },
 
     announceBoss(text) {
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
             levelInfoManager.showLootNotice(text);
+        }
+    },
+
+    /** Faction movement doctrine — runs every boss tick. */
+    updateBossMovement(e, dt) {
+        const beh = this.bossBehaviorFor(e);
+        const style = beh.style || 'patrol';
+        e.bossMoveTimer = (e.bossMoveTimer || 0) + dt;
+
+        let px = null;
+        if (typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            const p = playerManager.getPosition();
+            if (p) px = p.x + (p.width || 0) / 2;
+        }
+        const track = beh.trackPlayer != null ? beh.trackPlayer : 0;
+        if (px != null && track > 0 && !e.bossSpecial) {
+            const cx = e.x + e.width / 2;
+            if (Math.abs(px - cx) > 8) {
+                e.speed = Math.sign(px - cx) * Math.abs(e.speed || e.bossBaseSpeed || 0.4);
+                // Soft pull toward player X without overriding bounce physics.
+                e.x += Math.sign(px - cx) * track * 0.35 * (dt / 16.67);
+            }
+        }
+
+        if (e.bossGridResume != null) {
+            e.bossGridResume -= dt;
+            if (e.bossGridResume <= 0) {
+                e.bossGridResume = null;
+                e.verticalSpeed = Math.sign(Math.random() - 0.5)
+                    * e.bossBaseVertical * (beh.verticalMul || 1);
+            }
+        }
+
+        if (style === 'erratic' && e.bossMoveTimer > 700) {
+            e.bossMoveTimer = 0;
+            if (Math.random() < 0.45) e.speed = -e.speed;
+            if (Math.random() < 0.35) e.verticalSpeed = -e.verticalSpeed;
+            const burst = 1 + Math.random() * 0.55;
+            e.speed = Math.sign(e.speed || 1) * e.bossBaseSpeed * (beh.speedMul || 1) * burst;
+        } else if (style === 'grid' && e.bossMoveTimer > 1100) {
+            e.bossMoveTimer = 0;
+            // Mechanical lane-step: pause vertical, flip lane, resume after a beat.
+            e.verticalSpeed = 0;
+            e.speed = -Math.sign(e.speed || 1) * e.bossBaseSpeed * (beh.speedMul || 1);
+            e.bossGridResume = 280;
+        } else if (style === 'hunter' && e.bossMoveTimer > 900) {
+            e.bossMoveTimer = 0;
+            // Push lower into the lane while hunting.
+            if (e.maxY != null) {
+                e.y = Math.min(e.maxY, e.y + 4 + e.bossPhase * 2);
+            }
+            e.verticalSpeed = Math.abs(e.verticalSpeed || e.bossBaseVertical) * (Math.random() < 0.5 ? 1 : -1);
+        } else if (style === 'patrol' && e.bossMoveTimer > 1600) {
+            e.bossMoveTimer = 0;
+            // Steady drill — keep speed magnitude locked.
+            const mag = e.bossBaseSpeed * (beh.speedMul || 1) * (1 + 0.12 * (e.bossPhase - 1));
+            e.speed = Math.sign(e.speed || 1) * mag;
+            e.verticalSpeed = Math.sign(e.verticalSpeed || 1) * mag * 0.45;
         }
     },
 
@@ -126,6 +206,14 @@ extendClass(EnemyManager, {
         const ratio = this.maxHealth > 0 ? this.health / this.maxHealth : 1;
         const phase = ratio > 0.66 ? 1 : ratio > 0.33 ? 2 : 3;
         if (phase > e.bossPhase) this.enterBossPhase(phase, gameState);
+
+        this.updateBossMovement(e, dt);
+
+        // Active special (dive / blink / salvo delay) takes the tick.
+        if (e.bossSpecial) {
+            this.tickBossSpecial(e, dt);
+            return;
+        }
 
         // Sweep in progress: one shot per tick along an arc.
         if (e.bossSweep) {
@@ -144,36 +232,185 @@ extendClass(EnemyManager, {
 
         e.bossAttackTimer -= dt;
         if (e.bossAttackTimer > 0) return;
+        const beh = this.bossBehaviorFor(e);
         const rate = Math.max(0.45, Number(e.attackRateMul) || 1);
         const interval = [3200, 2400, 1700][e.bossPhase - 1];
-        e.bossAttackTimer = (interval / Math.sqrt(e.bossTierMul || 1) / rate)
+        const iMul = beh.intervalMul != null ? beh.intervalMul : 1;
+        e.bossAttackTimer = (interval / Math.sqrt(e.bossTierMul || 1) / rate * iMul)
             * (0.85 + Math.random() * 0.3);
 
         const kit = this.bossWeaponKitFor(e);
-        const pattern = e.bossPattern++ % 3;
-        if (pattern === 0) this.bossFan(e, kit.fan);
-        else if (pattern === 1) this.bossAimed(e, kit.aimed);
-        else this.bossStartSweep(e, kit.sweep);
+        const seq = (beh.patterns && beh.patterns.length) ? beh.patterns : ['fan', 'aimed', 'sweep'];
+        const pattern = seq[e.bossPattern++ % seq.length];
+        this.runBossPattern(e, pattern, kit);
+    },
+
+    runBossPattern(e, pattern, kit) {
+        const id = String(pattern || 'fan');
+        if (id === 'fan') this.bossFan(e, kit.fan);
+        else if (id === 'aimed') this.bossAimed(e, kit.aimed);
+        else if (id === 'sweep') this.bossStartSweep(e, kit.sweep);
+        else if (id === 'barrage') this.bossBarrage(e, kit);
+        else if (id === 'scatter') this.bossScatter(e, kit);
+        else if (id === 'dive') this.bossStartDive(e, kit);
+        else if (id === 'salvo') this.bossStartSalvo(e, kit);
+        else if (id === 'ring') this.bossRing(e, kit);
+        else if (id === 'blink') this.bossStartBlink(e, kit);
+        else this.bossFan(e, kit.fan);
     },
 
     enterBossPhase(phase, gameState) {
         const e = this.enemy;
+        const beh = this.bossBehaviorFor(e);
         e.bossPhase = phase;
         this.bossFlash = 450;
-        const sp = e.bossBaseSpeed * (1 + 0.3 * (phase - 1));
+        const pMul = beh.phaseSpeedMul != null ? beh.phaseSpeedMul : 1.3;
+        const sp = e.bossBaseSpeed * (beh.speedMul || 1) * (1 + (pMul - 1) * (phase - 1) / 2);
         e.speed = Math.sign(e.speed || 1) * sp;
-        e.verticalSpeed = Math.sign(e.verticalSpeed || 1) * sp * 0.6;
-        e.bossAttackTimer = 600;
-        this.announceBoss(phase === 3 ? 'BOSS ENRAGED' : 'BOSS PHASE ' + phase);
+        e.verticalSpeed = Math.sign(e.verticalSpeed || 1)
+            * e.bossBaseVertical * (beh.verticalMul || 1) * (1 + 0.2 * (phase - 1));
+        e.bossAttackTimer = 500;
+        const tag = beh.label || 'BOSS';
+        this.announceBoss(phase === 3 ? (tag + ' ENRAGED') : (tag + ' PHASE ' + phase));
         if (typeof explosionSystem !== 'undefined' && explosionSystem.play) {
             try { explosionSystem.play('small_pop', e.x + e.width / 2, e.y + e.height / 2); } catch (err) { /* optional fx */ }
         }
-        // Call in escorts: one in phase 2, two when enraged.
-        const escorts = phase - 1;
+        // Escorts scaled by faction doctrine (machine floods, kronax fights alone).
+        const escortMul = beh.escortMul != null ? beh.escortMul : 1;
+        const escorts = Math.max(0, Math.round((phase - 1) * escortMul));
         const cap = this.sideEnemyCap;
         this.sideEnemyCap = Math.max(cap, this.sideEnemies.length + escorts);
         for (let i = 0; i < escorts; i++) this.spawnSideEnemy(gameState || (typeof game !== 'undefined' ? game : null));
         this.sideEnemyCap = Math.max(cap, 3, this.sideEnemies.length);
+
+        // Faction phase flourish.
+        const kit = this.bossWeaponKitFor(e);
+        if (phase === 3) {
+            if (beh.style === 'blink') this.bossRing(e, kit);
+            else if (beh.style === 'hunter') this.bossStartDive(e, kit);
+            else if (beh.style === 'grid') this.bossStartSalvo(e, kit);
+            else if (beh.style === 'erratic') this.bossScatter(e, kit);
+            else this.bossBarrage(e, kit);
+        }
+    },
+
+    tickBossSpecial(e, dt) {
+        const s = e.bossSpecial;
+        if (!s) return;
+        s.timer -= dt;
+        if (s.kind === 'barrage') {
+            if (s.timer <= 0) {
+                const kit = s.kit || this.bossWeaponKitFor(e);
+                this.bossFan(e, kit.fan || 'laser');
+                e.bossSpecial = null;
+                e.bossAttackTimer = 350;
+            }
+        } else if (s.kind === 'dive') {
+            // Surge toward player X while dropping; fire claw fan on impact.
+            if (typeof playerManager !== 'undefined' && playerManager.getPosition) {
+                const p = playerManager.getPosition();
+                if (p) {
+                    const px = p.x + (p.width || 0) / 2;
+                    const cx = e.x + e.width / 2;
+                    e.x += Math.sign(px - cx) * 1.8 * (dt / 16.67);
+                }
+            }
+            e.y += 1.1 * (dt / 16.67);
+            if (s.timer <= 0) {
+                this.bossFan(e, s.weapon || 'claw_beam');
+                e.bossSpecial = null;
+                e.bossAttackTimer = 400;
+            }
+        } else if (s.kind === 'blink') {
+            if (s.timer <= 0) {
+                const host = (typeof game !== 'undefined' && game) ? game : null;
+                const W = host && (host.internalWidth || host.baseWidth || host.width) || 200;
+                e.x = Math.max(0, Math.min(W - e.width, Math.random() * (W - e.width)));
+                e.y = Math.max(e.minY || 20, Math.min(e.maxY || 80, (e.minY || 20) + Math.random() * 30));
+                this.bossRing(e, s.kit || this.bossWeaponKitFor(e));
+                e.bossSpecial = null;
+                e.bossAttackTimer = 500;
+                this.bossFlash = 280;
+            }
+        } else if (s.kind === 'salvo') {
+            s.pulse = (s.pulse || 0) - dt;
+            if (s.pulse <= 0 && s.left > 0) {
+                const kit = s.kit || this.bossWeaponKitFor(e);
+                const cols = 3 + e.bossPhase;
+                const angles = [];
+                for (let i = 0; i < cols; i++) {
+                    angles.push((i - (cols - 1) / 2) * 0.18 + (Math.random() - 0.5) * 0.04);
+                }
+                this.bossFire(e, angles, 0.9 + e.bossPhase * 0.1, kit.fan || 'missile');
+                s.left--;
+                s.pulse = 140;
+            }
+            if (s.left <= 0 && s.timer <= 0) {
+                e.bossSpecial = null;
+                e.bossAttackTimer = 600;
+            }
+        } else {
+            e.bossSpecial = null;
+        }
+    },
+
+    /** Terran: stacked pierce + laser volley. */
+    bossBarrage(e, kit) {
+        this.bossAimed(e, kit.aimed || 'pierce');
+        e.bossSpecial = {
+            kind: 'barrage',
+            timer: 220,
+            kit: kit
+        };
+    },
+
+    /** Pirate: chaotic shotgun spray. */
+    bossScatter(e, kit) {
+        const id = String((kit && kit.fan) || 'spread');
+        const n = 5 + e.bossPhase * 2;
+        const angles = [];
+        for (let i = 0; i < n; i++) angles.push((Math.random() - 0.5) * 1.4);
+        this.bossFire(e, angles, 1.2 + e.bossPhase * 0.15, id);
+    },
+
+    /** Kronax: dive then claw fan. */
+    bossStartDive(e, kit) {
+        e.bossSpecial = {
+            kind: 'dive',
+            timer: 420,
+            weapon: (kit && kit.fan) || 'claw_beam'
+        };
+        e.speed = Math.sign(e.speed || 1) * e.bossBaseSpeed * 1.8;
+    },
+
+    /** Machine: delayed missile grid. */
+    bossStartSalvo(e, kit) {
+        e.bossSpecial = {
+            kind: 'salvo',
+            timer: 520 + e.bossPhase * 80,
+            pulse: 0,
+            left: 2 + e.bossPhase,
+            kit: kit
+        };
+        this.bossFlash = 200;
+    },
+
+    /** Voidborn: circular nova/wave ring. */
+    bossRing(e, kit) {
+        const id = String((kit && (kit.aimed || kit.fan)) || 'nova');
+        const n = 8 + e.bossPhase * 2;
+        const angles = [];
+        for (let i = 0; i < n; i++) {
+            // Map ring to downward-ish cone with wrap (atan-style boss angles).
+            angles.push(-1.1 + (2.2 * i) / (n - 1));
+        }
+        this.bossFire(e, angles, 1.05 + e.bossPhase * 0.12, id);
+    },
+
+    /** Voidborn: rift jump then ring. */
+    bossStartBlink(e, kit) {
+        e.bossSpecial = { kind: 'blink', timer: 280, kit: kit };
+        this.bossFlash = 320;
     },
 
     /** Fan of bullets straight down, wider each phase — faction fan weapon. */
@@ -209,9 +446,19 @@ extendClass(EnemyManager, {
     },
 
     bossStartSweep(e) {
+        const beh = this.bossBehaviorFor(e);
+        const arc = beh.sweepArc != null ? beh.sweepArc : 0.8;
+        const stepMul = beh.sweepStepMul != null ? beh.sweepStepMul : 1;
         const total = 5 + e.bossPhase * 2;
         const dir = Math.random() < 0.5 ? 1 : -1;
-        e.bossSweep = { from: -0.8 * dir, to: 0.8 * dir, total, left: total, step: 90 - e.bossPhase * 15, timer: 0 };
+        e.bossSweep = {
+            from: -arc * dir,
+            to: arc * dir,
+            total,
+            left: total,
+            step: Math.max(40, (90 - e.bossPhase * 15) * stepMul),
+            timer: 0
+        };
     },
 
     bossFire(e, angles, speed, weaponId) {
@@ -241,6 +488,7 @@ extendClass(EnemyManager, {
                 speed: spd, damage: dmg, angle: a,
                 color: color, type: shot.type,
                 weaponId: id, isEnemyShot: true, isBossShot: true,
+                _sweepDx: 0, _sweepDy: 0,
                 lightRadius: shot.light * Math.max(0.7, Math.sqrt(sizeMul)),
                 lightIntensity: 1.15, lightColor: color
             });

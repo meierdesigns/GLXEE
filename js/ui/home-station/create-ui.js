@@ -22,11 +22,11 @@ extendClass(HomeStationUI, {
         if (this.tab !== 'play') this._travelModal = false;
         // A rebuild replaces the body, so an embedded WIKI viewer ends here.
         if (this._embeddedViewer) this.closeEmbeddedViewer();
-        // A trading-post visit ends as soon as another tab is shown.
-        if (this.tab !== 'shop' && this.visitPostId) {
-            this.visitPostId = null;
-            if (this._shopCategoryBeforeDock) this.shopCategory = this._shopCategoryBeforeDock;
-            this._shopCategoryBeforeDock = null;
+        // Trading-post modal owns overlay while open — restore HS shell first.
+        if (this.restoreTradingPostHomeOverlay) this.restoreTradingPostHomeOverlay();
+        // Leaving PLAY while docked closes the trader modal.
+        if (this.tab !== 'play' && this._tpsModalOpen && this.undockTradingPost) {
+            this.undockTradingPost();
         }
         this.stopHangarPreview();
         const scrollState = this.captureScrollState();
@@ -619,6 +619,10 @@ extendClass(HomeStationUI, {
         if (['factions', 'ffleet', 'ftrade', 'fcontracts'].indexOf(this.tab) !== -1) this.bindFactionEvents();
         this.restoreScrollState(scrollState);
         this.applyPendingFlash();
+        // Buys from the trader call setStatus→createUI; remount the modal on top.
+        if (this._tpsModalOpen && this.visitPostId && this.mountTradingPostModal) {
+            this.mountTradingPostModal();
+        }
         // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
         if (soft) {
             requestAnimationFrame(() => {

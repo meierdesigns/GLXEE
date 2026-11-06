@@ -1234,6 +1234,68 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     height: calc(28px * var(--hle-icon-scale, 1)) !important;
 }
 
+.gi-transit-map {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 60px;
+    box-sizing: border-box;
+    padding: 8px 5px;
+    border: var(--ui-border-width) solid var(--color-primary);
+    background: color-mix(in srgb, var(--color-primary) 6%, #05060a);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+.gi-transit-map[hidden] {
+    display: none !important;
+}
+.gi-transit-track {
+    position: relative;
+    flex: 1 1 auto;
+    width: 10px;
+    min-height: 0;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 10%, #000);
+}
+.gi-transit-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--vf-transit-pct, 0%);
+    background: var(--color-primary);
+    opacity: 0.55;
+    transition: height 0.4s linear;
+}
+.gi-transit-ship {
+    position: absolute;
+    left: 50%;
+    bottom: var(--vf-transit-pct, 0%);
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, 50%) rotate(45deg);
+    background: #fff;
+    box-shadow: 0 0 4px 1px var(--color-primary);
+    transition: bottom 0.4s linear;
+}
+.gi-transit-gate {
+    position: absolute;
+    top: -2px;
+    left: 50%;
+    transform: translate(-50%, -100%);
+    font-size: var(--font-sm);
+    letter-spacing: 0.08em;
+    color: color-mix(in srgb, var(--color-primary) 60%, #fff);
+    opacity: 0;
+    white-space: nowrap;
+}
+.gi-transit-gate.is-visible {
+    opacity: 1;
+}
+.gi-transit-arrived .gi-transit-ship {
+    box-shadow: 0 0 8px 2px #fff;
+}
+
 .gi-mission-side {
     flex: 0 0 auto;
     width: 100%;
@@ -2034,8 +2096,8 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
     image-rendering: pixelated;
     background: #05060a;
     /* Closed outer shell so the shield always fully wraps the image. */
-    padding: 6px;
-    border: 2px solid #05060a;
+    padding: 4px;
+    border: 1px solid #05060a;
     box-shadow:
         0 0 0 1px color-mix(in srgb, var(--shield-color) 35%, #05060a),
         0 0 12px color-mix(in srgb, var(--shield-color) calc(var(--shield-pct) * 0.55), transparent);
@@ -2076,11 +2138,11 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
 }
 .enemy-vitals-side .enemy-card-v .enemy-shield-track {
     stroke: color-mix(in srgb, var(--shield-color) 22%, #081018);
-    stroke-width: 9;
+    stroke-width: 4;
 }
 .enemy-vitals-side .enemy-card-v .enemy-shield-fill {
     stroke: var(--shield-color);
-    stroke-width: 9;
+    stroke-width: 4;
     stroke-dasharray: 100 100;
     transition: stroke-dasharray 0.15s steps(5, end);
 }
@@ -2161,6 +2223,12 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
 }
 .enemy-vitals-side .enemy-card-v.face-dead .enemy-portrait-face {
     filter: grayscale(0.8) brightness(0.6) contrast(1.2);
+    animation: enemy-face-drain 0.6s steps(10, end) forwards;
+}
+/* Hull breached: the portrait drains away bottom-to-top, like a tank emptying out. */
+@keyframes enemy-face-drain {
+    from { clip-path: inset(0 0 0 0); }
+    to { clip-path: inset(0 0 100% 0); }
 }
 .enemy-vitals-side .enemy-card-v.face-dead .enemy-name {
     text-decoration: line-through;

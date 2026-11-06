@@ -15,6 +15,7 @@ const OBSTACLE_PATTERNS = [
     { id: 'stream', weight: 2 }
 ];
 const OBSTACLE_MAX_ALIVE = 48;
+const OBSTACLE_MAX_ALIVE_BOSS = 14; // static arena — keep room to dodge the boss
 const OBSTACLE_RAMP_MS = 90000; // density ramps up over the first 90 s
 const OBSTACLE_SCROLL_SPEED = 0.55; // px/frame the level scrolls in regular stages
 const TERRAIN_ZONES = ['canyon', 'narrows', 'open', 'winding', 'teeth', 'funnel', 'terraces', 'bulges', 'zigzag', 'gorge',
@@ -28,33 +29,45 @@ const TERRAIN_MATERIALS = {
     crystal: { id: 'crystal', hp: 1, score: 4 },
     magma: { id: 'magma', hp: 2, score: 3 }
 };
-const TERRAIN_SILL_ROWS = 5;
-const TERRAIN_JITTER_ROWS = 4; // wall-depth jitter holds this many rows (no 1-row slivers)
+const TERRAIN_SILL_ROWS = 3;
+const TERRAIN_JITTER_ROWS = 10; // wall-depth jitter holds this many rows (soft silhouette, no comb spikes)
 const TERRAIN_OPENING_PX = 34; // height of a hangar opening side craft launch from     // rows of the threshold at an area change
 // Visual marker only — keep the upper flight band open (was 0.13 and stacked
 // with the gate, which sealed the passage).
-const TERRAIN_SILL_REACH = 0.05; // how far it juts in from each side (x W)
+const TERRAIN_SILL_REACH = 0.028; // how far it juts in from each side (x W)
 const OBSTACLE_LAYER_SPACING = 160; // px of scroll between obstacle rows
-// Areas that squeeze or stab into the passage; later stages favour them.
+// Areas that squeeze or stab into the passage; later stages lean gently toward them.
 const TERRAIN_HARSH_ZONES = ['narrows', 'teeth', 'zigzag', 'gorge', 'spires', 'icefall', 'ribs', 'chasm', 'funnel'];
-const TERRAIN_CALM_ZONES = ['canyon', 'open', 'delta', 'winding'];
+const TERRAIN_CALM_ZONES = ['canyon', 'open', 'delta', 'winding', 'bulges', 'reef', 'terraces'];
+const TERRAIN_BLEND_START = 0.72; // fraction of a zone before wall/floor softens into the next
 
 extendClass(ObstacleManager, {
     /**
-     * Stage danger 0..1: stage 1 = 0, the last stage and the boss = 1.
-     * Later stages start denser and get harsher areas (kept moderate).
+     * Stage danger 0..1: stage 1 = 0, the last stage = 1.
+     * Boss arenas stay moderate — they don't scroll, so max danger packed
+     * the field with obstacles that never drain off-screen.
      */
     stageDanger() {
         const level = this.getCurrentLevel();
         if (!level) return 0;
         const n = Math.max(2, Number(level.stagesPerPlanet) || 3);
-        if (level.isBoss) return 1;
+        if (level.isBoss) return 0.35;
         const i = Math.max(1, Number(level.stageIndex) || 1);
         return Math.max(0, Math.min(1, (i - 1) / (n - 1)));
+    },
+    /** Alive-obstacle budget; boss arenas use a tighter cap. */
+    obstacleMaxAlive() {
+        const level = this.getCurrentLevel();
+        return (level && level.isBoss) ? OBSTACLE_MAX_ALIVE_BOSS : OBSTACLE_MAX_ALIVE;
     },
     /** 0..1 intensity that grows over the run (later stages start higher). */
     patternIntensity() {
         const ramp = (this.runTime || 0) / OBSTACLE_RAMP_MS;
+        const level = this.getCurrentLevel();
+        // Boss: soft floor only — don't ramp the static arena into a debris landfill.
+        if (level && level.isBoss) {
+            return Math.max(0, Math.min(0.45, Math.max(ramp * 0.35, this.stageDanger() * 0.35)));
+        }
         return Math.max(0, Math.min(1, Math.max(ramp, this.stageDanger() * 0.35)));
     },
     pickPattern() {
@@ -73,7 +86,8 @@ extendClass(ObstacleManager, {
     spawnPatternWave(gameState) {
         if (!this.hasDefs()) return;
         const alive = this.obstacles.filter((o) => !o.isFog).length;
-        if (alive >= OBSTACLE_MAX_ALIVE) return;
+        const maxAlive = this.obstacleMaxAlive();
+        if (alive >= maxAlive) return;
 
         const lead = this.pickWeightedDef();
         if (!lead) return;
@@ -116,7 +130,7 @@ extendClass(ObstacleManager, {
             this.buildPatternPoints(pattern, across, intensity),
             { vx: vx, vy: vy, py: py, cy: cy, H: H, intensity: intensity }
         );
-        const budget = OBSTACLE_MAX_ALIVE - alive;
+        const budget = maxAlive - alive;
         pts.slice(0, budget).forEach((pt) => {
             const def = pt.big ? (palette.slice().sort((a, b) => (b.width || 10) - (a.width || 10))[0])
                 : this.pickWeightedDef(palette);
@@ -318,7 +332,8 @@ extendClass(ObstacleManager, {
         // End of the level: the field only drains, no new layers.
         if (typeof objectiveManager !== 'undefined' && objectiveManager.isLevelEnding()) return;
         const alive = this.obstacles.filter((o) => !o.isFog).length;
-        if (alive >= OBSTACLE_MAX_ALIVE) return;
+        const maxAlive = this.obstacleMaxAlive();
+        if (alive >= maxAlive) return;
         // Every so often leave a breather layer empty.
         if (Math.random() < 0.2) return;
 
@@ -343,7 +358,7 @@ extendClass(ObstacleManager, {
         const minHole = Math.max(72, 96 - intensity * 18);
         let cursor = Math.random() * 20;
         let spawned = 0;
-        while (cursor < trainLen && alive + spawned < OBSTACLE_MAX_ALIVE) {
+        while (cursor < trainLen && alive + spawned < maxAlive) {
             const groupSize = 1 + Math.floor(Math.random() * (1.2 + intensity * 0.8));
             // A minority of groups also drift down/up slightly while flying across.
             const vSpeed = Math.random() < 0.25
@@ -418,9 +433,9 @@ extendClass(ObstacleManager, {
         const env = this.getEnvironment();
         // Planet look: only its own areas appear.
         const zoneBias = env.zones || null;
-        // Later stages lean towards harsh areas (within the planet's own set).
-        const zoneMul = (z) => TERRAIN_HARSH_ZONES.includes(z) ? 1 + 1.5 * danger
-            : (TERRAIN_CALM_ZONES.includes(z) ? 1 - 0.5 * danger : 1);
+        // Later stages lean gently towards harsh areas (within the planet's own set).
+        const zoneMul = (z) => TERRAIN_HARSH_ZONES.includes(z) ? 1 + 0.45 * danger
+            : (TERRAIN_CALM_ZONES.includes(z) ? 1 + 0.25 * (1 - danger) : 1);
         const zones = TERRAIN_ZONES.map((z, i) => ({
             id: z,
             weight: (zoneBias ? (zoneBias[z] ? zoneBias[z] : 0) : 0.3 + r(50 + i) * 1.4) * zoneMul(z)
@@ -453,19 +468,20 @@ extendClass(ObstacleManager, {
         const materials = mw.map((v) => (acc += v / tot));
         this._terrainProfile = {
             pid, stage, danger, env, seed, zones, materials, zoneMats, zoneFloors,
-            // ~12-17 s per area at the base scroll speed: long, coherent stretches.
-            zoneRows: Math.round(170 + r(1) * 70),
+            // ~14-20 s per area at the base scroll speed: long, coherent stretches.
+            zoneRows: Math.round(200 + r(1) * 80),
             // Thicker walls on later stages (narrower passage, still flyable).
             // Kept modest so the flyable corridor stays wide without stretching art.
-            width: (0.45 + this.terrainHash(pseed % 100003, 2) * 0.35) * (env.width || 1) * (1 + 0.12 * danger),
-            freq: 0.6 + r(7) * 1.0,
+            width: (0.42 + this.terrainHash(pseed % 100003, 2) * 0.28) * (env.width || 1) * (1 + 0.08 * danger),
+            // Lower spatial frequency → rolling canyon lips instead of comb spikes.
+            freq: 0.35 + r(7) * 0.55,
             phase: r(8) * 100
         };
         return this._terrainProfile;
     },
     /**
      * Flight area at world row `wr`: zones follow each other along the run
-     * and blend over a few rows. Returns wall offsets as fractions of W,
+     * and blend over a long soft ramp. Returns wall offsets as fractions of W,
      * a depth multiplier and whether faction structures show.
      */
     terrainZoneAt(wr, prof) {
@@ -473,16 +489,18 @@ extendClass(ObstacleManager, {
         const idx = Math.floor(wr / len);
         const t = (wr - idx * len) / len;
         const a = this.terrainZoneShape(this.terrainZoneId(idx, prof), wr, t);
-        // Blend into the next zone over the last 15% of this one.
-        if (t < 0.85) return a;
+        // Blend into the next zone over the last ~28% of this one.
+        if (t < TERRAIN_BLEND_START) return a;
         const b = this.terrainZoneShape(this.terrainZoneId(idx + 1, prof), wr, 0);
-        const k = (t - 0.85) / 0.15;
-        const m = (x, y) => x + (y - x) * k;
-        return { left: m(a.left, b.left), right: m(a.right, b.right), mul: m(a.mul, b.mul), structures: k < 0.5 ? a.structures : b.structures };
+        const k = (t - TERRAIN_BLEND_START) / (1 - TERRAIN_BLEND_START);
+        // Smoothstep so the seam doesn't read as a hard kink.
+        const s = k * k * (3 - 2 * k);
+        const m = (x, y) => x + (y - x) * s;
+        return { left: m(a.left, b.left), right: m(a.right, b.right), mul: m(a.mul, b.mul), structures: s < 0.5 ? a.structures : b.structures };
     },
     /**
      * Threshold between two areas: rows from the zone seam (0 = seam row),
-     * or null when not near one. The gate spans 7 rows centred on it.
+     * or null when not near one. The gate spans 5 rows centred on it.
      */
     terrainGateRow(wr, prof) {
         const p = prof || this.terrainProfile();
@@ -490,7 +508,7 @@ extendClass(ObstacleManager, {
         const idx = Math.round(wr / len);
         if (idx <= 0) return null;
         const d = wr - idx * len;
-        return Math.abs(d) <= 3 ? d : null;
+        return Math.abs(d) <= 2 ? d : null;
     },
     terrainZoneIndex(wr, prof) {
         return Math.floor(wr / (prof || this.terrainProfile()).zoneRows);
@@ -501,6 +519,13 @@ extendClass(ObstacleManager, {
         const len = prof.zoneRows;
         const idx = Math.floor(wr / len);
         const t = (wr - idx * len) / len;
-        return prof.zoneFloors[this.terrainZoneId(idx, prof)] || 'craters';
+        const a = prof.zoneFloors[this.terrainZoneId(idx, prof)] || 'craters';
+        if (t < TERRAIN_BLEND_START) return a;
+        const b = prof.zoneFloors[this.terrainZoneId(idx + 1, prof)] || a;
+        if (a === b) return a;
+        // Irregular spatial dither — no hard horizontal cut between biomes.
+        const k = (t - TERRAIN_BLEND_START) / (1 - TERRAIN_BLEND_START);
+        const n = this.terrainHash(Math.floor(wr / 2), ((cx | 0) * 17 + 41) | 0);
+        return n < k * k * (3 - 2 * k) ? b : a;
     },
 });

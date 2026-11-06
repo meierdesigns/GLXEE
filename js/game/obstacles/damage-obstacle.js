@@ -31,6 +31,9 @@ extendClass(ObstacleManager, {
     damageObstacle(index, amount, hitX, hitY) {
         const o = this.obstacles[index];
         if (!o || o.isFog || !o.isDestructible) return false;
+        // Shooting a crate disarms BOMB — opened crates drop perks, never boom.
+        // Untouched bomb crates still blast on ram (removeObstacle → spawnPowerUp).
+        if (o.isCrate && this.disarmCrateBomb) this.disarmCrateBomb(o);
         const before = o.health;
         o.health -= Math.max(1, amount);
         if (o.health <= 0) {

@@ -10,6 +10,22 @@ extendClass(ProfileManager, {
         return (p.homeStation.ownedPortalIds || []).indexOf(gid) !== -1;
     },
 
+    /** Bought portal module sitting in inventory — not yet installed on the station. */
+    hasPortalInInventory(galaxyId, profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return false;
+        this.ensureEconomyDefaults(p);
+        const gid = String(galaxyId || '').toLowerCase();
+        return (p.homeStation.portalInventory || []).indexOf(gid) !== -1;
+    },
+
+    getPortalInventory(profile) {
+        const p = profile || this.getActiveProfile();
+        if (!p) return [];
+        this.ensureEconomyDefaults(p);
+        return (p.homeStation.portalInventory || []).slice();
+    },
+
     getShopFaction(profile) {
         const gid = this.getCurrentGalaxyId(profile);
         if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction) {
@@ -86,6 +102,9 @@ extendClass(ProfileManager, {
         if (this.ownsPortal(gid, profile)) {
             return { ok: false, reason: 'OWNED' };
         }
+        if (this.hasPortalInInventory(gid, profile)) {
+            return { ok: false, reason: 'IN INVENTORY' };
+        }
         const faction = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyFaction)
             ? planetConfigManager.getGalaxyFaction(gid)
             : null;
@@ -104,8 +123,33 @@ extendClass(ProfileManager, {
         } else if (!this.spendResources(cost)) {
             return { ok: false, reason: 'RESOURCES' };
         }
-        profile.homeStation.ownedPortalIds.push(gid);
+        // Bought modules sit in inventory — install from STATION → TRAVEL.
+        profile.homeStation.portalInventory.push(gid);
         if (faction) this.discoverFaction(faction);
+        this.save();
+        return { ok: true, galaxyId: gid, inventory: true };
+    },
+
+    /** Install a bought portal module onto the station (unlocks travel to that galaxy). */
+    installPortal(galaxyId) {
+        const profile = this.getActiveProfile();
+        if (!profile) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const gid = String(galaxyId || '').toLowerCase();
+        if (!gid || gid === 'milky_way') {
+            return { ok: false, reason: 'INVALID' };
+        }
+        if (this.ownsPortal(gid, profile)) {
+            return { ok: false, reason: 'OWNED' };
+        }
+        const inv = profile.homeStation.portalInventory || [];
+        const idx = inv.indexOf(gid);
+        if (idx === -1) {
+            return { ok: false, reason: 'NOT IN INVENTORY' };
+        }
+        inv.splice(idx, 1);
+        profile.homeStation.portalInventory = inv;
+        profile.homeStation.ownedPortalIds.push(gid);
         this.save();
         return { ok: true, galaxyId: gid };
     },

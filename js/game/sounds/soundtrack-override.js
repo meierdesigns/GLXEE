@@ -9,6 +9,16 @@ extendClass(SoundManager, {
         this._currentPlanetId = planetId;
         this._currentStageId = stageId || null;
         this._currentHostileFaction = this._resolveHostileFaction(planetId);
+        const ambientKey = 'ambient:' + (planetId || 'mars')
+            + ':' + (stageId || '')
+            + ':' + (this._currentHostileFaction || '');
+        // Same combat song already playing (e.g. next stage, same planet) → keep position.
+        if (this._combatSongAlreadyPlaying(planetId) && !this._resolveSoundtrackOverride()) {
+            this._pendingMissionIntro = false;
+            this._introPlaying = false;
+            this._activeOverrideKey = ambientKey;
+            return;
+        }
         // Always re-bind combat music when a stage boots (don't trust stale keys).
         this._activeOverrideKey = null;
         // Fresh stage boot → play one-shot intro before the combat loop.
@@ -16,6 +26,29 @@ extendClass(SoundManager, {
         this._introPlaying = false;
         this._reevaluateMusic();
         this._ensureCombatMusicPlaying();
+    },
+
+    /** True when the vftrack that combat would pick is already audible. */
+    _combatSongAlreadyPlaying(planetId) {
+        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.isPlaying
+            || !vfTrackerManager.isPlaying()) {
+            return false;
+        }
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const keys = this.combatTrackKeys
+            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+            : [id];
+        if (keys.indexOf(id) === -1) keys.push(id);
+        const target = vfTrackerManager.firstPlayableKey
+            ? vfTrackerManager.firstPlayableKey(keys)
+            : null;
+        if (target && vfTrackerManager.isPlaying(target)) return true;
+        for (let i = 0; i < keys.length; i++) {
+            if (vfTrackerManager.isPlaying(keys[i])) return true;
+        }
+        return false;
     },
 
     introTrackKeys(planetId, factionId) {
@@ -42,8 +75,11 @@ extendClass(SoundManager, {
         }
         if (!this.ensureContext()) return false;
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly();
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
+        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         const keys = this.introTrackKeys(id, this._currentHostileFaction);
         vfTrackerManager.setEnabled(true);
         vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
@@ -98,7 +134,11 @@ extendClass(SoundManager, {
         if (key === this._activeEnemyTypesKey) return;
         this._activeEnemyTypesKey = key;
         this._activeEnemyTypes = list;
+        // Only swap when the resolved override identity changes — spawn/despawn
+        // churn of untracked types must not restart the combat loop.
+        const before = this._activeOverrideKey;
         this._reevaluateMusic();
+        if (this._activeOverrideKey === before && this._musicActuallyPlaying()) return;
         this._ensureCombatMusicPlaying();
     },
 
@@ -178,12 +218,42 @@ extendClass(SoundManager, {
             + ':' + (this._currentStageId || '')
             + ':' + (this._currentHostileFaction || ''));
 
-        // Skip only when the same key is already audibly playing.
+        // Skip when the same logical slot is already playing.
         if (ambientKey === this._activeOverrideKey && this._musicActuallyPlaying()) return;
+
+        // Same actual song under a new slot (stage change, override key rename) → keep position.
+        if (!resolved && this._combatSongAlreadyPlaying(this._currentPlanetId)) {
+            this._activeOverrideKey = ambientKey;
+            return;
+        }
+        if (resolved && this.musicEnabled) {
+            const track = resolved.track;
+            if (track.localAudioData && typeof localAudioManager !== 'undefined'
+                && localAudioManager.el && !localAudioManager.el.paused
+                && localAudioManager._currentDataUrl === track.localAudioData) {
+                localAudioManager.currentKey = overrideKey;
+                this._activeOverrideKey = ambientKey;
+                return;
+            }
+            if (track.trackerData && typeof vfTrackerManager !== 'undefined'
+                && vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()
+                && (vfTrackerManager.isPlaying(overrideKey)
+                    || vfTrackerManager.currentKey === overrideKey)) {
+                this._activeOverrideKey = ambientKey;
+                return;
+            }
+            if (track.youtubeUrl && typeof youtubeSoundtrackManager !== 'undefined'
+                && youtubeSoundtrackManager.enabled
+                && youtubeSoundtrackManager.currentKey === overrideKey) {
+                this._activeOverrideKey = ambientKey;
+                return;
+            }
+        }
+
         this._activeOverrideKey = ambientKey;
 
         if (!resolved) {
-            // Don't pre-stop here — startPlanetAmbient stops/restarts cleanly.
+            // Don't pre-stop here — startPlanetAmbient keeps position if same song.
             this.startPlanetAmbient(this._currentPlanetId || 'mars');
             return;
         }
@@ -197,25 +267,43 @@ extendClass(SoundManager, {
             return;
         }
 
-        this.stopPlanetAmbientNodesOnly();
+        // Soft handoff between sources — play()/fadeOut crossfade the audible bus.
+        if (!track.localAudioData && !track.trackerData) {
+            this.stopPlanetAmbientNodesOnly({ fade: 0.85 });
+        } else if (track.localAudioData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
+        } else if (track.trackerData) {
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
+        }
+
         const bus = this.musicBusVolume ? this.musicBusVolume() : (this.masterVolume * this.musicVolume);
         if (track.localAudioData) {
-            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
             if (typeof localAudioManager !== 'undefined') {
                 localAudioManager.setVolume(bus);
                 localAudioManager.play(overrideKey, track.localAudioData);
             }
         } else if (track.trackerData) {
-            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.setVolume(bus);
                 vfTrackerManager.play(overrideKey, track.trackerData);
             }
         } else if (track.youtubeUrl) {
-            if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
+            if (typeof vfTrackerManager !== 'undefined') {
+                if (vfTrackerManager.fadeOut) vfTrackerManager.fadeOut();
+                else vfTrackerManager.stop();
+            }
             if (typeof youtubeSoundtrackManager !== 'undefined') {
                 youtubeSoundtrackManager.setEnabled(true);
                 youtubeSoundtrackManager.setVolume(bus);
@@ -235,6 +323,7 @@ extendClass(SoundManager, {
         this._pendingMissionIntro = false;
         this._introPlaying = false;
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+        // Leave the tracker bus up so startMenuMusic can crossfade combat→menu
+        // (hard-stop made non-PLANET styles feel like the same loop continued).
     }
 });

@@ -206,12 +206,15 @@ class DifficultyEditorUI {
                     cfg[key] = value / (tierCfg[key] || 1);
                 }));
             });
-        // Show this faction's boss kit so designers see the weapon split.
+        // Show this faction's boss kit so designers see the weapon + doctrine split.
         const kit = manager.getBossWeaponKit ? manager.getBossWeaponKit(faction) : null;
+        const beh = manager.getBossBehaviorKit ? manager.getBossBehaviorKit(faction) : null;
         if (kit) {
             const note = document.createElement('p');
             note.className = 'de-kit-note';
-            note.textContent = `Boss kit — fan: ${kit.fan} · aimed: ${kit.aimed} · sweep: ${kit.sweep}`;
+            const seq = beh && beh.patterns ? beh.patterns.join(' → ') : 'fan → aimed → sweep';
+            const style = beh && beh.style ? beh.style : '?';
+            note.textContent = `Boss kit — ${style} · fan: ${kit.fan} · aimed: ${kit.aimed} · sweep: ${kit.sweep} · ${seq}`;
             aiRoot.appendChild(note);
         }
         root.appendChild(aiRoot);

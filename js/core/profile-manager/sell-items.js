@@ -74,11 +74,41 @@ extendClass(ProfileManager, {
 
     getPartSellValue(kind, partId) {
         if (typeof economyConfig === 'undefined') return 0;
-        const item = this.getPartItem(kind, partId);
+        const id = this.partDefId ? this.partDefId(partId) : String(partId || '');
+        const item = this.getPartItem(kind, id);
         return item ? this.getSellValue(economyConfig.getPartCost(kind, item)) : 0;
     },
 
-    /** Sells one stored part. Equipping depends on discovery, not the count. */
+    /** Drop one instance's upgrade bag and slide higher indices down. */
+    _compactPartInstanceUpgradesAfterSell(profile, bucket, defId, unit, ownedBefore) {
+        if (!profile || !bucket || !defId || ownedBefore <= 0) return;
+        const upBag = profile.itemUpgrades && profile.itemUpgrades[bucket];
+        if (!upBag) return;
+        const from = unit != null ? Math.max(0, Math.round(Number(unit) || 0)) : (ownedBefore - 1);
+        if (ownedBefore <= 1) {
+            Object.keys(upBag).forEach((k) => {
+                if (k === defId || k.indexOf(defId + '#') === 0) delete upBag[k];
+            });
+            return;
+        }
+        if (from >= ownedBefore) return;
+        delete upBag[defId];
+        delete upBag[defId + '#' + from];
+        for (let i = from + 1; i < ownedBefore; i++) {
+            const src = defId + '#' + i;
+            const dst = defId + '#' + (i - 1);
+            if (upBag[src]) {
+                upBag[dst] = upBag[src];
+                delete upBag[src];
+            } else {
+                delete upBag[dst];
+            }
+        }
+        delete upBag[defId + '#' + (ownedBefore - 1)];
+    },
+
+    /** Sells one stored part. Equipping depends on discovery, not the count.
+     *  Accepts bare defIds or instance ids (`defId#unit`) from shop inventory cells. */
     sellPart(kind, partId) {
         const profile = this.getActiveProfile();
         if (!profile) return { ok: false, reason: 'NO PROFILE' };
@@ -86,11 +116,19 @@ extendClass(ProfileManager, {
         const bag = kind === 'weapon' ? profile.parts.weapons
             : (kind === 'defense' ? profile.parts.defenses
                 : (kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
-        const id = String(partId || '');
-        if (!bag || !((bag[id] || 0) > 0)) return { ok: false, reason: 'NONE LEFT' };
+        const bucket = kind === 'weapon' ? 'weapons'
+            : (kind === 'defense' ? 'defenses'
+                : (kind === 'energy' ? 'energy' : 'abilities'));
+        const parsed = this.parsePartInstanceId
+            ? this.parsePartInstanceId(partId)
+            : { defId: String(partId || ''), unit: null };
+        const id = parsed.defId || String(partId || '');
+        const ownedBefore = (bag && bag[id]) || 0;
+        if (!bag || ownedBefore <= 0) return { ok: false, reason: 'NONE LEFT' };
         const credits = this.getPartSellValue(kind, id);
         bag[id] -= 1;
         if (bag[id] <= 0) delete bag[id];
+        this._compactPartInstanceUpgradesAfterSell(profile, bucket, id, parsed.unit, ownedBefore);
         this.addCredits(credits, true);
         this.save();
         return { ok: true, credits: credits };

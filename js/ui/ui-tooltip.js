@@ -18,7 +18,9 @@ class UiTooltipManager {
         const tip = document.createElement('div');
         tip.className = 'ui-tooltip';
         tip.setAttribute('role', 'tooltip');
-        document.body.appendChild(tip);
+        // Mount on <html>, not <body>: body carries overflow:clip + bezel clip-path
+        // and stage scale, which shears tips that open near the rim (bezel tools).
+        document.documentElement.appendChild(tip);
         this.el = tip;
         return tip;
     }
@@ -377,6 +379,18 @@ class UiTooltipManager {
         });
     }
 
+    /** Keep a viewport box fully inside the window with a pad. */
+    clampBox(left, top, tw, th, pad) {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const maxL = Math.max(pad, vw - tw - pad);
+        const maxT = Math.max(pad, vh - th - pad);
+        return {
+            left: Math.max(pad, Math.min(left, maxL)),
+            top: Math.max(pad, Math.min(top, maxT))
+        };
+    }
+
     position(anchor, tip) {
         if (!anchor || !tip || !anchor.isConnected) {
             this.hide();
@@ -387,70 +401,65 @@ class UiTooltipManager {
             this.hide();
             return;
         }
-        // Work in visual px; convert when writing (the tip may sit inside a
-        // zoomed container, see zoom-rect-fix.js).
-        const tz = window.vfEffectiveZoom ? window.vfEffectiveZoom(tip) : 1;
-        // <body> carries the stage scale transform: a fixed tip lives in body space, not the viewport.
-        const br = document.body.getBoundingClientRect();
-        const bs = (br.width / (document.body.offsetWidth || br.width)) || 1;
-        const toCss = (v, axis) => (window.vfToCssPx ? window.vfToCssPx(tip, (v - (axis === 'y' ? br.top : br.left)) / bs) : (v - (axis === 'y' ? br.top : br.left)) / bs);
-        const tw = tip.offsetWidth * tz * bs;
-        const th = tip.offsetHeight * tz * bs;
+        // Tip lives on <html> as position:fixed → true viewport pixels (no body scale).
+        const tw = tip.offsetWidth || tip.getBoundingClientRect().width || 0;
+        const th = tip.offsetHeight || tip.getBoundingClientRect().height || 0;
+        const pad = 8;
+        const gap = 10;
         tip.classList.remove('below', 'side-left', 'side-right');
+        const place = (left, top, sideClass) => {
+            const box = this.clampBox(left, top, tw, th, pad);
+            if (sideClass) tip.classList.add(sideClass);
+            tip.style.left = Math.round(box.left) + 'px';
+            tip.style.top = Math.round(box.top) + 'px';
+        };
         // Sidebars: open beside the panel (right of the left one, left of the
         // right one) instead of covering the neighbouring rows.
         // Slot-layout cells: right beside the cell itself.
         if (anchor.closest('.hs-slotview')) {
-            let sl = r.right + 10;
-            if (sl + tw > window.innerWidth - 8) sl = r.left - tw - 10;
-            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
-            tip.classList.add('side-right');
-            tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
-            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            let sl = r.right + gap;
+            if (sl + tw > window.innerWidth - pad) sl = r.left - tw - gap;
+            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
             return;
         }
         // Bay inventory: tuck beside the hovered cell (near the cursor), not the whole panel edge.
         const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
         if (invPanel) {
-            const gap = 8;
             let sl = r.right + gap;
-            if (sl + tw > window.innerWidth - 8) sl = Math.max(8, r.left - tw - gap);
-            const st = Math.max(8, Math.min(r.top + r.height / 2 - th / 2, window.innerHeight - th - 8));
-            tip.classList.add('side-right');
-            tip.style.left = Math.round(toCss(sl, 'x')) + 'px';
-            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            if (sl + tw > window.innerWidth - pad) sl = Math.max(pad, r.left - tw - gap);
+            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
             return;
         }
         const leftBar = anchor.closest('.hs-hangar-list, [data-tip-side="right"]');
         const rightBar = !leftBar && anchor.closest('.hs-hangar-preview, [data-tip-side="left"]');
         if (leftBar || rightBar) {
             const b = (leftBar || rightBar).getBoundingClientRect();
-            let sl = leftBar ? b.right + 10 : b.left - tw - 10;
+            let sl = leftBar ? b.right + gap : b.left - tw - gap;
             // No room on that side: fall back to the other.
-            if (sl + tw > window.innerWidth - 8 || sl < 8) sl = leftBar ? r.left - tw - 10 : r.right + 10;
-            let st = r.top + r.height / 2 - th / 2;
-            st = Math.max(8, Math.min(st, window.innerHeight - th - 8));
-            tip.classList.add(leftBar ? 'side-right' : 'side-left');
-            tip.style.left = Math.round(toCss(Math.max(8, sl), 'x')) + 'px';
-            tip.style.top = Math.round(toCss(st, 'y')) + 'px';
+            if (sl + tw > window.innerWidth - pad || sl < pad) {
+                sl = leftBar ? r.left - tw - gap : r.right + gap;
+            }
+            place(sl, r.top + r.height / 2 - th / 2, leftBar ? 'side-right' : 'side-left');
             return;
         }
+        // Bezel tools sit in the top rim — always open below so the tip never
+        // gets sheared by the stage clip / bezel band.
+        const bezelTool = !!anchor.closest('.vf-bezel-tools, .vf-bezel-res, .vf-bezel-vol, .vf-bezel-fx');
+        const spaceAbove = r.top - gap;
+        const spaceBelow = window.innerHeight - r.bottom - gap;
+        const preferBelow = bezelTool || (spaceAbove < th && spaceBelow >= spaceAbove);
         let left = r.left + (r.width / 2) - (tw / 2);
-        let top = r.top - th - 10;
-        // Not enough room above (near the top edge / header bar): flip below.
-        // Flip whenever below has strictly more room, not only when above is negative,
-        // so a tall tooltip never gets squeezed against the screen edge.
-        const spaceAbove = r.top - 10;
-        const spaceBelow = window.innerHeight - r.bottom - 10;
-        if (spaceAbove < th && spaceBelow > spaceAbove) {
-            top = r.bottom + 10;
+        let top = preferBelow ? (r.bottom + gap) : (r.top - th - gap);
+        if (preferBelow) tip.classList.add('below');
+        // If the preferred side still overflows, flip once more.
+        if (!preferBelow && top < pad && spaceBelow >= th) {
+            top = r.bottom + gap;
             tip.classList.add('below');
+        } else if (preferBelow && top + th > window.innerHeight - pad && spaceAbove >= th) {
+            top = r.top - th - gap;
+            tip.classList.remove('below');
         }
-        left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
-        // Never past the bottom edge either (below-placement near the foot).
-        top = Math.max(8, Math.min(top, window.innerHeight - th - 8));
-        tip.style.left = Math.round(toCss(left, 'x')) + 'px';
-        tip.style.top = Math.round(toCss(top, 'y')) + 'px';
+        place(left, top, null);
     }
 
     hide() {

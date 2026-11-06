@@ -13,7 +13,7 @@
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
     const syncPilotPlate = (...args) => NS.syncPilotPlate(...args); // defined in a later part
     const update = (...args) => NS.update(...args); // defined in a later part
-    Object.assign(NS, { applyFrameStyle, clamp, endPreviewFaction, ensureBezel, frameAdjust, frameDefaults, getUi, hexToHsl, playfieldParams, readCssNumber, resLabel, saveFrameStyles, setPerf, setPreviewFaction, syncMapToAspect, viewportSize }); // functions (hoisted)
+    Object.assign(NS, { applyFrameStyle, clamp, endPreviewFaction, ensureBezel, ensureVolPlate, frameAdjust, frameDefaults, getUi, hexToHsl, playfieldParams, readCssNumber, resLabel, saveFrameStyles, setPerf, setPreviewFaction, syncMapToAspect, viewportSize }); // functions (hoisted)
 
     const ROOT = document.documentElement;
     const DEFAULT_ASPECT = 1.42;
@@ -192,6 +192,43 @@
         return el;
     }
 
+    // Master-volume dropdown plate, unfolding under the mute key in the bezel strip.
+    // Same "child of <html>" trick as #vf-res: fixed pixel size outside the scaled stage.
+    function ensureVolPlate() {
+        let el = document.getElementById('vf-vol');
+        if (el) return el;
+        el = document.createElement('label');
+        el.id = 'vf-vol';
+        el.className = 'vf-bezel-vol';
+        el.style.display = 'none';
+        el.innerHTML = '<span>VOL</span>' +
+            '<input type="range" id="vfVolSlider" min="0" max="100" step="1" aria-label="Master volume">' +
+            '<output id="vfVolValue"></output>';
+        document.documentElement.appendChild(el);
+        const input = el.querySelector('input');
+        const out = el.querySelector('output');
+        const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+        const fill = function (pct) { input.style.setProperty('--look-fill', pct + '%'); };
+        const sync = function () {
+            const pct = Math.round((mgr ? mgr.getMasterVolume() : 0.75) * 100);
+            input.value = String(pct);
+            fill(pct);
+            out.textContent = pct + '%';
+        };
+        sync();
+        input.addEventListener('input', function () {
+            const pct = parseInt(input.value, 10) || 0;
+            fill(pct);
+            out.textContent = pct + '%';
+            if (mgr) mgr.setMasterVolume(pct / 100);
+        });
+        ['keydown', 'keyup'].forEach(function (t) {
+            input.addEventListener(t, function (e) { e.stopPropagation(); });
+        });
+        el.addEventListener('vf-vol-sync', sync);
+        return el;
+    }
+
     // All tool icons are drawn on the same 16x16 pixel grid.
     // Every icon: 16x16 grid, 2px strokes, square caps, no fills.
     const svg16 = function (body) {
@@ -201,7 +238,8 @@
     const FS_ON = svg16('<path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4"/>');
     const FS_OFF = svg16('<path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/>');
     const POWER = svg16('<path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/>');
-    const FX_ICON = svg16('<path d="M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2"/>');
+    // Settings remote (fernbedienung): tall handset body, dial, button rows.
+    const FX_ICON = svg16('<rect x="4" y="1" width="8" height="14"/><circle cx="8" cy="5" r="2"/><path d="M6 9h4M6 12h4"/>');
     // HUD remote: pilot plate + crest (second fernbedienung).
     const HUD_ICON = svg16('<rect x="2" y="3" width="12" height="10"/><circle cx="6" cy="7" r="2"/><path d="M10 5h2M10 8h2M10 11h2"/>');
     const LAYOUT_ICON = svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/>');
@@ -213,8 +251,12 @@
     const FRAME_EDIT_ICON = svg16('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>');
     const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
+    const MUTE_ON = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5c1.5 1 1.5 5 0 6M13 3c3 2.5 3 7.5 0 10"/>');
+    const MUTE_OFF = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5l5 6M16 5l-5 6"/>');
+    Object.assign(NS, { MUTE_ON, MUTE_OFF });
     vfs.resOpen = false;
     vfs.fxOpen = false;
+    vfs.volOpen = false;
 
     // Per-faction frame style overrides (bevel, plate colours, deco), kept in localStorage.
     const FACTIONS = ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];

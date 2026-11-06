@@ -275,6 +275,13 @@ extendClass(GalaxyMapManager, {
         this._zoomAnim = null;
         if (svg && this.adoptViewBoxZoom) this.adoptViewBoxZoom(svg);
         const originalViewBox = svg && svg.getAttribute('viewBox');
+        // Camera starts wherever it already was (e.g. still framing the selection) and
+        // eases onto the ship instead of snapping to it the instant the flight begins.
+        const camFrom = (() => {
+            const vb = (originalViewBox || '').trim().split(/\s+/).map(Number);
+            return (vb.length === 4 && vb.every(Number.isFinite))
+                ? { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2 } : null;
+        })();
         const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
         if (!from || !to || !svg || reduced) {
             this.commitFlight(kind, id);
@@ -307,7 +314,8 @@ extendClass(GalaxyMapManager, {
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
         const duration = Math.max(1800, Math.min(5000, dist * 12));
         this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
-            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox };
+            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox,
+            camFrom: camFrom };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
             if (stopAt < 1) this.showAmbush();
@@ -321,6 +329,9 @@ extendClass(GalaxyMapManager, {
         const start = performance.now();
         const span = Math.max(1, f.duration * (t1 - t0));
         const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
+        // Only the flight's opening leg eases the camera in from wherever it was; a
+        // resumed leg (post-ambush) is already following the ship, so it just continues.
+        const camBlendDur = t0 === 0 && f.camFrom ? Math.min(600, span) : 0;
         const step = (now) => {
             if (this._flight !== f) return;
             const local = Math.min(1, (now - start) / span);
@@ -333,7 +344,13 @@ extendClass(GalaxyMapManager, {
             f.ship.setAttribute('transform', `translate(${sat.x},${sat.y})`);
             const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
             if (vb.length === 4 && vb.every(Number.isFinite)) {
-                f.svg.setAttribute('viewBox', `${at.x - vb[2] / 2} ${at.y - vb[3] / 2} ${vb[2]} ${vb[3]}`);
+                let cx = at.x, cy = at.y;
+                if (camBlendDur > 0) {
+                    const camK = ease(Math.min(1, (now - start) / camBlendDur));
+                    cx = f.camFrom.x + (at.x - f.camFrom.x) * camK;
+                    cy = f.camFrom.y + (at.y - f.camFrom.y) * camK;
+                }
+                f.svg.setAttribute('viewBox', `${cx - vb[2] / 2} ${cy - vb[3] / 2} ${vb[2]} ${vb[3]}`);
             }
             if (f.heading) f.heading.setAttribute('transform', `rotate(${at.angle})`);
             // Trail: the path's corners passed so far, then the ship.

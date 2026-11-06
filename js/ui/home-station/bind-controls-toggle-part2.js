@@ -58,6 +58,10 @@ extendClass(HomeStationUI, {
                 if (e.key === 'Escape' || e.key === 'Backspace') {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (galaxyMapManager.hasCardFocus && galaxyMapManager.hasCardFocus()) {
+                        galaxyMapManager.clearCardFocus();
+                        return;
+                    }
                     if (galaxyMapManager.hasActionFocus()) {
                         galaxyMapManager.clearActionFocus();
                         return;

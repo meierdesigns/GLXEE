@@ -22,81 +22,87 @@ extendClass(ObstacleManager, {
         return 'canyon';
     },
     terrainZoneShape(id, wr, t) {
-        // Envelope: shapes ramp in from the zone start so edges stay smooth.
-        const env = Math.min(1, t / 0.15);
+        // Envelope: shapes ramp in slowly so area starts don't look like hard cuts.
+        const env = Math.min(1, t / 0.28);
         switch (id) {
             case 'narrows': // walls close in: a tight squeeze
-                return { left: 0.17 * env, right: 0.17 * env, mul: 1, structures: false };
+                return { left: 0.13 * env, right: 0.13 * env, mul: 1, structures: false };
             case 'open': // the canyon opens up into an open field
                 return { left: 0, right: 0, mul: 1 - 0.65 * env, structures: false };
             case 'winding': { // corridor snakes left and right
-                const s = Math.sin(wr * 0.035) * 0.22 * env;
+                const s = Math.sin(wr * 0.028) * 0.16 * env;
                 return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.8, structures: false };
             }
-            case 'teeth': { // alternating jagged spurs from each side
-                const p = ((wr % 36) + 36) % 36;
-                const spur = p < 12 ? (1 - Math.abs(p - 6) / 6) * 0.26 * env : 0;
-                const left = Math.floor(wr / 36) % 2 ? spur : 0;
+            case 'teeth': { // rounded spurs, not needle teeth
+                const p = ((wr % 48) + 48) % 48;
+                const spur = p < 18 ? Math.sin((p / 18) * Math.PI) * 0.14 * env : 0;
+                const left = Math.floor(wr / 48) % 2 ? spur : 0;
                 return { left, right: spur - left, mul: 0.9, structures: false };
             }
-            case 'funnel': { // walls slowly close in, then snap open at the end
-                const k = (t < 0.85 ? t / 0.85 : (1 - t) / 0.15) * env;
-                return { left: 0.19 * k, right: 0.19 * k, mul: 1, structures: false };
+            case 'funnel': { // walls slowly close in, then ease open at the end
+                const k = (t < 0.78 ? t / 0.78 : (1 - t) / 0.22) * env;
+                return { left: 0.15 * k, right: 0.15 * k, mul: 1, structures: false };
             }
             case 'terraces': { // stepped shelves, offset per side
-                const step = (o) => (Math.floor((((wr + o) % 48) + 48) % 48 / 12)) * 0.055 * env;
-                return { left: step(0), right: step(24), mul: 0.85, structures: true };
+                const step = (o) => (Math.floor((((wr + o) % 56) + 56) % 56 / 14)) * 0.045 * env;
+                return { left: step(0), right: step(28), mul: 0.85, structures: true };
             }
             case 'bulges': { // round boulders bulging out of both walls
-                const b = (o) => Math.max(0, Math.sin((wr + o) * 0.11)) ** 2 * 0.2 * env;
-                return { left: b(0), right: b(14), mul: 0.9, structures: false };
+                const b = (o) => Math.max(0, Math.sin((wr + o) * 0.09)) ** 2 * 0.18 * env;
+                return { left: b(0), right: b(17), mul: 0.9, structures: false };
             }
-            case 'zigzag': { // sharp diagonal switchbacks
-                const p = (((wr % 40) + 40) % 40) / 40;
-                const tri = (p < 0.5 ? p * 2 : 2 - p * 2) * 2 - 1;
-                const s = tri * 0.2 * env;
-                return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.75, structures: false };
+            case 'zigzag': { // soft diagonal switchbacks
+                const s = Math.sin(wr * 0.04) * 0.14 * env;
+                return { left: Math.max(0, s), right: Math.max(0, -s), mul: 0.8, structures: false };
             }
-            case 'gorge': { // deep narrow cut with alcoves to dodge into
-                const alcove = ((((wr % 30) + 30) % 30) < 8) ? 0.1 : 0;
-                const side = Math.floor(wr / 30) % 2;
-                const n = 0.16 * env;
-                return { left: n - (side ? 0 : alcove * env), right: n - (side ? alcove * env : 0), mul: 1.15, structures: false };
+            case 'gorge': { // deep narrow cut with soft alcoves to dodge into
+                const alcove = Math.max(0, Math.sin((((wr % 36) + 36) % 36) / 36 * Math.PI * 2)) * 0.08;
+                const side = Math.floor(wr / 36) % 2;
+                const n = 0.12 * env;
+                return { left: n - (side ? 0 : alcove * env), right: n - (side ? alcove * env : 0), mul: 1.1, structures: false };
             }
-            case 'spires': { // thin needle spikes stabbing in from both sides
-                const sp = (o) => { const p = (((wr + o) % 16) + 16) % 16; return p < 4 ? (1 - Math.abs(p - 1.5) / 2.5) * 0.24 * env : 0; };
-                return { left: sp(0), right: sp(8), mul: 0.8, structures: false };
+            case 'spires': { // broad soft knolls instead of needle spikes
+                const sp = (o) => {
+                    const p = (((wr + o) % 28) + 28) % 28;
+                    return p < 10 ? Math.sin((p / 10) * Math.PI) * 0.12 * env : 0;
+                };
+                return { left: sp(0), right: sp(14), mul: 0.85, structures: false };
             }
-            case 'ruins': { // collapsed blocks: stepped, square-edged chunks
-                const blk = (o) => Math.floor(this.terrainHash(Math.floor((wr + o) / 14), 503 + o) * 4) * 0.05 * env;
-                return { left: blk(0), right: blk(7), mul: 0.9, structures: true };
+            case 'ruins': { // collapsed blocks: stepped chunks with longer runs
+                const blk = (o) => Math.floor(this.terrainHash(Math.floor((wr + o) / 18), 503 + o) * 3) * 0.045 * env;
+                return { left: blk(0), right: blk(9), mul: 0.9, structures: true };
             }
             case 'reef': { // lumpy organic growth
-                const lump = (o) => Math.max(0, Math.sin((wr + o) * 0.21) * 0.08 + Math.sin((wr + o) * 0.07) * 0.09 + 0.03) * env;
+                const lump = (o) => Math.max(0, Math.sin((wr + o) * 0.16) * 0.07 + Math.sin((wr + o) * 0.055) * 0.09 + 0.02) * env;
                 return { left: lump(0), right: lump(31), mul: 0.85, structures: false };
             }
-            case 'chasm': { // one cliff juts far out, the other side falls away
-                const side = Math.floor(wr / 60) % 2;
-                const c = 0.28 * env * Math.min(1, Math.min((((wr % 60) + 60) % 60), 60 - (((wr % 60) + 60) % 60)) / 8);
-                return { left: side ? c : 0, right: side ? 0 : c, mul: side ? 1.2 : 0.5, structures: false };
+            case 'chasm': { // one cliff swells out, the other side falls away
+                const side = Math.floor(wr / 72) % 2;
+                const local = (((wr % 72) + 72) % 72);
+                const c = 0.2 * env * Math.sin(Math.min(1, Math.min(local, 72 - local) / 14) * Math.PI);
+                return { left: side ? c : 0, right: side ? 0 : c, mul: side ? 1.15 : 0.55, structures: false };
             }
-            case 'icefall': { // sawtooth icicles, sharp tip pointing downstream
-                const saw = (o) => ((((wr + o) % 12) + 12) % 12) / 12 * 0.17 * env;
-                return { left: saw(0), right: saw(6), mul: 0.9, structures: false };
+            case 'icefall': { // soft cascading shelves, not sawtooth needles
+                const saw = (o) => {
+                    const p = (((wr + o) % 20) + 20) % 20;
+                    return Math.sin((p / 20) * Math.PI) * 0.11 * env;
+                };
+                return { left: saw(0), right: saw(10), mul: 0.9, structures: false };
             }
-            case 'pipes': { // conduits reaching across in flat bands
-                const p = ((wr % 24) + 24) % 24;
-                const band = p < 3 ? 0.22 * env : 0.03 * env;
-                const left = Math.floor(wr / 24) % 2 ? band : 0.03 * env;
-                return { left, right: left === band ? 0.03 * env : band, mul: 1, structures: true };
+            case 'pipes': { // conduits reaching across in soft bands
+                const p = ((wr % 28) + 28) % 28;
+                const band = p < 5 ? 0.16 * env * Math.sin((p / 5) * Math.PI) : 0.02 * env;
+                const left = Math.floor(wr / 28) % 2 ? band : 0.02 * env;
+                return { left, right: left === band ? 0.02 * env : band, mul: 1, structures: true };
             }
-            case 'ribs': { // dense thin ribs like a skeleton
-                const rb = ((((wr % 6) + 6) % 6) < 2 ? 0.09 : 0.02) * env;
+            case 'ribs': { // soft ribbing, spaced so it doesn't read as a comb
+                const p = ((wr % 12) + 12) % 12;
+                const rb = (p < 4 ? 0.06 * Math.sin((p / 4) * Math.PI) : 0.015) * env;
                 return { left: rb, right: rb, mul: 0.85, structures: false };
             }
             case 'delta': { // slow braided channel: walls swell and recede out of phase
-                const a = (0.5 + 0.5 * Math.sin(wr * 0.05)) * 0.18 * env;
-                const b = (0.5 + 0.5 * Math.sin(wr * 0.05 + 2.4)) * 0.18 * env;
+                const a = (0.5 + 0.5 * Math.sin(wr * 0.04)) * 0.15 * env;
+                const b = (0.5 + 0.5 * Math.sin(wr * 0.04 + 2.4)) * 0.15 * env;
                 return { left: a, right: b, mul: 0.7, structures: false };
             }
             default: // canyon: the regular look with faction structures
@@ -126,10 +132,20 @@ extendClass(ObstacleManager, {
         const seg = Math.floor(wr / TERRAIN_SEGMENT_ROWS);
         const prof = this.terrainProfile();
         // Each area has its own wall material (fixed per planet + zone);
-        // now and then a segment breaks the pattern for variety.
+        // near the seam, dither into the next zone so color bands don't hard-cut.
+        const len = prof.zoneRows;
         const zi = this.terrainZoneIndex(wr, prof);
-        const zoneMat = prof.zoneMats[this.terrainZoneId(zi, prof)];
-        if (zoneMat && this.terrainHash(seg * 2 + side, 881) > 0.04) return TERRAIN_MATERIALS[zoneMat];
+        const t = (wr - zi * len) / len;
+        let zoneId = this.terrainZoneId(zi, prof);
+        if (t >= TERRAIN_BLEND_START) {
+            const k = (t - TERRAIN_BLEND_START) / (1 - TERRAIN_BLEND_START);
+            const s = k * k * (3 - 2 * k);
+            if (this.terrainHash(Math.floor(wr / 3), side + 907) < s) {
+                zoneId = this.terrainZoneId(zi + 1, prof);
+            }
+        }
+        const zoneMat = prof.zoneMats[zoneId];
+        if (zoneMat && this.terrainHash(seg * 2 + side, 881) > 0.08) return TERRAIN_MATERIALS[zoneMat];
         const h = this.terrainHash(seg * 2 + side, 4099 + prof.seed % 997);
         const w = prof.materials;
         if (h < w[0]) return TERRAIN_MATERIALS.rock;
@@ -147,17 +163,23 @@ extendClass(ObstacleManager, {
         const style = this.getEnvironment().style;
         const prof = this.terrainProfile();
         const maxCells = Math.floor((W * 0.38) / cell);
-        // Build wall extents at an arbitrary world row (used for natural edges
-        // and for the shared lip of a carved block band).
-        const buildAt = (row) => {
-            const zone = this.terrainZoneAt(row, prof);
-            const gd = this.terrainGateRow(row, prof);
+        // Undamaged silhouette is pure (wr, W, style, profile) — cache it and only
+        // re-apply crater cuts below. Collision + draw hit this many times per frame.
+        let silCache = this._wallSilCache;
+        if (!silCache || silCache.W !== W || silCache.cell !== cell
+            || silCache.style !== style || silCache.prof !== prof) {
+            silCache = this._wallSilCache = { W, cell, style, prof, rows: new Map() };
+        }
+        let fullOf = silCache.rows.get(wr);
+        if (!fullOf) {
+            const zone = this.terrainZoneAt(wr, prof);
+            const gd = this.terrainGateRow(wr, prof);
             const gate = gd == null ? 0 : Math.max(0, Math.round((W * 0.04) / cell) - (Math.abs(gd) === 3 ? 1 : 0));
             const outcrop = (side) => {
-                const slot = Math.floor(row / 70);
+                const slot = Math.floor(wr / 70);
                 if (slot <= 1 || this.terrainHash(slot, prof.seed % 331) > 0.45 + 0.15 * (prof.danger || 0)) return 0;
                 if ((this.terrainHash(slot, 17) < 0.5 ? 0 : 1) !== side) return 0;
-                const t = (row - slot * 70 - 10) / 44;
+                const t = (wr - slot * 70 - 10) / 44;
                 if (t < 0 || t > 1) return 0;
                 const reach = 0.07 + this.terrainHash(slot, 29) * 0.1;
                 return reach * Math.min(1, Math.sin(t * Math.PI) * 1.4);
@@ -165,29 +187,29 @@ extendClass(ObstacleManager, {
             const depth = (side, mat) => {
                 const s = side * 37.1 + prof.phase;
                 const f = prof.freq;
-                const n = Math.sin(row * 0.05 * f + s) * 0.5 + Math.sin(row * 0.11 * f + s * 2) * 0.3
-                    + Math.sin(row * 0.23 * f + s * 3) * 0.2;
-                let d = (W * (0.03 + 0.028 * (n + 1) / 2) * prof.width * zone.mul
+                // Low-frequency rolling noise — high bands made every planet look like the same comb.
+                const n = Math.sin(wr * 0.035 * f + s) * 0.62 + Math.sin(wr * 0.07 * f + s * 2) * 0.28
+                    + Math.sin(wr * 0.13 * f + s * 3) * 0.1;
+                let d = (W * (0.028 + 0.02 * (n + 1) / 2) * prof.width * zone.mul
                     + W * (side ? zone.right : zone.left) * 0.7 + W * outcrop(side)) / cell
                     + gate;
-                // Material jitter changes in blocks of rows, never per single
-                // row: per-row noise left 1-row slivers that read as strata.
-                const jr = Math.floor(row / TERRAIN_JITTER_ROWS);
+                // Material jitter in long blocks so lips stay soft, not spiky.
+                const jr = Math.floor(wr / TERRAIN_JITTER_ROWS);
                 if (mat.id === 'metal') {
-                    d = Math.round(d / 2) * 2 + (this.terrainHash(jr, side + 19) < 0.4 ? 1 : 0);
+                    d = Math.round(d / 2) * 2 + (this.terrainHash(jr, side + 19) < 0.35 ? 1 : 0);
                 } else if (mat.id === 'crystal') {
-                    d += 1 + this.terrainHash(jr, side + 31) * 3;
+                    d += 0.5 + this.terrainHash(jr, side + 31) * 1.6;
                 } else if (mat.id === 'rock') {
-                    d += Math.floor(this.terrainHash(jr, side + 7) * 3) - 1;
+                    d += Math.floor(this.terrainHash(jr, side + 7) * 2) - 0.5;
                 } else {
-                    d += (this.terrainHash(jr, side + 47) - 0.5) * 3;
+                    d += (this.terrainHash(jr, side + 47) - 0.5) * 1.6;
                 }
                 return Math.max(2, Math.round(d));
             };
             const structure = (side) => {
-                const slot = Math.floor(row / 36);
+                const slot = Math.floor(wr / 36);
                 if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
-                const t = (row - slot * 36 - 10) / 14;
+                const t = (wr - slot * 36 - 10) / 14;
                 if (t < 0 || t > 1) return 0;
                 let v;
                 switch (style) {
@@ -199,26 +221,26 @@ extendClass(ObstacleManager, {
                 }
                 return Math.round((W * v) / cell);
             };
-            const zi = this.terrainZoneIndex(row, prof);
-            const local = row - zi * prof.zoneRows;
+            const zi = this.terrainZoneIndex(wr, prof);
+            const local = wr - zi * prof.zoneRows;
             let sill = 0;
             if (gate <= 0 && zi >= 1 && local < TERRAIN_SILL_ROWS) {
                 const edgeRow = local === 0 || local === TERRAIN_SILL_ROWS - 1;
                 sill = Math.round((W * TERRAIN_SILL_REACH * (edgeRow ? 0.6 : 1)) / cell);
             }
             const sides = [0, 1].map((side) => {
-                let mat = this.terrainMaterial(row, side) || { id: 'rock', hp: 1 };
+                let mat = this.terrainMaterial(wr, side) || { id: 'rock', hp: 1 };
                 let base = depth(side, mat);
                 let full = base + sill + (zone.structures && !sill ? structure(side) : 0);
                 // Hangar opening side craft fly out of: open slot, metal jambs around it.
-                const hatch = gd == null && !sill ? this.terrainOpeningInfo(row, side) : null;
+                const hatch = gd == null && !sill ? this.terrainOpeningInfo(wr, side) : null;
                 let tunnel = 0;
                 let lip = 0;
                 if (hatch && hatch.kind === 'gap') {
                     tunnel = full;
                     full = base = 0;
                 } else if (hatch) {
-                    lip = this.terrainOpeningLip(style, hatch, row);
+                    lip = this.terrainOpeningLip(style, hatch, wr);
                     if (style === 'tech') mat = TERRAIN_MATERIALS.metal;
                     full += lip;
                 }
@@ -232,12 +254,16 @@ extendClass(ObstacleManager, {
                     f.base = Math.min(f.base, f.full);
                 });
             }
-            return sides;
-        };
+            fullOf = sides;
+            silCache.rows.set(wr, fullOf);
+            if (silCache.rows.size > 900) {
+                const lo = wr - 500, hi = wr + 200;
+                silCache.rows.forEach((_, k) => { if (k < lo || k > hi) silCache.rows.delete(k); });
+            }
+        }
         // Each row keeps its natural silhouette until a crater cuts into it: the cut is an absolute
         // depth (cells from the screen edge), so a crater bites through the outline instead of
         // shifting the whole jagged edge outward.
-        const fullOf = buildAt(wr);
         const out = {};
         for (let side = 0; side < 2; side++) {
             const key = side + ':' + wr;
@@ -387,10 +413,10 @@ extendClass(ObstacleManager, {
             // Crack-only chip (no cell removed).
             soundManager.playRockHit(0.6);
         }
-        // Force the scroll-terrain wall layer to rebuild so carved cells match collision.
+        // Force only the wall/overlay lattice to rebuild (floor parallax stays cached).
         this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
         if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {
-            renderManager._terrainLayerKey = null;
+            renderManager._terrainLayerKey.dmg = -1;
         }
         if (this.terrainDamage.size > 4000) {
             const cutoff = wr - 1200;

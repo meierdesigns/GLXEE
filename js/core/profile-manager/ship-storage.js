@@ -228,6 +228,16 @@ extendClass(ProfileManager, {
         const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, defId) : 0;
         const move = Math.min(qty, onShip + equipped);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
+        // Starter-loadout parts with owned<=0 have no real backing count in profile.parts:
+        // getStationStorageQty always clamps to 0 for owned<=0 (it's owned minus filed minus
+        // equipped, and owned<=0 makes that expression <=0 no matter what), so station storage
+        // can never display them. Moving one there would unequip/unfile it on the ship with
+        // nowhere for it to land — filed+equipped both drop to 0 and it vanishes from every
+        // storage grid (see the fileUnequippedPart doc above for the same failure mode).
+        // Refuse instead of deleting it.
+        if (bucket !== 'blueprints' && this._ownedStorageCount(profile, bucket, defId) <= 0) {
+            return { ok: false, reason: 'CANNOT STORE AT STATION' };
+        }
         // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
         // push occupied cells past the budget is refused — the item stays filed on the ship.
         const stats = this.getStationStats(profile);

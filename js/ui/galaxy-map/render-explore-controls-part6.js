@@ -403,6 +403,30 @@ extendClass(GalaxyMapManager, {
             this._panAnchor = null;
             apply();
         });
+        // Right-click a planet / station: select it and fly straight there (no menu, no combat start).
+        svg.addEventListener('contextmenu', (e) => {
+            const target = e.composedPath().find((el) => el && el.classList
+                && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node')));
+            if (!target) return;
+            e.preventDefault();
+            if (this._flight || this._ambush) return;
+            const pid = target.getAttribute('data-planet');
+            const postId = target.getAttribute('data-post');
+            if (postId) {
+                const post = this.getTradingPosts().find((p) => p.id === postId);
+                if (!post || !profileManager.isTradingPostUnlocked(post)) return;
+                const willFly = !this.isShipAt('post', post.id);
+                this.markUserPicked();
+                this.selectPost(postId, { noCamera: willFly });
+                if (willFly) this.flyTo('post', post.id);
+                return;
+            }
+            if (!pid || !this.isUnlocked(pid)) return;
+            const willFly = !this.isShipAt('planet', pid);
+            this.markUserPicked();
+            this.selectPlanet(pid, { noCamera: willFly });
+            if (willFly) this.flyTo('planet', pid);
+        });
         // The map SVG is re-rendered often: bind the window handlers once.
         if (this._mapDragBound) return;
         this._mapDragBound = true;

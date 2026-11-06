@@ -199,18 +199,22 @@ extendClass(ShipAssetLoader, {
 
     /** Indexed palette for a hull part: 0 transparent, 1 edge, 2 hull, 3 accent. */
     buildHullPartPalette(colorOverlay, overlayIntensity, factionStyle) {
-        const edgeBase = factionStyle ? factionStyle.edge : '#1e221c';
         const hullBase = factionStyle ? factionStyle.hull : '#5a6350';
         const accentBase = factionStyle ? factionStyle.accent : '#a8b090';
+        // Hard black rim + lifted hull so brown/olive factions stay opaque on
+        // matching planet floors (pirate on Mars looked see-through).
+        const edge = this.applyHullOverlayHex('#050508', colorOverlay, overlayIntensity * 0.25, 0);
+        const hull = this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, 18);
+        const accent = this.applyHullOverlayHex(accentBase, colorOverlay, overlayIntensity, 8);
         return {
             0: 'transparent',
-            1: this.applyHullOverlayHex(edgeBase, colorOverlay, overlayIntensity, 0),
-            2: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, 0),
-            3: this.applyHullOverlayHex(accentBase, colorOverlay, overlayIntensity, 8),
+            1: edge,
+            2: hull,
+            3: accent,
             // Two extra hull tones carry the faction plating pattern. Without
             // them a part's interior is a single flat fill.
-            4: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, -26),
-            5: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, 22),
+            4: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, -8),
+            5: this.applyHullOverlayHex(hullBase, colorOverlay, overlayIntensity, 36),
             // Accent shade / light: accent blocks (cockpit, engines, trim)
             // get a lit top, shaded sides and bands instead of a flat fill.
             6: this.applyHullOverlayHex(accentBase, colorOverlay, overlayIntensity, -30),

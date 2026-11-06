@@ -18,7 +18,9 @@ extendClass(CoreLevelManager, {
         const ramp = stageCount > 1 ? (parsed.stageIndex - 1) / (stageCount - 1) * 2 : 0;
         const healthMult = parsed.isBoss ? 2.2 : (0.85 + ramp * 0.2);
         const speedMult = parsed.isBoss ? 1.25 : (0.9 + ramp * 0.1);
-        const spawnMult = parsed.isBoss ? 0.7 : (1.15 - ramp * 0.12);
+        // Boss arenas are static (no scroll drain), so obstacles must spawn
+        // less often than scroll stages or the field packs solid.
+        const spawnMult = parsed.isBoss ? 1.85 : (1.15 - ramp * 0.12);
 
         // Planet tier: early planets easier, later ones harder.
         const tier = (typeof planetTierIndex === 'function') ? planetTierIndex(base.difficulty) : 1;

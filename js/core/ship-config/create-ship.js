@@ -267,6 +267,8 @@ extendClass(ShipConfigManager, {
                         );
                     }
                 }
+                // Reflective shots: EQUIPMENT → REFLECT unlock only (never default-on).
+                entry.reflectiveShots = !!(itemBonus && itemBonus.reflectiveShots);
                 if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
                     weaponConfigManager.clampWeaponShot(entry);
                 }

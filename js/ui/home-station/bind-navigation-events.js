@@ -270,9 +270,26 @@ extendClass(HomeStationUI, {
                     const seeded = res.seeded
                         ? (' · ' + ((res.planetIds && res.planetIds.length) || 0) + ' PLANETS CHARTED')
                         : '';
-                    this.playButtonResult(btn, true, 'TRAVELLED TO ' + name + factionTag + seeded);
+                    this.statusMsg = 'TRAVELLED TO ' + name + factionTag + seeded;
+                    this.createUI();
                 } else if (res.reason === 'DRIVE') {
                     this.playButtonResult(btn, false, 'NEED WARP L' + (res.requireWarp || 1) + ' OR BUY PORTAL');
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
+
+        this.overlay.querySelectorAll('[data-install-portal]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const gid = btn.getAttribute('data-install-portal');
+                const res = profileManager.installPortal
+                    ? profileManager.installPortal(gid)
+                    : { ok: false, reason: 'FAILED' };
+                if (res.ok) {
+                    const name = String(gid).replace(/_/g, ' ').toUpperCase();
+                    this.statusMsg = 'PORTAL INSTALLED: ' + name;
+                    this.createUI();
                 } else {
                     this.playButtonResult(btn, false, res.reason || 'FAILED');
                 }

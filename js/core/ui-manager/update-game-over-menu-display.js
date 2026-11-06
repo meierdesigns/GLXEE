@@ -5,9 +5,16 @@ extendClass(UIManager, {
     updateGameOverMenuDisplay() {
         // Same lit-block selection as the victory buttons (no text arrow: icon + label stay intact).
         const buttons = document.querySelectorAll('#gameOver .game-over-button');
+        let focused = null;
         buttons.forEach((button, index) => {
-            button.classList.toggle('selected', index === this.gameOverMenuIndex);
+            const on = index === this.gameOverMenuIndex;
+            button.classList.toggle('selected', on);
+            button.classList.toggle('nav-focused', on);
+            if (on) focused = button;
         });
+        if (focused && typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(focused);
+        }
     },
 
     selectGameOverOption() {
@@ -88,13 +95,18 @@ extendClass(UIManager, {
             this.victoryMenuIndex = 0;
         }
 
+        let focused = null;
         buttons.forEach((button, index) => {
-            if (index === this.victoryMenuIndex) {
-                button.classList.add('selected');
-            } else {
-                button.classList.remove('selected');
-            }
+            const on = index === this.victoryMenuIndex;
+            button.classList.toggle('selected', on);
+            button.classList.toggle('nav-focused', on);
+            if (on) focused = button;
         });
+        // Keep the gamepad HUD frame locked to the lit button so it cannot
+        // freeze as a ghost over the planet / stats when the target rebuilds.
+        if (focused && typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(focused);
+        }
     },
 
     runVictoryAction(action) {

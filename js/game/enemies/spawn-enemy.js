@@ -150,6 +150,9 @@ extendClass(EnemyManager, {
         if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossWeaponKit && isBossLvl) {
             this.enemy.weaponId = difficultyConfigManager.getBossWeaponKit(champFaction).primary;
             this.enemy.bossWeaponKit = difficultyConfigManager.getBossWeaponKit(champFaction);
+            if (difficultyConfigManager.getBossBehaviorKit) {
+                this.enemy.bossBehavior = difficultyConfigManager.getBossBehaviorKit(champFaction);
+            }
         } else if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons) {
             const kit = factionShipStyles.getFactionDefaultWeapons(champFaction);
             this.enemy.weaponId = (kit && kit[0]) || 'laser';

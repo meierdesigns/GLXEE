@@ -66,6 +66,21 @@ extendClass(HomeStationUI, {
                 }
             });
         });
+        wrap.querySelectorAll('[data-install-portal]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const gid = btn.getAttribute('data-install-portal');
+                const res = profileManager.installPortal
+                    ? profileManager.installPortal(gid)
+                    : { ok: false, reason: 'FAILED' };
+                if (res.ok) {
+                    const name = String(gid).replace(/_/g, ' ').toUpperCase();
+                    this.statusMsg = 'PORTAL INSTALLED: ' + name;
+                    this.mountTravelControls(mount);
+                } else {
+                    this.playButtonResult(btn, false, res.reason || 'FAILED');
+                }
+            });
+        });
         this._travelKey = (e) => {
             if (e.key === 'Escape' && this._travelModal) {
                 e.preventDefault();

@@ -167,6 +167,9 @@ class ProfileManager {
         if (!Array.isArray(profile.homeStation.ownedPortalIds)) {
             profile.homeStation.ownedPortalIds = [];
         }
+        if (!Array.isArray(profile.homeStation.portalInventory)) {
+            profile.homeStation.portalInventory = [];
+        }
         if (typeof profile.homeStation.exploreCount !== 'object' || !profile.homeStation.exploreCount) {
             profile.homeStation.exploreCount = {};
         }

@@ -5,18 +5,18 @@
 // the walls are (see drawScrollTerrain / terrainProfile).
 // Extra flight areas by planet theme and by holding faction (added on top).
 const THEME_ZONES = {
-    fire: { spires: 2, chasm: 2 },
-    ocean: { reef: 2, delta: 2 },
-    purple: { spires: 2, ribs: 2 },
-    sunset: { chasm: 2, ruins: 2 },
-    retro: { pipes: 2, ruins: 2 }
+    fire: { chasm: 2, bulges: 2, gorge: 1 },
+    ocean: { reef: 2, delta: 2, open: 1 },
+    purple: { winding: 2, reef: 2, narrows: 1 },
+    sunset: { chasm: 2, ruins: 2, terraces: 1 },
+    retro: { pipes: 2, ruins: 2, canyon: 1 }
 };
 const FACTION_ZONES = {
     pirate: { ruins: 2, pipes: 2, terraces: 1 },
     terran: { terraces: 2, pipes: 2, ruins: 1 },
-    kronax: { spires: 2, teeth: 2, ribs: 1 },
-    machine: { pipes: 3, ribs: 2, ruins: 1 },
-    voidborn: { reef: 3, ribs: 2, spires: 1 }
+    kronax: { bulges: 2, gorge: 2, winding: 1 },
+    machine: { pipes: 3, terraces: 2, ruins: 1 },
+    voidborn: { reef: 3, winding: 2, open: 1 }
 };
 // Holding faction paints the playfield: organic growth vs welded plating.
 const FACTION_FLOORS = {
@@ -35,23 +35,23 @@ const FACTION_MATS = {
 };
 
 const PLANET_LOOK_ENV = {
-    lava: { surface: 'lava', floors: ['cracks', 'veins', 'rubble', 'spines'], mats: ['magma', 'rock'], zones: { teeth: 3, narrows: 2, gorge: 2, zigzag: 1, chasm: 2 }, width: 1.25 },
-    cracked: { surface: 'lava', floors: ['cracks', 'plates', 'rubble', 'veins'], mats: ['rock', 'magma'], zones: { teeth: 2, canyon: 2, terraces: 2, chasm: 2 } },
-    glacial: { surface: 'ice', floors: ['cracks', 'plates', 'rubble', 'dunes'], mats: ['crystal', 'rock'], zones: { open: 3, winding: 2, bulges: 2, icefall: 3 } },
+    lava: { surface: 'lava', floors: ['cracks', 'veins', 'rubble', 'spines'], mats: ['magma', 'rock'], zones: { canyon: 2, narrows: 2, gorge: 2, bulges: 2, chasm: 2 }, width: 1.2 },
+    cracked: { surface: 'lava', floors: ['cracks', 'plates', 'rubble', 'veins'], mats: ['rock', 'magma'], zones: { canyon: 3, terraces: 2, chasm: 2, ruins: 1 } },
+    glacial: { surface: 'ice', floors: ['cracks', 'plates', 'rubble', 'dunes'], mats: ['crystal', 'rock'], zones: { open: 3, winding: 2, bulges: 2, icefall: 2, delta: 1 } },
     oceanic: { surface: 'ice', floors: ['dunes', 'tendrils', 'plates', 'rubble'], mats: ['crystal', 'rock'], zones: { open: 4, bulges: 2, reef: 2, delta: 2 }, width: 0.7 },
-    crystal: { surface: 'void', floors: ['veins', 'plates', 'rubble', 'spines'], mats: ['crystal'], zones: { teeth: 3, narrows: 1, zigzag: 3, spires: 3 }, width: 1.2 },
-    toxic: { surface: 'toxic', floors: ['cracks', 'biomass', 'veins', 'tendrils'], mats: ['crystal', 'rock'], zones: { narrows: 3, winding: 2, funnel: 2, gorge: 1, reef: 2 }, width: 1.3 },
-    dunes: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['rock'], zones: { winding: 3, open: 2, bulges: 1, delta: 2 }, width: 0.9 },
-    craters: { surface: 'plain', floors: ['craters', 'rubble', 'cracks', 'plates'], mats: ['rock', 'metal'], zones: { canyon: 3, open: 1, terraces: 2, ruins: 2 } },
-    pocked: { surface: 'plain', floors: ['craters', 'cracks', 'rubble', 'dunes'], mats: ['rock', 'metal'], zones: { canyon: 2, teeth: 2, bulges: 2, ruins: 1 }, width: 1.1 },
-    continents: { surface: 'plain', floors: ['plates', 'craters', 'rubble', 'cracks'], mats: ['rock', 'metal'], zones: { canyon: 2, winding: 2, terraces: 2, delta: 1 } },
-    spotted: { surface: 'plain', floors: ['craters', 'dunes', 'rubble', 'biomass'], mats: ['rock', 'crystal'], zones: { open: 2, canyon: 2, bulges: 2, reef: 1 } },
-    banded: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'veins'], mats: ['metal', 'crystal'], zones: { open: 3, winding: 1, funnel: 2, ribs: 2 }, width: 0.8 },
-    striped: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['metal'], zones: { winding: 3, zigzag: 2, ribs: 2 } },
-    swirl: { surface: 'banded', floors: ['dunes', 'plates', 'veins', 'tendrils'], mats: ['metal', 'crystal'], zones: { winding: 3, open: 1, funnel: 2, delta: 2 } },
+    crystal: { surface: 'void', floors: ['veins', 'plates', 'rubble', 'spines'], mats: ['crystal'], zones: { winding: 2, narrows: 2, bulges: 2, reef: 2, open: 1 }, width: 1.1 },
+    toxic: { surface: 'toxic', floors: ['cracks', 'biomass', 'veins', 'tendrils'], mats: ['crystal', 'rock'], zones: { winding: 3, reef: 2, funnel: 2, gorge: 1, open: 1 }, width: 1.2 },
+    dunes: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['rock'], zones: { winding: 3, open: 2, bulges: 2, delta: 2 }, width: 0.9 },
+    craters: { surface: 'plain', floors: ['craters', 'rubble', 'cracks', 'plates'], mats: ['rock', 'metal'], zones: { canyon: 3, open: 2, terraces: 2, ruins: 2 } },
+    pocked: { surface: 'plain', floors: ['craters', 'cracks', 'rubble', 'dunes'], mats: ['rock', 'metal'], zones: { canyon: 3, bulges: 2, ruins: 2, open: 1 }, width: 1.05 },
+    continents: { surface: 'plain', floors: ['plates', 'craters', 'rubble', 'cracks'], mats: ['rock', 'metal'], zones: { canyon: 2, winding: 2, terraces: 2, delta: 2 } },
+    spotted: { surface: 'plain', floors: ['craters', 'dunes', 'rubble', 'biomass'], mats: ['rock', 'crystal'], zones: { open: 2, canyon: 2, bulges: 2, reef: 2 } },
+    banded: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'veins'], mats: ['metal', 'crystal'], zones: { open: 3, winding: 2, funnel: 2, delta: 1 }, width: 0.8 },
+    striped: { surface: 'banded', floors: ['dunes', 'rubble', 'plates', 'cracks'], mats: ['metal'], zones: { winding: 3, terraces: 2, delta: 2, open: 1 } },
+    swirl: { surface: 'banded', floors: ['dunes', 'plates', 'veins', 'tendrils'], mats: ['metal', 'crystal'], zones: { winding: 3, open: 2, funnel: 2, delta: 2 } },
     cloudy: { surface: 'banded', floors: ['dunes', 'rubble', 'plates'], mats: ['metal', 'crystal'], zones: { open: 4, funnel: 1, delta: 2 }, width: 0.7 },
-    marbled: { surface: 'plain', floors: ['plates', 'dunes', 'veins', 'biomass'], mats: ['crystal', 'metal'], zones: { winding: 2, narrows: 2, zigzag: 1, reef: 2 } },
-    ringed: { surface: 'banded', floors: ['plates', 'rubble', 'conduits', 'cracks'], mats: ['metal', 'crystal'], zones: { open: 2, narrows: 2, terraces: 2, gorge: 1, pipes: 3 } }
+    marbled: { surface: 'plain', floors: ['plates', 'dunes', 'veins', 'biomass'], mats: ['crystal', 'metal'], zones: { winding: 2, open: 2, reef: 2, bulges: 2 } },
+    ringed: { surface: 'banded', floors: ['plates', 'rubble', 'conduits', 'cracks'], mats: ['metal', 'crystal'], zones: { open: 2, terraces: 2, pipes: 3, canyon: 2, winding: 1 } }
 };
 
 // PlanetConfigManager methods, split from planet-config.js.

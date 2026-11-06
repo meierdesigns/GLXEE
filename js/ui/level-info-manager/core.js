@@ -45,9 +45,39 @@ class LevelInfoManager {
         this.under = document.getElementById('giUnderStage');
         this.loadoutSide = document.getElementById('giLoadoutSide');
         this.missionSide = document.getElementById('giMissionSide');
+        this.transitMap = document.getElementById('giTransitMap');
         this.panel.style.display = 'flex';
         this.startUpdateLoop();
         this.updateLevelData(this.collectLevelData());
+    }
+    /** Tube/sluice levels: vertical progress track to the exit gate, under the LOADOUT card. */
+    updateTransitMap() {
+        const el = this.transitMap;
+        if (!el) return;
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        const isTransit = !!(om && om.objective && om.objective.type === 'reachGoal');
+        el.hidden = !isTransit;
+        if (!isTransit) return;
+        const seconds = Math.max(1, Number(om.objective.seconds) || 1);
+        const elapsed = Math.max(0, Number(om.elapsedMs) || 0);
+        const arrived = !!om.goal;
+        const pct = (om.completed || om.won || arrived)
+            ? 100
+            : Math.max(0, Math.min(100, Math.round((elapsed / (seconds * 1000)) * 100)));
+        el.style.setProperty('--vf-transit-pct', pct + '%');
+        el.classList.toggle('gi-transit-arrived', arrived);
+        if (!el.firstElementChild) {
+            el.innerHTML = '<div class="gi-transit-track">' +
+                '<div class="gi-transit-gate">GATE</div>' +
+                '<div class="gi-transit-fill"></div>' +
+                '<div class="gi-transit-ship"></div>' +
+                '</div>';
+        }
+        const gateEl = el.querySelector('.gi-transit-gate');
+        if (gateEl) {
+            gateEl.classList.toggle('is-visible', arrived);
+            gateEl.textContent = arrived && om.goal.kind === 'warp' ? 'WARP' : 'GATE';
+        }
     }
     showPanel() {
         if (this.panel) {
@@ -62,6 +92,7 @@ class LevelInfoManager {
         if (this.missionSide) {
             this.missionSide.hidden = false;
         }
+        this.updateTransitMap();
     }
     hidePanel() {
         if (this.panel) {
@@ -76,6 +107,9 @@ class LevelInfoManager {
         }
         if (this.missionSide) {
             this.missionSide.hidden = true;
+        }
+        if (this.transitMap) {
+            this.transitMap.hidden = true;
         }
     }
     /** Show HUD + refresh content without starting the combat clock. */
@@ -342,6 +376,7 @@ class LevelInfoManager {
         this.updateElement('levelDifficulty', this.levelData.difficulty || 'NORMAL');
         this.updatePlanetIcon();
         this.renderBody();
+        this.updateTransitMap();
     }
     resolvePlanetId() {
         const raw = (this.levelData && (this.levelData.planetId || this.levelData.background || this.levelData.name)) || 'mars';

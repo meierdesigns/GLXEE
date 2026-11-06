@@ -389,6 +389,11 @@ extendClass(HomeStationUI, {
                 if (first) first.click();
                 return this.focusNavRow('area');
             }
+            // ↓ enters the galaxy map (same as ENTER / SPACE).
+            if (key === 'ArrowDown') {
+                this.enterPlayMap();
+                return true;
+            }
             return key === 'ArrowLeft' || key === 'ArrowUp';
         }
         // Logout sits in the wallet card right of the area row: ← goes back.
@@ -409,8 +414,12 @@ extendClass(HomeStationUI, {
                     return true;
                 }
                 if (hasSub) return this.focusNavRow('subnav');
-                // The galaxy map (PLAY) is only entered with ENTER / SPACE.
-                if (this.tab !== 'play') this.enterTabContent();
+                // LAUNCH / PLAY: ↓ enters the map like every other area enters content.
+                if (this.tab === 'play') {
+                    this.enterPlayMap();
+                    return true;
+                }
+                this.enterTabContent();
                 return true;
             }
             if (key === 'ArrowLeft' || key === 'ArrowRight') {
@@ -488,8 +497,12 @@ extendClass(HomeStationUI, {
                 this.enterMenuContent();
                 return true;
             }
-            // The galaxy map (PLAY) is only entered with ENTER / SPACE.
-            if (this.tab !== 'play') this.enterTabContent();
+            // LAUNCH / PLAY: ↓ enters the map.
+            if (this.tab === 'play') {
+                this.enterPlayMap();
+                return true;
+            }
+            this.enterTabContent();
             return true;
         }
         if (key === 'ArrowLeft' || key === 'ArrowRight') {

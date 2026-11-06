@@ -425,11 +425,32 @@ extendClass(GalaxyMapManager, {
             if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'ArrowDown') {
                 e.preventDefault();
                 e.stopPropagation();
+                if (this.hasStageFocus()) {
+                    // Stage row: ←/→ pick, ↑ map, ↓ action buttons.
+                    if (e.key === 'ArrowLeft') this.focusStage(this._stageFocus - 1);
+                    else if (e.key === 'ArrowRight') this.focusStage(this._stageFocus + 1);
+                    else if (e.key === 'ArrowUp') {
+                        this.clearStageFocus();
+                        this.syncHostNavHint && this.syncHostNavHint();
+                    } else if (e.key === 'ArrowDown') {
+                        this.clearStageFocus();
+                        if (!this.focusActionButton()) this.syncHostNavHint && this.syncHostNavHint();
+                    }
+                    return;
+                }
                 if (this.hasActionFocus()) {
-                    // On the start buttons: ←/→ pick one, ↑ back to the map.
+                    // Action buttons: ←/→ pick, ↑ stages (or map), no ↓.
                     if (e.key === 'ArrowLeft') this.focusActionButton(this._actionFocus - 1);
                     else if (e.key === 'ArrowRight') this.focusActionButton(this._actionFocus + 1);
-                    else if (e.key === 'ArrowUp') this.clearActionFocus();
+                    else if (e.key === 'ArrowUp') {
+                        this.clearActionFocus();
+                        if (!this.focusStage()) this.clearCardFocus();
+                    }
+                    return;
+                }
+                // Map: arrows hop planets/posts. ↓ with nothing below drops into the card.
+                if (e.key === 'ArrowDown') {
+                    if (!this.navigateByArrow(e.key)) this.focusCardPanel();
                     return;
                 }
                 this.navigateByArrow(e.key);
@@ -442,8 +463,8 @@ extendClass(GalaxyMapManager, {
             } else if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (this.hasActionFocus()) {
-                    this.clearActionFocus();
+                if (this.hasCardFocus()) {
+                    this.clearCardFocus();
                     return;
                 }
                 if (this._mountEl) {

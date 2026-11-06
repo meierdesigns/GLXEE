@@ -188,11 +188,24 @@ extendClass(CollisionManager, {
                             this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
+                        const hx = bulletX + (bullet.width || 0) / 2;
+                        const hy = bulletY + (bullet.height || 0) / 2;
+                        // Bomb crates: detonate immediately on shot contact.
+                        if (obstacle.isCrate && obstacle.trap === 'bomb') {
+                            bulletManager.removeBullet(i);
+                            if (typeof pickupManager !== 'undefined' && pickupManager.trapBlast) {
+                                pickupManager.trapBlast(hx, hy);
+                            }
+                            // Spent: removeObstacle → spawnPowerUp must not drop loot or re-blast.
+                            obstacle._trapSpent = true;
+                            obstacle.trap = null;
+                            obstacleManager.removeObstacle(j);
+                            game.score += 10;
+                            break;
+                        }
                         // Weapon-scaled damage plus splash to nearby rocks.
                         const rockDmg = obstacleManager.bulletRockDamage(bullet);
                         const splash = obstacleManager.bulletSplashRadius(bullet);
-                        const hx = bulletX + (bullet.width || 0) / 2;
-                        const hy = bulletY + (bullet.height || 0) / 2;
                         const destroyed = obstacleManager.damageObstacle(j, rockDmg, hx, hy);
                         obstacleManager.splashObstacles(hx, hy, splash, Math.max(1, Math.ceil(rockDmg * 0.6)), destroyed ? null : obstacle);
                         if (destroyed) {
@@ -267,6 +280,18 @@ extendClass(CollisionManager, {
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
                         }
                     } else if (obstacle.isDestructible) {
+                        const hx = bulletX + (bullet.width || 0) / 2;
+                        const hy = bulletY + (bullet.height || 0) / 2;
+                        if (obstacle.isCrate && obstacle.trap === 'bomb') {
+                            bulletManager.removeEnemyBullet(i);
+                            if (typeof pickupManager !== 'undefined' && pickupManager.trapBlast) {
+                                pickupManager.trapBlast(hx, hy);
+                            }
+                            obstacle._trapSpent = true;
+                            obstacle.trap = null;
+                            obstacleManager.removeObstacle(j);
+                            break;
+                        }
                         // Destroy obstacle
                         obstacle.health--;
                         if (obstacle.health <= 0) {

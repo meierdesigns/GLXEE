@@ -209,7 +209,7 @@ class GalaxyMapManager {
         return this.setInputActive(true);
     }
     disarmInput() {
-        this.clearActionFocus();
+        this.clearCardFocus();
         return this.setInputActive(false);
     }
     /** Start/confirm buttons of the selected planet card, enabled only. */
@@ -222,6 +222,25 @@ class GalaxyMapManager {
     hasActionFocus() {
         return this._actionFocus != null && this.getActionButtons().length > 0;
     }
+    /** Cleared / replayable / dev-pick stage tiles in the planet card. */
+    getStageFocusables() {
+        if (!this.overlay) return [];
+        return Array.from(this.overlay.querySelectorAll(
+            '#gmStageStepper .gm-sector-stage[data-replay-stage], #gmStageStepper .gm-sector-stage[data-dev-stage]'
+        ));
+    }
+    hasStageFocus() {
+        return this._stageFocus != null && this.getStageFocusables().length > 0;
+    }
+    hasCardFocus() {
+        return this.hasActionFocus() || this.hasStageFocus();
+    }
+    /** Keep the station footer tip in sync when map card focus changes. */
+    syncHostNavHint() {
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.syncNavHint) {
+            homeStationUI.syncNavHint();
+        }
+    }
     /** Highlight one action button (defaults to the main CONTINUE/START one). */
     focusActionButton(index) {
         const list = this.getActionButtons();
@@ -229,6 +248,7 @@ class GalaxyMapManager {
             this._actionFocus = null;
             return false;
         }
+        this.clearStageFocus();
         let i = index;
         if (i == null) {
             const main = list.findIndex((b) => b.id === 'gmConfirm');
@@ -238,6 +258,10 @@ class GalaxyMapManager {
         this._actionFocus = i;
         list.forEach((b, idx) => b.classList.toggle('nav-focused', idx === i));
         try { list[i].focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+        if (typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(list[i]);
+        }
+        this.syncHostNavHint();
         return true;
     }
     clearActionFocus() {
@@ -247,15 +271,57 @@ class GalaxyMapManager {
             if (document.activeElement === b) b.blur();
         });
     }
+    focusStage(index) {
+        const list = this.getStageFocusables();
+        if (!list.length) {
+            this._stageFocus = null;
+            return false;
+        }
+        this.clearActionFocus();
+        let i = index;
+        if (i == null) {
+            const cur = list.findIndex((el) => el.classList.contains('is-current'));
+            i = cur >= 0 ? cur : 0;
+        }
+        i = (i + list.length) % list.length;
+        this._stageFocus = i;
+        list.forEach((el, idx) => el.classList.toggle('nav-focused', idx === i));
+        if (typeof gamepadCursor !== 'undefined' && gamepadCursor.follow) {
+            gamepadCursor.follow(list[i]);
+        }
+        this.syncHostNavHint();
+        return true;
+    }
+    clearStageFocus() {
+        this._stageFocus = null;
+        this.getStageFocusables().forEach((el) => el.classList.remove('nav-focused'));
+    }
+    clearCardFocus() {
+        this.clearActionFocus();
+        this.clearStageFocus();
+        this.syncHostNavHint();
+    }
+    /** Drop from the map into the planet card: stages first, else action buttons. */
+    focusCardPanel() {
+        if (this.focusStage()) return true;
+        return this.focusActionButton();
+    }
     /**
      * ENTER / SPACE inside the map: first press moves focus from the map to
-     * the planet card's start button, the next press activates it.
+     * the planet card, the next press activates the focused control.
      */
     confirmKey() {
-        if (!this.hasActionFocus()) {
-            if (this.focusActionButton()) return true;
-            this.confirm('resume');
+        if (this.hasStageFocus()) {
+            const el = this.getStageFocusables()[this._stageFocus];
+            this.clearStageFocus();
+            if (el) el.click();
             return true;
+        }
+        if (!this.hasActionFocus()) {
+            // Liberated / locked: focus stages (replay) or do nothing — never
+            // force-start a mission when the card has no enabled action.
+            if (this.focusCardPanel()) return true;
+            return false;
         }
         const btn = this.getActionButtons()[this._actionFocus];
         this.clearActionFocus();

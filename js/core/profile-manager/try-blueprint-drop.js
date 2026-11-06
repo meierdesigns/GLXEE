@@ -147,6 +147,97 @@ extendClass(ProfileManager, {
         return moved;
     },
 
+    /** Resources only: auto-collected into the station wallet at victory, capped same as
+     *  teleportCargoToStation. Parts/blueprints are left in cargo — see sellCargoPart /
+     *  takeCargoPartToShip / clearPendingCargo — so the victory screen's found-items grid
+     *  reflects a real "take or sell" decision instead of displaying already-stored items. */
+    teleportCargoResourcesToStation() {
+        const profile = this.getActiveProfile();
+        if (!profile) return false;
+        this.ensureEconomyDefaults(profile);
+        const stats = this.getStationStats(profile);
+        let moved = false;
+        Object.keys(profile.cargo.resources).forEach((id) => {
+            const n = profile.cargo.resources[id] || 0;
+            if (n <= 0) return;
+            const applied = this.applyResourceCap(profile.resources[id], n, stats.resourceCap);
+            if (applied.granted > 0) {
+                profile.resources[id] = applied.next;
+                moved = true;
+            }
+            if (applied.leftover > 0) {
+                profile.cargo.resources[id] = applied.leftover;
+            } else {
+                delete profile.cargo.resources[id];
+            }
+        });
+        this.save();
+        return moved;
+    },
+
+    /** Credits a cargo part/blueprint would pay out (same rate as a stored one).
+     *  A key that no longer resolves (part renamed/removed since it was picked up) still
+     *  pays out a token amount — it must stay sellable or it gets stuck in cargo forever. */
+    getCargoPartSellValue(key) {
+        const bp = this.parseBlueprintKey(key);
+        if (!bp || typeof economyConfig === 'undefined') return 1;
+        return this.getSellValue(economyConfig.getPartCost(bp.kind, bp.item));
+    },
+
+    /** Sells one still-pending cargo part/blueprint stack directly — it never touches
+     *  station/ship storage. `asBlueprint` sells from profile.cargo.blueprints, otherwise
+     *  from profile.cargo.parts. */
+    sellCargoPart(key, asBlueprint) {
+        const profile = this.getActiveProfile();
+        if (!profile) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const bucket = asBlueprint ? profile.cargo.blueprints : (profile.cargo.parts || {});
+        const n = bucket[key] || 0;
+        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const unitValue = this.getCargoPartSellValue(key);
+        const credits = unitValue * n;
+        delete bucket[key];
+        if (credits > 0) this.addCredits(credits, true);
+        this.save();
+        return { ok: true, credits: credits, amount: n };
+    },
+
+    /** Files a pending cargo part onto `shipId`'s storage: grants real ownership (profile.parts)
+     *  and marks it filed on that ship in one step, then clears it out of cargo. Blueprints
+     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way. */
+    takeCargoPartToShip(shipId, key) {
+        const profile = this.getActiveProfile();
+        if (!profile || !shipId) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const n = (profile.cargo.parts || {})[key] || 0;
+        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const bag = bp.kind === 'weapon' ? profile.parts.weapons
+            : (bp.kind === 'defense' ? profile.parts.defenses
+                : (bp.kind === 'energy' ? profile.parts.energy : profile.parts.abilities));
+        bag[bp.id] = (bag[bp.id] || 0) + n;
+        const shipBucket = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+        if (shipBucket && this.discover) this.discover(shipBucket === 'energy' ? 'energy' : shipBucket, bp.id);
+        if (shipBucket && this.fileUnequippedPart) {
+            for (let i = 0; i < n; i++) this.fileUnequippedPart(profile, shipId, shipBucket, bp.id);
+        }
+        delete profile.cargo.parts[key];
+        this.save();
+        return { ok: true, amount: n };
+    },
+
+    /** Drops whatever found parts/blueprints the player never took or sold — called when the
+     *  victory screen closes (next stage / leave planet), so the decision can't be skipped. */
+    clearPendingCargo() {
+        const profile = this.getActiveProfile();
+        if (!profile) return;
+        this.ensureEconomyDefaults(profile);
+        profile.cargo.parts = {};
+        profile.cargo.blueprints = {};
+        this.save();
+    },
+
     spendResources(costMap) {
         const profile = this.getActiveProfile();
         if (!profile || typeof economyConfig === 'undefined') return false;

@@ -96,10 +96,10 @@ class PlayerManager {
             const dp = difficultyConfigManager.profiles[difficultyConfigManager.current];
             if (dp && dp.playerSpeedMul > 0) diffSpeedMul = dp.playerSpeedMul;
         }
-        // Power-ups (power-crates.js): AFTERBURNER speeds up, FREEZE trap locks the ship.
+        // Power-ups (power-crates.js): AFTERBURNER speeds up, FREEZE trap only chills (slow).
         let perkMul = 1;
         if (typeof pickupManager !== 'undefined' && pickupManager.getMoveSpeedMul) {
-            perkMul = pickupManager.isFrozen() ? 0 : pickupManager.getMoveSpeedMul();
+            perkMul = pickupManager.getMoveSpeedMul();
             const repair = pickupManager.getRepairPerSec(this.maxHealth);
             if (repair > 0 && this.health > 0) this.health = Math.min(this.maxHealth, this.health + repair * dt);
         }

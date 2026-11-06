@@ -8,9 +8,21 @@ extendClass(GalaxyMapManager, {
      * anchors). From a post: its anchor planets, their linked planets and
      * the other posts sharing an anchor.
      */
+    /**
+     * Trading posts at resting coords (no orbit). Arrow nav must stay stable —
+     * orbiting display positions made ←/→ pick different posts every few seconds.
+     */
+    getNavTradingPosts() {
+        if (typeof profileManager === 'undefined' || !profileManager.getTradingPosts) return [];
+        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        return (profileManager.getTradingPosts(this.galaxyId) || []).filter((p) => dev
+            || (p.anchors || [p.planetId]).some((id) => this.nodeById && this.nodeById[id] && this.isUnlocked(id)));
+    },
     getArrowTargets() {
-        const posts = this.getTradingPosts();
-        const current = this.getSelectedPost();
+        const posts = this.getNavTradingPosts();
+        const current = this.selectedPostId
+            ? posts.find((p) => p.id === this.selectedPostId) || null
+            : null;
         const anchorsOf = (p) => p.anchors || [p.planetId];
         const origin = current ? anchorsOf(current) : [this.selectedPlanetId];
         const out = [];
@@ -47,21 +59,25 @@ extendClass(GalaxyMapManager, {
         }
         return out;
     },
+    /** Move map selection by arrow. Returns true when a neighbour was selected. */
     navigateByArrow(key) {
-        if (this._flight || this._ambush) return;
-        if (!this.selectedPlanetId) return;
-        const post = this.getSelectedPost();
+        if (this._flight || this._ambush) return false;
+        if (!this.selectedPlanetId) return false;
+        const posts = this.getNavTradingPosts();
+        const post = this.selectedPostId
+            ? posts.find((p) => p.id === this.selectedPostId) || null
+            : null;
         const cur = post || this.nodeById[this.selectedPlanetId];
-        if (!cur) return;
+        if (!cur) return false;
         const targets = this.getArrowTargets();
-        if (!targets.length) return;
+        if (!targets.length) return false;
 
         // Compare in map pixels (the map is ~544×224), not normalised 0..1
         // units, so left/right and up/down weigh distances the way they look.
         const SX = 544;
         const SY = 224;
         const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[key];
-        if (!dir) return;
+        if (!dir) return false;
         let best = null;
         let bestScore = Infinity;
         targets.forEach((t) => {
@@ -80,13 +96,14 @@ extendClass(GalaxyMapManager, {
                 best = t;
             }
         });
-        if (!best) return;
+        if (!best) return false;
         if (best.kind === 'post') this.selectPost(best.id);
         else this.selectPlanet(best.id);
         // The camera follows: selection and ship stay in view, zooming out with the distance.
         if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        return true;
     },
-    selectPlanet(planetId) {
+    selectPlanet(planetId, opts) {
         this.selectedPostId = null;
         this.selectedBorder = null;
         this.selectedPlanetId = planetId;
@@ -94,7 +111,10 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        // A flight about to start frames its own camera; reframing to the
+        // selection first would jump the view, then jump again into the flight.
+        const skipCam = this._flight || (opts && opts.noCamera);
+        if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     /**
      * Select a border checkpoint (route from open → shut). The card shows
@@ -196,7 +216,7 @@ extendClass(GalaxyMapManager, {
         return this.getTradingPosts().find((p) => p.id === this.selectedPostId) || null;
     },
     /** Select a trading post; its anchor planet stays the arrow-nav origin. */
-    selectPost(postId) {
+    selectPost(postId, opts) {
         const post = this.getTradingPosts().find((p) => p.id === postId);
         if (!post) return;
         this.selectedBorder = null;
@@ -206,7 +226,8 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
-        if (!this._flight && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        const skipCam = this._flight || (opts && opts.noCamera);
+        if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;
@@ -330,7 +351,7 @@ extendClass(GalaxyMapManager, {
         const info = this.getPlanetInfo(this.selectedPlanetId);
         const backBtn = actions.querySelector('#gmBack');
         const backHtml = backBtn ? backBtn.outerHTML : '';
-        this._actionFocus = null; // buttons are rebuilt; focus returns to the map
+        this.clearCardFocus && this.clearCardFocus(); // card rebuilt; focus returns to the map
         if (this.selectedBorder) {
             // Checkpoint: nothing to start here — one button jumps to the
             // planet whose clearing opens it.

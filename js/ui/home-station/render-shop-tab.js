@@ -38,7 +38,7 @@ extendClass(HomeStationUI, {
         const galaxyName = String(galaxyId).replace(/_/g, ' ').toUpperCase();
         let stockHint = '';
         if (this.shopCategory === 'portals') {
-            stockHint = `<p class="hs-muted hs-hint">Buy portals only for factions you have already met in combat. Filter by discovered faction.</p>`;
+            stockHint = `<p class="hs-muted hs-hint">Portal modules go into inventory when bought. Install them in STATION → TRAVEL to unlock that galaxy. Only factions you have met in combat are listed.</p>`;
         } else if (this.shopCategory === 'resources') {
             stockHint = `<p class="hs-muted hs-hint">CREDITS = money (uncapped). SCRAP / ORE / CRYSTAL / VOLTEX = materials. Buy &amp; sell materials for credits from STATION or CARGO.</p>`;
         } else if (this.shopCategory === 'styles') {

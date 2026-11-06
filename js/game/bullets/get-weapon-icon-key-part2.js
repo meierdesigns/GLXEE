@@ -94,6 +94,8 @@ extendClass(BulletManager, {
             for (let i = firstNew; i < this.bullets.length; i++) {
                 const b = this.bullets[i];
                 b.weaponId = slot.id;
+                // Only weapons with EQUIPMENT → REFLECT purchased clash with enemy fire.
+                b.reflectiveShots = !!cfg.reflectiveShots;
                 // 0..1 brightness boost from the charge / beat bonus.
                 if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
                 if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));

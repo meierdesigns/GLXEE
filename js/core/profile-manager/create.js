@@ -29,6 +29,7 @@ extendClass(ProfileManager, {
                 upgrades: this.emptyStationUpgrades(),
                 currentGalaxyId: 'milky_way',
                 ownedPortalIds: [],
+                portalInventory: [],
                 exploreCount: {}
             },
             shipUpgrades: {},

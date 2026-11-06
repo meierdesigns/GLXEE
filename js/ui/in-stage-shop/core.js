@@ -22,6 +22,10 @@ class InStageShop {
         this.cartBuys = new Set();
         /** Frozen permanent-part offer for this shop visit. */
         this._partsOffer = null;
+        /** Frozen temp-perk offer for this shop visit. */
+        this._perksOffer = null;
+        /** Frozen vendor bag size for this shop visit (rolled on open). */
+        this._visitBag = null;
         this._faceState = 0;
         this._faceUntil = 0;
         this.focusIndex = 0;
@@ -44,9 +48,19 @@ class InStageShop {
                     stats: ['DMG TAKEN ×0.5', 'SHIELD HOLD · 90s', 'STACKS WITH SHIELD REGEN']
                 },
                 {
+                    id: 'aegis', label: 'AEGIS', cost: 75, ms: 80000,
+                    icon: 'ability_energy_shield',
+                    stats: ['DMG TAKEN ×0.7', 'DURATION 80s']
+                },
+                {
                     id: 'speed_boost', label: 'AFTERBURNER', cost: 55, ms: 75000,
                     icon: 'ability_high_speed',
                     stats: ['MOVE SPEED ×1.45', 'DURATION 75s']
+                },
+                {
+                    id: 'turbo', label: 'TURBO', cost: 40, ms: 60000,
+                    icon: 'ability_high_speed',
+                    stats: ['MOVE SPEED ×1.25', 'DURATION 60s']
                 },
                 {
                     id: 'power_shot', label: 'POWER SHOT', cost: 95, ms: 90000,
@@ -54,9 +68,24 @@ class InStageShop {
                     stats: ['DAMAGE ×1.6', 'SHOT SIZE ×1.3', 'DURATION 90s']
                 },
                 {
+                    id: 'overcharge', label: 'OVERCHARGE', cost: 100, ms: 75000,
+                    icon: 'ability_powerful_cannon',
+                    stats: ['DAMAGE ×2.0', 'SHOT SIZE ×1.15', 'DURATION 75s']
+                },
+                {
+                    id: 'focus', label: 'FOCUS BEAM', cost: 90, ms: 80000,
+                    icon: 'ability_weapon_systems',
+                    stats: ['DAMAGE ×1.35', 'SHOT SIZE ×1.55', 'DURATION 80s']
+                },
+                {
                     id: 'rapid_fire', label: 'RAPID FIRE', cost: 90, ms: 75000,
                     icon: 'ability_versatile_weapons',
                     stats: ['FIRE RATE ×1.7', 'COOLDOWN ×0.6', 'DURATION 75s']
+                },
+                {
+                    id: 'spray', label: 'SPRAY FIRE', cost: 85, ms: 70000,
+                    icon: 'ability_versatile_weapons',
+                    stats: ['FIRE RATE ×2.1', 'COOLDOWN ×0.48', 'DURATION 70s']
                 },
                 {
                     id: 'repair', label: 'FIELD REPAIR', cost: 70, ms: 60000,
@@ -64,9 +93,24 @@ class InStageShop {
                     stats: ['HULL REGEN 4%/s', 'DURATION 60s']
                 },
                 {
+                    id: 'stim', label: 'STIM PACK', cost: 60, ms: 50000,
+                    icon: 'ability_energy_shield',
+                    stats: ['INSTANT +20% HULL', 'REGEN 2.5%/s', 'DURATION 50s']
+                },
+                {
                     id: 'magnet', label: 'LOOT MAGNET', cost: 50, ms: 90000,
                     icon: 'ability_high_speed',
                     stats: ['PICKUP RADIUS ×1.8', 'DURATION 90s']
+                },
+                {
+                    id: 'scrapper', label: 'SCRAPPER', cost: 65, ms: 90000,
+                    icon: 'ability_high_speed',
+                    stats: ['PICKUP RADIUS ×1.35', 'LOOT ×1.5', 'DURATION 90s']
+                },
+                {
+                    id: 'double_loot', label: 'DOUBLE LOOT', cost: 80, ms: 90000,
+                    icon: 'ability_high_speed',
+                    stats: ['RESOURCE YIELD ×2', 'DURATION 90s']
                 }
             ],
             /** Temporary weapons — ammo depletes, then reverts. */
@@ -96,13 +140,82 @@ class InStageShop {
     }
 
     flatPerks() {
-        const c = this.perkCatalog();
-        return c.buffs.map((i) => Object.assign({ kind: 'buff', stock: 'perk' }, i))
-            .concat(c.weapons.map((i) => Object.assign({ kind: 'weapon', stock: 'perk' }, i)));
+        return (this._perksOffer || this.buildPerksOffer()).slice();
     }
 
     flatParts() {
         return (this._partsOffer || this.buildPartsOffer()).slice();
+    }
+
+    /**
+     * Temp perk / weapon shelf for this visit — shuffled and capped by bag size
+     * (better faction standing → richer shelves).
+     */
+    buildPerksOffer() {
+        const c = this.perkCatalog();
+        const list = c.buffs.map((i) => Object.assign({ kind: 'buff', stock: 'perk' }, i))
+            .concat(c.weapons.map((i) => Object.assign({ kind: 'weapon', stock: 'perk' }, i)));
+        for (let i = list.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = list[i];
+            list[i] = list[j];
+            list[j] = tmp;
+        }
+        const bag = this.shopStockLayout();
+        const cap = Math.max(1, Math.min(list.length, bag.perkCap || list.length));
+        this._perksOffer = list.slice(0, cap);
+        return this._perksOffer;
+    }
+
+    /** Relation to the planet's resident faction (-100..100 + label). */
+    planetFactionRelation() {
+        const faction = String((this.planetContext().faction) || '').toLowerCase();
+        if (typeof factionManager !== 'undefined' && factionManager.getRelation) {
+            return factionManager.getRelation(faction);
+        }
+        return { score: 0, label: 'NEUTRAL', tone: 'neutral' };
+    }
+
+    /**
+     * Roll vendor bag size for this visit from alliance + luck.
+     * Allied residents stock deeper shelves; hostiles keep a thin stall.
+     */
+    rollVisitStockLayout() {
+        const rel = this.planetFactionRelation();
+        const score = Number(rel.score) || 0;
+        let minR = 0.08;
+        let maxR = 0.55;
+        if (score >= 90) {
+            minR = 0.55;
+            maxR = 1;
+        } else if (score >= 60) {
+            minR = 0.4;
+            maxR = 0.95;
+        } else if (score >= 40) {
+            minR = 0.28;
+            maxR = 0.8;
+        } else if (score <= -30) {
+            minR = 0;
+            maxR = 0.32;
+        } else if (score < 0) {
+            minR = 0.04;
+            maxR = 0.42;
+        }
+        const rich = minR + Math.random() * Math.max(0.01, maxR - minR);
+        let bag;
+        if (rich >= 0.78) {
+            bag = { cols: 10, rows: 4, minRows: 3, partCap: 16, perkCap: 9 };
+        } else if (rich >= 0.52) {
+            bag = { cols: 8, rows: 4, minRows: 3, partCap: 12, perkCap: 8 };
+        } else if (rich >= 0.28) {
+            bag = { cols: 7, rows: 3, minRows: 3, partCap: 10, perkCap: 6 };
+        } else {
+            bag = { cols: 5, rows: 3, minRows: 2, partCap: 7, perkCap: 4 };
+        }
+        bag.relation = rel;
+        bag.richness = rich;
+        this._visitBag = bag;
+        return bag;
     }
 
     flatStock() {
@@ -169,12 +282,20 @@ class InStageShop {
         };
         list.sort((a, b) => factionScore(a) - factionScore(b) || a.cost - b.cost || a.label.localeCompare(b.label));
 
-        // Keep a tight stash: mix kinds, max 8.
+        // Offer size follows this planet's shop bag (modest → rich).
+        const bag = this.shopStockLayout();
+        const cap = bag.partCap || 8;
         const picked = [];
         const kindCount = { weapon: 0, defense: 0, ability: 0, energy: 0 };
-        const kindCap = { weapon: 3, defense: 2, ability: 2, energy: 1 };
+        const kindCap = bag.partCap >= 14
+            ? { weapon: 5, defense: 4, ability: 4, energy: 2 }
+            : (bag.partCap >= 10
+                ? { weapon: 4, defense: 3, ability: 3, energy: 2 }
+                : (bag.partCap <= 7
+                    ? { weapon: 2, defense: 2, ability: 2, energy: 1 }
+                    : { weapon: 3, defense: 2, ability: 2, energy: 1 }));
         list.forEach((e) => {
-            if (picked.length >= 8) return;
+            if (picked.length >= cap) return;
             if ((kindCount[e.partKind] || 0) >= (kindCap[e.partKind] || 1)) return;
             kindCount[e.partKind] = (kindCount[e.partKind] || 0) + 1;
             picked.push(e);
@@ -231,6 +352,12 @@ class InStageShop {
         this.markedForSale.clear();
         this.cartBuys.clear();
         this._partsOffer = null;
+        this._perksOffer = null;
+        this._visitBag = null;
+        this._fitCellPx = null;
+        this._fittingLock = false;
+        this.rollVisitStockLayout();
+        this.buildPerksOffer();
         this.buildPartsOffer();
         if (!this.fromVictory
             && typeof game !== 'undefined'
@@ -250,6 +377,15 @@ class InStageShop {
         this.isOpen = false;
         this.markedForSale.clear();
         this.cartBuys.clear();
+        this._partsOffer = null;
+        this._perksOffer = null;
+        this._visitBag = null;
+        this._fitCellPx = null;
+        this._fittingLock = false;
+        if (this._shopRo) {
+            try { this._shopRo.disconnect(); } catch (e) { /* ignore */ }
+            this._shopRo = null;
+        }
         this._unpatchHomeStation();
         if (this._faceRaf) cancelAnimationFrame(this._faceRaf);
         this._faceRaf = null;
@@ -340,8 +476,12 @@ class InStageShop {
         const { dragKey } = this.parseSaleMarkKey(mark);
         const sep = dragKey.indexOf(':');
         const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
-        const id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+        let id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
         if (!id || typeof profileManager === 'undefined') return 0;
+        // Storage cells use instance keys (`defId#unit`); sell value is per def.
+        if (bucket !== 'blueprints' && profileManager.partDefId) {
+            id = profileManager.partDefId(id) || id;
+        }
         let raw = 0;
         if (bucket === 'blueprints') {
             raw = profileManager.getBlueprintSellValue
@@ -472,8 +612,28 @@ class InStageShop {
         const shipId = cell.getAttribute('data-drag-ship') || '';
         if (!dragKey || !source) return false;
         const mark = this.saleMarkKey(source, shipId, dragKey);
-        if (this.markedForSale.has(mark)) this.markedForSale.delete(mark);
-        else this.markedForSale.add(mark);
+        if (this.markedForSale.has(mark)) {
+            this.markedForSale.delete(mark);
+        } else {
+            // Starter loadout copies (owned=0, filed only) cannot be sold.
+            if (typeof profileManager !== 'undefined' && profileManager._ownedStorageCount) {
+                const sep = dragKey.indexOf(':');
+                const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
+                const rawId = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+                if (bucket && bucket !== 'blueprints' && rawId) {
+                    const defId = profileManager.partDefId
+                        ? profileManager.partDefId(rawId)
+                        : rawId;
+                    const profile = this.getProfile();
+                    if (profile && profileManager._ownedStorageCount(profile, bucket, defId) <= 0) {
+                        this.flashFace('sad');
+                        this.lastMsg = 'STARTER PART';
+                        return false;
+                    }
+                }
+            }
+            this.markedForSale.add(mark);
+        }
         this.applySaleMarks();
         this.updateCompleteButton();
         this.updateWalletProjection();
@@ -656,36 +816,50 @@ class InStageShop {
         const { source, shipId, dragKey } = this.parseSaleMarkKey(mark);
         const sep = dragKey.indexOf(':');
         const bucket = sep === -1 ? '' : dragKey.slice(0, sep);
-        const id = sep === -1 ? dragKey : dragKey.slice(sep + 1);
-        if (!bucket || !id) return { ok: false, reason: 'BAD KEY' };
+        const rawId = sep === -1 ? dragKey : dragKey.slice(sep + 1);
+        if (!bucket || !rawId) return { ok: false, reason: 'BAD KEY' };
 
         if (bucket === 'blueprints') {
             return profileManager.sellBlueprint
-                ? profileManager.sellBlueprint(id)
+                ? profileManager.sellBlueprint(rawId)
                 : { ok: false, reason: 'NO API' };
         }
 
         const kind = this.bucketToSellKind(bucket);
         if (!kind) return { ok: false, reason: 'BAD BUCKET' };
 
+        // Inventory drag-keys are instance ids (`defId#unit`); ledgers use bare defId.
+        const parsed = profileManager.parsePartInstanceId
+            ? profileManager.parsePartInstanceId(rawId)
+            : { defId: rawId, unit: null };
+        const defId = parsed.defId || rawId;
+        if (!defId) return { ok: false, reason: 'BAD KEY' };
+
         // Equipped-only: refuse (marking already blocks, but re-check).
         if (source === 'ship' && shipId
             && typeof profileManager._equippedStorageCount === 'function'
-            && profileManager._equippedStorageCount(profile, shipId, bucket, id) > 0) {
+            && profileManager._equippedStorageCount(profile, shipId, bucket, defId) > 0) {
             const entry = (profile.shipStorage || {})[shipId];
-            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
+            const filed = (entry && entry[bucket] && entry[bucket][defId]) || 0;
             if (filed <= 0) return { ok: false, reason: 'EQUIPPED' };
         }
+
+        // Starter loadout copies can sit filed with owned=0 — not sellable stock.
+        const owned = profileManager._ownedStorageCount
+            ? profileManager._ownedStorageCount(profile, bucket, defId)
+            : 0;
+        if (owned <= 0) return { ok: false, reason: 'STARTER' };
 
         // Filed ship cargo must leave the ship's ledger before ownership drops.
         if (source === 'ship' && shipId && profileManager.consumeFiledPart) {
             const entry = (profile.shipStorage || {})[shipId];
-            const filed = (entry && entry[bucket] && entry[bucket][id]) || 0;
-            if (filed > 0) profileManager.consumeFiledPart(profile, shipId, bucket, id);
+            const filed = (entry && entry[bucket] && entry[bucket][defId]) || 0;
+            if (filed > 0) profileManager.consumeFiledPart(profile, shipId, bucket, defId);
         }
 
+        // Pass the instance id so sellPart can compact per-copy upgrades.
         return profileManager.sellPart
-            ? profileManager.sellPart(kind, id)
+            ? profileManager.sellPart(kind, rawId)
             : { ok: false, reason: 'NO API' };
     }
 
@@ -812,9 +986,14 @@ class InStageShop {
         return map[id] || 'resScrap';
     }
 
-    /** Same generative casing the hangar bay uses — ability_* UI icons tint into blank blobs. */
-    stockVisualHtml(item, cellPx) {
-        const box = Math.max(28, (cellPx | 0) - 6);
+    /** Same generative casing the hangar bay uses — ability_* UI icons tint into blank blobs.
+     *  `span` is [w,h] slots so M/L parts fill their multi-cell footprint. */
+    stockVisualHtml(item, cellPx, span) {
+        const sw = Math.max(1, (span && span[0]) || 1);
+        const sh = Math.max(1, (span && span[1]) || 1);
+        const boxW = Math.max(16, sw * (cellPx | 0) - 4);
+        const boxH = Math.max(16, sh * (cellPx | 0) - 4);
+        const box = Math.min(boxW, boxH);
         let kind = 'ability';
         let color = '#c08cff';
         let inner = '';
@@ -847,10 +1026,11 @@ class InStageShop {
             }
         } else {
             const pu = (typeof POWER_UPS !== 'undefined') ? POWER_UPS[item.id] : null;
-            if (item.id === 'barrier' || item.id === 'repair') {
+            if (item.id === 'barrier' || item.id === 'aegis' || item.id === 'repair' || item.id === 'stim') {
                 kind = 'defense';
                 color = (pu && pu.color) || '#5cff7a';
-            } else if (item.id === 'speed_boost' || item.id === 'magnet') {
+            } else if (item.id === 'speed_boost' || item.id === 'turbo' || item.id === 'magnet'
+                || item.id === 'scrapper' || item.id === 'double_loot') {
                 kind = 'ability';
                 color = (pu && pu.color) || '#ff8a3a';
             } else {
@@ -860,7 +1040,7 @@ class InStageShop {
             inner = `<span class="hs-storage-cell-icon">${this.powerUpBadgeHtml(item.id, color, Math.max(16, Math.floor(box * 0.4)))}</span>`;
         }
         if (typeof physicalItem !== 'undefined' && physicalItem.wrap) {
-            return physicalItem.wrap(kind, physId, box, box, color, inner);
+            return physicalItem.wrap(kind, physId, boxW, boxH, color, inner);
         }
         return inner || this.iconHtml(item.icon || 'hsShop', Math.floor(box * 0.55), color);
     }
@@ -939,7 +1119,10 @@ class InStageShop {
         return (lines || []).map((line, i) => {
             const text = String(line || '');
             const cls = i === 0 ? ' is-tag' : (/\d+c$/.test(text.trim()) ? ' is-cost' : '');
-            return `<div class="vf-iss-detail-line${cls}">${text.replace(/</g, '&lt;')}</div>`;
+            const body = (typeof homeStationUI !== 'undefined' && homeStationUI.formatDetailStatLineHtml)
+                ? homeStationUI.formatDetailStatLineHtml(text)
+                : text.replace(/</g, '&lt;');
+            return `<div class="vf-iss-detail-line${cls}">${body}</div>`;
         }).join('');
     }
 
@@ -1211,7 +1394,7 @@ class InStageShop {
                     ? economyConfig.getResourceLabel(id)
                     : String(id).toUpperCase());
             return `<span class="vf-iss-wallet-item${n <= 0 ? ' is-empty' : ''}">` +
-                `<span class="vf-iss-wallet-ico">${this.iconHtml(this.resourceIconKey(iconId || id), 28)}</span>` +
+                `<span class="vf-iss-wallet-ico">${this.iconHtml(this.resourceIconKey(iconId || id), 20)}</span>` +
                 `<span class="vf-iss-wallet-meta"><span>${label}</span><b>${n}</b></span>` +
                 `</span>`;
         };
@@ -1224,29 +1407,180 @@ class InStageShop {
             `</div>`;
     }
 
-    /** Compact stash cells — room for the right-hand detail pane. */
-    SHOP_CELL_PX = 40;
+    /** Stash cells — fitted to the main column beside DETAIL (no vertical scroll). */
+    SHOP_CELL_PX = 48;
     SHOP_GAP_PX = 2;
-    /** Vendor stash footprint (empty pads give the Diablo bag feel). */
-    STOCK_COLS = 6;
-    STOCK_ROWS = 4;
+    SHOP_CELL_MIN_PX = 32;
+    SHOP_CELL_MAX_PX = 120;
+    /** Fallback vendor bag when planet context is missing. */
+    STOCK_COLS = 7;
+    STOCK_ROWS = 3;
+
+    /**
+     * Frozen vendor bag for this shop visit.
+     * Size is rolled on open from resident-faction standing + luck.
+     */
+    shopStockLayout() {
+        if (this._visitBag) return this._visitBag;
+        return this.rollVisitStockLayout();
+    }
+
+    /** S/M/L footprint for a stock listing (buffs stay 1×1). */
+    stockItemSpan(item) {
+        if (!item) return [1, 1];
+        if (item.kind === 'part' && item.partKind) {
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.shopPartSpan) {
+                return homeStationUI.shopPartSpan(item.partKind, item.id);
+            }
+        }
+        if (item.kind === 'weapon') {
+            if (typeof homeStationUI !== 'undefined' && homeStationUI.shopPartSpan) {
+                return homeStationUI.shopPartSpan('weapon', item.id);
+            }
+        }
+        return [1, 1];
+    }
 
     slotLayout() {
-        if (typeof homeStationUI !== 'undefined' && homeStationUI._storageLayoutPx) {
-            const prev = homeStationUI.STORAGE_CELL_PX;
-            const prevGap = homeStationUI.STORAGE_GAP_PX;
-            homeStationUI.STORAGE_CELL_PX = this.SHOP_CELL_PX;
-            homeStationUI.STORAGE_GAP_PX = this.SHOP_GAP_PX;
-            let layout;
-            try {
-                layout = homeStationUI._storageLayoutPx();
-            } finally {
-                homeStationUI.STORAGE_CELL_PX = prev;
-                homeStationUI.STORAGE_GAP_PX = prevGap;
-            }
-            return layout;
+        // Fitted size is already measured at shop zoom 1 — do not re-snap via glass zoom.
+        if (this._fitCellPx) {
+            return {
+                cell: Math.max(this.SHOP_CELL_MIN_PX, Math.min(this.SHOP_CELL_MAX_PX, this._fitCellPx | 0)),
+                gap: this.SHOP_GAP_PX
+            };
         }
-        return { cell: this.SHOP_CELL_PX, gap: this.SHOP_GAP_PX };
+        let cell = this.SHOP_CELL_PX;
+        const host = document.getElementById('vf-in-stage-shop');
+        const hostW = (host && host.clientWidth) || 0;
+        const hostH = (host && host.clientHeight) || 0;
+        if (hostW > 0) {
+            // First paint guess: main column beside DETAIL (~1.6/2.5 of body).
+            const usableW = Math.max(320, Math.floor(hostW * 0.58));
+            const usableH = Math.max(240, Math.floor(hostH * 0.62));
+            const cols = Math.max(this.STOCK_COLS || 7, 8) * 2;
+            const rows = 3 + 3;
+            const gap = this.SHOP_GAP_PX;
+            const fromW = Math.floor((usableW - gap * (cols - 1) - 12) / cols);
+            const fromH = Math.floor((usableH - gap * (rows - 1) - 72) / rows);
+            cell = Math.max(
+                this.SHOP_CELL_MIN_PX,
+                Math.min(this.SHOP_CELL_MAX_PX, Math.min(fromW, fromH))
+            );
+        }
+        return { cell: cell, gap: this.SHOP_GAP_PX };
+    }
+
+    /** Apply one cell size to every shop bag grid (measure / final CSS). */
+    applyShopCellSize(host, cs) {
+        if (!host) return;
+        const gap = this.SHOP_GAP_PX;
+        host.querySelectorAll(
+            '.vf-iss-stock-grid, .vf-iss-inv-grid, .vf-iss-station-grid, .vf-iss-queued-grid, ' +
+            '.vf-iss-ship-inv .hs-storage-grid, .vf-iss-station-inv .hs-storage-grid'
+        ).forEach((g) => {
+            const cols = Math.max(1, parseInt(g.getAttribute('data-inv-cols'), 10) || 1);
+            const rows = Math.max(1, parseInt(g.getAttribute('data-inv-rows'), 10) || 1);
+            g.style.setProperty('--cs', cs + 'px');
+            g.style.setProperty('--hs-gap', gap + 'px');
+            g.style.gridTemplateColumns = `repeat(${cols}, ${cs}px)`;
+            g.style.gridTemplateRows = `repeat(${rows}, ${cs}px)`;
+            g.style.width = (cols * cs + (cols - 1) * gap) + 'px';
+            g.style.height = (rows * cs + (rows - 1) * gap) + 'px';
+        });
+        host.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv').forEach((bag) => {
+            bag.style.maxHeight = 'none';
+            bag.style.overflow = 'visible';
+        });
+    }
+
+    /**
+     * Largest cell that fills .vf-iss-main up to the DETAIL column without
+     * vertical (or horizontal) overflow/scroll.
+     */
+    measureFitCellPx(host) {
+        const main = host && host.querySelector('.vf-iss-main');
+        if (!main) return this.SHOP_CELL_PX;
+        const availW = main.clientWidth;
+        const availH = main.clientHeight;
+        if (availW < 80 || availH < 80) return this.SHOP_CELL_PX;
+
+        const bags = host.querySelectorAll('.vf-iss-ship-inv, .vf-iss-station-inv');
+        const prevBag = [];
+        bags.forEach((bag) => {
+            prevBag.push({
+                el: bag,
+                maxHeight: bag.style.maxHeight,
+                overflow: bag.style.overflow
+            });
+        });
+        const prevOverflow = main.style.overflow;
+        main.style.overflow = 'hidden';
+
+        let lo = this.SHOP_CELL_MIN_PX;
+        let hi = this.SHOP_CELL_MAX_PX;
+        let best = lo;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            this.applyShopCellSize(host, mid);
+            void main.offsetHeight;
+            const fits = main.scrollHeight <= availH + 2 && main.scrollWidth <= availW + 2
+                && ![...bags].some((bag) => bag.scrollHeight > bag.clientHeight + 2);
+            if (fits) {
+                best = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        this.applyShopCellSize(host, best);
+        main.style.overflow = prevOverflow;
+        prevBag.forEach((p) => {
+            p.el.style.maxHeight = p.maxHeight;
+            p.el.style.overflow = p.overflow;
+        });
+        return best;
+    }
+
+    /** Fit bags once after layout, then re-render so icons match the cell. */
+    fitBagsToSpace(host) {
+        if (!host || this._fittingLock) return;
+        const best = this.measureFitCellPx(host);
+        if (!best) return;
+        if (this._fitCellPx && Math.abs(this._fitCellPx - best) <= 1) {
+            this.applyShopCellSize(host, this._fitCellPx);
+            return;
+        }
+        this._fitCellPx = best;
+        this._fittingLock = true;
+        try {
+            this.renderDom();
+        } finally {
+            this._fittingLock = false;
+        }
+    }
+
+    bindShopResize(host) {
+        if (!host || typeof ResizeObserver === 'undefined') return;
+        if (this._shopRo) {
+            try { this._shopRo.disconnect(); } catch (e) { /* ignore */ }
+            this._shopRo = null;
+        }
+        let t = 0;
+        this._shopRo = new ResizeObserver(() => {
+            if (!this.isOpen || this._fittingLock) return;
+            clearTimeout(t);
+            t = setTimeout(() => {
+                if (!this.isOpen) return;
+                const el = document.getElementById('vf-in-stage-shop');
+                if (!el) return;
+                const next = this.measureFitCellPx(el);
+                if (!next || (this._fitCellPx && Math.abs(this._fitCellPx - next) <= 1)) return;
+                this._fitCellPx = next;
+                this._fittingLock = true;
+                try { this.renderDom(); } finally { this._fittingLock = false; }
+            }, 80);
+        });
+        this._shopRo.observe(host);
     }
 
     /** Run hangar storage renderers with shop cell size, then restore. */
@@ -1276,14 +1610,15 @@ class InStageShop {
             `</div>`;
     }
 
-    /** Shared cell builder for perk / part vendor grids. */
-    stockCellHtml(item, cs) {
+    /** Shared cell builder for perk / part vendor grids. Returns { html, span }. */
+    stockCellHtml(item, cs, span) {
         const cost = Math.max(0, Math.round(Number(item.cost) || 0));
         item.cost = cost;
         const buyKey = this.stockBuyKey(item);
         const inCart = this.cartBuys.has(buyKey);
         const afford = inCart || this.canAffordCartItem(item);
         const isPart = item.kind === 'part';
+        const footprint = span || this.stockItemSpan(item);
         let accent = '#c08cff';
         if (isPart && item.partKind === 'weapon') {
             accent = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
@@ -1304,57 +1639,61 @@ class InStageShop {
             : `<span class="vf-iss-stock-tag is-temp">TEMP</span>`;
         const cartBadge = inCart ? `<span class="vf-iss-cart-mark">CART</span>` : '';
         // Keep unaffordable cells clickable so the trader can flash "NOT ENOUGH CREDITS".
-        return `<button type="button" class="hs-storage-cell vf-iss-stock-cell${isPart ? ' is-part' : ' is-perk'}${afford ? '' : ' is-locked'}${inCart ? ' is-in-cart' : ''}" ` +
-            `data-shop-buy="${buyKey}" data-nav-item tabindex="-1" style="--pk-c:${accent}" ` +
+        const html = `<button type="button" class="hs-storage-cell vf-iss-stock-cell${isPart ? ' is-part' : ' is-perk'}${afford ? '' : ' is-locked'}${inCart ? ' is-in-cart' : ''}" ` +
+            `data-shop-buy="${buyKey}" data-nav-item tabindex="-1" style="__SPAN__--pk-c:${accent}" ` +
             `data-ui-tip-compact data-ui-tip-head="${head}" data-ui-tip="${tip}" ` +
             `aria-label="Add ${head} to cart for ${cost} credits">` +
-            this.stockVisualHtml(item, cs) +
+            this.stockVisualHtml(item, cs, footprint) +
             badge +
             cartBadge +
             `<span class="vf-iss-stock-cost">${cost}c</span>` +
             `</button>`;
-    }
-
-    /** Pad a cell list out to cols×rows empty slots. */
-    padStockCells(cells, cols, rows) {
-        const pad = Math.max(0, cols * rows - cells.length);
-        for (let i = 0; i < pad; i++) {
-            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
-        }
-        return cells;
+        return { html, span: footprint };
     }
 
     /** Temp perks / temp weapons for the next stage. */
     perkGridHtml() {
-        const items = this.flatPerks();
-        const cols = this.STOCK_COLS;
-        const rows = Math.max(2, Math.ceil(Math.max(items.length, 1) / cols));
+        const bag = this.shopStockLayout();
+        const cols = bag.cols;
         this._stockCols = cols;
         const layout = this.slotLayout();
         const cs = layout.cell;
         const gap = layout.gap;
-        const cells = this.padStockCells(items.map((item) => this.stockCellHtml(item, cs)), cols, rows);
-        return this.storageGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid', cells.join(''));
+        const specs = this.flatPerks().map((item) => this.stockCellHtml(item, cs));
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.packShopStockGrid) {
+            return homeStationUI.packShopStockGrid(specs, cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid');
+        }
+        return this.storageGridShell(cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-perk-grid',
+            specs.map((s) => s.html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;')).join(''));
     }
 
     /** Permanent parts that go into ship/station storage. */
     partsGridHtml() {
-        const items = this.flatParts();
-        const cols = this.STOCK_COLS;
-        const rows = Math.max(2, Math.ceil(Math.max(items.length, 1) / cols));
+        const bag = this.shopStockLayout();
+        const cols = bag.cols;
         const layout = this.slotLayout();
         const cs = layout.cell;
         const gap = layout.gap;
-        const cells = this.padStockCells(items.map((item) => this.stockCellHtml(item, cs)), cols, rows);
-        return this.storageGridShell(cols, rows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid', cells.join(''));
+        const specs = this.flatParts().map((item) => this.stockCellHtml(item, cs));
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.packShopStockGrid) {
+            return homeStationUI.packShopStockGrid(specs, cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid');
+        }
+        return this.storageGridShell(cols, bag.minRows, cs, gap, 'vf-iss-stock-grid vf-iss-parts-grid',
+            specs.map((s) => s.html.replace('__SPAN__', 'grid-column: span 1; grid-row: span 1;')).join(''));
     }
 
-    /** Both vendor grids under STOCK. */
+    /** Both vendor grids under STOCK — side by side, wrap when too wide. */
     stockGridsHtml() {
-        return `<h3 class="vf-iss-col-title vf-iss-sub-title">PERKS · NEXT STAGE</h3>` +
+        return `<div class="vf-iss-stock-row">` +
+            `<div class="vf-iss-stock-bay">` +
+            `<h3 class="vf-iss-col-title vf-iss-sub-title">PERKS · NEXT STAGE</h3>` +
             this.perkGridHtml() +
+            `</div>` +
+            `<div class="vf-iss-stock-bay">` +
             `<h3 class="vf-iss-col-title vf-iss-sub-title">PARTS · PERMANENT</h3>` +
-            this.partsGridHtml();
+            this.partsGridHtml() +
+            `</div>` +
+            `</div>`;
     }
 
     /** Ship cargo bay at shop slot size. */
@@ -1364,11 +1703,13 @@ class InStageShop {
         if (!profile || !shipId || typeof homeStationUI === 'undefined' || !homeStationUI.renderShipStorage) {
             return this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
         }
+        const bagCols = this.shopStockLayout().cols;
         const { html } = this.withShopSlotSize(() => homeStationUI.renderShipStorage(profile, shipId, {
             tipAction: false,
             extraGridClass: 'vf-iss-inv-grid',
-            // Shop: one tile per part — hangar footprints make the trader bag look messy.
-            compactSpans: true
+            // Real S/M/L footprints — bag width follows this shop's offer size.
+            compactSpans: false,
+            maxCols: bagCols
         }));
         return html || this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
     }
@@ -1379,10 +1720,11 @@ class InStageShop {
         if (!profile || typeof homeStationUI === 'undefined' || !homeStationUI.renderStationStorage) {
             return this.emptyBagHtml('STATION EMPTY');
         }
+        const bagCols = this.shopStockLayout().cols;
         const { html } = this.withShopSlotSize(() => homeStationUI.renderStationStorage(profile, {
             tipAction: false,
-            compactSpans: true,
-            maxCols: this.STOCK_COLS
+            compactSpans: false,
+            maxCols: bagCols
         }));
         if (!html) return this.emptyBagHtml('STATION EMPTY');
         // Tag for shop CSS (renderStationStorage has no extraGridClass hook).
@@ -1394,7 +1736,7 @@ class InStageShop {
 
     emptyBagHtml(label) {
         const layout = this.slotLayout();
-        const cols = 6;
+        const cols = this.shopStockLayout().cols;
         const rows = 2;
         const cells = [];
         for (let i = 0; i < cols * rows; i++) {
@@ -1473,6 +1815,17 @@ class InStageShop {
     }
 
     /** Paint shop chrome in the trader's faction colours (not the player's HUD theme). */
+    /** Keep the shop panel filling the glass host (1:1 CSS, no shrink zoom). */
+    fitPanelToHost(host) {
+        if (!host) return;
+        const panel = host.querySelector('.vf-iss-panel');
+        if (!panel) return;
+        panel.style.width = '100%';
+        panel.style.height = '100%';
+        panel.style.zoom = '';
+        panel.style.transform = '';
+    }
+
     applyTraderTheme(root, factionId) {
         if (!root) return;
         const id = String(factionId || 'terran').toLowerCase();
@@ -1559,6 +1912,8 @@ class InStageShop {
         const ctx = this.planetContext();
         this.applyTraderTheme(el, ctx.faction);
         const factionLabel = String(ctx.faction || 'local').toUpperCase();
+        const rel = (this._visitBag && this._visitBag.relation) || this.planetFactionRelation();
+        const standLabel = String((rel && rel.label) || 'NEUTRAL').toUpperCase();
         const pendingNote = (this.pendingBuffs.length || this.pendingWeapons.length)
             ? `<div class="vf-iss-note">QUEUED FOR NEXT STAGE</div>`
             : '';
@@ -1570,7 +1925,7 @@ class InStageShop {
             `<div class="vf-iss-portrait">${this.portraitHtml(ctx)}</div>` +
             `<div class="vf-iss-trader-meta">` +
             `<div class="vf-iss-trader-title">${ctx.name} LOCAL</div>` +
-            `<div class="vf-iss-trader-sub">${factionLabel} · PLANET TRADER</div>` +
+            `<div class="vf-iss-trader-sub">${factionLabel} · ${standLabel} · PLANET TRADER</div>` +
             `<div class="vf-iss-trader-cash">${this.getCredits()}c ON HAND</div>` +
             `</div></div>` +
             `<button type="button" class="vf-iss-close" data-shop-close data-nav-item tabindex="-1">CLOSE [E / B]</button>` +
@@ -1593,6 +1948,7 @@ class InStageShop {
             `</footer></div>`;
         // Theme lives on the root; re-apply after innerHTML so dataset/vars stay.
         this.applyTraderTheme(el, ctx.faction);
+        this.fitPanelToHost(el);
         if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) {
             voxelPortrait.scan(el);
         }
@@ -1608,6 +1964,13 @@ class InStageShop {
             this.showDetail(this.detailFromStockItem(
                 this.resolveBuyKey(focused.getAttribute('data-shop-buy'))
             ));
+        }
+        this.bindShopResize(el);
+        // Grow bags to fill main (beside DETAIL) without scrolling; re-renders once.
+        if (!this._fittingLock) {
+            requestAnimationFrame(() => {
+                if (this.isOpen) this.fitBagsToSpace(document.getElementById('vf-in-stage-shop'));
+            });
         }
         this.startFaceLoop();
     }

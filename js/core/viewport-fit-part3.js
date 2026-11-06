@@ -3,7 +3,7 @@
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
@@ -139,6 +139,11 @@
                 placeResPlate();
             },
             fx: function () { setFxOpen(!vfs.fxOpen); },
+            mute: function (btn) {
+                vfs.volOpen = !vfs.volOpen;
+                btn.classList.toggle('is-open', vfs.volOpen);
+                placeVolPlate();
+            },
             fs: function () {
                 const src = document.querySelector('#vfFullscreenBtn') || document.querySelector('.home-station-overlay .hs-fullscreen-btn');
                 if (src) src.click();
@@ -178,7 +183,8 @@
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
-            res: ['Resolution', RES_ICON], fx: ['Visual settings', FX_ICON], fs: ['Fullscreen', FS_OFF], logout: ['Logout', POWER]
+            res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], fs: ['Fullscreen', FS_OFF],
+            fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
         // only wires them. Built here as a fallback if the markup is missing.
@@ -225,6 +231,31 @@
             else tools.appendChild(feBtn);
             tools.dataset.wired = '0';
         }
+        // Older saves / markup without the mute key: inject it just before fullscreen.
+        if (!tools.querySelector('[data-tool="mute"]') && meta.mute) {
+            const muteBtn = document.createElement('button');
+            muteBtn.type = 'button';
+            muteBtn.dataset.tool = 'mute';
+            muteBtn.title = meta.mute[0];
+            muteBtn.setAttribute('aria-label', meta.mute[0]);
+            muteBtn.innerHTML = meta.mute[1];
+            const fsSlot = tools.querySelector('[data-tool="fs"]');
+            if (fsSlot) tools.insertBefore(muteBtn, fsSlot);
+            else tools.appendChild(muteBtn);
+            tools.dataset.wired = '0';
+        }
+        // Settings remote sits to the right of fullscreen (mute → fs → fx → logout).
+        const fxSlot = tools.querySelector('[data-tool="fx"]');
+        const fsAfter = tools.querySelector('[data-tool="fs"]');
+        if (fxSlot && fsAfter && fsAfter.nextElementSibling !== fxSlot) {
+            tools.insertBefore(fxSlot, fsAfter.nextSibling);
+        }
+        if (fxSlot && fxSlot.dataset.icon !== 'remote') {
+            fxSlot.dataset.icon = 'remote';
+            fxSlot.innerHTML = FX_ICON;
+            fxSlot.title = meta.fx[0];
+            fxSlot.setAttribute('aria-label', meta.fx[0]);
+        }
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
@@ -236,7 +267,7 @@
             });
             const fxb = tools.querySelector('[data-tool="fx"]');
             if (fxb) fxb.setAttribute('data-fx-toggle', '');
-            requestAnimationFrame(function () { placeResPlate(); placeFxPlate(); });
+            requestAnimationFrame(function () { placeResPlate(); placeFxPlate(); placeVolPlate(); });
         }
         const q = function (k) { return tools.querySelector('[data-tool="' + k + '"]'); };
         const setOff = function (btn, off) {
@@ -245,6 +276,18 @@
         };
         q('res').classList.toggle('is-open', vfs.resOpen);
         q('fx').classList.toggle('is-open', vfs.fxOpen);
+        const muteBtn = q('mute');
+        if (muteBtn) {
+            muteBtn.classList.toggle('is-open', vfs.volOpen);
+            const vol = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager.getMasterVolume() : 0.75;
+            const isMuted = vol <= 0;
+            if (muteBtn.dataset.state !== (isMuted ? '1' : '0')) {
+                muteBtn.dataset.state = isMuted ? '1' : '0';
+                muteBtn.innerHTML = isMuted ? MUTE_OFF : MUTE_ON;
+                muteBtn.title = isMuted ? 'Unmute' : 'Volume';
+                muteBtn.setAttribute('aria-label', muteBtn.title);
+            }
+        }
         const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
         const fsBtn = q('fs');
         setOff(fsBtn, !fsOk);
@@ -334,6 +377,28 @@
         plate.style.top = Math.round(r.top + (r.height - hh) / 2) + 'px';
         plate.style.left = Math.round(r.left - 8 - plate.offsetWidth) + 'px';
     }
+
+    // The volume plate unfolds as a dropdown under the mute key (not to the side, like RES/FX).
+    function placeVolPlate() {
+        const plate = ensureVolPlate();
+        const btn = document.querySelector('.vf-bezel-tools [data-tool="mute"]');
+        if (!plate) return;
+        plate.style.display = vfs.volOpen && btn ? 'inline-flex' : 'none';
+        if (!vfs.volOpen || !btn) return;
+        plate.dispatchEvent(new Event('vf-vol-sync'));
+        const r = btn.getBoundingClientRect();
+        plate.style.top = Math.round(r.bottom + 8) + 'px';
+        plate.style.left = Math.round(r.right - plate.offsetWidth) + 'px';
+    }
+    // Close the dropdown on an outside click, like the FX panel's own Escape/outside handling.
+    document.addEventListener('click', function (e) {
+        if (!vfs.volOpen) return;
+        if (e.target.closest('#vf-vol') || e.target.closest('.vf-bezel-tools [data-tool="mute"]')) return;
+        vfs.volOpen = false;
+        const btn = document.querySelector('.vf-bezel-tools [data-tool="mute"]');
+        if (btn) btn.classList.remove('is-open');
+        placeVolPlate();
+    });
 
     // Pilot display in the bezel's top strip: crest, name, resources of the active pilot,
     // or an "empty screen" graphic when none is selected.

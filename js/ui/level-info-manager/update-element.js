@@ -43,6 +43,9 @@ extendClass(LevelInfoManager, {
                 this._timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
                 this.updateElement('levelTime', this._timeString);
             }
+            if (typeof objectiveManager !== 'undefined') {
+                this.updateTransitMap();
+            }
             if (typeof objectiveManager !== 'undefined' || typeof dailyTracker !== 'undefined') {
                 const objVal = document.getElementById('objectiveHudValue');
                 const dailyVal = document.getElementById('dailyHudValue');

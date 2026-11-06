@@ -6,7 +6,8 @@
  */
 (function () {
     const PAD = 6;
-    const HIDE_MS = 280;
+    /** Class cleanup only — visual hide is instant via removing is-on. */
+    const HIDE_MS = 0;
     const LERP = 0.28;
     const SNAP = 0.6;
 
@@ -58,16 +59,16 @@
     GamepadCursor.prototype.markGamepad = function () {
         this.active = true;
         if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = 0; }
-        const focused = document.querySelector('.nav-focused')
-            || (document.activeElement && document.activeElement !== document.body
-                ? document.activeElement : null);
+        const el = this.ensure();
+        el.classList.remove('is-out');
+        const focused = this._resolveTarget();
         if (focused) this.follow(focused);
-        else this._showIdle();
+        // No target yet: stay armed, but do not paint a floating ghost frame.
         this._kick();
     };
 
     GamepadCursor.prototype.markPointer = function () {
-        if (!this.active) return;
+        if (!this.active && !(this.el && this.el.classList.contains('is-on'))) return;
         this.active = false;
         this.target = null;
         this._fadeOut();
@@ -77,28 +78,30 @@
         if (!el || !el.getBoundingClientRect) return;
         if (!this.active) return;
         this.target = el;
-        this.ensure().classList.add('is-on', 'is-jump');
+        if (this.hideTimer) { clearTimeout(this.hideTimer); this.hideTimer = 0; }
+        const node = this.ensure();
+        node.classList.remove('is-out');
+        node.classList.add('is-on', 'is-jump');
         this._kick();
-    };
-
-    GamepadCursor.prototype._showIdle = function () {
-        const el = this.ensure();
-        el.classList.add('is-on');
-        el.classList.remove('is-jump');
     };
 
     GamepadCursor.prototype._fadeOut = function () {
         const el = this.el;
         if (!el) return;
-        el.classList.remove('is-jump');
+        // Drop is-on immediately so :not(.is-on) rules kill the frame this frame
+        // (no opacity linger — previous HIDE_MS/CSS fade felt a beat too late).
+        el.classList.remove('is-jump', 'is-on');
         el.classList.add('is-out');
+        el.style.width = '0px';
+        el.style.height = '0px';
+        this.hasPos = false;
+        this.target = null;
         const self = this;
         if (this.hideTimer) clearTimeout(this.hideTimer);
         this.hideTimer = setTimeout(function () {
             self.hideTimer = 0;
             if (self.active) return;
             el.classList.remove('is-on', 'is-out');
-            self.hasPos = false;
         }, HIDE_MS);
     };
 
@@ -113,18 +116,31 @@
         });
     };
 
+    /** Menu screens that use .selected instead of (or as well as) .nav-focused. */
+    GamepadCursor.prototype._selectedFallback = function () {
+        return document.querySelector(
+            '#victoryOverlay .victory-button.selected, ' +
+            '#gameOver .victory-button.selected, ' +
+            '#gameOver .game-over-button.selected, ' +
+            '#pauseOverlay .pause-button.selected'
+        );
+    };
+
     GamepadCursor.prototype._resolveTarget = function () {
         if (this.target && document.body.contains(this.target)
-            && this.target.classList.contains('nav-focused')) {
+            && (this.target.classList.contains('nav-focused')
+                || this.target.classList.contains('selected'))) {
             return this.target;
         }
-        const focused = document.querySelector('.nav-focused');
+        const focused = document.querySelector('.nav-focused') || this._selectedFallback();
         if (focused) {
             this.target = focused;
             return focused;
         }
         const ae = document.activeElement;
-        if (ae && ae !== document.body && ae.getBoundingClientRect) {
+        if (ae && ae !== document.body && ae.getBoundingClientRect
+            && typeof ae.matches === 'function'
+            && ae.matches('button, [data-nav-item], [role="button"], a[href], input, select, textarea')) {
             this.target = ae;
             return ae;
         }
@@ -133,11 +149,35 @@
 
     GamepadCursor.prototype._paint = function () {
         const el = this.ensure();
-        if (this.el.classList.contains('is-out') && !this.active) return;
+        if (el.classList.contains('is-out') && !this.active) return;
         const target = this._resolveTarget();
-        if (!target) return;
+        if (!target) {
+            // Target gone (screen swap / rebuild): clear the frame now, but stay
+            // armed — markGamepad may run before the key handler sets nav-focused.
+            if (this.hasPos || el.classList.contains('is-on')) {
+                el.classList.remove('is-jump', 'is-on');
+                el.classList.add('is-out');
+                el.style.width = '0px';
+                el.style.height = '0px';
+                this.hasPos = false;
+                this.target = null;
+            }
+            return;
+        }
         const r = target.getBoundingClientRect();
-        if (r.width <= 0 && r.height <= 0) return;
+        if (r.width <= 0 && r.height <= 0) {
+            if (this.hasPos || el.classList.contains('is-on')) {
+                el.classList.remove('is-jump', 'is-on');
+                el.classList.add('is-out');
+                el.style.width = '0px';
+                el.style.height = '0px';
+                this.hasPos = false;
+                this.target = null;
+            }
+            return;
+        }
+        el.classList.remove('is-out');
+        el.classList.add('is-on');
         const tx = r.left - PAD;
         const ty = r.top - PAD;
         const tw = r.width + PAD * 2;

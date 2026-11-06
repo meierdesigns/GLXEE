@@ -98,12 +98,9 @@ extendClass(HomeStationUI, {
         const ids = (typeof planetConfigManager !== 'undefined')
             ? planetConfigManager.getGalaxyIds()
             : ['milky_way', 'andromeda'];
-        const cards = ids.filter((gid) => {
-            if (gid === current) return true;
-            return (typeof profileManager !== 'undefined')
-                ? profileManager.canTravelToGalaxy(gid, profile).ok
-                : gid === 'milky_way';
-        }).map((gid) => {
+        // Always list every galaxy. Locked rows keep NEED WARP / INSTALL PORTAL
+        // so destinations do not vanish after travelling home with Warp L0.
+        const cards = ids.map((gid) => {
             const g = (typeof planetConfigManager !== 'undefined')
                 ? planetConfigManager.getGalaxy(gid)
                 : { id: gid, name: gid.toUpperCase() };
@@ -114,6 +111,9 @@ extendClass(HomeStationUI, {
             const req = (typeof economyConfig !== 'undefined')
                 ? economyConfig.getGalaxyWarpRequirement(gid, current)
                 : 0;
+            const portalReady = (typeof profileManager !== 'undefined' && profileManager.hasPortalInInventory)
+                ? profileManager.hasPortalInInventory(gid, profile)
+                : false;
             // Map nodes = the galaxy's real planets (planetIds can hold strays).
             const gmap = (typeof planetConfigManager !== 'undefined') ? planetConfigManager.getGalaxyMap(gid) : null;
             const planetCount = (gmap && gmap.nodes && gmap.nodes.length) || 0;
@@ -126,10 +126,12 @@ extendClass(HomeStationUI, {
             let action = '';
             if (here) {
                 action = '<span class="hs-muted hs-line-action">CURRENT</span>';
-            } else if (!travel.ok) {
-                action = `<span class="hs-muted hs-line-action">NEED WARP L${req} OR PORTAL</span>`;
-            } else {
+            } else if (travel.ok) {
                 action = `<button class="action-button hs-line-action" data-travel="${gid}">TRAVEL HERE</button>`;
+            } else if (portalReady) {
+                action = `<button class="action-button hs-line-action" data-install-portal="${gid}">INSTALL PORTAL</button>`;
+            } else {
+                action = `<span class="hs-muted hs-line-action">NEED WARP L${req} OR PORTAL</span>`;
             }
             const ctl = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyControl) ? planetConfigManager.getGalaxyControl(gid) : null;
             const held = !ctl || ctl.control !== 'contested';
@@ -158,7 +160,7 @@ extendClass(HomeStationUI, {
 
         return `<div class="hs-section hs-panel">` +
             `${this.panelTitle('hsTravel', 'GALAXY TRAVEL')}` +
-            `<p class="hs-muted hs-hint">Move the home station between galaxies. First travel into a foreign galaxy charts faction-matched planets and icons immediately. START only shows planets in the current galaxy. Unlock destinations with WARP DRIVE or buy a PORTAL in the shop.</p>` +
+            `<p class="hs-muted hs-hint">Move the home station between galaxies. Buy portal modules in the shop — they go into inventory. Install them here to unlock that galaxy route. Warp Drive can also unlock destinations by level.</p>` +
             `<p class="hs-line">CURRENT: <strong>${String(current).replace(/_/g, ' ').toUpperCase()}</strong> · WARP L${levels.warp_drive || 0}</p>` +
             `<div class="hs-tab-fill">${cards}</div>` +
             `</div>`;

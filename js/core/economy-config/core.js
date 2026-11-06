@@ -175,7 +175,9 @@ class EconomyConfig {
             weapons: {
                 dmg: { label: 'DAMAGE', desc: '+Damage', maxLevel: 5, costMul: 1.15 },
                 rof: { label: 'ROF', desc: '−Cooldown (rate of fire)', maxLevel: 5, costMul: 1.0 },
-                range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 }
+                range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 },
+                // Binary unlock: player shots from this weapon clash/redirect vs enemy shots.
+                reflect: { label: 'REFLECT', desc: 'Reflective shots (clash with enemy fire)', maxLevel: 1, costMul: 1.6 }
             },
             defenses: {
                 capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.1 },

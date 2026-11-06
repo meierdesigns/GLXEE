@@ -72,49 +72,73 @@ extendClass(RenderManager, {
         };
         const rowsN = Math.ceil(H / cell) + 3;
 
-        // The lattice layers only change when the scroll crosses a cell boundary (or the palette, width or
-        // stage changes); in between they are re-blitted at the new sub-cell phase without being rebuilt.
+        // Floor and wall lattices invalidate independently: floor only cares about
+        // parallax row / palette, walls about scroll row + crater epoch. Wall chips
+        // must not rebuild the whole floor, and parallax advances half as often.
         const gOffC = offset * GROUND_PARALLAX;
-        const lc = this._terrainLayerKey;
+        const gPhase = gOffC % cell;
+        const gBase = Math.floor(gOffC / cell);
+        const lc = this._terrainLayerKey || (this._terrainLayerKey = {});
         const dmgEpoch = obstacleManager._terrainDamageEpoch || 0;
-        const sameLayers = !!lc && lc.baseRow === baseRow && lc.gBase === Math.floor(gOffC / cell) && lc.cols === cols
-            && lc.rowsN === rowsN && lc.cell === cell && lc.W === W && lc.key === this._terrainKey
-            && lc.prof === obstacleManager._terrainProfile && lc.pal === pal && lc.dmg === dmgEpoch
-            && !!this._terrainWallBuf;
+        const sharedOk = lc.cols === cols && lc.rowsN === rowsN && lc.cell === cell && lc.W === W
+            && lc.key === this._terrainKey && lc.prof === obstacleManager._terrainProfile && lc.pal === pal;
+        const groundSame = sharedOk && lc.gBase === gBase && !!this._terrainBuf;
+        const wallSame = sharedOk && lc.baseRow === baseRow && lc.dmg === dmgEpoch
+            && !!this._terrainWallBuf && !!this._terrainOverlayBuf;
         let groundLayer, overlayLayer, wallLayer;
-        if (sameLayers) {
-            groundLayer = { canvas: this._terrainBuf, y: (gOffC % cell) - cell };
-            overlayLayer = { canvas: this._terrainOverlayBuf, y: phase - cell };
-            wallLayer = { canvas: this._terrainWallBuf, y: phase - cell };
+
+        const pushRunInto = (batch, curPhase, col, x, y, w, h) => {
+            if (!col || !(w > 0) || !(h > 0)) return;
+            let a = batch[col];
+            if (!a) batch[col] = a = [];
+            // y is r * cell + phase with r starting at -1 → row index r + 1.
+            a.push(Math.round(x / cell), Math.round((y - curPhase) / cell) + 1,
+                Math.max(1, Math.round(w / cell)), Math.max(1, Math.round(h / cell)));
+        };
+        const flushBatch = (target, into) => {
+            for (const col in target) {
+                if (!Object.prototype.hasOwnProperty.call(target, col)) continue;
+                into.fillStyle = col;
+                const a = target[col];
+                for (let i = 0; i < a.length; i += 4) {
+                    into.fillRect(a[i], a[i + 1], a[i + 2], a[i + 3]);
+                }
+            }
+        };
+        const layer = (name, target, dy, opaque, px) => {
+            let c = this[name];
+            if (!c) c = this[name] = document.createElement('canvas');
+            if (c.width !== cols || c.height !== rowsN) {
+                c.width = cols;
+                c.height = rowsN;
+            }
+            const lctx = c.getContext('2d', { alpha: !opaque });
+            if (!lctx) return null;
+            lctx.setTransform(1, 0, 0, 1, 0, 0);
+            lctx.globalAlpha = 1;
+            lctx.globalCompositeOperation = 'source-over';
+            lctx.imageSmoothingEnabled = false;
+            // Ground and walls paint every cell once with opaque colours: write the pixels directly
+            // (one putImageData) instead of thousands of single-cell fillRects.
+            if (px && this.flushBatchPixels(target, lctx, cols, rowsN, opaque ? '#0a0c10' : null)) {
+                return { canvas: c, y: dy - cell };
+            }
+            if (opaque) {
+                lctx.fillStyle = '#0a0c10';
+                lctx.fillRect(0, 0, cols, rowsN);
+            } else {
+                lctx.clearRect(0, 0, cols, rowsN);
+            }
+            flushBatch(target, lctx);
+            return { canvas: c, y: dy - cell };
+        };
+
+        if (groundSame) {
+            groundLayer = { canvas: this._terrainBuf, y: gPhase - cell };
         } else {
             // color → flat [x,y,w,h,…] runs (horizontal RLE) in lattice cells.
-            // Layers are painted at one pixel per voxel and scaled up, so every
-            // voxel is exactly the same size no matter the scroll phase.
-            // Ground, slope shading and walls stay in separate batches so
-            // obstacles can sit between them or on top of the walls.
             const groundBatch = Object.create(null);
-            const overlayBatch = Object.create(null);
-            const wallBatch = Object.create(null);
-            let batch = groundBatch;
-            let curPhase = 0;
-            const pushRun = (col, x, y, w, h) => {
-                if (!col || !(w > 0) || !(h > 0)) return;
-                let a = batch[col];
-                if (!a) batch[col] = a = [];
-                // y is r * cell + phase with r starting at -1 → row index r + 1.
-                a.push(Math.round(x / cell), Math.round((y - curPhase) / cell) + 1,
-                    Math.max(1, Math.round(w / cell)), Math.max(1, Math.round(h / cell)));
-            };
-            const flushBatch = (target, into) => {
-                for (const col in target) {
-                    if (!Object.prototype.hasOwnProperty.call(target, col)) continue;
-                    into.fillStyle = col;
-                    const a = target[col];
-                    for (let i = 0; i < a.length; i += 4) {
-                        into.fillRect(a[i], a[i + 1], a[i + 2], a[i + 3]);
-                    }
-                }
-            };
+            const rowCols = new Array(cols);
             const flushRow = (colsArr, y) => {
                 let runCol = null;
                 let runX = 0;
@@ -124,28 +148,20 @@ extendClass(RenderManager, {
                     if (col === runCol) {
                         runW += cell;
                     } else {
-                        if (runCol) pushRun(runCol, runX, y, runW, cell);
+                        if (runCol) pushRunInto(groundBatch, gPhase, runCol, runX, y, runW, cell);
                         runCol = col;
                         runX = cx * cell;
                         runW = cell;
                     }
                 }
-                if (runCol) pushRun(runCol, runX, y, runW, cell);
+                if (runCol) pushRunInto(groundBatch, gPhase, runCol, runX, y, runW, cell);
             };
-
-            // Ground: a far layer, scrolls at half speed (parallax under the walls).
-            const gOff = offset * GROUND_PARALLAX;
-            const gPhase = gOff % cell;
-            curPhase = gPhase;
-            const gBase = Math.floor(gOff / cell);
-            const rowCols = new Array(cols);
             for (let r = -1; r * cell + gPhase < H; r++) {
                 const y = r * cell + gPhase;
                 const wr = gBase - r;
-                // The floor type only depends on the row; noise and craters are pure per cell, so both are
-                // computed once per world row (cached while it scrolls past) instead of every frame.
-                const floor = obstacleManager.terrainFloorAt
-                    ? obstacleManager.terrainFloorAt(baseRow - r, 0) : 'craters';
+                // Floor type can dither per cell near biome seams; noise/craters stay row-cached.
+                const floorAt = obstacleManager.terrainFloorAt
+                    ? (cx) => obstacleManager.terrainFloorAt(wr, cx) : () => 'craters';
                 const rc = this.terrainRowCache(wr, cols);
                 for (let cx = 0; cx < cols; cx++) {
                     // Large lighter / darker patches (macro noise) shift the fine noise, so the floor
@@ -154,6 +170,7 @@ extendClass(RenderManager, {
                     let col = pal.ground[n > 0.66 ? 0 : n > 0.5 ? 1 : n > 0.34 ? 2 : 3];
                     // Surface veins (ice / lava / …) follow coarse noise: connected seams, not confetti specks.
                     if (pal.special && Math.abs(rc.v[cx] - 0.5) < (env.planetStyle ? 0.035 : 0.018) * pal.veinMul) col = pal.special;
+                    const floor = floorAt(cx);
                     if (floor === 'craters') {
                         let c = rc.hits[cx];
                         if (c === undefined) c = rc.hits[cx] = crater(cx, wr);
@@ -173,15 +190,23 @@ extendClass(RenderManager, {
                 }
                 flushRow(rowCols, y);
             }
-            // Canyon slope
-            batch = overlayBatch;
-            curPhase = phase;
+            groundLayer = layer('_terrainBuf', groundBatch, gPhase, true, true);
+            lc.gBase = gBase;
+        }
+
+        if (wallSame) {
+            overlayLayer = { canvas: this._terrainOverlayBuf, y: phase - cell };
+            wallLayer = { canvas: this._terrainWallBuf, y: phase - cell };
+        } else {
+            const overlayBatch = Object.create(null);
+            const wallBatch = Object.create(null);
+            let batch = overlayBatch;
+            const pushRun = (col, x, y, w, h) => pushRunInto(batch, phase, col, x, y, w, h);
             // Light veil: keep ships readable without washing out floor doctrine.
-            curPhase = gPhase;
-            for (let r = -1; r * cell + gPhase < H; r++) {
-                pushRun('rgba(2,6,8,0.28)', 0, r * cell + gPhase, cols * cell, cell);
+            // Painted in wall-scroll phase so it shares the overlay buffer with slope/hatch.
+            for (let r = -1; r * cell + phase < H; r++) {
+                pushRun('rgba(2,6,8,0.4)', 0, r * cell + phase, cols * cell, cell);
             }
-            curPhase = phase;
             const slope = [0.62, 0.45, 0.3, 0.18, 0.1];
             for (let r = -1; r * cell + phase < H; r++) {
                 const y = r * cell + phase;
@@ -198,7 +223,6 @@ extendClass(RenderManager, {
             }
             // Walls (own batch → drawn after under-wall obstacles)
             batch = wallBatch;
-            curPhase = phase;
             const mats = this.terrainMaterialPalettes(env, pal);
             for (let r = -1; r * cell + phase < H; r++) {
                 const y = r * cell + phase;
@@ -266,40 +290,22 @@ extendClass(RenderManager, {
                     flushWall();
                 }
             }
-
-            const layer = (name, target, dy, opaque, px) => {
-                let c = this[name];
-                if (!c) c = this[name] = document.createElement('canvas');
-                if (c.width !== cols || c.height !== rowsN) {
-                    c.width = cols;
-                    c.height = rowsN;
-                }
-                const lc = c.getContext('2d', { alpha: !opaque });
-                if (!lc) return null;
-                lc.setTransform(1, 0, 0, 1, 0, 0);
-                lc.globalAlpha = 1;
-                lc.globalCompositeOperation = 'source-over';
-                lc.imageSmoothingEnabled = false;
-                // Ground and walls paint every cell once with opaque colours: write the pixels directly
-                // (one putImageData) instead of thousands of single-cell fillRects.
-                if (px && this.flushBatchPixels(target, lc, cols, rowsN, opaque ? '#0a0c10' : null)) {
-                    return { canvas: c, y: dy - cell };
-                }
-                if (opaque) {
-                    lc.fillStyle = '#0a0c10';
-                    lc.fillRect(0, 0, cols, rowsN);
-                } else {
-                    lc.clearRect(0, 0, cols, rowsN);
-                }
-                flushBatch(target, lc);
-                return { canvas: c, y: dy - cell };
-            };
-            groundLayer = layer('_terrainBuf', groundBatch, gPhase, true, true);
             overlayLayer = layer('_terrainOverlayBuf', overlayBatch, phase, false);
             wallLayer = layer('_terrainWallBuf', wallBatch, phase, false, true);
-            this._terrainLayerKey = { baseRow, gBase: Math.floor(gOffC / cell), cols, rowsN, cell, W, key: this._terrainKey,
-                prof: obstacleManager._terrainProfile, pal, dmg: dmgEpoch };
+            lc.baseRow = baseRow;
+            lc.dmg = dmgEpoch;
         }
+
+        lc.cols = cols;
+        lc.rowsN = rowsN;
+        lc.cell = cell;
+        lc.W = W;
+        lc.key = this._terrainKey;
+        lc.prof = obstacleManager._terrainProfile;
+        lc.pal = pal;
+        if (lc.gBase == null) lc.gBase = gBase;
+        if (lc.baseRow == null) lc.baseRow = baseRow;
+        if (lc.dmg == null) lc.dmg = dmgEpoch;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
         // Fill the strip the shifted layers leave uncovered at the edges.

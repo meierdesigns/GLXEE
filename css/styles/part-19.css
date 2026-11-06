@@ -159,6 +159,8 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
 .start-screen-overlay,
 .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
 .player-selection-overlay,
+#vf-in-stage-shop.vf-iss,
+#vf-trading-post-shop.hs-tps.vf-iss,
 html body .game-container {
     --_z: var(--vf-glass-z, var(--gui-zoom-eff, var(--gui-zoom, 0.75)));
     --_gi: var(--vf-glass-inset, 0px);
@@ -239,7 +241,29 @@ html body .game-container {
     line-height: 1;
     image-rendering: pixelated;
 }
-:is(.vf-bezel-res, .vf-bezel-fx) input {
+.vf-bezel-vol {
+    /* Child of <html>, dropdown positioned under the mute key by viewport-fit-part3.js. */
+    position: fixed;
+    z-index: 9996;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 22px;
+    padding: 0 8px;
+    box-sizing: border-box;
+    background: #0c0e12;
+    box-shadow: inset 0 0 0 2px #2c313b;
+    pointer-events: auto;
+    font-family: var(--ui-font-family);
+    font-size: var(--font-text);
+    font-weight: 700;
+    color: var(--color-primary, #3dff6a);
+    letter-spacing: 0.12em;
+    line-height: 1;
+    image-rendering: pixelated;
+}
+.vf-bezel-vol output { min-width: 3em; color: var(--color-text, #fff); text-align: right; }
+:is(.vf-bezel-res, .vf-bezel-fx, .vf-bezel-vol) input {
     width: 140px;
     height: 10px;
     margin: 0;
@@ -255,9 +279,9 @@ html body .game-container {
         color-mix(in srgb, var(--color-primary, #3dff6a) 12%, #05060a) var(--look-fill, 0%),
         color-mix(in srgb, var(--color-primary, #3dff6a) 12%, #05060a) 100%);
 }
-:is(.vf-bezel-res, .vf-bezel-fx) input::-webkit-slider-runnable-track { height: 6px; background: transparent; border: 0; }
-:is(.vf-bezel-res, .vf-bezel-fx) input::-moz-range-track { height: 6px; background: transparent; border: 0; }
-:is(.vf-bezel-res, .vf-bezel-fx) input::-webkit-slider-thumb {
+:is(.vf-bezel-res, .vf-bezel-fx, .vf-bezel-vol) input::-webkit-slider-runnable-track { height: 6px; background: transparent; border: 0; }
+:is(.vf-bezel-res, .vf-bezel-fx, .vf-bezel-vol) input::-moz-range-track { height: 6px; background: transparent; border: 0; }
+:is(.vf-bezel-res, .vf-bezel-fx, .vf-bezel-vol) input::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 8px;
@@ -268,7 +292,7 @@ html body .game-container {
     border-radius: 0;
     box-shadow: none;
 }
-:is(.vf-bezel-res, .vf-bezel-fx) input::-moz-range-thumb {
+:is(.vf-bezel-res, .vf-bezel-fx, .vf-bezel-vol) input::-moz-range-thumb {
     width: 4px;
     height: 10px;
     background: #fff;
@@ -318,6 +342,7 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
     right: calc(100 * var(--bz-u));
     z-index: 9995;
     display: flex;
+    align-items: center;
     gap: calc(8 * var(--bz-u));
 }
 .vf-bezel-tools button {
@@ -333,6 +358,15 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
     color: var(--color-primary, #3dff6a);
     cursor: pointer;
     box-sizing: border-box;
+}
+/* Settings remote: larger handset key to the right of fullscreen. */
+.vf-bezel-tools button[data-tool="fx"] {
+    width: calc(52 * var(--bz-u));
+    height: calc(68 * var(--bz-u));
+}
+.vf-bezel-tools button[data-tool="fx"] > * {
+    width: calc(40 * var(--bz-u)) !important;
+    height: calc(40 * var(--bz-u)) !important;
 }
 .vf-bezel-tools button:hover,
 .vf-bezel-tools button:focus-visible {
@@ -606,7 +640,9 @@ html[data-faction="voidborn"] :is(
     .start-screen,
     .start-screen-overlay,
     .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
-    .player-selection-overlay
+    .player-selection-overlay,
+    #vf-in-stage-shop.vf-iss,
+    #vf-trading-post-shop.hs-tps.vf-iss
 ),
 html[data-faction="voidborn"] body .game-container {
     border-radius: calc(24 * var(--bz-u));
@@ -1599,11 +1635,19 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco { image-rendering: pixelate
     box-sizing: border-box;
     pointer-events: none;
     opacity: 0;
-    will-change: transform, width, height, opacity;
-    transition: opacity 0.18s ease;
+    visibility: hidden;
+    will-change: transform, width, height;
+    transition: none;
 }
-.vf-gp-cursor.is-on { opacity: 1; }
-.vf-gp-cursor.is-out { opacity: 0; }
+.vf-gp-cursor.is-on {
+    opacity: 1;
+    visibility: visible;
+}
+.vf-gp-cursor.is-out {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transition: none !important;
+}
 .vf-gp-cursor > i {
     position: absolute;
     width: 10px;
@@ -1619,6 +1663,12 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco { image-rendering: pixelate
 .vf-gp-cursor.is-jump > i {
     animation: vf-gp-cursor-pulse 0.22s steps(2) 1;
 }
+.vf-gp-cursor.is-out > i,
+.vf-gp-cursor:not(.is-on) > i {
+    animation: none !important;
+    box-shadow: none;
+    opacity: 0;
+}
 .vf-gp-cursor::after {
     content: '';
     position: absolute;
@@ -1626,6 +1676,12 @@ html[data-vf-frame-px="on"] #vf-bezel .vf-bezel-deco { image-rendering: pixelate
     border: 1px solid color-mix(in srgb, var(--color-primary, #3dff6a) 35%, transparent);
     background: color-mix(in srgb, var(--color-primary, #3dff6a) 8%, transparent);
     pointer-events: none;
+}
+.vf-gp-cursor.is-out::after,
+.vf-gp-cursor:not(.is-on)::after {
+    opacity: 0;
+    border-color: transparent;
+    background: transparent;
 }
 @keyframes vf-gp-cursor-pulse {
     0% { transform: scale(1.15); opacity: 0.55; }

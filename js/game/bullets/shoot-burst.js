@@ -314,6 +314,9 @@ extendClass(BulletManager, {
         for (let i = before; i < this.enemyBullets.length; i++) {
             this.enemyBullets[i].weaponId = defaultWeapon;
             this.enemyBullets[i].isEnemyShot = true;
+            // Spawn-frame collisions run before the next bullet.update sweep.
+            if (this.enemyBullets[i]._sweepDx == null) this.enemyBullets[i]._sweepDx = 0;
+            if (this.enemyBullets[i]._sweepDy == null) this.enemyBullets[i]._sweepDy = 0;
         }
         this.fitBulletsToBarrel(this.enemyBullets, before, this.getEnemyGunWidth(enemy), defaultWeapon);
         this.applyShotSizeSetting(this.enemyBullets, before,
@@ -333,6 +336,9 @@ extendClass(BulletManager, {
             ) * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1))),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
+            isEnemyShot: true,
+            _sweepDx: 0,
+            _sweepDy: 0,
             // Lighting properties
             lightRadius: 14,
             lightIntensity: 1.0,
@@ -353,6 +359,9 @@ extendClass(BulletManager, {
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_laser',
+            isEnemyShot: true,
+            _sweepDx: 0,
+            _sweepDy: 0,
             // Lighting properties
             lightRadius: 18,
             lightIntensity: 1.2,
@@ -385,6 +394,9 @@ extendClass(BulletManager, {
                 angle: angle,
                 color: '#808080', // Grayscale base - will be colored by render system
                 type: 'enemy_spread',
+                isEnemyShot: true,
+                _sweepDx: 0,
+                _sweepDy: 0,
                 // Lighting properties
                 lightRadius: 14,
                 lightIntensity: 1.0,
@@ -409,6 +421,9 @@ extendClass(BulletManager, {
                 damage: config.damage,
                 color: '#808080', // Grayscale base - will be colored by render system
                 type: 'enemy_rapid',
+                isEnemyShot: true,
+                _sweepDx: 0,
+                _sweepDy: 0,
                 // Lighting properties
                 lightRadius: 12,
                 lightIntensity: 0.9,
@@ -428,6 +443,9 @@ extendClass(BulletManager, {
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'enemy_plasma',
+            isEnemyShot: true,
+            _sweepDx: 0,
+            _sweepDy: 0,
             // Lighting properties
             lightRadius: 22,
             lightIntensity: 1.5,

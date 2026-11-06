@@ -88,8 +88,11 @@ extendClass(HomeStationUI, {
             const tier = (typeof economyConfig !== 'undefined' && economyConfig.getPortalTier)
                 ? economyConfig.getPortalTier(gid)
                 : 1;
-            const owned = (typeof profileManager !== 'undefined')
+            const installed = (typeof profileManager !== 'undefined')
                 ? profileManager.ownsPortal(gid, profile)
+                : false;
+            const inInv = (typeof profileManager !== 'undefined' && profileManager.hasPortalInInventory)
+                ? profileManager.hasPortalInInventory(gid, profile)
                 : false;
             const meta = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta)
                 ? planetConfigManager.getFactionMeta(factionId)
@@ -104,7 +107,9 @@ extendClass(HomeStationUI, {
                 tier: tier,
                 cost: cost,
                 costTotal: this.costTotal(cost),
-                owned: owned
+                owned: installed || inInv,
+                installed: installed,
+                inInv: inInv
             };
         }).filter(Boolean);
 
@@ -117,9 +122,14 @@ extendClass(HomeStationUI, {
         }
         return entries.map((e) => {
             const afford = this.canAffordCost(wallet, e.cost, profile);
-            const action = e.owned
-                ? '<span class="hs-muted hs-line-action">OWNED</span>'
-                : `<button class="action-button hs-line-action" data-buy-portal="${e.id}" ${afford ? '' : 'disabled'}>BUY</button>`;
+            let action = '';
+            if (e.installed) {
+                action = '<span class="hs-muted hs-line-action">INSTALLED</span>';
+            } else if (e.inInv) {
+                action = '<span class="hs-muted hs-line-action">IN INVENTORY</span>';
+            } else {
+                action = `<button class="action-button hs-line-action" data-buy-portal="${e.id}" ${afford ? '' : 'disabled'}>BUY</button>`;
+            }
             const galaxyIcon = e.id === 'andromeda' ? 'galaxyAndromeda'
                 : (e.id === 'milky_way' ? 'galaxyMilkyWay' : 'galaxyDefault');
             return `<div class="hs-line hs-shop-line">` +
@@ -129,8 +139,9 @@ extendClass(HomeStationUI, {
                 `<strong>PORTAL: ${e.name}</strong>` +
                 `<span class="hs-line-meta">` +
                 `<span class="hs-shop-ctrl-icon">${this.iconHtml(e.factionIcon, 20, 'hs-pixel hs-pixel-20')}</span>` +
-                `${this.factionTagHtml(e.faction)} · WARP L${e.tier}</span>` +
+                `${this.factionTagHtml(e.faction)} · PORTAL MODULE · WARP L${e.tier}</span>` +
                 (e.lore ? `<span class="hs-line-lore">${e.lore}</span>` : '') +
+                `<span class="hs-line-lore">Buy → inventory. Install in STATION → TRAVEL to unlock the route.</span>` +
                 `</span></span>` +
                 `${this.renderCostGrid(e.cost, wallet, profile)}${action}</div>`;
         }).join('');

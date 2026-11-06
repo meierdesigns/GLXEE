@@ -39,9 +39,16 @@ extendClass(HomeStationUI, {
         const level = this.getNavLevel();
         if (this.tab === 'play') {
             if (this.isPlayMapActive()) {
-                hint.setAttribute('data-ui-tip', '[MAP] ARROWS Planets | ENTER Start Mission | ESC/BACKSPACE Back to Tabs');
+                const gm = typeof galaxyMapManager !== 'undefined' ? galaxyMapManager : null;
+                if (gm && gm.hasStageFocus && gm.hasStageFocus()) {
+                    hint.setAttribute('data-ui-tip', '[STAGES] ←→ Pick | ENTER Replay | ↑ Map | ↓ Actions | ESC Back');
+                } else if (gm && gm.hasActionFocus && gm.hasActionFocus()) {
+                    hint.setAttribute('data-ui-tip', '[CARD] ←→ Actions | ENTER Confirm | ↑ Stages/Map | ESC Back');
+                } else {
+                    hint.setAttribute('data-ui-tip', '[MAP] ←→↑↓ Planets | ↓/ENTER Card | ESC Tabs');
+                }
             } else {
-                hint.setAttribute('data-ui-tip', '[TABS] ←→ Switch | ENTER Enter Map | ESC/BACKSPACE Menu');
+                hint.setAttribute('data-ui-tip', '[TABS] ←→ Switch | ↓/ENTER Enter Map | ESC/BACKSPACE Menu');
             }
             return;
         }

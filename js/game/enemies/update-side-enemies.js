@@ -39,7 +39,13 @@ extendClass(EnemyManager, {
         // Transit stages have no champion: the side craft are the whole stage.
         const transit = !!(this.levelMods && this.levelMods.transit);
         const transitDone = transit && typeof objectiveManager !== 'undefined' && objectiveManager.completed;
-        if (this.sideEnemies.length && (transit ? transitDone : !mainAlive)) {
+        // Fire the flee a few seconds before the exit gate scrolls in, so side craft
+        // are visibly peeling off and gone by the time the player reaches it, instead
+        // of vanishing the instant the run completes.
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        const nearingGoal = transit && om && om.objective && !om.goal
+            && om.elapsedMs >= (Number(om.objective.seconds) || 0) * 1000 - 3500;
+        if (this.sideEnemies.length && (transit ? (transitDone || nearingGoal) : !mainAlive)) {
             this.beginSideEnemyFlee(gameState);
         }
         const pendingCluster = this.pendingChampionEntry
@@ -74,7 +80,7 @@ extendClass(EnemyManager, {
                 e.lifetimeMs = 12000 + Math.random() * 7000;
             }
 
-            if (gateFloor != null) {
+            if (gateFloor != null && !this.sideFleeing) {
                 const waiting = (e.chain && !e.chain.entered) || (e.pass && !e.pass.entered);
                 if (waiting) { this.sideEnemies.splice(i, 1); continue; }
                 if (e.chain || e.pass || e.fleeing || e.lifetimeMs != null) {

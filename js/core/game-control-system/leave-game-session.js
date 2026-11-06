@@ -8,10 +8,15 @@ extendClass(GameControlSystem, {
         // Next planet entry is a fresh arrival: launch from the home station again.
         if (typeof objectiveManager !== 'undefined') objectiveManager.arrivalPlanetId = null;
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
+            // Keep tracker bus for combat→menu crossfade (startMenuMusic forces hub).
+            if (soundManager.stopPlanetAmbientNodesOnly) {
+                soundManager.stopPlanetAmbientNodesOnly({ keepTracker: true });
+            } else if (soundManager.stopPlanetAmbient) {
+                soundManager.stopPlanetAmbient();
+            }
             if (soundManager.ambientPlanetId != null) soundManager.ambientPlanetId = null;
             if (soundManager.clearMusicContext) soundManager.clearMusicContext();
-            // Back to station / map — restore hub soundtrack.
+            // Back to station / map — restore hub soundtrack (forced swap).
             if (soundManager.startMenuMusic) soundManager.startMenuMusic();
         }
 
@@ -235,7 +240,28 @@ extendClass(GameControlSystem, {
 
         const lootList = document.getElementById('victoryLootList');
         if (lootList) {
-            lootList.innerHTML = this.renderVictoryLootHtml(this.lastVictoryLoot);
+            lootList.innerHTML = this.renderVictoryLootHtml();
+        }
+
+        const loadoutList = document.getElementById('victoryLoadoutList');
+        if (loadoutList && this.renderVictoryLoadoutHtml) {
+            loadoutList.innerHTML = this.renderVictoryLoadoutHtml();
+        }
+
+        const victoryOverlay = document.getElementById('victoryOverlay');
+        if (victoryOverlay && this.bindVictoryCargoDrag) {
+            this.bindVictoryCargoDrag(victoryOverlay);
+        }
+        if (victoryOverlay && this.bindVictoryShipGridDrag) {
+            this.bindVictoryShipGridDrag(victoryOverlay);
+        }
+
+        const creditsElement = document.getElementById('victoryLootCredits');
+        if (creditsElement) {
+            const credits = typeof profileManager !== 'undefined' && profileManager.getCredits
+                ? profileManager.getCredits()
+                : 0;
+            creditsElement.textContent = credits + 'c';
         }
     },
 

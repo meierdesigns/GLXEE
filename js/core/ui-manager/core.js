@@ -225,6 +225,7 @@ class UIManager {
             const enemy = enemies[i];
             if (!enemy || !fill) continue;
             this.updateEnemyFace(card, enemy);
+            this.syncEnemyShipIcon(card, enemy);
             const pct = Math.max(0, Math.min(100, (enemy.health / (enemy.maxHealth || 1)) * 100));
             const hpCur = Math.max(0, Math.ceil(enemy.health));
             const hpMax = Math.ceil(enemy.maxHealth || 0);
@@ -308,6 +309,21 @@ class UIManager {
             else out.push(e);
         });
         return out;
+    }
+
+    /**
+     * Line ships fall back to a drawn ship-icon canvas (no pilot portrait). It's drawn once at
+     * card creation, but the ship sprite atlas can still be loading then and the canvas stays
+     * blank forever since nothing else ever redraws it. Retry each tick until the asset loader
+     * reports ready, then stop.
+     */
+    syncEnemyShipIcon(card, enemy) {
+        const icon = card.querySelector('.health-ship-icon');
+        if (!icon || icon.dataset.vfIconDrawn === '1') return;
+        const loader = typeof graphicsManager !== 'undefined' ? graphicsManager.shipAssetLoader : null;
+        if (loader && !loader.isLoaded()) return;
+        this.renderEnemyHealthIcon(icon, enemy);
+        icon.dataset.vfIconDrawn = '1';
     }
 
     /** Portrait expression: dead once defeated, pain on a hit (anger once the hull is low), calm otherwise. */

@@ -388,8 +388,12 @@ extendClass(ShipAssetLoader, {
         // factionShipStyles.styleStrength exaggerates (or flattens) the bend.
         const k = this.factionStyleStrength();
         const p = this.baseFactionRowProfile(silhouette, t, seedIndex);
+        // Keep a solid fuselage floor. With styleStrength 2 the old 0.18 clamp
+        // pinched scrap/modular cores into an H / waist so terrain read as
+        // "holes" through the hull (durchsichtig).
+        const minW = seedIndex === 4 ? 0.72 : 0.55;
         return {
-            widthMul: Math.max(0.18, Math.min(1.25, 1 + (p.widthMul - 1) * k)),
+            widthMul: Math.max(minW, Math.min(1.25, 1 + (p.widthMul - 1) * k)),
             offsetMul: p.offsetMul * Math.min(k, 1)
         };
     },
@@ -428,10 +432,10 @@ extendClass(ShipAssetLoader, {
             const jitter = Math.sin((block * 0.9 + seedIndex * 1.7) * 3.1) * 0.5 + 0.5;
             const chunk = Math.round(jitter * 2) / 2;
             // Irregular widths, but every row stays centred on the hull axis (no sideways drift off the axis).
-            // The core (seedIndex 4) must still read as one fuselage: a shallow floor keeps it from
-            // pinching into a waist that reads as an "H" — that lopsidedness belongs on the wings instead.
-            const floor = seedIndex === 4 ? 0.82 : 0.62;
-            const span = seedIndex === 4 ? 0.26 : 0.45;
+            // Floors stay high enough that styleStrength 2 cannot pinch the
+            // core into an H-waist (terrain showed through as "transparent").
+            const floor = seedIndex === 4 ? 0.94 : 0.8;
+            const span = seedIndex === 4 ? 0.1 : 0.28;
             return { widthMul: floor + chunk * span, offsetMul: 0 };
         }
         if (silhouette === 'circuit') {

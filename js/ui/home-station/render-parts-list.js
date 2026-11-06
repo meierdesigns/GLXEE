@@ -172,6 +172,48 @@ extendClass(HomeStationUI, {
         return [[1, 1], [1, 2], [2, 2]][lv];
     },
 
+    /** Part/module footprint for vendor stock (S/M/L → 1×1 / 1×2 / 2×2). */
+    shopPartSpan(kind, id) {
+        const bucket = kind === 'weapon' ? 'weapons'
+            : (kind === 'defense' ? 'defenses'
+                : (kind === 'energy' ? 'energy' : 'abilities'));
+        return this._storageItemSpan(bucket, id);
+    },
+
+    /**
+     * Pack vendor stock cells that may span multiple slots. `cellSpecs` entries
+     * are `{ html, span:[w,h] }` with `__SPAN__` in the style attribute.
+     * Grows rows until the dense footprint fits the shop bag.
+     */
+    packShopStockGrid(cellSpecs, cols, minRows, cs, gap, extraClass) {
+        const specs = (cellSpecs || []).map((c) => {
+            const w = Math.max(1, Math.min(cols, (c.span && c.span[0]) || 1));
+            const h = Math.max(1, (c.span && c.span[1]) || 1);
+            return { html: c.html, span: [w, h] };
+        });
+        let used = specs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        let rows = Math.max(minRows | 0, Math.ceil(Math.max(used, 1) / cols));
+        // Tall M/L parts need at least their own height.
+        specs.forEach((c) => { if (c.span[1] > rows) rows = c.span[1]; });
+        while (used > cols * rows) rows += 1;
+        const cells = specs.map((c) => {
+            const [w, h] = c.span;
+            return c.html.replace('__SPAN__', `grid-column: span ${w}; grid-row: span ${h};`);
+        });
+        const pad = Math.max(0, cols * rows - used);
+        for (let i = 0; i < pad; i++) {
+            cells.push(`<span class="hs-storage-cell hs-storage-cell-empty" aria-hidden="true"></span>`);
+        }
+        return `<div class="hs-storage-grid ${extraClass || ''}" data-inv-cols="${cols}" data-inv-rows="${rows}" ` +
+            `style="--cs:${cs}px;--hs-gap:${gap}px;grid-auto-flow:row dense;` +
+            `grid-template-columns:repeat(${cols},${cs}px);` +
+            `grid-template-rows:repeat(${rows},${cs}px);` +
+            `width:calc(${cols}*${cs}px + ${cols - 1}*${gap}px);` +
+            `height:calc(${rows}*${cs}px + ${rows - 1}*${gap}px)">` +
+            cells.join('') +
+            `</div>`;
+    },
+
     /** Grid shape (cols x rows) for a ship's storage — the same shape the hangar bay-inventory grid uses for that hull. */
     _storageGrid(shipId) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
@@ -259,9 +301,10 @@ extendClass(HomeStationUI, {
         const targetCell = this.STORAGE_CELL_PX;
         const targetGap = this.STORAGE_GAP_PX;
         let best = { cell: targetCell, gap: Math.max(2, targetGap), err: Infinity };
+        const minCell = Math.max(20, Math.min(40, targetCell - 8));
         for (let gap = 2; gap <= 6; gap++) {
             for (let cell = targetCell - 8; cell <= targetCell + 8; cell++) {
-                if (cell < 40) continue;
+                if (cell < minCell) continue;
                 const step = cell + gap;
                 const gapErr = Math.abs(gap * z - Math.round(gap * z));
                 const stepErr = Math.abs(step * z - Math.round(step * z));
@@ -402,7 +445,7 @@ extendClass(HomeStationUI, {
         opts = opts || {};
         const selectMode = opts.selectKey !== undefined;
         const selectKey = opts.selectKey || null;
-        const grid = this._storageGrid(shipId);
+        let grid = this._storageGrid(shipId);
         if (!shipId) return this._storageGridHtml([], grid);
         const entry = profileManager.getShipStorageEntry(profile, shipId);
         const rawEntries = [];
@@ -507,6 +550,7 @@ extendClass(HomeStationUI, {
             const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
             // data-part-kind/-id: see renderStationStorage above — same reason, needed here too
             // since this is the function the hangar bay-inventory grid actually calls.
+            // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
             const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
             const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
@@ -516,6 +560,19 @@ extendClass(HomeStationUI, {
                 `</button>`;
             return { html, span, pos: pinnedPos };
         });
+        // Shop / trading-post bags may clamp hangar width to the vendor bag so
+        // multi-slot parts still fit (rows grow) without spilling past DETAIL.
+        if (opts.maxCols != null) {
+            const maxCols = Math.max(1, opts.maxCols | 0);
+            if (grid.cols > maxCols) {
+                const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+                const capacity = Math.max(grid.cols * grid.rows, used);
+                grid = {
+                    cols: maxCols,
+                    rows: Math.max(grid.rows, Math.ceil(capacity / maxCols))
+                };
+            }
+        }
         // opts.extraGridClass: the hangar bay-inventory grid (physical-item.js bayInventoryHtml)
         // calls this same function for its item set/positions/grid size — one source of truth —
         // and tags the result with its own class for CSS/selector hooks (.hs-pick-grid) that

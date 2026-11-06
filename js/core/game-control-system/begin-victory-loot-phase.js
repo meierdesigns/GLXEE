@@ -174,8 +174,10 @@ extendClass(GameControlSystem, {
                         const granted = profileManager.grantPlanetResources(planetId);
                         this.lastVictoryLoot = granted && Object.keys(granted).length ? granted : null;
                     }
-                    if (profileManager.teleportCargoToStation) {
-                        profileManager.teleportCargoToStation();
+                    // Resources auto-bank; found parts/blueprints stay in cargo, pending a
+                    // take-or-sell choice on the victory screen (show-victory-overlay.js).
+                    if (profileManager.teleportCargoResourcesToStation) {
+                        profileManager.teleportCargoResourcesToStation();
                     }
                     profileManager.save();
                     try {

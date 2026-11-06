@@ -31,6 +31,8 @@ extendClass(GameControlSystem, {
         // Rebuild when missing, or when stale HTML lacks the shop button.
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
+            || !document.getElementById('victoryLootCredits')
+            || !document.getElementById('victoryLoadoutList')
             || existingBtns !== 3
             || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
             || !victoryOverlay.querySelector('.victory-button[data-action="shop"]');
@@ -64,9 +66,19 @@ extendClass(GameControlSystem, {
                     </div>
 
                     <div class="victory-body">
-                        <div class="victory-loot" id="victoryLoot">
-                            <div class="victory-loot-title">RESOURCES ACQUIRED</div>
-                            <div class="victory-loot-list" id="victoryLootList"></div>
+                        <div class="victory-panels" style="display:flex !important;flex-direction:row !important;width:100% !important;gap:12px !important;align-items:stretch !important;">
+                            <div class="victory-loot" id="victoryLoot" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                                <div class="victory-loot-title">
+                                    <span>FOUND ITEMS</span>
+                                    <span class="victory-loot-credits" id="victoryLootCredits"></span>
+                                </div>
+                                <div class="victory-loot-list" id="victoryLootList"></div>
+                            </div>
+
+                            <div class="victory-loadout" id="victoryLoadout" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                                <div class="victory-loot-title"><span>SHIP LOADOUT</span></div>
+                                <div class="victory-loadout-list" id="victoryLoadoutList"></div>
+                            </div>
                         </div>
 
                         <div class="victory-buttons">
@@ -100,6 +112,7 @@ extendClass(GameControlSystem, {
             this.bindVictoryButtons(victoryOverlay);
             victoryOverlay.dataset.bound = '1';
         }
+        this.bindVictoryLootList(victoryOverlay);
 
         this.updateVictoryNextButton();
         this.cancelVictoryAutoReturn();
@@ -194,29 +207,271 @@ extendClass(GameControlSystem, {
         return undefined;
     },
 
-    renderVictoryLootHtml(loot) {
-        const entries = loot
-            ? Object.keys(loot).filter((id) => (loot[id] || 0) > 0)
-            : [];
+    /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
+     *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
+     *  snapshot) since selling/taking changes it while this screen stays open. Click sells
+     *  the stack; drag onto the SHIP grid below files it there. Still-pending cargo is wiped
+     *  when the screen closes (clearPendingCargo in hideVictoryOverlay) — the player has to
+     *  decide now. Plain resources aren't shown: those auto-bank straight to the station
+     *  wallet at victory (teleportCargoResourcesToStation), no decision needed. */
+    renderVictoryLootHtml() {
+        if (typeof profileManager === 'undefined') return '';
+        const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        // Fixed 6x4 slots at the exact same px size as the SHIP grid (homeStationUI.STORAGE_CELL_PX)
+        // — no stretching, no adding rows/cols to fill the panel, so the two grids always read
+        // as one consistent slot size no matter how tall/wide the surrounding panel ends up.
+        const cs = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_CELL_PX) || 56;
+        const gap = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_GAP_PX) || 2;
+        const cols = 6;
+        const rows = 4;
+        const fillSlots = cols * rows;
+        const gridStyle = `--cs:${cs}px;--hs-gap:${gap}px;` +
+            `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${rows},${cs}px);`;
+        const emptyGrid = (label) => {
+            const placeholders = Array.from({ length: fillSlots })
+                .map(() => '<span class="hs-storage-cell hs-storage-cell-empty"></span>')
+                .join('');
+            return `<div class="hs-storage-grid victory-loot-grid" style="${gridStyle}">` +
+                placeholders +
+                `</div>` +
+                (label ? `<div class="victory-loot-empty">${label}</div>` : '');
+        };
+        if (!profile) return emptyGrid();
+        const cargoParts = profile.cargo && profile.cargo.parts ? profile.cargo.parts : {};
+        const cargoBps = profile.cargo && profile.cargo.blueprints ? profile.cargo.blueprints : {};
+        // Parts never stack visually (one cell per found unit, same rule as the home-station
+        // bag); blueprints stay one stacked cell with a ×N badge, matching render-parts-list.js.
+        const entries = [];
+        Object.keys(cargoParts).forEach((key) => {
+            const n = Math.max(0, Math.round(Number(cargoParts[key]) || 0));
+            for (let i = 0; i < n; i++) entries.push({ key: key, amount: n, unitAmount: 1, isBlueprint: false });
+        });
+        Object.keys(cargoBps).forEach((key) => {
+            if ((cargoBps[key] || 0) > 0) entries.push({ key: key, amount: cargoBps[key], unitAmount: cargoBps[key], isBlueprint: true });
+        });
         if (!entries.length) {
-            return '<div class="victory-loot-empty">NO RESOURCES THIS RUN</div>';
+            return emptyGrid();
         }
-        return entries.map((id) => {
-            const amount = loot[id] || 0;
-            const label = this.victoryLootLabel(id);
-            const iconKey = this.victoryResourceIconKey(id);
+        const cells = entries.map((e) => {
+            const id = 'part:' + e.key;
             const tint = this.victoryLootTint(id);
-            const iconHtml = (typeof iconRenderer !== 'undefined')
-                ? iconRenderer.imgHtml(iconKey, 28, 'victory-loot-pixel', tint)
-                : '';
+            const parsed = (typeof profileManager !== 'undefined' && profileManager.parseBlueprintKey)
+                ? profileManager.parseBlueprintKey(e.key) : null;
+            // Real name + stat lines (DMG/SPD, SHIELD, ARMOR, …) from the same lookup the
+            // home-station hangar uses — not just a bare id label.
+            const fullTip = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip)
+                ? homeStationUI.hangarModuleTip(parsed.kind, parsed.id)
+                : 'UNKNOWN ITEM';
+            const tipLines = fullTip.split('\n');
+            const name = tipLines[0] + (e.isBlueprint ? ' (BP)' : '');
+            const iconHtml = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml)
+                ? homeStationUI.moduleIconHtml(parsed.kind, parsed.id, cs - 20, 'victory-loot-pixel', false, tint)
+                : (typeof iconRenderer !== 'undefined')
+                    ? iconRenderer.imgHtml(this.victoryResourceIconKey(id), cs - 20, 'victory-loot-pixel', tint)
+                    : '';
             const color = tint || '#ccc';
-            const safeClass = String(id).replace(/[^a-z0-9_-]+/gi, '-');
-            return `<div class="victory-loot-row victory-loot-${safeClass}" style="--victory-res-color:${color}" title="${label}">` +
-                `<span class="victory-loot-icon">${iconHtml}</span>` +
-                `<span class="victory-loot-label">${label}</span>` +
-                `<span class="victory-loot-amount">${amount}</span>` +
-                `</div>`;
+            const sellValue = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0) * e.amount;
+            const sellable = sellValue > 0 ? ' is-sellable' : '';
+            const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
+            const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
+            const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
+                : (parsed ? `DRAG TO SHIP · CLICK TO SELL ALL · ${sellValue}c` : `CLICK TO SELL · ${sellValue}c`));
+            const tip = tipLines.concat(actionLine.split('\n')).join('\n');
+            return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
+                `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" style="--pk-c:${color}" ` +
+                `data-ui-tip-compact data-ui-tip-head="${name.replace(/"/g, '&quot;')}" data-ui-tip="${tip.replace(/"/g, '&quot;')}" ` +
+                `aria-label="${name}">` +
+                iconHtml +
+                qtyHtml +
+                `</button>`;
         }).join('');
+        const totalRows = Math.max(rows, Math.ceil(entries.length / cols));
+        const padCount = Math.max(0, cols * totalRows - entries.length);
+        const padding = Array.from({ length: padCount })
+            .map(() => '<span class="hs-storage-cell hs-storage-cell-empty"></span>')
+            .join('');
+        const filledGridStyle = totalRows === rows
+            ? gridStyle
+            : `--cs:${cs}px;--hs-gap:${gap}px;` +
+                `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${totalRows},${cs}px);`;
+        return `<div class="hs-storage-grid victory-loot-grid" style="${filledGridStyle}">` +
+            cells + padding +
+            `</div>`;
+    },
+
+    /** Sells one pending cargo stack (part or blueprint) and refreshes the panel. */
+    sellVictoryCargoItem(key, isBlueprint) {
+        if (typeof profileManager === 'undefined' || !profileManager.sellCargoPart) return;
+        const res = profileManager.sellCargoPart(key, isBlueprint);
+        if (!res || !res.ok) return;
+        this.updateVictoryStats();
+    },
+
+    /** Files one pending cargo part onto the active ship and refreshes the panel. */
+    takeVictoryCargoItem(key) {
+        if (typeof profileManager === 'undefined' || !profileManager.takeCargoPartToShip) return;
+        const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
+        if (!shipId) return;
+        const res = profileManager.takeCargoPartToShip(shipId, key);
+        if (!res || !res.ok) return;
+        this.updateVictoryStats();
+    },
+
+    /** Same square-slot storage grid as the home station (hs-storage-grid): the active ship's
+     *  equipped + filed parts, view-only except as a drop target for the found-items grid. */
+    renderVictoryLoadoutHtml() {
+        if (typeof profileManager === 'undefined' || typeof homeStationUI === 'undefined') return '';
+        const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
+        if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
+        const shipGrid = homeStationUI.renderShipStorage(profile, shipId, { tipAction: false }) || '';
+        return `<div class="victory-loadout-bags">` +
+            `<div class="victory-loadout-col"><h3 class="victory-loadout-col-title">SHIP</h3>${shipGrid}</div>` +
+            `</div>`;
+    },
+
+    victoryShipGridAt(x, y) {
+        const el = document.elementFromPoint(x, y);
+        return el && el.closest ? el.closest('#victoryLoadoutList .hs-storage-grid[data-storage-target="ship"]') : null;
+    },
+
+    /** Route the home-station storage drag engine at the victory screen's own SHIP grid for the
+     *  span of exactly one drag gesture, so items already on the ship can be rearranged — same
+     *  monkey-patch idea as js/ui/in-stage-shop/core.js, but patched and unpatched around each
+     *  drag rather than left in place for the overlay's whole lifetime. Opening SHOP from the
+     *  victory screen does not hide it (hideVictoryOverlay never runs), so a patch left "on"
+     *  for the whole screen would still be active when the shop's OWN patch runs, has it save
+     *  OUR wrapper as "the real original", and leave homeStationUI permanently pointed at the
+     *  victory screen afterwards — which is exactly why rearranges stopped showing up anywhere
+     *  else. Patching only around the drag itself means every other UI always sees the real,
+     *  unpatched homeStationUI. */
+    patchHomeStationForVictory() {
+        if (this._hsVictoryPatched || typeof homeStationUI === 'undefined') return;
+        this._hsVictoryPrevOverlay = homeStationUI.overlay;
+        this._hsVictoryPrevCreate = typeof homeStationUI.createUI === 'function'
+            ? homeStationUI.createUI.bind(homeStationUI)
+            : null;
+        const self = this;
+        homeStationUI.overlay = document.getElementById('victoryOverlay');
+        homeStationUI.createUI = function () {
+            self.unpatchHomeStationForVictory();
+            self.updateVictoryStats();
+        };
+        this._hsVictoryPatched = true;
+    },
+
+    unpatchHomeStationForVictory() {
+        if (!this._hsVictoryPatched || typeof homeStationUI === 'undefined') return;
+        homeStationUI.overlay = this._hsVictoryPrevOverlay;
+        if (this._hsVictoryPrevCreate) homeStationUI.createUI = this._hsVictoryPrevCreate;
+        this._hsVictoryPatched = false;
+        this._hsVictoryPrevOverlay = null;
+        this._hsVictoryPrevCreate = null;
+    },
+
+    bindVictoryShipGridDrag(victoryOverlay) {
+        if (!victoryOverlay || typeof homeStationUI === 'undefined') return;
+        victoryOverlay.querySelectorAll('#victoryLoadoutList .hs-storage-cell[data-drag-key]').forEach((cell) => {
+            cell.setAttribute('draggable', 'false');
+            cell.addEventListener('dragstart', (e) => e.preventDefault());
+            cell.addEventListener('pointerdown', (ev) => {
+                if (ev.button !== 0) return;
+                this.patchHomeStationForVictory();
+                homeStationUI._storageDragStart(ev, cell);
+                // Safety net: a plain click (no real drag past the threshold) never reaches a
+                // drop, so createUI — where the patch normally lifts — never runs either.
+                // These fire after the engine's own pointerup/cancel handlers (registered
+                // first, during _storageDragStart above), so unpatching here never races a
+                // drop that's still in flight.
+                const releasePatch = () => {
+                    document.removeEventListener('pointerup', releasePatch);
+                    document.removeEventListener('pointercancel', releasePatch);
+                    this.unpatchHomeStationForVictory();
+                };
+                document.addEventListener('pointerup', releasePatch);
+                document.addEventListener('pointercancel', releasePatch);
+            });
+        });
+    },
+
+    /** Pointer-drag (not native HTML5 DnD — this app shell runs inside a scaled stage where
+     *  dragover/drop don't fire reliably) from a found-items cargo cell onto the SHIP grid. */
+    bindVictoryCargoDrag(victoryOverlay) {
+        const list = victoryOverlay.querySelector('#victoryLootList');
+        if (!list) return;
+        list.querySelectorAll('.victory-loot-cell.is-draggable').forEach((cell) => {
+            cell.addEventListener('pointerdown', (downEv) => {
+                if (downEv.button !== 0) return;
+                const startX = downEv.clientX;
+                const startY = downEv.clientY;
+                const THRESH = 6;
+                let dragging = false;
+                let ghost = null;
+                try {
+                    if (cell.setPointerCapture) cell.setPointerCapture(downEv.pointerId);
+                } catch (err) { /* ignore */ }
+                const cleanup = () => {
+                    document.removeEventListener('pointermove', onMove);
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onCancel);
+                    try {
+                        if (cell.releasePointerCapture) cell.releasePointerCapture(downEv.pointerId);
+                    } catch (err) { /* ignore */ }
+                    cell.classList.remove('is-dragging');
+                    victoryOverlay.querySelectorAll('.hs-storage-grid.is-drag-over')
+                        .forEach((g) => g.classList.remove('is-drag-over'));
+                    if (ghost) { ghost.remove(); ghost = null; }
+                };
+                const onMove = (ev) => {
+                    if (!dragging) {
+                        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESH) return;
+                        dragging = true;
+                        cell.classList.add('is-dragging');
+                        ghost = cell.cloneNode(true);
+                        ghost.classList.add('victory-drag-ghost');
+                        ghost.style.cssText = 'position:fixed;pointer-events:none;z-index:10050;opacity:0.85;margin:0;';
+                        ghost.style.width = cell.offsetWidth + 'px';
+                        ghost.style.height = cell.offsetHeight + 'px';
+                        document.body.appendChild(ghost);
+                    }
+                    ev.preventDefault();
+                    ghost.style.left = (ev.clientX - cell.offsetWidth / 2) + 'px';
+                    ghost.style.top = (ev.clientY - cell.offsetHeight / 2) + 'px';
+                    const overShip = this.victoryShipGridAt(ev.clientX, ev.clientY);
+                    victoryOverlay.querySelectorAll('#victoryLoadoutList .hs-storage-grid[data-storage-target="ship"]')
+                        .forEach((g) => g.classList.toggle('is-drag-over', g === overShip));
+                };
+                const onUp = (ev) => {
+                    const wasDragging = dragging;
+                    const dropTarget = wasDragging ? this.victoryShipGridAt(ev.clientX, ev.clientY) : null;
+                    cleanup();
+                    if (!wasDragging) return;
+                    // A real drag still ends with a native 'click' on this button — swallow it
+                    // so it doesn't also fire the cell's own sell action right after the drop.
+                    const suppressClick = (e) => { e.preventDefault(); e.stopPropagation(); };
+                    cell.addEventListener('click', suppressClick, { capture: true, once: true });
+                    setTimeout(() => cell.removeEventListener('click', suppressClick, true), 0);
+                    if (dropTarget) this.takeVictoryCargoItem(cell.dataset.cargoKey);
+                };
+                const onCancel = () => cleanup();
+                document.addEventListener('pointermove', onMove);
+                document.addEventListener('pointerup', onUp);
+                document.addEventListener('pointercancel', onCancel);
+            });
+        });
+    },
+
+    bindVictoryLootList(victoryOverlay) {
+        const list = victoryOverlay.querySelector('#victoryLootList');
+        if (!list || list.dataset.sellBound) return;
+        list.dataset.sellBound = '1';
+        list.addEventListener('click', (event) => {
+            const btn = event.target.closest('.victory-loot-cell.is-sellable');
+            if (!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            this.sellVictoryCargoItem(btn.dataset.cargoKey, btn.dataset.cargoBlueprint === '1');
+        });
     },
 
     applyVictoryPixelIcons(victoryOverlay) {
@@ -358,10 +613,17 @@ extendClass(GameControlSystem, {
             leaveBtn.hidden = hideLeaveBtn;
             leaveBtn.setAttribute('aria-hidden', hideLeaveBtn ? 'true' : 'false');
         }
+        // Ambush is a brief raider interruption, not a real planet stage — no
+        // trader to shop from, so the SHOP button has no business showing here.
+        const shopBtn = document.querySelector('#victoryOverlay .victory-button[data-action="shop"]');
+        if (shopBtn) {
+            shopBtn.hidden = ambushVictory;
+            shopBtn.setAttribute('aria-hidden', ambushVictory ? 'true' : 'false');
+        }
         if (typeof uiManager !== 'undefined') {
-            uiManager.victoryMenuItems = hideLeaveBtn
-                ? ['nextLevel', 'shop']
-                : ['nextLevel', 'shop', 'levelSelection'];
+            uiManager.victoryMenuItems = ambushVictory
+                ? ['nextLevel']
+                : (hideLeaveBtn ? ['nextLevel', 'shop'] : ['nextLevel', 'shop', 'levelSelection']);
             const visible = typeof uiManager.getVictoryButtons === 'function'
                 ? uiManager.getVictoryButtons().length
                 : uiManager.victoryMenuItems.length;
@@ -402,8 +664,16 @@ extendClass(GameControlSystem, {
 
     hideVictoryOverlay() {
         this.cancelVictoryAutoReturn();
+        this.unpatchHomeStationForVictory();
+        // Whatever the player never took or sold is lost here — no silent fallback into
+        // station storage, so the found-items decision on this screen actually matters.
+        if (typeof profileManager !== 'undefined' && profileManager.clearPendingCargo) {
+            profileManager.clearPendingCargo();
+        }
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay) {
+            victoryOverlay.querySelectorAll('.victory-button.nav-focused, .victory-button.selected')
+                .forEach((btn) => btn.classList.remove('nav-focused', 'selected'));
             victoryOverlay.classList.add('hidden');
         }
 

@@ -20,13 +20,23 @@ extendClass(StartScreenManager, {
         }
 
         const soundSetting = this.settingsItems.find(item => item.name === 'Sound');
-        if (soundSetting && typeof soundManager !== 'undefined') {
-            soundManager.setSoundEnabled(soundSetting.value === 'ON');
+        if (soundSetting) {
+            const on = soundSetting.value === 'ON';
+            if (typeof soundManager !== 'undefined') soundManager.setSoundEnabled(on);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.soundEnabled = on;
+                settingsManager.saveMuteState('vf_soundEnabled', on);
+            }
         }
 
         const musicSetting = this.settingsItems.find(item => item.name === 'Music');
-        if (musicSetting && typeof soundManager !== 'undefined') {
-            soundManager.setMusicEnabled(musicSetting.value === 'ON');
+        if (musicSetting) {
+            const on = musicSetting.value === 'ON';
+            if (typeof soundManager !== 'undefined') soundManager.setMusicEnabled(on);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.musicEnabled = on;
+                settingsManager.saveMuteState('vf_musicEnabled', on);
+            }
         }
 
         const difficultySetting = this.settingsItems.find(item => item.name === 'Difficulty');

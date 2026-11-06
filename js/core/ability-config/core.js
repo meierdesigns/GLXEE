@@ -181,7 +181,7 @@ class AbilityConfigManager {
                 id: 'capacitor_shield_regen',
                 name: 'Capacitor Shield',
                 description: 'Bulkier shield capacitor bank. Higher capacity and faster self-recharge, needs a larger core mount.',
-                icon: 'ability_energy_shield',
+                icon: 'ability_capacitor_shield',
                 cluster: 'defense',
                 type: 'passive',
                 tier: 3,

@@ -205,14 +205,37 @@ extendClass(CollisionManager, {
         }
     },
 
-    /** Bullets set _sweepDx/_sweepDy every frame; ships/obstacles do not. */
+    /**
+     * Bullets set _sweepDx/_sweepDy every frame; ships/obstacles do not.
+     * Spawn-frame enemy shots (created after bullet.update) have no sweep yet —
+     * still treat them as shots so sparse hull masks cannot swallow the hit.
+     */
     isShotEntity(obj) {
-        return !!(obj && (obj._sweepDx != null || obj._sweepDy != null));
+        if (!obj) return false;
+        if (obj._sweepDx != null || obj._sweepDy != null) return true;
+        if (obj.isEnemyShot || obj.isBossShot || obj._isShot) return true;
+        // Untagged projectile: has shot stats, no hull HP.
+        if (obj.damage != null && obj.speed != null && obj.health == null && obj.maxHealth == null
+            && !obj.collision) {
+            return true;
+        }
+        return false;
     },
 
     isColliding(obj1, obj2) {
-        const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1);
-        const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2);
+        const shot1 = this.isShotEntity(obj1);
+        const shot2 = this.isShotEntity(obj2);
+        const anyShot = shot1 || shot2;
+        // Shots vs hull: use the full entity footprint the sprite is fitted into.
+        // Tight mask insets were shrinking the AABB below the visible ship.
+        const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1, {
+            ignoreInsets: anyShot && !shot1,
+            matchVoxelDraw: shot1
+        });
+        const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2, {
+            ignoreInsets: anyShot && !shot2,
+            matchVoxelDraw: shot2
+        });
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
                                b1.y < b2.y + b2.height &&
@@ -221,10 +244,19 @@ extendClass(CollisionManager, {
         if (!basicCollision) {
             // Fast shots: also test the strip swept since last frame so they cannot jump over a target.
             const sx = obj1 && obj1._sweepDx, sy = obj1 && obj1._sweepDy;
-            if (!(sx || sy) || (obj2 && obj2._mask)) return false;
+            if (!(sx || sy)) return false;
             const x0 = Math.min(b1.x, b1.x - sx), x1 = Math.max(b1.x + b1.width, b1.x + b1.width - sx);
             const y0 = Math.min(b1.y, b1.y - sy), y1 = Math.max(b1.y + b1.height, b1.y + b1.height - sy);
-            return x0 < b2.x + b2.width && x1 > b2.x && y0 < b2.y + b2.height && y1 > b2.y;
+            const sweptHit = x0 < b2.x + b2.width && x1 > b2.x && y0 < b2.y + b2.height && y1 > b2.y;
+            if (!sweptHit) return false;
+            // Carved rocks: confirm the swept strip still touches remaining pixels
+            // (previously skipped entirely → shots tunneled through thin lips).
+            if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
+                const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+                if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, swept)) return false;
+                if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, swept)) return false;
+            }
+            return true;
         }
         // Carved boulders: only their remaining pixels are solid.
         if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
@@ -236,7 +268,7 @@ extendClass(CollisionManager, {
         // sparse after VOXEL bake and were letting clear overlaps register as misses
         // (and an exception in the mask path aborted the whole collision pass,
         // which also killed terrain wall hits in the same frame).
-        if (this.isShotEntity(obj1) || this.isShotEntity(obj2)) {
+        if (anyShot) {
             return true;
         }
 
@@ -255,14 +287,15 @@ extendClass(CollisionManager, {
         return true;
     },
 
-    getCollisionBounds(obj, out) {
+    getCollisionBounds(obj, out, opts) {
         const o = out || { x: 0, y: 0, width: 0, height: 0 };
         if (!obj) {
             o.x = 0; o.y = 0; o.width = 0; o.height = 0;
             return o;
         }
+        const ignoreInsets = !!(opts && opts.ignoreInsets);
         const c = obj.collision;
-        if (c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
+        if (!ignoreInsets && c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
             const insetL = c.insetL || 0;
             const insetT = c.insetT || 0;
             const insetR = c.insetR || 0;
@@ -271,12 +304,31 @@ extendClass(CollisionManager, {
             o.y = obj.y + insetT;
             o.width = Math.max(1, obj.width - insetL - insetR);
             o.height = Math.max(1, obj.height - insetT - insetB);
-            return o;
+        } else {
+            o.x = obj.x;
+            o.y = obj.y;
+            o.width = obj.width;
+            o.height = obj.height;
         }
-        o.x = obj.x;
-        o.y = obj.y;
-        o.width = obj.width;
-        o.height = obj.height;
+        // VOXEL draw path snaps/quantizes shots; collision must use the same box
+        // or glancing hits look solid on screen but never register.
+        if (opts && opts.matchVoxelDraw
+            && typeof renderManager !== 'undefined'
+            && renderManager.getCombatVoxelCell) {
+            const cell = renderManager.getCombatVoxelCell();
+            if (cell != null && cell > 0) {
+                const snap = renderManager.snapCombat
+                    ? (v) => renderManager.snapCombat(v, cell)
+                    : (v) => Math.round(v / cell) * cell;
+                const quant = renderManager.quantizeCombatSize
+                    ? (s) => renderManager.quantizeCombatSize(s, cell)
+                    : (s) => Math.max(cell, Math.round(s / cell) * cell);
+                o.x = snap(o.x);
+                o.y = snap(o.y);
+                o.width = quant(o.width);
+                o.height = quant(o.height);
+            }
+        }
         return o;
     },
 

@@ -66,6 +66,40 @@
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
     }
+    /** Voice dropdown + channel volume slider (BASS / LEAD / ARP / DRUMS). */
+    function fxVoiceSelect(label, ch, current, volPct) {
+        const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
+            ? VFTrackerVoices.optionsFor(ch)
+            : [{ id: 'default', label: 'DEFAULT' }];
+        const cur = String(current || 'default');
+        const keys = ['bass', 'lead', 'arp', 'drums'];
+        const pct = Math.max(0, Math.min(200, Math.round(Number(volPct) || 100)));
+        const html = opts.map(function (o) {
+            return '<option value="' + o.id + '"' + (o.id === cur ? ' selected' : '') + '>' + o.label + '</option>';
+        }).join('');
+        return '<label class="vf-fx-row vf-fx-voice-row"><span>' + label + '</span>' +
+            '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
+            '<input type="range" class="vf-fx-voice-vol" min="0" max="200" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
+            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%">' +
+            '<output>' + pct + '%</output></label>';
+    }
+    /** Music STYLE dropdown + AMOUNT slider on one row (same layout as MUSIC VOICES). */
+    function fxStyleSelect(currentIdx, junglePct, jungleLabel) {
+        const list = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list)
+            ? VFTrackerThemes.list
+            : [{ id: 'planet', label: 'PLANET' }];
+        const cur = Math.max(0, Math.min(list.length - 1, Math.round(Number(currentIdx) || 0)));
+        const pct = Math.max(0, Math.min(100, Math.round(Number(junglePct) || 0)));
+        const shown = jungleLabel == null ? (pct === 0 ? 'OFF' : pct + '%') : jungleLabel;
+        const html = list.map(function (o, i) {
+            return '<option value="' + i + '"' + (i === cur ? ' selected' : '') + '>' + o.label + '</option>';
+        }).join('');
+        return '<label class="vf-fx-row vf-fx-voice-row"><span>STYLE</span>' +
+            '<select class="vf-fx-voice vf-fx-style" data-au-style="1" title="Music style">' + html + '</select>' +
+            '<input type="range" min="0" max="100" step="1" value="' + pct + '" data-sl="au:jungle"' +
+            ' data-unit="" style="--look-fill:' + pct + '%">' +
+            '<output>' + shown + '</output></label>';
+    }
     // Fleet colours (hull / edge / accent / engine of the faction's ships): HUE continuous,
     // SAT / LIGHT in three steps. Slider moves are unsaved drafts shown live; SAVE keeps them.
     function fleetColorsHtml(cur) {
@@ -319,17 +353,43 @@
             const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
             const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
             const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
-            const musicSpeed = vol && vol.getMusicSpeed
-                ? Math.round(vol.getMusicSpeed() * 100) / 100
-                : 3.5;
+            const musicBpm = vol && vol.getMusicBpm
+                ? Math.round(vol.getMusicBpm())
+                : (vol && vol.getMusicSpeed ? Math.round(vol.getMusicSpeed() * 132) : 462);
+            const jungleAmt = vol && vol.getJungleAmount ? Number(vol.getJungleAmount()) : 0;
+            const junglePct = Math.round(Math.max(0, Math.min(1, Math.abs(jungleAmt) || 0)) * 100);
+            const jungleLabel = junglePct === 0 ? 'OFF' : junglePct + '%';
+            const themeMax = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+                ? VFTrackerThemes.count() - 1
+                : 6;
+            const themeIdx = vol && vol.getMusicTheme != null
+                ? Math.max(0, Math.min(themeMax, Math.round(vol.getMusicTheme())))
+                : 0;
+            const voiceOf = function (i) {
+                return vol && vol.getChannelVoice ? vol.getChannelVoice(i) : 'default';
+            };
+            const chVolOf = function (i) {
+                const v = vol && vol.getChannelVolume ? vol.getChannelVolume(i) : 1;
+                return Math.round(Math.max(0, Math.min(2, Number(v) || 1)) * 100);
+            };
+            const xfade = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.crossfadeSeconds != null)
+                ? Math.round(Number(vfTrackerManager.crossfadeSeconds) * 100) / 100
+                : 1.4;
             const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
             const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
             h += '<div class="vf-fx-title">VOLUME</div>' +
                 fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
                 fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
                 fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
-                '<div class="vf-fx-title">SPEED</div>' +
-                fxSlider('MUSIC SPEED', 'au:speed', 0.5, 4, 0.02, musicSpeed, '×') +
+                '<div class="vf-fx-title">MUSIC VOICES</div>' +
+                fxVoiceSelect('BASS', 0, voiceOf(0), chVolOf(0)) +
+                fxVoiceSelect('LEAD', 1, voiceOf(1), chVolOf(1)) +
+                fxVoiceSelect('ARP', 2, voiceOf(2), chVolOf(2)) +
+                fxVoiceSelect('DRUMS', 3, voiceOf(3), chVolOf(3)) +
+                '<div class="vf-fx-title">MUSIC PLAYBACK</div>' +
+                fxSlider('MUSIC BPM', 'au:bpm', 60, 600, 1, musicBpm, ' BPM') +
+                fxStyleSelect(themeIdx, junglePct, jungleLabel) +
+                fxSlider('CROSSFADE', 'au:xfade', 0.2, 3, 0.05, xfade, 's') +
                 '<div class="vf-fx-title">TOGGLES</div>' +
                 '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
                 '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +

@@ -482,6 +482,9 @@ class CollisionManager {
                 if (this.shotsCrossed(playerBullets[i], enemyBullets[j])) {
                     const pb = playerBullets[i];
                     const eb = enemyBullets[j];
+                    // Reflective shots is a per-weapon EQUIPMENT unlock — without it,
+                    // player and enemy fire pass through each other.
+                    if (!pb.reflectiveShots) continue;
                     const playerBulletX = pb.x + pb.width / 2;
                     const playerBulletY = pb.y + pb.height / 2;
                     const enemyBulletX = eb.x + eb.width / 2;

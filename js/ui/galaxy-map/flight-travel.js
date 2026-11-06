@@ -261,6 +261,66 @@ extendClass(GalaxyMapManager, {
         // Rebuilt with the route so its cells follow the current pixel size.
         if (this.syncHoverRoute) this.syncHoverRoute();
     },
+    /** OS "reduce motion" shortens flights; never teleport — that felt broken in Firefox/Safari. */
+    mapFlightReduced() {
+        try {
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) {
+            return false;
+        }
+    },
+    /**
+     * Build the in-flight ship marker with createElementNS.
+     * SVGElement.innerHTML is unreliable across browsers (wrong namespace / missing kids)
+     * and then runFlight no-ops or the ship pops in only on commitFlight.
+     */
+    buildTravelShipGroup(className, points, angle, shipX, shipY) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const g = document.createElementNS(ns, 'g');
+        g.setAttribute('class', className || 'gm-ship-travel');
+        const trail = document.createElementNS(ns, 'polyline');
+        trail.setAttribute('class', 'gm-travel-trail');
+        trail.setAttribute('fill', 'none');
+        trail.setAttribute('points', points);
+        g.appendChild(trail);
+        const ship = document.createElementNS(ns, 'g');
+        ship.setAttribute('class', 'gm-travel-ship');
+        if (shipX != null && shipY != null) {
+            ship.setAttribute('transform', 'translate(' + shipX + ',' + shipY + ')');
+        }
+        const heading = document.createElementNS(ns, 'g');
+        heading.setAttribute('class', 'gm-travel-heading');
+        heading.setAttribute('transform', 'rotate(' + (angle || 0) + ')');
+        const icon = this.getShipIconUrl && this.getShipIconUrl();
+        if (icon) {
+            const img = document.createElementNS(ns, 'image');
+            const box = this.shipIconBox();
+            img.setAttribute('href', icon);
+            img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', icon);
+            img.setAttribute('x', String(box.x));
+            img.setAttribute('y', String(box.y));
+            img.setAttribute('width', String(box.w));
+            img.setAttribute('height', String(box.h));
+            img.setAttribute('class', 'gm-ship-marker-img');
+            heading.appendChild(img);
+        } else {
+            const body = document.createElementNS(ns, 'path');
+            body.setAttribute('d', 'M0 -7 L6 6 L0 3 L-6 6 Z');
+            body.setAttribute('class', 'gm-ship-marker-body');
+            heading.appendChild(body);
+        }
+        const thrustHtml = this.shipThrustRect && this.shipThrustRect();
+        if (thrustHtml) {
+            // Single known <rect> from shipThrustRect — parse via SVG wrapper for NS safety.
+            const wrap = document.createElement('div');
+            wrap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg">' + thrustHtml + '</svg>';
+            const rect = wrap.querySelector('rect');
+            if (rect) heading.appendChild(document.importNode(rect, true));
+        }
+        ship.appendChild(heading);
+        g.appendChild(ship);
+        return { g: g, trail: trail, ship: ship, heading: heading };
+    },
     /** Animate the ship to a planet / post, then commit the new location. */
     flyTo(kind, id) {
         if (this._flight || this._ambush) return;
@@ -282,8 +342,7 @@ extendClass(GalaxyMapManager, {
             return (vb.length === 4 && vb.every(Number.isFinite))
                 ? { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2 } : null;
         })();
-        const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!from || !to || !svg || reduced) {
+        if (!from || !to || !svg) {
             this.commitFlight(kind, id);
             return;
         }
@@ -291,31 +350,27 @@ extendClass(GalaxyMapManager, {
         const path = this.routePath(current, { kind: kind, id: id }) || [from, to];
         let dist = 0;
         for (let i = 0; i < path.length - 1; i++) dist += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
+        if (!(dist > 0) || !Number.isFinite(dist)) {
+            this.commitFlight(kind, id);
+            return;
+        }
         const angle = this.pointOnPath(path, 0).angle; // ship art points up
-        const icon = this.getShipIconUrl && this.getShipIconUrl();
-        const shipSvg = icon
-            ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
-            : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
-        const ns = 'http://www.w3.org/2000/svg';
-        const g = document.createElementNS(ns, 'g');
-        g.setAttribute('class', 'gm-ship-travel');
-        g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${from.x},${from.y}"/>` +
-            `<g class="gm-travel-ship"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
-        svg.appendChild(g);
+        const parts = this.buildTravelShipGroup('gm-ship-travel', from.x + ',' + from.y, angle);
+        svg.appendChild(parts.g);
         const layer = svg.querySelector('.gm-route-layer');
         if (layer) layer.innerHTML = '';
         const marker = svg.querySelector('.gm-ship-marker');
         if (marker) marker.style.display = 'none';
-        const trail = g.querySelector('.gm-travel-trail');
-        const ship = g.querySelector('.gm-travel-ship');
         const ambush = !this._skipAmbushOnce
             && Math.random() < this.ambushChance(current, { kind: kind, id: id });
         this._skipAmbushOnce = false;
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
-        const duration = Math.max(1800, Math.min(5000, dist * 12));
-        this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
-            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox,
-            camFrom: camFrom };
+        let duration = Math.max(1800, Math.min(5000, dist * 12));
+        // Accessibility: shorten, do not skip — teleport looked like a broken right-click.
+        if (this.mapFlightReduced()) duration = Math.max(500, Math.min(1200, duration * 0.35));
+        this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: parts.g,
+            trail: parts.trail, ship: parts.ship, heading: parts.heading, duration: duration, t: 0,
+            svg: svg, originalViewBox: originalViewBox, camFrom: camFrom };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
             if (stopAt < 1) this.showAmbush();
@@ -325,9 +380,12 @@ extendClass(GalaxyMapManager, {
     /** Advance the flight from progress t0 to t1, then call done. */
     runFlight(t0, t1, done) {
         const f = this._flight;
-        if (!f) return;
+        if (!f || !f.ship || !f.trail) {
+            if (typeof done === 'function') done();
+            return;
+        }
         const start = performance.now();
-        const span = Math.max(1, f.duration * (t1 - t0));
+        const span = Math.max(16, f.duration * Math.max(0.001, t1 - t0));
         const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
         // Only the flight's opening leg eases the camera in from wherever it was; a
         // resumed leg (post-ambush) is already following the ship, so it just continues.
@@ -341,18 +399,18 @@ extendClass(GalaxyMapManager, {
             const at = this.pointOnPath(path, e);
             f.t = t;
             const sat = this.latticeShipPt ? this.latticeShipPt(at.x, at.y) : at;
-            f.ship.setAttribute('transform', `translate(${sat.x},${sat.y})`);
+            f.ship.setAttribute('transform', 'translate(' + sat.x + ',' + sat.y + ')');
             const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
-            if (vb.length === 4 && vb.every(Number.isFinite)) {
+            if (vb.length === 4 && vb.every(Number.isFinite) && f.svg) {
                 let cx = at.x, cy = at.y;
                 if (camBlendDur > 0) {
                     const camK = ease(Math.min(1, (now - start) / camBlendDur));
                     cx = f.camFrom.x + (at.x - f.camFrom.x) * camK;
                     cy = f.camFrom.y + (at.y - f.camFrom.y) * camK;
                 }
-                f.svg.setAttribute('viewBox', `${cx - vb[2] / 2} ${cy - vb[3] / 2} ${vb[2]} ${vb[3]}`);
+                f.svg.setAttribute('viewBox', (cx - vb[2] / 2) + ' ' + (cy - vb[3] / 2) + ' ' + vb[2] + ' ' + vb[3]);
             }
-            if (f.heading) f.heading.setAttribute('transform', `rotate(${at.angle})`);
+            if (f.heading) f.heading.setAttribute('transform', 'rotate(' + at.angle + ')');
             // Trail: the path's corners passed so far, then the ship.
             const trailPoints = path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
             trailPoints.push(at.x.toFixed(1) + ',' + at.y.toFixed(1));

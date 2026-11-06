@@ -4,8 +4,44 @@
 const FRAGMENT_MIN_PARENT = 18; // px: smaller rocks only burst into debris
 const FRAGMENT_MIN_SIZE = 12;   // px: smallest collidable chunk (no dust pebbles)
 const DEBRIS_MAX = 260;
+const DEBRIS_POOL_MAX = 320;
+const FLASH_POOL_MAX = 48;
+const DEBRIS_FALLBACK_COLORS = ['#9aa0a8', '#6e737b', '#c8ccd2'];
+const FLASH_LAYERS = [[1, '#ff8a2a', 0.55], [0.72, '#ffc15a', 0.7], [0.4, '#fff2c8', 0.9]];
 
 extendClass(ObstacleManager, {
+    _acquireDebris() {
+        if (!this._debrisPool) this._debrisPool = [];
+        return this._debrisPool.pop() || {
+            x: 0, y: 0, vx: 0, vy: 0, s: 1, c: '#9aa0a8', life: 0, ttl: 1
+        };
+    },
+
+    _releaseDebris(p) {
+        if (!p) return;
+        if (!this._debrisPool) this._debrisPool = [];
+        if (this._debrisPool.length < DEBRIS_POOL_MAX) this._debrisPool.push(p);
+    },
+
+    _acquireFlash() {
+        if (!this._flashPool) this._flashPool = [];
+        return this._flashPool.pop() || { x: 0, y: 0, r: 1, life: 0, ttl: 1 };
+    },
+
+    _releaseFlash(f) {
+        if (!f) return;
+        if (!this._flashPool) this._flashPool = [];
+        if (this._flashPool.length < FLASH_POOL_MAX) this._flashPool.push(f);
+    },
+
+    _trimDebris() {
+        const list = this.debris;
+        if (!list || list.length <= DEBRIS_MAX) return;
+        const drop = list.length - DEBRIS_MAX;
+        for (let i = 0; i < drop; i++) this._releaseDebris(list[i]);
+        list.splice(0, drop);
+    },
+
     /**
      * Visual-only burst: pixel chips in the rock's own colours fly out,
      * spin down and fade, plus a short flash. No collision.
@@ -31,27 +67,41 @@ extendClass(ObstacleManager, {
             } else {
                 s = cell * (roll < 0.25 ? 2 : 1);
             }
-            this.debris.push({
-                x: cx + (Math.random() - 0.5) * o.width * 0.6,
-                y: cy + (Math.random() - 0.5) * o.height * 0.6,
-                vx: Math.cos(a) * sp + (o.horizontalSpeed || 0) * 0.5,
-                vy: Math.sin(a) * sp + (o.verticalSpeed || 0) * 0.5,
-                s: s,
-                c: colors[Math.floor(Math.random() * colors.length)],
-                life: 0,
-                ttl: 350 + Math.random() * 450
-            });
+            const p = this._acquireDebris();
+            p.x = cx + (Math.random() - 0.5) * o.width * 0.6;
+            p.y = cy + (Math.random() - 0.5) * o.height * 0.6;
+            p.vx = Math.cos(a) * sp + (o.horizontalSpeed || 0) * 0.5;
+            p.vy = Math.sin(a) * sp + (o.verticalSpeed || 0) * 0.5;
+            p.s = s;
+            p.c = colors[(Math.random() * colors.length) | 0];
+            p.life = 0;
+            p.ttl = 350 + Math.random() * 450;
+            this.debris.push(p);
         }
         // Hot core flash: a few bright chips that die fast.
         const hotN = fine ? 10 : 6;
         for (let i = 0; i < hotN; i++) {
             const a = Math.random() * Math.PI * 2;
-            this.debris.push({ x: cx, y: cy, vx: Math.cos(a) * 2.2, vy: Math.sin(a) * 2.2,
-                s: grit, c: i % 2 ? '#ffe9a8' : '#ffffff', life: 0, ttl: 160 + Math.random() * 120 });
+            const p = this._acquireDebris();
+            p.x = cx;
+            p.y = cy;
+            p.vx = Math.cos(a) * 2.2;
+            p.vy = Math.sin(a) * 2.2;
+            p.s = grit;
+            p.c = i % 2 ? '#ffe9a8' : '#ffffff';
+            p.life = 0;
+            p.ttl = 160 + Math.random() * 120;
+            this.debris.push(p);
         }
         this.flashes = this.flashes || [];
-        this.flashes.push({ x: cx, y: cy, r: size * (fine ? 0.7 : 0.9), life: 0, ttl: 140 });
-        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+        const flash = this._acquireFlash();
+        flash.x = cx;
+        flash.y = cy;
+        flash.r = size * (fine ? 0.7 : 0.9);
+        flash.life = 0;
+        flash.ttl = 140;
+        this.flashes.push(flash);
+        this._trimDebris();
     },
 
     /**
@@ -63,25 +113,27 @@ extendClass(ObstacleManager, {
         if (!this.debris) this.debris = [];
         const cell = this.terrainCell ? this.terrainCell() : 2.5;
         const count = n || 24;
+        const palette = colors && colors.length ? colors : DEBRIS_FALLBACK_COLORS;
         for (let i = 0; i < count; i++) {
             const a = (Math.random() - 0.5) * (spread || 0.9);
             const sp = (speed || 2.6) * (0.45 + Math.random() * 0.9);
-            this.debris.push({
-                x: x,
-                y: y + (Math.random() - 0.5) * 6,
-                vx: Math.cos(a) * sp * dir,
-                vy: Math.sin(a) * sp,
-                s: Math.random() < 0.7 ? Math.max(1, cell * 0.5) : cell,
-                c: colors[Math.floor(Math.random() * colors.length)],
-                life: 0,
-                ttl: 260 + Math.random() * 420
-            });
+            const p = this._acquireDebris();
+            p.x = x;
+            p.y = y + (Math.random() - 0.5) * 6;
+            p.vx = Math.cos(a) * sp * dir;
+            p.vy = Math.sin(a) * sp;
+            p.s = Math.random() < 0.7 ? Math.max(1, cell * 0.5) : cell;
+            p.c = palette[(Math.random() * palette.length) | 0];
+            p.life = 0;
+            p.ttl = 260 + Math.random() * 420;
+            this.debris.push(p);
         }
-        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+        this._trimDebris();
     },
 
     /** Opaque, non-outline colours from the rock's baked art (fallback grey). */
     debrisColors(o) {
+        if (o && o._debrisColors) return o._debrisColors;
         const img = o && o._hiRes;
         const out = [];
         try {
@@ -94,26 +146,38 @@ extendClass(ObstacleManager, {
                 }
             }
         } catch (e) { /* ignore */ }
-        return out.length ? out : ['#9aa0a8', '#6e737b', '#c8ccd2'];
+        const colors = out.length ? out : DEBRIS_FALLBACK_COLORS;
+        if (o) o._debrisColors = colors;
+        return colors;
     },
 
     updateDebris(deltaTime) {
         const dt = Math.max(0, Number(deltaTime) || 16.67);
         const f = Math.min(3, dt / 16.67);
+        const drag = f === 1 ? 0.93 : Math.pow(0.93, f);
         const list = this.debris || [];
         for (let i = list.length - 1; i >= 0; i--) {
             const p = list[i];
             p.life += dt;
-            if (p.life >= p.ttl) { list.splice(i, 1); continue; }
+            if (p.life >= p.ttl) {
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                this._releaseDebris(list.pop());
+                continue;
+            }
             p.x += p.vx * f;
             p.y += p.vy * f;
-            p.vx *= Math.pow(0.93, f);
-            p.vy *= Math.pow(0.93, f);
+            p.vx *= drag;
+            p.vy *= drag;
         }
         const fl = this.flashes || [];
         for (let i = fl.length - 1; i >= 0; i--) {
             fl[i].life += dt;
-            if (fl[i].life >= fl[i].ttl) fl.splice(i, 1);
+            if (fl[i].life >= fl[i].ttl) {
+                const last = fl.length - 1;
+                if (i !== last) fl[i] = fl[last];
+                this._releaseFlash(fl.pop());
+            }
         }
     },
 
@@ -125,15 +189,16 @@ extendClass(ObstacleManager, {
             ctx.save();
             ctx.imageSmoothingEnabled = false;
             ctx.globalCompositeOperation = 'lighter';
-            fl.forEach((f) => {
+            for (let fi = 0; fi < fl.length; fi++) {
+                const f = fl[fi];
                 const t = f.life / f.ttl;
                 const alpha = 1 - t;
                 const r = f.r * (0.6 + t * 0.8);
                 // Fine pixel fireball: small steps, nested discs from a pale
                 // core out to an orange rim, so big rocks get no blocky plus.
                 const step = Math.max(1, cell ? cell * 0.5 : 1);
-                const layers = [[1, '#ff8a2a', 0.55], [0.72, '#ffc15a', 0.7], [0.4, '#fff2c8', 0.9]];
-                layers.forEach((L) => {
+                for (let li = 0; li < FLASH_LAYERS.length; li++) {
+                    const L = FLASH_LAYERS[li];
                     const lr = r * L[0];
                     ctx.globalAlpha = alpha * L[2];
                     ctx.fillStyle = L[1];
@@ -143,15 +208,16 @@ extendClass(ObstacleManager, {
                         const x1 = Math.round((f.x + half) / step) * step;
                         if (x1 > x0) ctx.fillRect(x0, Math.round((f.y + dy) / step) * step, x1 - x0, step);
                     }
-                });
-            });
+                }
+            }
             ctx.restore();
         }
         const list = this.debris || [];
         if (!list.length) return;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        list.forEach((p) => {
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i];
             const t = p.life / p.ttl;
             const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
             let s = Math.max(1, p.s);
@@ -170,7 +236,7 @@ extendClass(ObstacleManager, {
                 ctx.fillStyle = p.c;
                 ctx.fillRect(Math.round(px), Math.round(py), s, s);
             }
-        });
+        }
         ctx.restore();
     },
 
@@ -287,8 +353,18 @@ extendClass(ObstacleManager, {
 
     reset() {
         this.obstacles.length = 0;
-        this.debris = [];
-        this.flashes = [];
+        if (this.debris) {
+            for (let i = 0; i < this.debris.length; i++) this._releaseDebris(this.debris[i]);
+            this.debris.length = 0;
+        } else {
+            this.debris = [];
+        }
+        if (this.flashes) {
+            for (let i = 0; i < this.flashes.length; i++) this._releaseFlash(this.flashes[i]);
+            this.flashes.length = 0;
+        } else {
+            this.flashes = [];
+        }
         this.runTime = 0;
         this.scrollDistance = 0;
         this.terrainOffset = 0;

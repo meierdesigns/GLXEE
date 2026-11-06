@@ -405,10 +405,24 @@ extendClass(GalaxyMapManager, {
         });
         // Right-click a planet / station: select it and fly straight there (no menu, no combat start).
         svg.addEventListener('contextmenu', (e) => {
-            const target = e.composedPath().find((el) => el && el.classList
-                && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node')));
+            // closest() is reliable on SVG across browsers; composedPath() alone
+            // missed nodes under filtered / nested map layers in Firefox/Safari.
+            const path = (typeof e.composedPath === 'function') ? e.composedPath() : [];
+            let target = null;
+            for (let i = 0; i < path.length; i++) {
+                const el = path[i];
+                if (el && el.classList
+                    && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node'))) {
+                    target = el;
+                    break;
+                }
+            }
+            if (!target && e.target && e.target.closest) {
+                target = e.target.closest('.gm-node, .gm-post-node');
+            }
             if (!target) return;
             e.preventDefault();
+            e.stopPropagation();
             if (this._flight || this._ambush) return;
             const pid = target.getAttribute('data-planet');
             const postId = target.getAttribute('data-post');

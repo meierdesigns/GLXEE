@@ -15,6 +15,10 @@ extendClass(ParallaxManager, {
         x.imageSmoothingEnabled = false;
         paint(x);
         entry = { canvas: c, w: tw, h: th };
+        const keys = Object.keys(this._patternBake);
+        if (keys.length > 48) {
+            for (let i = 0; i < 12; i++) delete this._patternBake[keys[i]];
+        }
         this._patternBake[key] = entry;
         return entry;
     },

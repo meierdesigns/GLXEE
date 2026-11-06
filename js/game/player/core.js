@@ -104,12 +104,13 @@ class PlayerManager {
             if (repair > 0 && this.health > 0) this.health = Math.min(this.maxHealth, this.health + repair * dt);
         }
         const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul * perkMul;
-        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
-        const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
         // Sluice / warp fly-in owns the ship's position — ignore stick input so it cannot steer into a wall.
         const gateEnter = typeof objectiveManager !== 'undefined'
             && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
 
+        // Pilot ship stays on continuous float coords. Lattice stepMove/snap
+        // (cell often 4–20 logical px) teleported in jerks instead of adding
+        // velocity each frame; FX/bullets keep the Game-Boy raster separately.
         if (typeof game !== 'undefined') {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
             const canvasWidth = game.internalWidth || game.baseWidth || 200;
@@ -121,7 +122,6 @@ class PlayerManager {
             // bouncing along the walls stay hittable.
             const halfW = this.player.width / 2;
             // Arrow keys only: A / S / D fire assigned weapon groups.
-            // VOXEL: Game-Boy raster — accumulate into whole lattice steps.
             let dx = 0;
             let dy = 0;
             if (!gateEnter) {
@@ -130,18 +130,12 @@ class PlayerManager {
                 if (keys['ArrowUp']) dy -= moveSpeed;
                 if (keys['ArrowDown']) dy += moveSpeed;
             }
-            if (voxelMove) {
-                cv.stepMove(this.player, dx, dy);
-            } else {
-                this.player.x += dx;
-                this.player.y += dy;
-            }
+            this.player.x += dx;
+            this.player.y += dy;
             this.player.x = Math.max(-halfW, Math.min(canvasWidth - halfW, this.player.x));
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
             // Pressing on against the bottom edge = fly back down the corridor (transit runs read this).
-            // Lattice snapping can park the ship a few px above maxY, so allow a small band.
             this.player.backtrack = !gateEnter && !!keys['ArrowDown'] && this.player.y >= this.player.maxY - 6;
-            if (voxelMove && cv.snapEntity) cv.snapEntity(this.player);
         } else {
             let dx = 0;
             let dy = 0;
@@ -151,11 +145,8 @@ class PlayerManager {
                 if (keys['ArrowUp']) dy -= moveSpeed;
                 if (keys['ArrowDown']) dy += moveSpeed;
             }
-            if (voxelMove) cv.stepMove(this.player, dx, dy);
-            else {
-                this.player.x += dx;
-                this.player.y += dy;
-            }
+            this.player.x += dx;
+            this.player.y += dy;
             this.player.x = Math.max(0, Math.min(200 - this.player.width, this.player.x));
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
         }

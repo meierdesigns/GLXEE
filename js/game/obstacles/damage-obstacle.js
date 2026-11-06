@@ -67,8 +67,12 @@ extendClass(ObstacleManager, {
         if (!(radius > 0)) return;
         // Snapshot: chunks/fragments spawned by this blast aren't hit by it,
         // and indices are re-resolved since removals shift the array.
-        const targets = this.obstacles.slice();
-        for (const o of targets) {
+        const targets = this._splashScratch || (this._splashScratch = []);
+        targets.length = 0;
+        const src = this.obstacles;
+        for (let i = 0; i < src.length; i++) targets.push(src[i]);
+        for (let ti = 0; ti < targets.length; ti++) {
+            const o = targets[ti];
             if (!o || o === skip || o.isFog || !o.isDestructible) continue;
             const cx = Math.max(o.x, Math.min(x, o.x + o.width));
             const cy = Math.max(o.y, Math.min(y, o.y + o.height));

@@ -177,6 +177,43 @@ class SoundManager {
 
     // --- Synth primitives ---
 
+    /** Release Web Audio nodes after stop so long combat sessions don't retain graphs. */
+    _autoRelease(nodes, when) {
+        const list = nodes || [];
+        const done = () => {
+            for (let i = 0; i < list.length; i++) {
+                try { list[i].disconnect(); } catch (e) { /* already gone */ }
+            }
+        };
+        const lead = list[0];
+        if (lead && typeof lead.addEventListener === 'function') {
+            try {
+                lead.addEventListener('ended', done, { once: true });
+                return;
+            } catch (e) { /* fall through */ }
+        }
+        this.schedule(done, Math.max(30, Math.ceil((when || 0.05) * 1000) + 40));
+    }
+
+    /** Shared decaying-noise buffer — createNoiseBurst used to allocate a new AudioBuffer every shot. */
+    _noiseBurstBuffer(ctx, duration) {
+        // Bucket durations so many SFX share one buffer (0.05 / 0.08 / 0.1 …).
+        const bucket = Math.max(0.03, Math.ceil(duration * 40) / 40);
+        if (!this._noiseBufCache) this._noiseBufCache = Object.create(null);
+        let buffer = this._noiseBufCache[bucket];
+        if (buffer && buffer.sampleRate === ctx.sampleRate) return buffer;
+        const len = Math.max(1, Math.floor(ctx.sampleRate * bucket));
+        buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        }
+        const keys = Object.keys(this._noiseBufCache);
+        if (keys.length > 24) delete this._noiseBufCache[keys[0]];
+        this._noiseBufCache[bucket] = buffer;
+        return buffer;
+    }
+
     createBeep(frequency, duration, type, volumeScale) {
         if (!this.canPlaySfx()) return;
         const ctx = this.audioContext;
@@ -193,6 +230,7 @@ class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.02, duration));
         osc.start(now);
         osc.stop(now + duration + 0.02);
+        this._autoRelease([osc, gain], duration + 0.02);
     }
 
     createSweep(startFreq, endFreq, duration, type, volumeScale) {
@@ -214,20 +252,15 @@ class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
         osc.start(now);
         osc.stop(now + duration + 0.02);
+        this._autoRelease([osc, gain], duration + 0.02);
     }
 
     createNoiseBurst(duration, volumeScale, filterFreq) {
         if (!this.canPlaySfx()) return;
         const ctx = this.audioContext;
         const now = ctx.currentTime;
-        const len = Math.max(1, Math.floor(ctx.sampleRate * duration));
-        const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < len; i++) {
-            data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-        }
         const src = ctx.createBufferSource();
-        src.buffer = buffer;
+        src.buffer = this._noiseBurstBuffer(ctx, duration);
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(filterFreq || 800, now);
@@ -241,6 +274,7 @@ class SoundManager {
         gain.connect(ctx.destination);
         src.start(now);
         src.stop(now + duration + 0.02);
+        this._autoRelease([src, filter, gain], duration + 0.02);
     }
 
     createDualTone(freq1, freq2, duration, type, volumeScale) {

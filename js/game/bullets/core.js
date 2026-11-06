@@ -1,10 +1,13 @@
 "use strict";
 
 // Bullet management
+const BULLET_POOL_MAX = 96;
+
 class BulletManager {
     constructor() {
         this.bullets = [];
         this.enemyBullets = [];
+        this._bulletPool = [];
         this.shotType = 0;
         this.shotTypes = (typeof weaponConfigManager !== 'undefined')
             ? weaponConfigManager.getIds()
@@ -27,6 +30,64 @@ class BulletManager {
         if (typeof chargeSystem !== 'undefined') {
             chargeSystem.syncFromShipModel(null);
         }
+    }
+
+    /**
+     * Reuse a spent bullet object. Optional fields are cleared so a recycled
+     * missile/wave slot can't keep pierce/angle/boss flags from a prior shot.
+     */
+    acquireBullet() {
+        const b = this._bulletPool.pop();
+        if (!b) return {};
+        b.angle = undefined;
+        b.waveAmp = undefined;
+        b.wavePhase = undefined;
+        b.pierce = undefined;
+        b.charged = undefined;
+        b.isBossShot = undefined;
+        b.isEnemyShot = undefined;
+        b.bonusGlow = undefined;
+        b._ignoreObstacle = undefined;
+        b._sweepDx = 0;
+        b._sweepDy = 0;
+        b.lightRadius = undefined;
+        b.lightIntensity = undefined;
+        b.lightColor = undefined;
+        return b;
+    }
+
+    releaseBullet(b) {
+        if (!b || this._bulletPool.length >= BULLET_POOL_MAX) return;
+        this._bulletPool.push(b);
+    }
+
+    /**
+     * Push a shot onto `list`. Prefer pooled shells: if the pool is empty the
+     * `fields` object itself becomes the live bullet (no second alloc); later
+     * shots copy into recycled shells so long fights stop growing.
+     */
+    pushBullet(list, fields) {
+        const b = this._bulletPool.pop();
+        if (!b) {
+            list.push(fields);
+            return fields;
+        }
+        b.angle = undefined;
+        b.waveAmp = undefined;
+        b.wavePhase = undefined;
+        b.pierce = undefined;
+        b.charged = undefined;
+        b.isBossShot = undefined;
+        b.isEnemyShot = undefined;
+        b.bonusGlow = undefined;
+        b._ignoreObstacle = undefined;
+        b._sweepDx = 0;
+        b._sweepDy = 0;
+        for (const k in fields) {
+            if (Object.prototype.hasOwnProperty.call(fields, k)) b[k] = fields[k];
+        }
+        list.push(b);
+        return b;
     }
 
     /** In-stage shop purchase: fires `weaponId` for `shots` shots, then reverts to whatever was equipped before. */
@@ -231,7 +292,7 @@ class BulletManager {
             if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
                 const last = this.bullets.length - 1;
                 if (i !== last) this.bullets[i] = this.bullets[last];
-                this.bullets.pop();
+                this.releaseBullet(this.bullets.pop());
             }
         }
 
@@ -265,7 +326,7 @@ class BulletManager {
             if (bullet.y > canvasHeight || bullet.x < 0 || bullet.x > canvasWidth) {
                 const last = this.enemyBullets.length - 1;
                 if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
-                this.enemyBullets.pop();
+                this.releaseBullet(this.enemyBullets.pop());
             }
         }
     }

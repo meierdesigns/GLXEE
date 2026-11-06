@@ -1048,6 +1048,10 @@ be reviewed or reverted independently.
 | 73G | Release 1.14.8 | Deploy ZIP `.claude/GLXEE-V1.14.8.zip` — lazy editors, volume/PERF, slim README media |
 | 73H | Combat frame smooth | Baked light glow sprites, reuse bullet-light/HUD/enemy-type buffers; no quality cuts |
 | 73I | Release 1.14.9 | Deploy ZIP `.claude/GLXEE-V1.14.9.zip` — combat frame smooth (73H) |
+| 73J | Session slowdown fix | Single game-loop RAF; reuse SFX noise buffers + node release; cap ring/hit/terrain/pattern caches |
+| 73K | Combat object pools | Pool particles/debris/flashes/voxels/bursts/bullets; cache debris colours; scratch splash list |
+| 73L | Smooth pilot thrust | Player ship moves on continuous velocity (no VOXEL cell teleports); lattice snap stays for FX/enemies |
+| 73M | Map right-click fly | Always animate map travel (no reduced-motion teleport); SVG NS ship marker; closer hit target |
 
 The wave commit convention is:
 

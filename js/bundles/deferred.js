@@ -22633,22 +22633,50 @@ var GameLoop = class GameLoop {
         this.lastTime = 0;
         this.frameCount = 0;
         this.gameRunning = true;
+        this._rafId = 0;
+        this._parkTimer = 0;
+        this._visKickBound = false;
     }
 
     start() {
         this.lastTime = 0;
         this.frameCount = 0;
-        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        this._clearPark();
         this._bindVisibilityKick();
         // Do not force gameRunning here — startGame() owns that flag. Boot must
         // leave the loop idle so menus are not fighting a combat RAF.
         if (!this.gameState.gameRunning) return;
-        this.loop(performance.now());
+        // One RAF chain only — stop/start and visibility kicks must not stack.
+        this._scheduleFrame();
     }
 
     stop() {
         this.gameState.gameRunning = false;
-        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        this._clearPark();
+        this._cancelFrame();
+    }
+
+    _clearPark() {
+        if (this._parkTimer) {
+            clearTimeout(this._parkTimer);
+            this._parkTimer = 0;
+        }
+    }
+
+    _cancelFrame() {
+        if (this._rafId) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = 0;
+        }
+    }
+
+    /** Schedule the next frame only if none is already pending. */
+    _scheduleFrame() {
+        if (this._rafId) return;
+        this._rafId = requestAnimationFrame((time) => {
+            this._rafId = 0;
+            this.loop(time);
+        });
     }
 
     /** Some hosts (embedded browsers / webviews) keep document.hidden true while the
@@ -22659,9 +22687,9 @@ var GameLoop = class GameLoop {
         this._visKickBound = true;
         document.addEventListener('visibilitychange', () => {
             if (document.hidden || !this.gameState.gameRunning) return;
-            if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+            this._clearPark();
             this.lastTime = 0;
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
         });
     }
 
@@ -22692,7 +22720,7 @@ var GameLoop = class GameLoop {
         // frozen mission-start intro.
         if (typeof document !== 'undefined' && document.hidden && !this.isCombatSurfaceActive()) {
             this.lastTime = 0;
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
             return;
         }
 
@@ -22700,12 +22728,10 @@ var GameLoop = class GameLoop {
         // Poll slowly instead of a empty 60 Hz RAF chain.
         if (!this.isCombatSurfaceActive()) {
             this.lastTime = 0;
-            if (this._parkTimer) clearTimeout(this._parkTimer);
+            this._clearPark();
             this._parkTimer = setTimeout(() => {
                 this._parkTimer = 0;
-                if (this.gameState.gameRunning) {
-                    requestAnimationFrame((time) => this.loop(time));
-                }
+                if (this.gameState.gameRunning) this._scheduleFrame();
             }, 250);
             return;
         }
@@ -22722,7 +22748,7 @@ var GameLoop = class GameLoop {
         let safeDeltaTime;
         if (deltaTime < 0) {
             // Skip this frame if deltaTime is negative
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
             return;
         } else {
             safeDeltaTime = Math.max(deltaTime, 0.1); // Minimum 0.1ms to prevent division by zero
@@ -22739,7 +22765,7 @@ var GameLoop = class GameLoop {
         
         // Only continue loop if game is still running
         if (this.gameState.gameRunning) {
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
         }
     }
 
@@ -29997,6 +30023,43 @@ var SoundManager = class SoundManager {
 
     // --- Synth primitives ---
 
+    /** Release Web Audio nodes after stop so long combat sessions don't retain graphs. */
+    _autoRelease(nodes, when) {
+        const list = nodes || [];
+        const done = () => {
+            for (let i = 0; i < list.length; i++) {
+                try { list[i].disconnect(); } catch (e) { /* already gone */ }
+            }
+        };
+        const lead = list[0];
+        if (lead && typeof lead.addEventListener === 'function') {
+            try {
+                lead.addEventListener('ended', done, { once: true });
+                return;
+            } catch (e) { /* fall through */ }
+        }
+        this.schedule(done, Math.max(30, Math.ceil((when || 0.05) * 1000) + 40));
+    }
+
+    /** Shared decaying-noise buffer — createNoiseBurst used to allocate a new AudioBuffer every shot. */
+    _noiseBurstBuffer(ctx, duration) {
+        // Bucket durations so many SFX share one buffer (0.05 / 0.08 / 0.1 …).
+        const bucket = Math.max(0.03, Math.ceil(duration * 40) / 40);
+        if (!this._noiseBufCache) this._noiseBufCache = Object.create(null);
+        let buffer = this._noiseBufCache[bucket];
+        if (buffer && buffer.sampleRate === ctx.sampleRate) return buffer;
+        const len = Math.max(1, Math.floor(ctx.sampleRate * bucket));
+        buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+            data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+        }
+        const keys = Object.keys(this._noiseBufCache);
+        if (keys.length > 24) delete this._noiseBufCache[keys[0]];
+        this._noiseBufCache[bucket] = buffer;
+        return buffer;
+    }
+
     createBeep(frequency, duration, type, volumeScale) {
         if (!this.canPlaySfx()) return;
         const ctx = this.audioContext;
@@ -30013,6 +30076,7 @@ var SoundManager = class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + Math.max(0.02, duration));
         osc.start(now);
         osc.stop(now + duration + 0.02);
+        this._autoRelease([osc, gain], duration + 0.02);
     }
 
     createSweep(startFreq, endFreq, duration, type, volumeScale) {
@@ -30034,20 +30098,15 @@ var SoundManager = class SoundManager {
         gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
         osc.start(now);
         osc.stop(now + duration + 0.02);
+        this._autoRelease([osc, gain], duration + 0.02);
     }
 
     createNoiseBurst(duration, volumeScale, filterFreq) {
         if (!this.canPlaySfx()) return;
         const ctx = this.audioContext;
         const now = ctx.currentTime;
-        const len = Math.max(1, Math.floor(ctx.sampleRate * duration));
-        const buffer = ctx.createBuffer(1, len, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < len; i++) {
-            data[i] = (Math.random() * 2 - 1) * (1 - i / len);
-        }
         const src = ctx.createBufferSource();
-        src.buffer = buffer;
+        src.buffer = this._noiseBurstBuffer(ctx, duration);
         const filter = ctx.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(filterFreq || 800, now);
@@ -30061,6 +30120,7 @@ var SoundManager = class SoundManager {
         gain.connect(ctx.destination);
         src.start(now);
         src.stop(now + duration + 0.02);
+        this._autoRelease([src, filter, gain], duration + 0.02);
     }
 
     createDualTone(freq1, freq2, duration, type, volumeScale) {
@@ -37156,12 +37216,13 @@ var PlayerManager = class PlayerManager {
             if (repair > 0 && this.health > 0) this.health = Math.min(this.maxHealth, this.health + repair * dt);
         }
         const moveSpeed = this.player.speed * speedMultiplier * chargeMul * tetherMul * diffSpeedMul * perkMul;
-        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
-        const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
         // Sluice / warp fly-in owns the ship's position — ignore stick input so it cannot steer into a wall.
         const gateEnter = typeof objectiveManager !== 'undefined'
             && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
 
+        // Pilot ship stays on continuous float coords. Lattice stepMove/snap
+        // (cell often 4–20 logical px) teleported in jerks instead of adding
+        // velocity each frame; FX/bullets keep the Game-Boy raster separately.
         if (typeof game !== 'undefined') {
             const canvasHeight = game.internalHeight || game.baseHeight || 300;
             const canvasWidth = game.internalWidth || game.baseWidth || 200;
@@ -37173,7 +37234,6 @@ var PlayerManager = class PlayerManager {
             // bouncing along the walls stay hittable.
             const halfW = this.player.width / 2;
             // Arrow keys only: A / S / D fire assigned weapon groups.
-            // VOXEL: Game-Boy raster — accumulate into whole lattice steps.
             let dx = 0;
             let dy = 0;
             if (!gateEnter) {
@@ -37182,18 +37242,12 @@ var PlayerManager = class PlayerManager {
                 if (keys['ArrowUp']) dy -= moveSpeed;
                 if (keys['ArrowDown']) dy += moveSpeed;
             }
-            if (voxelMove) {
-                cv.stepMove(this.player, dx, dy);
-            } else {
-                this.player.x += dx;
-                this.player.y += dy;
-            }
+            this.player.x += dx;
+            this.player.y += dy;
             this.player.x = Math.max(-halfW, Math.min(canvasWidth - halfW, this.player.x));
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
             // Pressing on against the bottom edge = fly back down the corridor (transit runs read this).
-            // Lattice snapping can park the ship a few px above maxY, so allow a small band.
             this.player.backtrack = !gateEnter && !!keys['ArrowDown'] && this.player.y >= this.player.maxY - 6;
-            if (voxelMove && cv.snapEntity) cv.snapEntity(this.player);
         } else {
             let dx = 0;
             let dy = 0;
@@ -37203,11 +37257,8 @@ var PlayerManager = class PlayerManager {
                 if (keys['ArrowUp']) dy -= moveSpeed;
                 if (keys['ArrowDown']) dy += moveSpeed;
             }
-            if (voxelMove) cv.stepMove(this.player, dx, dy);
-            else {
-                this.player.x += dx;
-                this.player.y += dy;
-            }
+            this.player.x += dx;
+            this.player.y += dy;
             this.player.x = Math.max(0, Math.min(200 - this.player.width, this.player.x));
             this.player.y = Math.max(this.player.minY, Math.min(this.player.maxY, this.player.y));
         }
@@ -37577,10 +37628,13 @@ var playerManager = new PlayerManager();
 "use strict";
 
 // Bullet management
+var BULLET_POOL_MAX = 96;
+
 var BulletManager = class BulletManager {
     constructor() {
         this.bullets = [];
         this.enemyBullets = [];
+        this._bulletPool = [];
         this.shotType = 0;
         this.shotTypes = (typeof weaponConfigManager !== 'undefined')
             ? weaponConfigManager.getIds()
@@ -37603,6 +37657,64 @@ var BulletManager = class BulletManager {
         if (typeof chargeSystem !== 'undefined') {
             chargeSystem.syncFromShipModel(null);
         }
+    }
+
+    /**
+     * Reuse a spent bullet object. Optional fields are cleared so a recycled
+     * missile/wave slot can't keep pierce/angle/boss flags from a prior shot.
+     */
+    acquireBullet() {
+        const b = this._bulletPool.pop();
+        if (!b) return {};
+        b.angle = undefined;
+        b.waveAmp = undefined;
+        b.wavePhase = undefined;
+        b.pierce = undefined;
+        b.charged = undefined;
+        b.isBossShot = undefined;
+        b.isEnemyShot = undefined;
+        b.bonusGlow = undefined;
+        b._ignoreObstacle = undefined;
+        b._sweepDx = 0;
+        b._sweepDy = 0;
+        b.lightRadius = undefined;
+        b.lightIntensity = undefined;
+        b.lightColor = undefined;
+        return b;
+    }
+
+    releaseBullet(b) {
+        if (!b || this._bulletPool.length >= BULLET_POOL_MAX) return;
+        this._bulletPool.push(b);
+    }
+
+    /**
+     * Push a shot onto `list`. Prefer pooled shells: if the pool is empty the
+     * `fields` object itself becomes the live bullet (no second alloc); later
+     * shots copy into recycled shells so long fights stop growing.
+     */
+    pushBullet(list, fields) {
+        const b = this._bulletPool.pop();
+        if (!b) {
+            list.push(fields);
+            return fields;
+        }
+        b.angle = undefined;
+        b.waveAmp = undefined;
+        b.wavePhase = undefined;
+        b.pierce = undefined;
+        b.charged = undefined;
+        b.isBossShot = undefined;
+        b.isEnemyShot = undefined;
+        b.bonusGlow = undefined;
+        b._ignoreObstacle = undefined;
+        b._sweepDx = 0;
+        b._sweepDy = 0;
+        for (const k in fields) {
+            if (Object.prototype.hasOwnProperty.call(fields, k)) b[k] = fields[k];
+        }
+        list.push(b);
+        return b;
     }
 
     /** In-stage shop purchase: fires `weaponId` for `shots` shots, then reverts to whatever was equipped before. */
@@ -37807,7 +37919,7 @@ var BulletManager = class BulletManager {
             if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
                 const last = this.bullets.length - 1;
                 if (i !== last) this.bullets[i] = this.bullets[last];
-                this.bullets.pop();
+                this.releaseBullet(this.bullets.pop());
             }
         }
 
@@ -37841,7 +37953,7 @@ var BulletManager = class BulletManager {
             if (bullet.y > canvasHeight || bullet.x < 0 || bullet.x > canvasWidth) {
                 const last = this.enemyBullets.length - 1;
                 if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
-                this.enemyBullets.pop();
+                this.releaseBullet(this.enemyBullets.pop());
             }
         }
     }
@@ -38799,7 +38911,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.2 * mult,
             lightColor: '#808080' // Grayscale base
         };
-        this.bullets.push(bullet);
+        this.pushBullet(this.bullets, bullet);
     },
 
     shootSpread(playerPosition) {
@@ -38824,7 +38936,7 @@ extendClass(BulletManager, {
                     lightIntensity: 1.0,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.bullets.push(bullet);
+                this.pushBullet(this.bullets, bullet);
             }
         });
     },
@@ -38849,7 +38961,7 @@ extendClass(BulletManager, {
                     lightIntensity: 0.9,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.bullets.push(bullet);
+                this.pushBullet(this.bullets, bullet);
             }
         }
     },
@@ -38875,7 +38987,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.2 * Math.max(1, mult * 0.85),
             lightColor: '#808080' // Grayscale base
         };
-        this.bullets.push(bullet);
+        this.pushBullet(this.bullets, bullet);
     },
 
     shootSpreadWeapon(playerPosition, config) {
@@ -38908,7 +39020,7 @@ extendClass(BulletManager, {
                     lightIntensity: 1.0,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.bullets.push(bullet);
+                this.pushBullet(this.bullets, bullet);
             }
         });
     },
@@ -38934,7 +39046,7 @@ extendClass(BulletManager, {
                     lightIntensity: 0.9,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.bullets.push(bullet);
+                this.pushBullet(this.bullets, bullet);
             }
         }
     },
@@ -38953,7 +39065,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.5,
             lightColor: '#808080'
         };
-        this.bullets.push(bullet);
+        this.pushBullet(this.bullets, bullet);
     },
 
     shootMissile(playerPosition, config) {
@@ -38970,7 +39082,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.1,
             lightColor: '#808080'
         };
-        this.bullets.push(bullet);
+        this.pushBullet(this.bullets, bullet);
     },
 
     shootIon(playerPosition, config) {
@@ -38979,7 +39091,7 @@ extendClass(BulletManager, {
         const start = playerPosition.x + playerPosition.width / 2 - ((count - 1) * spacing) / 2 - 1.5;
         for (let i = 0; i < count; i++) {
             if (this.bullets.length >= 8) break;
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: start + i * spacing,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -38996,7 +39108,7 @@ extendClass(BulletManager, {
     },
 
     shootWave(playerPosition, config) {
-        this.bullets.push({
+        this.pushBullet(this.bullets, {
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 4) / 2,
             y: playerPosition.y,
             width: config.width || 4,
@@ -39026,7 +39138,7 @@ extendClass(BulletManager, {
         for (let i = 0; i < bulletCount; i++) {
             if (this.bullets.length >= 8) break;
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: playerPosition.x + playerPosition.width / 2 - 1.5,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -39057,7 +39169,7 @@ extendClass(BulletManager, {
         const meet = h * 5;
         const angle = Math.atan2(half, meet);
         [-1, 1].forEach((side) => {
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: playerPosition.x + playerPosition.width / 2 + side * half - w / 2,
                 y: playerPosition.y,
                 width: w,
@@ -39077,7 +39189,7 @@ extendClass(BulletManager, {
     },
 
     shootPierce(playerPosition, config) {
-        this.bullets.push({
+        this.pushBullet(this.bullets, {
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 2) / 2,
             y: playerPosition.y,
             width: config.width || 2,
@@ -39099,7 +39211,7 @@ extendClass(BulletManager, {
         for (let i = 0; i < bulletCount; i++) {
             if (this.bullets.length >= 8) break;
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: playerPosition.x + playerPosition.width / 2 - 2,
                 y: playerPosition.y,
                 width: config.width || 4,
@@ -39362,7 +39474,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.0,
             lightColor: '#808080' // Grayscale base
         };
-        this.enemyBullets.push(bullet);
+        this.pushBullet(this.enemyBullets, bullet);
     },
 
     enemyShootLaser(enemy, config) {
@@ -39385,7 +39497,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.2,
             lightColor: '#808080' // Grayscale base
         };
-        this.enemyBullets.push(bullet);
+        this.pushBullet(this.enemyBullets, bullet);
     },
 
     enemyShootSpread(enemy, config) {
@@ -39420,7 +39532,7 @@ extendClass(BulletManager, {
                 lightIntensity: 1.0,
                 lightColor: '#808080' // Grayscale base
             };
-            this.enemyBullets.push(bullet);
+            this.pushBullet(this.enemyBullets, bullet);
         });
     },
 
@@ -39447,7 +39559,7 @@ extendClass(BulletManager, {
                 lightIntensity: 0.9,
                 lightColor: '#808080' // Grayscale base
             };
-            this.enemyBullets.push(bullet);
+            this.pushBullet(this.enemyBullets, bullet);
         }
     },
 
@@ -39469,7 +39581,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.5,
             lightColor: '#808080' // Grayscale base
         };
-        this.enemyBullets.push(bullet);
+        this.pushBullet(this.enemyBullets, bullet);
     },
 
     getBullets() {
@@ -39485,7 +39597,7 @@ extendClass(BulletManager, {
         if (index < 0 || index >= list.length) return;
         const last = list.length - 1;
         if (index !== last) list[index] = list[last];
-        list.pop();
+        this.releaseBullet(list.pop());
     },
 
     removeEnemyBullet(index) {
@@ -39493,7 +39605,7 @@ extendClass(BulletManager, {
         if (index < 0 || index >= list.length) return;
         const last = list.length - 1;
         if (index !== last) list[index] = list[last];
-        list.pop();
+        this.releaseBullet(list.pop());
     },
 
     switchShotType() {
@@ -39526,6 +39638,10 @@ extendClass(BulletManager, {
 // BulletManager methods, split from bullets.js.
 extendClass(BulletManager, {
     reset() {
+        if (this.releaseBullet) {
+            for (let i = 0; i < this.bullets.length; i++) this.releaseBullet(this.bullets[i]);
+            for (let i = 0; i < this.enemyBullets.length; i++) this.releaseBullet(this.enemyBullets[i]);
+        }
         this.bullets.length = 0;
         this.enemyBullets.length = 0;
         this.shotType = 0;
@@ -40142,6 +40258,10 @@ extendClass(EnemyManager, {
             // sparse sample), then dilate one cell for edge forgiveness.
             grid = this.unionEnemyHitMasks(grid, this.enemyLogicalHitMask(model));
             grid = this.dilateEnemyHitMask(grid);
+            const keys = Object.keys(this._hitMaskCache);
+            if (keys.length > 48) {
+                for (let i = 0; i < 16; i++) delete this._hitMaskCache[keys[i]];
+            }
             this._hitMaskCache[key] = grid;
             return grid;
         } catch (e) {
@@ -45128,12 +45248,13 @@ extendClass(ObstacleManager, {
         if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {
             renderManager._terrainLayerKey.dmg = -1;
         }
-        if (this.terrainDamage.size > 4000) {
-            const cutoff = wr - 1200;
+        // Prune behind the camera often — long scroll fights used to keep ~4k Map entries hot.
+        if (this.terrainDamage.size > 1200) {
+            const cutoff = wr - 500;
             this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
         }
-        if (this.terrainCut.size > 4000) {
-            const cutoff = wr - 1200;
+        if (this.terrainCut.size > 1200) {
+            const cutoff = wr - 500;
             this.terrainCut.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainCut.delete(k); });
         }
         return broken;
@@ -45448,8 +45569,44 @@ extendClass(ObstacleManager, {
 var FRAGMENT_MIN_PARENT = 18; // px: smaller rocks only burst into debris
 var FRAGMENT_MIN_SIZE = 12;   // px: smallest collidable chunk (no dust pebbles)
 var DEBRIS_MAX = 260;
+var DEBRIS_POOL_MAX = 320;
+var FLASH_POOL_MAX = 48;
+var DEBRIS_FALLBACK_COLORS = ['#9aa0a8', '#6e737b', '#c8ccd2'];
+var FLASH_LAYERS = [[1, '#ff8a2a', 0.55], [0.72, '#ffc15a', 0.7], [0.4, '#fff2c8', 0.9]];
 
 extendClass(ObstacleManager, {
+    _acquireDebris() {
+        if (!this._debrisPool) this._debrisPool = [];
+        return this._debrisPool.pop() || {
+            x: 0, y: 0, vx: 0, vy: 0, s: 1, c: '#9aa0a8', life: 0, ttl: 1
+        };
+    },
+
+    _releaseDebris(p) {
+        if (!p) return;
+        if (!this._debrisPool) this._debrisPool = [];
+        if (this._debrisPool.length < DEBRIS_POOL_MAX) this._debrisPool.push(p);
+    },
+
+    _acquireFlash() {
+        if (!this._flashPool) this._flashPool = [];
+        return this._flashPool.pop() || { x: 0, y: 0, r: 1, life: 0, ttl: 1 };
+    },
+
+    _releaseFlash(f) {
+        if (!f) return;
+        if (!this._flashPool) this._flashPool = [];
+        if (this._flashPool.length < FLASH_POOL_MAX) this._flashPool.push(f);
+    },
+
+    _trimDebris() {
+        const list = this.debris;
+        if (!list || list.length <= DEBRIS_MAX) return;
+        const drop = list.length - DEBRIS_MAX;
+        for (let i = 0; i < drop; i++) this._releaseDebris(list[i]);
+        list.splice(0, drop);
+    },
+
     /**
      * Visual-only burst: pixel chips in the rock's own colours fly out,
      * spin down and fade, plus a short flash. No collision.
@@ -45475,27 +45632,41 @@ extendClass(ObstacleManager, {
             } else {
                 s = cell * (roll < 0.25 ? 2 : 1);
             }
-            this.debris.push({
-                x: cx + (Math.random() - 0.5) * o.width * 0.6,
-                y: cy + (Math.random() - 0.5) * o.height * 0.6,
-                vx: Math.cos(a) * sp + (o.horizontalSpeed || 0) * 0.5,
-                vy: Math.sin(a) * sp + (o.verticalSpeed || 0) * 0.5,
-                s: s,
-                c: colors[Math.floor(Math.random() * colors.length)],
-                life: 0,
-                ttl: 350 + Math.random() * 450
-            });
+            const p = this._acquireDebris();
+            p.x = cx + (Math.random() - 0.5) * o.width * 0.6;
+            p.y = cy + (Math.random() - 0.5) * o.height * 0.6;
+            p.vx = Math.cos(a) * sp + (o.horizontalSpeed || 0) * 0.5;
+            p.vy = Math.sin(a) * sp + (o.verticalSpeed || 0) * 0.5;
+            p.s = s;
+            p.c = colors[(Math.random() * colors.length) | 0];
+            p.life = 0;
+            p.ttl = 350 + Math.random() * 450;
+            this.debris.push(p);
         }
         // Hot core flash: a few bright chips that die fast.
         const hotN = fine ? 10 : 6;
         for (let i = 0; i < hotN; i++) {
             const a = Math.random() * Math.PI * 2;
-            this.debris.push({ x: cx, y: cy, vx: Math.cos(a) * 2.2, vy: Math.sin(a) * 2.2,
-                s: grit, c: i % 2 ? '#ffe9a8' : '#ffffff', life: 0, ttl: 160 + Math.random() * 120 });
+            const p = this._acquireDebris();
+            p.x = cx;
+            p.y = cy;
+            p.vx = Math.cos(a) * 2.2;
+            p.vy = Math.sin(a) * 2.2;
+            p.s = grit;
+            p.c = i % 2 ? '#ffe9a8' : '#ffffff';
+            p.life = 0;
+            p.ttl = 160 + Math.random() * 120;
+            this.debris.push(p);
         }
         this.flashes = this.flashes || [];
-        this.flashes.push({ x: cx, y: cy, r: size * (fine ? 0.7 : 0.9), life: 0, ttl: 140 });
-        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+        const flash = this._acquireFlash();
+        flash.x = cx;
+        flash.y = cy;
+        flash.r = size * (fine ? 0.7 : 0.9);
+        flash.life = 0;
+        flash.ttl = 140;
+        this.flashes.push(flash);
+        this._trimDebris();
     },
 
     /**
@@ -45507,25 +45678,27 @@ extendClass(ObstacleManager, {
         if (!this.debris) this.debris = [];
         const cell = this.terrainCell ? this.terrainCell() : 2.5;
         const count = n || 24;
+        const palette = colors && colors.length ? colors : DEBRIS_FALLBACK_COLORS;
         for (let i = 0; i < count; i++) {
             const a = (Math.random() - 0.5) * (spread || 0.9);
             const sp = (speed || 2.6) * (0.45 + Math.random() * 0.9);
-            this.debris.push({
-                x: x,
-                y: y + (Math.random() - 0.5) * 6,
-                vx: Math.cos(a) * sp * dir,
-                vy: Math.sin(a) * sp,
-                s: Math.random() < 0.7 ? Math.max(1, cell * 0.5) : cell,
-                c: colors[Math.floor(Math.random() * colors.length)],
-                life: 0,
-                ttl: 260 + Math.random() * 420
-            });
+            const p = this._acquireDebris();
+            p.x = x;
+            p.y = y + (Math.random() - 0.5) * 6;
+            p.vx = Math.cos(a) * sp * dir;
+            p.vy = Math.sin(a) * sp;
+            p.s = Math.random() < 0.7 ? Math.max(1, cell * 0.5) : cell;
+            p.c = palette[(Math.random() * palette.length) | 0];
+            p.life = 0;
+            p.ttl = 260 + Math.random() * 420;
+            this.debris.push(p);
         }
-        if (this.debris.length > DEBRIS_MAX) this.debris.splice(0, this.debris.length - DEBRIS_MAX);
+        this._trimDebris();
     },
 
     /** Opaque, non-outline colours from the rock's baked art (fallback grey). */
     debrisColors(o) {
+        if (o && o._debrisColors) return o._debrisColors;
         const img = o && o._hiRes;
         const out = [];
         try {
@@ -45538,26 +45711,38 @@ extendClass(ObstacleManager, {
                 }
             }
         } catch (e) { /* ignore */ }
-        return out.length ? out : ['#9aa0a8', '#6e737b', '#c8ccd2'];
+        const colors = out.length ? out : DEBRIS_FALLBACK_COLORS;
+        if (o) o._debrisColors = colors;
+        return colors;
     },
 
     updateDebris(deltaTime) {
         const dt = Math.max(0, Number(deltaTime) || 16.67);
         const f = Math.min(3, dt / 16.67);
+        const drag = f === 1 ? 0.93 : Math.pow(0.93, f);
         const list = this.debris || [];
         for (let i = list.length - 1; i >= 0; i--) {
             const p = list[i];
             p.life += dt;
-            if (p.life >= p.ttl) { list.splice(i, 1); continue; }
+            if (p.life >= p.ttl) {
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                this._releaseDebris(list.pop());
+                continue;
+            }
             p.x += p.vx * f;
             p.y += p.vy * f;
-            p.vx *= Math.pow(0.93, f);
-            p.vy *= Math.pow(0.93, f);
+            p.vx *= drag;
+            p.vy *= drag;
         }
         const fl = this.flashes || [];
         for (let i = fl.length - 1; i >= 0; i--) {
             fl[i].life += dt;
-            if (fl[i].life >= fl[i].ttl) fl.splice(i, 1);
+            if (fl[i].life >= fl[i].ttl) {
+                const last = fl.length - 1;
+                if (i !== last) fl[i] = fl[last];
+                this._releaseFlash(fl.pop());
+            }
         }
     },
 
@@ -45569,15 +45754,16 @@ extendClass(ObstacleManager, {
             ctx.save();
             ctx.imageSmoothingEnabled = false;
             ctx.globalCompositeOperation = 'lighter';
-            fl.forEach((f) => {
+            for (let fi = 0; fi < fl.length; fi++) {
+                const f = fl[fi];
                 const t = f.life / f.ttl;
                 const alpha = 1 - t;
                 const r = f.r * (0.6 + t * 0.8);
                 // Fine pixel fireball: small steps, nested discs from a pale
                 // core out to an orange rim, so big rocks get no blocky plus.
                 const step = Math.max(1, cell ? cell * 0.5 : 1);
-                const layers = [[1, '#ff8a2a', 0.55], [0.72, '#ffc15a', 0.7], [0.4, '#fff2c8', 0.9]];
-                layers.forEach((L) => {
+                for (let li = 0; li < FLASH_LAYERS.length; li++) {
+                    const L = FLASH_LAYERS[li];
                     const lr = r * L[0];
                     ctx.globalAlpha = alpha * L[2];
                     ctx.fillStyle = L[1];
@@ -45587,15 +45773,16 @@ extendClass(ObstacleManager, {
                         const x1 = Math.round((f.x + half) / step) * step;
                         if (x1 > x0) ctx.fillRect(x0, Math.round((f.y + dy) / step) * step, x1 - x0, step);
                     }
-                });
-            });
+                }
+            }
             ctx.restore();
         }
         const list = this.debris || [];
         if (!list.length) return;
         ctx.save();
         ctx.imageSmoothingEnabled = false;
-        list.forEach((p) => {
+        for (let i = 0; i < list.length; i++) {
+            const p = list[i];
             const t = p.life / p.ttl;
             const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
             let s = Math.max(1, p.s);
@@ -45614,7 +45801,7 @@ extendClass(ObstacleManager, {
                 ctx.fillStyle = p.c;
                 ctx.fillRect(Math.round(px), Math.round(py), s, s);
             }
-        });
+        }
         ctx.restore();
     },
 
@@ -45731,8 +45918,18 @@ extendClass(ObstacleManager, {
 
     reset() {
         this.obstacles.length = 0;
-        this.debris = [];
-        this.flashes = [];
+        if (this.debris) {
+            for (let i = 0; i < this.debris.length; i++) this._releaseDebris(this.debris[i]);
+            this.debris.length = 0;
+        } else {
+            this.debris = [];
+        }
+        if (this.flashes) {
+            for (let i = 0; i < this.flashes.length; i++) this._releaseFlash(this.flashes[i]);
+            this.flashes.length = 0;
+        } else {
+            this.flashes = [];
+        }
         this.runTime = 0;
         this.scrollDistance = 0;
         this.terrainOffset = 0;
@@ -45891,8 +46088,12 @@ extendClass(ObstacleManager, {
         if (!(radius > 0)) return;
         // Snapshot: chunks/fragments spawned by this blast aren't hit by it,
         // and indices are re-resolved since removals shift the array.
-        const targets = this.obstacles.slice();
-        for (const o of targets) {
+        const targets = this._splashScratch || (this._splashScratch = []);
+        targets.length = 0;
+        const src = this.obstacles;
+        for (let i = 0; i < src.length; i++) targets.push(src[i]);
+        for (let ti = 0; ti < targets.length; ti++) {
+            const o = targets[ti];
             if (!o || o === skip || o.isFog || !o.isDestructible) continue;
             const cx = Math.max(o.x, Math.min(x, o.x + o.width));
             const cy = Math.max(o.y, Math.min(y, o.y + o.height));
@@ -47414,9 +47615,6 @@ var CollisionManager = class CollisionManager {
                     hitSide = 1;
                     player.x = walls.right - player.width - 1;
                 }
-                if (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.snapEntity) {
-                    window.combatVoxels.snapEntity(player);
-                }
                 const now = Date.now();
                 if (hitX != null && hitSide >= 0 && now - (this._terrainHitAt || 0) > 600) {
                     this._terrainHitAt = now;
@@ -48846,11 +49044,38 @@ var collisionManager = new CollisionManager();
 "use strict";
 
 /**
- * Particle System for hit effects and visual enhancements
+ * Particle System for hit effects and visual enhancements.
+ * Objects are pooled so long fights don't churn GC on every hit.
  */
+var PARTICLE_POOL_MAX = 640;
+var SHIELD_HIT_OPTS = {
+    speed: 1.9,
+    life: 12,
+    size: 1.35,
+    drag: 0.82,
+    gravity: -0.015,
+    kind: 'energy',
+    fadeOut: true,
+    colors: ['#e8f8ff', '#9fdcff', '#6ec8e8', '#ffffff', '#b8ecff']
+};
+var SCRAP_HIT_OPTS = {
+    speed: 2.1,
+    life: 14,
+    size: 1.55,
+    drag: 0.86,
+    gravity: 0.14,
+    kind: 'scrap',
+    fadeOut: true,
+    colors: ['#8a9098', '#c4c8ce', '#5a6068', '#a89878', '#d0d4d8', '#6e6460']
+};
+var FALLBACK_HIT_COLORS = ['#ffffff', '#ffe8cc', '#ffcc66', '#ffaa44', '#ffeeaa'];
+
 var ParticleSystem = class ParticleSystem {
     constructor() {
         this.particles = [];
+        this._pool = [];
+        this._themeColors = null;
+        this._themeAt = 0;
     }
 
     /**
@@ -48862,6 +49087,20 @@ var ParticleSystem = class ParticleSystem {
             if (document.documentElement.hasAttribute('data-vf-performance')) return 96;
         } catch (e) { /* ignore */ }
         return 480;
+    }
+
+    _acquire() {
+        const p = this._pool.pop();
+        return p || {
+            x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0,
+            size: 1, w: 1, h: 1, drag: 0.88, gravity: 0.1,
+            kind: 'spark', fadeOut: false, color: '#ffffff'
+        };
+    }
+
+    _release(p) {
+        if (!p) return;
+        if (this._pool.length < PARTICLE_POOL_MAX) this._pool.push(p);
     }
 
     createHitParticles(x, y, count = 8, colorOrOpts = null) {
@@ -48898,51 +49137,33 @@ var ParticleSystem = class ParticleSystem {
             }
 
             const size = baseSize * (0.7 + Math.random() * 0.8);
-            this.particles.push({
-                x: x + (Math.random() - 0.5) * 2,
-                y: y + (Math.random() - 0.5) * 2,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                life: life,
-                maxLife: life,
-                size: size,
-                w: kind === 'scrap' ? size * (0.6 + Math.random() * 1.4) : size,
-                h: kind === 'scrap' ? size * (0.4 + Math.random() * 0.9) : size,
-                drag: drag,
-                gravity: gravity,
-                kind: kind,
-                fadeOut: fadeOut,
-                color: color || this.getRandomHitColor()
-            });
+            const p = this._acquire();
+            p.x = x + (Math.random() - 0.5) * 2;
+            p.y = y + (Math.random() - 0.5) * 2;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+            p.life = life;
+            p.maxLife = life;
+            p.size = size;
+            p.w = kind === 'scrap' ? size * (0.6 + Math.random() * 1.4) : size;
+            p.h = kind === 'scrap' ? size * (0.4 + Math.random() * 0.9) : size;
+            p.drag = drag;
+            p.gravity = gravity;
+            p.kind = kind;
+            p.fadeOut = fadeOut;
+            p.color = color || this.getRandomHitColor();
+            this.particles.push(p);
         }
     }
 
     /** Short cyan energy flecks when a shield absorbs a hit. */
     createShieldHitParticles(x, y, count = 7) {
-        this.createHitParticles(x, y, count, {
-            speed: 1.9,
-            life: 12,
-            size: 1.35,
-            drag: 0.82,
-            gravity: -0.015,
-            kind: 'energy',
-            fadeOut: true,
-            colors: ['#e8f8ff', '#9fdcff', '#6ec8e8', '#ffffff', '#b8ecff']
-        });
+        this.createHitParticles(x, y, count, SHIELD_HIT_OPTS);
     }
 
     /** Tiny scrap chips when hull armor takes the hit. */
     createScrapHitParticles(x, y, count = 6) {
-        this.createHitParticles(x, y, count, {
-            speed: 2.1,
-            life: 14,
-            size: 1.55,
-            drag: 0.86,
-            gravity: 0.14,
-            kind: 'scrap',
-            fadeOut: true,
-            colors: ['#8a9098', '#c4c8ce', '#5a6068', '#a89878', '#d0d4d8', '#6e6460']
-        });
+        this.createHitParticles(x, y, count, SCRAP_HIT_OPTS);
     }
 
     resolveColor(color) {
@@ -48961,21 +49182,26 @@ var ParticleSystem = class ParticleSystem {
     }
 
     getRandomHitColor() {
-        try {
-            const fromTheme = [
-                vfCssVar('--color-highlight'),
-                vfCssVar('--color-text'),
-                vfCssVar('--color-particle'),
-                vfCssVar('--color-explosion'),
-                vfCssVar('--color-secondary'),
-                vfCssVar('--current-text')
-            ].filter(c => c && c.indexOf('var(') === -1);
-            if (fromTheme.length) {
-                return fromTheme[Math.floor(Math.random() * fromTheme.length)];
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        if (!this._themeColors || (now - this._themeAt) > 250) {
+            try {
+                const next = [];
+                const names = [
+                    '--color-highlight', '--color-text', '--color-particle',
+                    '--color-explosion', '--color-secondary', '--current-text'
+                ];
+                for (let i = 0; i < names.length; i++) {
+                    const c = vfCssVar(names[i]);
+                    if (c && c.indexOf('var(') === -1) next.push(c);
+                }
+                this._themeColors = next.length ? next : FALLBACK_HIT_COLORS;
+            } catch (e) {
+                this._themeColors = FALLBACK_HIT_COLORS;
             }
-        } catch (e) { /* ignore */ }
-        const colors = ['#ffffff', '#ffe8cc', '#ffcc66', '#ffaa44', '#ffeeaa'];
-        return colors[Math.floor(Math.random() * colors.length)];
+            this._themeAt = now;
+        }
+        const colors = this._themeColors;
+        return colors[(Math.random() * colors.length) | 0];
     }
 
     update() {
@@ -48999,7 +49225,7 @@ var ParticleSystem = class ParticleSystem {
             if (particle.life <= 0) {
                 const last = list.length - 1;
                 if (i !== last) list[i] = list[last];
-                list.pop();
+                this._release(list.pop());
             }
         }
     }
@@ -49009,7 +49235,9 @@ var ParticleSystem = class ParticleSystem {
         ctx.imageSmoothingEnabled = false;
         const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
         const cell = cv && cv.cell ? cv.cell() : null;
-        for (const particle of this.particles) {
+        const list = this.particles;
+        for (let i = 0; i < list.length; i++) {
+            const particle = list[i];
             const lifeT = particle.life / particle.maxLife;
             const alpha = particle.fadeOut
                 ? Math.max(0, lifeT)
@@ -49061,7 +49289,9 @@ var ParticleSystem = class ParticleSystem {
     }
 
     clear() {
-        this.particles = [];
+        const list = this.particles;
+        for (let i = 0; i < list.length; i++) this._release(list[i]);
+        list.length = 0;
     }
 }
 
@@ -49078,12 +49308,50 @@ var EXPLOSION_PARTICLE_DRAG = 0.86;
 // Largest ring base size in playfield pixels.
 var EXPLOSION_MAX_BASE = 22;
 var SHIP_VOXEL_DEBRIS_MAX = 120;
+var EXPLOSION_VOXEL_POOL_MAX = 220;
+var EXPLOSION_BURST_POOL_MAX = 40;
 
 var ExplosionSystem = class ExplosionSystem {
     constructor() {
         this.active = [];
         this.voxels = [];
+        this._voxelPool = [];
+        this._burstPool = [];
         this._sampleCanvas = null;
+        this._sampleBuf = [];
+        this._sampleFree = [];
+    }
+
+    _acquireVoxel() {
+        return this._voxelPool.pop() || {
+            x: 0, y: 0, vx: 0, vy: 0, rot: 0, spin: 0,
+            s: 1, c: '#fff', life: 0, ttl: 1, delay: 0, g: 0
+        };
+    }
+
+    _releaseVoxel(p) {
+        if (!p) return;
+        if (this._voxelPool.length < EXPLOSION_VOXEL_POOL_MAX) this._voxelPool.push(p);
+    }
+
+    _acquireBurst() {
+        const b = this._burstPool.pop();
+        if (b) {
+            if (!b.colors) b.colors = [];
+            else b.colors.length = 0;
+            return b;
+        }
+        return {
+            x: 0, y: 0, width: 14, height: 14, timer: 0, duration: 600,
+            rings: 2, ringScale: 1, sparkles: 6, colors: [],
+            presetId: 'default', fineRing: false
+        };
+    }
+
+    _releaseBurst(b) {
+        if (!b) return;
+        if (b.colors) b.colors.length = 0;
+        if (this._burstPool.length < EXPLOSION_BURST_POOL_MAX) this._burstPool.push(b);
     }
 
     resolvePreset(presetId) {
@@ -49151,22 +49419,30 @@ var ExplosionSystem = class ExplosionSystem {
             const bh = opts.height != null ? opts.height : 14;
             // Large sources: denser ring stepping so the burst isn't blocky.
             const fineRing = Math.max(bw, bh) >= 16;
-            this.active.push({
-                x: x,
-                y: y,
-                width: bw,
-                height: bh,
-                timer: 0,
-                duration: preset.ringDurationMs,
-                rings: fineRing ? Math.max(preset.rings, preset.rings + 1) : preset.rings,
-                ringScale: preset.ringScale * scale,
-                sparkles: fineRing
-                    ? Math.round(preset.sparkles * (1.2 + Math.min(1.2, Math.max(bw, bh) / 28)))
-                    : preset.sparkles,
-                colors: preset.colors ? preset.colors.slice() : [],
-                presetId: preset.id,
-                fineRing: fineRing
-            });
+            // Soft cap so stacked kills in a long fight can't grow the ring list forever.
+            if (this.active.length >= 28) {
+                const drop = this.active.length - 24;
+                for (let i = 0; i < drop; i++) this._releaseBurst(this.active[i]);
+                this.active.splice(0, drop);
+            }
+            const burst = this._acquireBurst();
+            burst.x = x;
+            burst.y = y;
+            burst.width = bw;
+            burst.height = bh;
+            burst.timer = 0;
+            burst.duration = preset.ringDurationMs;
+            burst.rings = fineRing ? Math.max(preset.rings, preset.rings + 1) : preset.rings;
+            burst.ringScale = preset.ringScale * scale;
+            burst.sparkles = fineRing
+                ? Math.round(preset.sparkles * (1.2 + Math.min(1.2, Math.max(bw, bh) / 28)))
+                : preset.sparkles;
+            if (preset.colors) {
+                for (let ci = 0; ci < preset.colors.length; ci++) burst.colors.push(preset.colors[ci]);
+            }
+            burst.presetId = preset.id;
+            burst.fineRing = fineRing;
+            this.active.push(burst);
         }
 
         if (opts.ship) {
@@ -49233,20 +49509,20 @@ var ExplosionSystem = class ExplosionSystem {
             const burst = (voxel ? 1.6 : 1.1) * power * (0.55 + Math.random() * 1.1);
             const tang = (Math.random() - 0.5) * (voxel ? 2.2 : 1.2) * power;
             // Always one lattice cell — no double-size chunks in VOXEL combat.
-            this.voxels.push({
-                x: wx,
-                y: wy,
-                vx: nx * burst + (-ny) * tang * 0.35,
-                vy: ny * burst + nx * tang * 0.35 - (voxel ? 0.15 : 0),
-                rot: Math.random() * Math.PI * 2,
-                spin: (Math.random() - 0.5) * (voxel ? 0.35 : 0.18),
-                s: cell,
-                c: p.c,
-                life: 0,
-                ttl: (voxel ? 700 : 480) + Math.random() * (voxel ? 900 : 520),
-                delay: voxel ? Math.min(220, dist * 2.2 + Math.random() * 80) : Math.random() * 40,
-                g: voxel ? 0.012 + Math.random() * 0.02 : 0.006
-            });
+            const vox = this._acquireVoxel();
+            vox.x = wx;
+            vox.y = wy;
+            vox.vx = nx * burst + (-ny) * tang * 0.35;
+            vox.vy = ny * burst + nx * tang * 0.35 - (voxel ? 0.15 : 0);
+            vox.rot = Math.random() * Math.PI * 2;
+            vox.spin = (Math.random() - 0.5) * (voxel ? 0.35 : 0.18);
+            vox.s = cell;
+            vox.c = p.c;
+            vox.life = 0;
+            vox.ttl = (voxel ? 700 : 480) + Math.random() * (voxel ? 900 : 520);
+            vox.delay = voxel ? Math.min(220, dist * 2.2 + Math.random() * 80) : Math.random() * 40;
+            vox.g = voxel ? 0.012 + Math.random() * 0.02 : 0.006;
+            this.voxels.push(vox);
         }
 
         // Hot core chips — bright voxels from the blast centre.
@@ -49254,24 +49530,27 @@ var ExplosionSystem = class ExplosionSystem {
         for (let i = 0; i < hotN; i++) {
             const a = Math.random() * Math.PI * 2;
             const sp = (voxel ? 2.4 : 1.6) * power * (0.7 + Math.random());
-            this.voxels.push({
-                x: cx,
-                y: cy,
-                vx: Math.cos(a) * sp,
-                vy: Math.sin(a) * sp,
-                rot: 0,
-                spin: (Math.random() - 0.5) * 0.4,
-                s: cell,
-                c: i % 2 ? '#ffe9a8' : '#ffffff',
-                life: 0,
-                ttl: 180 + Math.random() * 160,
-                delay: 0,
-                g: 0.004
-            });
+            const vox = this._acquireVoxel();
+            vox.x = cx;
+            vox.y = cy;
+            vox.vx = Math.cos(a) * sp;
+            vox.vy = Math.sin(a) * sp;
+            vox.rot = 0;
+            vox.spin = (Math.random() - 0.5) * 0.4;
+            vox.s = cell;
+            vox.c = i % 2 ? '#ffe9a8' : '#ffffff';
+            vox.life = 0;
+            vox.ttl = 180 + Math.random() * 160;
+            vox.delay = 0;
+            vox.g = 0.004;
+            this.voxels.push(vox);
         }
 
-        if (this.voxels.length > SHIP_VOXEL_DEBRIS_MAX * 1.5) {
-            this.voxels.splice(0, this.voxels.length - Math.floor(SHIP_VOXEL_DEBRIS_MAX * 1.5));
+        const cap = Math.floor(SHIP_VOXEL_DEBRIS_MAX * 1.5);
+        if (this.voxels.length > cap) {
+            const drop = this.voxels.length - cap;
+            for (let i = 0; i < drop; i++) this._releaseVoxel(this.voxels[i]);
+            this.voxels.splice(0, drop);
         }
     }
 
@@ -49316,7 +49595,9 @@ var ExplosionSystem = class ExplosionSystem {
             return [];
         }
 
-        const out = [];
+        const out = this._sampleBuf;
+        const free = this._sampleFree;
+        while (out.length) free.push(out.pop());
         for (let y = 0; y < h; y += step) {
             for (let x = 0; x < w; x += step) {
                 const i = (y * w + x) * 4;
@@ -49326,11 +49607,11 @@ var ExplosionSystem = class ExplosionSystem {
                 const g = data[i + 1];
                 const b = data[i + 2];
                 if (r + g + b < 40) continue;
-                out.push({
-                    x: x,
-                    y: y,
-                    c: 'rgb(' + r + ',' + g + ',' + b + ')'
-                });
+                const pt = free.pop() || { x: 0, y: 0, c: '' };
+                pt.x = x;
+                pt.y = y;
+                pt.c = 'rgb(' + r + ',' + g + ',' + b + ')';
+                out.push(pt);
             }
         }
         out.step = step;
@@ -49345,7 +49626,7 @@ var ExplosionSystem = class ExplosionSystem {
             if (rings[i].timer >= rings[i].duration) {
                 const last = rings.length - 1;
                 if (i !== last) rings[i] = rings[last];
-                rings.pop();
+                this._releaseBurst(rings.pop());
             }
         }
 
@@ -49361,7 +49642,7 @@ var ExplosionSystem = class ExplosionSystem {
             if (p.life >= p.ttl) {
                 const last = list.length - 1;
                 if (i !== last) list[i] = list[last];
-                list.pop();
+                this._releaseVoxel(list.pop());
                 continue;
             }
             p.vy += (p.g || 0) * f;
@@ -49442,9 +49723,14 @@ var ExplosionSystem = class ExplosionSystem {
     /** Relative ring pixel offsets for a given radius/step — same points every burst. */
     ringOffsets(ringRadius, angleStep, pixelSize) {
         if (!this._ringOff) this._ringOff = Object.create(null);
-        const key = ringRadius + ':' + angleStep + ':' + pixelSize;
+        // Quantise floats so fine-ring sizes don't mint unbounded cache keys.
+        const key = ringRadius + ':' + angleStep + ':' + Math.round(pixelSize * 100);
         let pts = this._ringOff[key];
         if (pts) return pts;
+        const keys = Object.keys(this._ringOff);
+        if (keys.length > 96) {
+            this._ringOff = Object.create(null);
+        }
         pts = [];
         for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
             pts.push(
@@ -49552,8 +49838,13 @@ var ExplosionSystem = class ExplosionSystem {
     }
 
     clear() {
+        for (let i = 0; i < this.active.length; i++) this._releaseBurst(this.active[i]);
         this.active.length = 0;
+        for (let i = 0; i < this.voxels.length; i++) this._releaseVoxel(this.voxels[i]);
         this.voxels.length = 0;
+        if (this._sampleBuf) {
+            while (this._sampleBuf.length) this._sampleFree.push(this._sampleBuf.pop());
+        }
     }
 }
 
@@ -57894,6 +58185,10 @@ extendClass(GraphicsManager, {
             }
             octx.putImageData(out, 0, 0);
             rim = off;
+            const sk = Object.keys(this._shieldHullCache);
+            if (sk.length > 32) {
+                for (let i = 0; i < 8; i++) delete this._shieldHullCache[sk[i]];
+            }
             this._shieldHullCache[cacheKey] = rim;
         }
 
@@ -64164,6 +64459,7 @@ extendClass(RenderManager, {
             r = +m[1]; g = +m[2]; b = +m[3];
         }
         v = r < 0 || r > 255 || g > 255 || b > 255 ? null : ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+        if (cache.size > 256) cache.clear();
         cache.set(css, v);
         return v;
     },
@@ -64202,7 +64498,7 @@ extendClass(RenderManager, {
     /** Cached per-world-row terrain noise (and lazily its craters) for one lattice width. */
     terrainRowCache(wr, cols) {
         let c = this._terrainRows;
-        if (!c || c.cols !== cols || c.rows.size > 600) c = this._terrainRows = { cols, rows: new Map() };
+        if (!c || c.cols !== cols) c = this._terrainRows = { cols, rows: new Map() };
         let rc = c.rows.get(wr);
         if (!rc) {
             const n = new Float64Array(cols);
@@ -64215,6 +64511,12 @@ extendClass(RenderManager, {
             }
             rc = { n, v, m, hits: new Array(cols) };
             c.rows.set(wr, rc);
+            // Drop rows far behind the scroll window (long runs used to wipe-all at 600).
+            if (c.rows.size > 240) {
+                const lo = wr - 180;
+                const hi = wr + 40;
+                c.rows.forEach((_, k) => { if (k < lo || k > hi) c.rows.delete(k); });
+            }
         }
         return rc;
     },
@@ -65021,7 +65323,8 @@ window.combatVoxels = {
         const c = this.cell();
         if (c == null || !(c > 0)) return;
         const snap = (e) => this.snapEntity(e, c);
-        if (typeof playerManager !== 'undefined' && playerManager.player) snap(playerManager.player);
+        // Do not lattice-snap the pilot — continuous thruster velocity must
+        // survive snapWorld (see player/core.js). Enemies/FX stay on the grid.
         if (typeof enemyManager !== 'undefined') {
             if (enemyManager.enemy) snap(enemyManager.enemy);
             const sides = enemyManager.sideEnemies;
@@ -65460,6 +65763,10 @@ extendClass(ParallaxManager, {
         x.imageSmoothingEnabled = false;
         paint(x);
         entry = { canvas: c, w: tw, h: th };
+        const keys = Object.keys(this._patternBake);
+        if (keys.length > 48) {
+            for (let i = 0; i < 12; i++) delete this._patternBake[keys[i]];
+        }
         this._patternBake[key] = entry;
         return entry;
     },
@@ -77268,10 +77575,24 @@ extendClass(GalaxyMapManager, {
         });
         // Right-click a planet / station: select it and fly straight there (no menu, no combat start).
         svg.addEventListener('contextmenu', (e) => {
-            const target = e.composedPath().find((el) => el && el.classList
-                && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node')));
+            // closest() is reliable on SVG across browsers; composedPath() alone
+            // missed nodes under filtered / nested map layers in Firefox/Safari.
+            const path = (typeof e.composedPath === 'function') ? e.composedPath() : [];
+            let target = null;
+            for (let i = 0; i < path.length; i++) {
+                const el = path[i];
+                if (el && el.classList
+                    && (el.classList.contains('gm-node') || el.classList.contains('gm-post-node'))) {
+                    target = el;
+                    break;
+                }
+            }
+            if (!target && e.target && e.target.closest) {
+                target = e.target.closest('.gm-node, .gm-post-node');
+            }
             if (!target) return;
             e.preventDefault();
+            e.stopPropagation();
             if (this._flight || this._ambush) return;
             const pid = target.getAttribute('data-planet');
             const postId = target.getAttribute('data-post');
@@ -79324,6 +79645,66 @@ extendClass(GalaxyMapManager, {
         // Rebuilt with the route so its cells follow the current pixel size.
         if (this.syncHoverRoute) this.syncHoverRoute();
     },
+    /** OS "reduce motion" shortens flights; never teleport — that felt broken in Firefox/Safari. */
+    mapFlightReduced() {
+        try {
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) {
+            return false;
+        }
+    },
+    /**
+     * Build the in-flight ship marker with createElementNS.
+     * SVGElement.innerHTML is unreliable across browsers (wrong namespace / missing kids)
+     * and then runFlight no-ops or the ship pops in only on commitFlight.
+     */
+    buildTravelShipGroup(className, points, angle, shipX, shipY) {
+        const ns = 'http://www.w3.org/2000/svg';
+        const g = document.createElementNS(ns, 'g');
+        g.setAttribute('class', className || 'gm-ship-travel');
+        const trail = document.createElementNS(ns, 'polyline');
+        trail.setAttribute('class', 'gm-travel-trail');
+        trail.setAttribute('fill', 'none');
+        trail.setAttribute('points', points);
+        g.appendChild(trail);
+        const ship = document.createElementNS(ns, 'g');
+        ship.setAttribute('class', 'gm-travel-ship');
+        if (shipX != null && shipY != null) {
+            ship.setAttribute('transform', 'translate(' + shipX + ',' + shipY + ')');
+        }
+        const heading = document.createElementNS(ns, 'g');
+        heading.setAttribute('class', 'gm-travel-heading');
+        heading.setAttribute('transform', 'rotate(' + (angle || 0) + ')');
+        const icon = this.getShipIconUrl && this.getShipIconUrl();
+        if (icon) {
+            const img = document.createElementNS(ns, 'image');
+            const box = this.shipIconBox();
+            img.setAttribute('href', icon);
+            img.setAttributeNS('http://www.w3.org/1999/xlink', 'href', icon);
+            img.setAttribute('x', String(box.x));
+            img.setAttribute('y', String(box.y));
+            img.setAttribute('width', String(box.w));
+            img.setAttribute('height', String(box.h));
+            img.setAttribute('class', 'gm-ship-marker-img');
+            heading.appendChild(img);
+        } else {
+            const body = document.createElementNS(ns, 'path');
+            body.setAttribute('d', 'M0 -7 L6 6 L0 3 L-6 6 Z');
+            body.setAttribute('class', 'gm-ship-marker-body');
+            heading.appendChild(body);
+        }
+        const thrustHtml = this.shipThrustRect && this.shipThrustRect();
+        if (thrustHtml) {
+            // Single known <rect> from shipThrustRect — parse via SVG wrapper for NS safety.
+            const wrap = document.createElement('div');
+            wrap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg">' + thrustHtml + '</svg>';
+            const rect = wrap.querySelector('rect');
+            if (rect) heading.appendChild(document.importNode(rect, true));
+        }
+        ship.appendChild(heading);
+        g.appendChild(ship);
+        return { g: g, trail: trail, ship: ship, heading: heading };
+    },
     /** Animate the ship to a planet / post, then commit the new location. */
     flyTo(kind, id) {
         if (this._flight || this._ambush) return;
@@ -79345,8 +79726,7 @@ extendClass(GalaxyMapManager, {
             return (vb.length === 4 && vb.every(Number.isFinite))
                 ? { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2 } : null;
         })();
-        const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!from || !to || !svg || reduced) {
+        if (!from || !to || !svg) {
             this.commitFlight(kind, id);
             return;
         }
@@ -79354,31 +79734,27 @@ extendClass(GalaxyMapManager, {
         const path = this.routePath(current, { kind: kind, id: id }) || [from, to];
         let dist = 0;
         for (let i = 0; i < path.length - 1; i++) dist += Math.hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
+        if (!(dist > 0) || !Number.isFinite(dist)) {
+            this.commitFlight(kind, id);
+            return;
+        }
         const angle = this.pointOnPath(path, 0).angle; // ship art points up
-        const icon = this.getShipIconUrl && this.getShipIconUrl();
-        const shipSvg = icon
-            ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
-            : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
-        const ns = 'http://www.w3.org/2000/svg';
-        const g = document.createElementNS(ns, 'g');
-        g.setAttribute('class', 'gm-ship-travel');
-        g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${from.x},${from.y}"/>` +
-            `<g class="gm-travel-ship"><g class="gm-travel-heading" transform="rotate(${angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
-        svg.appendChild(g);
+        const parts = this.buildTravelShipGroup('gm-ship-travel', from.x + ',' + from.y, angle);
+        svg.appendChild(parts.g);
         const layer = svg.querySelector('.gm-route-layer');
         if (layer) layer.innerHTML = '';
         const marker = svg.querySelector('.gm-ship-marker');
         if (marker) marker.style.display = 'none';
-        const trail = g.querySelector('.gm-travel-trail');
-        const ship = g.querySelector('.gm-travel-ship');
         const ambush = !this._skipAmbushOnce
             && Math.random() < this.ambushChance(current, { kind: kind, id: id });
         this._skipAmbushOnce = false;
         const stopAt = ambush ? 0.45 + Math.random() * 0.2 : 1;
-        const duration = Math.max(1800, Math.min(5000, dist * 12));
-        this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: g, trail: trail, ship: ship,
-            heading: g.querySelector('.gm-travel-heading'), duration: duration, t: 0, svg: svg, originalViewBox: originalViewBox,
-            camFrom: camFrom };
+        let duration = Math.max(1800, Math.min(5000, dist * 12));
+        // Accessibility: shorten, do not skip — teleport looked like a broken right-click.
+        if (this.mapFlightReduced()) duration = Math.max(500, Math.min(1200, duration * 0.35));
+        this._flight = { kind: kind, id: id, origin: current, from: from, to: to, path: path, g: parts.g,
+            trail: parts.trail, ship: parts.ship, heading: parts.heading, duration: duration, t: 0,
+            svg: svg, originalViewBox: originalViewBox, camFrom: camFrom };
         this.statusMsg = '';
         this.runFlight(0, stopAt, () => {
             if (stopAt < 1) this.showAmbush();
@@ -79388,9 +79764,12 @@ extendClass(GalaxyMapManager, {
     /** Advance the flight from progress t0 to t1, then call done. */
     runFlight(t0, t1, done) {
         const f = this._flight;
-        if (!f) return;
+        if (!f || !f.ship || !f.trail) {
+            if (typeof done === 'function') done();
+            return;
+        }
         const start = performance.now();
-        const span = Math.max(1, f.duration * (t1 - t0));
+        const span = Math.max(16, f.duration * Math.max(0.001, t1 - t0));
         const ease = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
         // Only the flight's opening leg eases the camera in from wherever it was; a
         // resumed leg (post-ambush) is already following the ship, so it just continues.
@@ -79404,18 +79783,18 @@ extendClass(GalaxyMapManager, {
             const at = this.pointOnPath(path, e);
             f.t = t;
             const sat = this.latticeShipPt ? this.latticeShipPt(at.x, at.y) : at;
-            f.ship.setAttribute('transform', `translate(${sat.x},${sat.y})`);
+            f.ship.setAttribute('transform', 'translate(' + sat.x + ',' + sat.y + ')');
             const vb = (f.originalViewBox || '').trim().split(/\s+/).map(Number);
-            if (vb.length === 4 && vb.every(Number.isFinite)) {
+            if (vb.length === 4 && vb.every(Number.isFinite) && f.svg) {
                 let cx = at.x, cy = at.y;
                 if (camBlendDur > 0) {
                     const camK = ease(Math.min(1, (now - start) / camBlendDur));
                     cx = f.camFrom.x + (at.x - f.camFrom.x) * camK;
                     cy = f.camFrom.y + (at.y - f.camFrom.y) * camK;
                 }
-                f.svg.setAttribute('viewBox', `${cx - vb[2] / 2} ${cy - vb[3] / 2} ${vb[2]} ${vb[3]}`);
+                f.svg.setAttribute('viewBox', (cx - vb[2] / 2) + ' ' + (cy - vb[3] / 2) + ' ' + vb[2] + ' ' + vb[3]);
             }
-            if (f.heading) f.heading.setAttribute('transform', `rotate(${at.angle})`);
+            if (f.heading) f.heading.setAttribute('transform', 'rotate(' + at.angle + ')');
             // Trail: the path's corners passed so far, then the ship.
             const trailPoints = path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
             trailPoints.push(at.x.toFixed(1) + ',' + at.y.toFixed(1));
@@ -79553,28 +79932,30 @@ extendClass(GalaxyMapManager, {
                 return;
             }
             const path = (f.path || [f.from, f.to]).slice().reverse();
-            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (path.length < 2 || reduced) { this.commitFlight(origin.kind, origin.id); return; }
-            const icon = this.getShipIconUrl && this.getShipIconUrl();
-            const shipSvg = icon
-                ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
-                : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
+            if (path.length < 2) { this.commitFlight(origin.kind, origin.id); return; }
             // Easing is symmetric, so 1 - t on the reversed path is the ambush point.
             const t0 = Math.max(0, Math.min(1, 1 - (Number(f.t) || 0.5)));
             const at = this.pointOnPath(path, t0 < 0.5 ? 2 * t0 * t0 : 1 - Math.pow(-2 * t0 + 2, 2) / 2);
-            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('class', 'gm-ship-travel gm-ship-retreat');
-            g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${at.x},${at.y}"/>` +
-                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
-            svg.appendChild(g);
+            const parts = this.buildTravelShipGroup(
+                'gm-ship-travel gm-ship-retreat',
+                at.x + ',' + at.y,
+                at.angle,
+                at.x,
+                at.y
+            );
+            svg.appendChild(parts.g);
             const layer = svg.querySelector('.gm-route-layer');
             if (layer) layer.innerHTML = '';
             const marker = svg.querySelector('.gm-ship-marker');
             if (marker) marker.style.display = 'none';
+            let duration = f.duration || 3000;
+            if (this.mapFlightReduced && this.mapFlightReduced()) {
+                duration = Math.max(500, Math.min(1200, duration * 0.35));
+            }
             this._flight = {
                 kind: origin.kind, id: origin.id, from: path[0], to: path[path.length - 1], path: path,
-                g: g, trail: g.querySelector('.gm-travel-trail'), ship: g.querySelector('.gm-travel-ship'),
-                heading: g.querySelector('.gm-travel-heading'), duration: f.duration || 3000, t: t0,
+                g: parts.g, trail: parts.trail, ship: parts.ship,
+                heading: parts.heading, duration: duration, t: t0,
                 svg: svg, originalViewBox: svg.getAttribute('viewBox')
             };
             this.statusMsg = 'AMBUSH LOST · RETURNING TO LAST STATION';
@@ -79604,30 +79985,31 @@ extendClass(GalaxyMapManager, {
                 if (!this._flight) this.commitFlight(dest.kind, dest.id);
                 return;
             }
-            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (reduced) { this.commitFlight(dest.kind, dest.id); return; }
-            const icon = this.getShipIconUrl && this.getShipIconUrl();
-            const shipSvg = icon
-                ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
-                : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
             const t0 = Math.max(0, Math.min(1, Number(f.t) || 0));
             const e0 = t0 < 0.5 ? 2 * t0 * t0 : 1 - Math.pow(-2 * t0 + 2, 2) / 2;
             const at = this.pointOnPath(f.path, e0);
-            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('class', 'gm-ship-travel');
             const done = f.path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
             done.push(at.x.toFixed(1) + ',' + at.y.toFixed(1));
-            g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${done.join(' ')}"/>` +
-                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
-            svg.appendChild(g);
+            const parts = this.buildTravelShipGroup(
+                'gm-ship-travel',
+                done.join(' '),
+                at.angle,
+                at.x,
+                at.y
+            );
+            svg.appendChild(parts.g);
             const layer = svg.querySelector('.gm-route-layer');
             if (layer) layer.innerHTML = '';
             const marker = svg.querySelector('.gm-ship-marker');
             if (marker) marker.style.display = 'none';
+            let duration = f.duration || 3000;
+            if (this.mapFlightReduced && this.mapFlightReduced()) {
+                duration = Math.max(500, Math.min(1200, duration * 0.35));
+            }
             this._flight = {
                 kind: dest.kind, id: dest.id, origin: f.origin, from: f.from, to: f.to, path: f.path,
-                g: g, trail: g.querySelector('.gm-travel-trail'), ship: g.querySelector('.gm-travel-ship'),
-                heading: g.querySelector('.gm-travel-heading'), duration: f.duration || 3000, t: t0,
+                g: parts.g, trail: parts.trail, ship: parts.ship,
+                heading: parts.heading, duration: duration, t: t0,
                 svg: svg, originalViewBox: svg.getAttribute('viewBox')
             };
             this.runFlight(t0, 1, () => this.finishFlight());

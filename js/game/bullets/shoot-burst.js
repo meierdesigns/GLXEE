@@ -8,7 +8,7 @@ extendClass(BulletManager, {
         for (let i = 0; i < bulletCount; i++) {
             if (this.bullets.length >= 8) break;
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: playerPosition.x + playerPosition.width / 2 - 1.5,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -39,7 +39,7 @@ extendClass(BulletManager, {
         const meet = h * 5;
         const angle = Math.atan2(half, meet);
         [-1, 1].forEach((side) => {
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: playerPosition.x + playerPosition.width / 2 + side * half - w / 2,
                 y: playerPosition.y,
                 width: w,
@@ -59,7 +59,7 @@ extendClass(BulletManager, {
     },
 
     shootPierce(playerPosition, config) {
-        this.bullets.push({
+        this.pushBullet(this.bullets, {
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 2) / 2,
             y: playerPosition.y,
             width: config.width || 2,
@@ -81,7 +81,7 @@ extendClass(BulletManager, {
         for (let i = 0; i < bulletCount; i++) {
             if (this.bullets.length >= 8) break;
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.bullets.push({
+            this.pushBullet(this.bullets, {
                 x: playerPosition.x + playerPosition.width / 2 - 2,
                 y: playerPosition.y,
                 width: config.width || 4,
@@ -344,7 +344,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.0,
             lightColor: '#808080' // Grayscale base
         };
-        this.enemyBullets.push(bullet);
+        this.pushBullet(this.enemyBullets, bullet);
     },
 
     enemyShootLaser(enemy, config) {
@@ -367,7 +367,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.2,
             lightColor: '#808080' // Grayscale base
         };
-        this.enemyBullets.push(bullet);
+        this.pushBullet(this.enemyBullets, bullet);
     },
 
     enemyShootSpread(enemy, config) {
@@ -402,7 +402,7 @@ extendClass(BulletManager, {
                 lightIntensity: 1.0,
                 lightColor: '#808080' // Grayscale base
             };
-            this.enemyBullets.push(bullet);
+            this.pushBullet(this.enemyBullets, bullet);
         });
     },
 
@@ -429,7 +429,7 @@ extendClass(BulletManager, {
                 lightIntensity: 0.9,
                 lightColor: '#808080' // Grayscale base
             };
-            this.enemyBullets.push(bullet);
+            this.pushBullet(this.enemyBullets, bullet);
         }
     },
 
@@ -451,7 +451,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.5,
             lightColor: '#808080' // Grayscale base
         };
-        this.enemyBullets.push(bullet);
+        this.pushBullet(this.enemyBullets, bullet);
     },
 
     getBullets() {
@@ -467,7 +467,7 @@ extendClass(BulletManager, {
         if (index < 0 || index >= list.length) return;
         const last = list.length - 1;
         if (index !== last) list[index] = list[last];
-        list.pop();
+        this.releaseBullet(list.pop());
     },
 
     removeEnemyBullet(index) {
@@ -475,7 +475,7 @@ extendClass(BulletManager, {
         if (index < 0 || index >= list.length) return;
         const last = list.length - 1;
         if (index !== last) list[index] = list[last];
-        list.pop();
+        this.releaseBullet(list.pop());
     },
 
     switchShotType() {

@@ -261,6 +261,10 @@ extendClass(EnemyManager, {
             // sparse sample), then dilate one cell for edge forgiveness.
             grid = this.unionEnemyHitMasks(grid, this.enemyLogicalHitMask(model));
             grid = this.dilateEnemyHitMask(grid);
+            const keys = Object.keys(this._hitMaskCache);
+            if (keys.length > 48) {
+                for (let i = 0; i < 16; i++) delete this._hitMaskCache[keys[i]];
+            }
             this._hitMaskCache[key] = grid;
             return grid;
         } catch (e) {

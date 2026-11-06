@@ -159,6 +159,10 @@ extendClass(GraphicsManager, {
             }
             octx.putImageData(out, 0, 0);
             rim = off;
+            const sk = Object.keys(this._shieldHullCache);
+            if (sk.length > 32) {
+                for (let i = 0; i < 8; i++) delete this._shieldHullCache[sk[i]];
+            }
             this._shieldHullCache[cacheKey] = rim;
         }
 

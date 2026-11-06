@@ -418,12 +418,13 @@ extendClass(ObstacleManager, {
         if (typeof renderManager !== 'undefined' && renderManager._terrainLayerKey) {
             renderManager._terrainLayerKey.dmg = -1;
         }
-        if (this.terrainDamage.size > 4000) {
-            const cutoff = wr - 1200;
+        // Prune behind the camera often — long scroll fights used to keep ~4k Map entries hot.
+        if (this.terrainDamage.size > 1200) {
+            const cutoff = wr - 500;
             this.terrainDamage.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainDamage.delete(k); });
         }
-        if (this.terrainCut.size > 4000) {
-            const cutoff = wr - 1200;
+        if (this.terrainCut.size > 1200) {
+            const cutoff = wr - 500;
             this.terrainCut.forEach((_, k) => { if (+k.split(':')[1] < cutoff) this.terrainCut.delete(k); });
         }
         return broken;

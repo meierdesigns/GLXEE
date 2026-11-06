@@ -1,11 +1,38 @@
 "use strict";
 
 /**
- * Particle System for hit effects and visual enhancements
+ * Particle System for hit effects and visual enhancements.
+ * Objects are pooled so long fights don't churn GC on every hit.
  */
+const PARTICLE_POOL_MAX = 640;
+const SHIELD_HIT_OPTS = {
+    speed: 1.9,
+    life: 12,
+    size: 1.35,
+    drag: 0.82,
+    gravity: -0.015,
+    kind: 'energy',
+    fadeOut: true,
+    colors: ['#e8f8ff', '#9fdcff', '#6ec8e8', '#ffffff', '#b8ecff']
+};
+const SCRAP_HIT_OPTS = {
+    speed: 2.1,
+    life: 14,
+    size: 1.55,
+    drag: 0.86,
+    gravity: 0.14,
+    kind: 'scrap',
+    fadeOut: true,
+    colors: ['#8a9098', '#c4c8ce', '#5a6068', '#a89878', '#d0d4d8', '#6e6460']
+};
+const FALLBACK_HIT_COLORS = ['#ffffff', '#ffe8cc', '#ffcc66', '#ffaa44', '#ffeeaa'];
+
 class ParticleSystem {
     constructor() {
         this.particles = [];
+        this._pool = [];
+        this._themeColors = null;
+        this._themeAt = 0;
     }
 
     /**
@@ -17,6 +44,20 @@ class ParticleSystem {
             if (document.documentElement.hasAttribute('data-vf-performance')) return 96;
         } catch (e) { /* ignore */ }
         return 480;
+    }
+
+    _acquire() {
+        const p = this._pool.pop();
+        return p || {
+            x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0,
+            size: 1, w: 1, h: 1, drag: 0.88, gravity: 0.1,
+            kind: 'spark', fadeOut: false, color: '#ffffff'
+        };
+    }
+
+    _release(p) {
+        if (!p) return;
+        if (this._pool.length < PARTICLE_POOL_MAX) this._pool.push(p);
     }
 
     createHitParticles(x, y, count = 8, colorOrOpts = null) {
@@ -53,51 +94,33 @@ class ParticleSystem {
             }
 
             const size = baseSize * (0.7 + Math.random() * 0.8);
-            this.particles.push({
-                x: x + (Math.random() - 0.5) * 2,
-                y: y + (Math.random() - 0.5) * 2,
-                vx: Math.cos(angle) * speed,
-                vy: Math.sin(angle) * speed,
-                life: life,
-                maxLife: life,
-                size: size,
-                w: kind === 'scrap' ? size * (0.6 + Math.random() * 1.4) : size,
-                h: kind === 'scrap' ? size * (0.4 + Math.random() * 0.9) : size,
-                drag: drag,
-                gravity: gravity,
-                kind: kind,
-                fadeOut: fadeOut,
-                color: color || this.getRandomHitColor()
-            });
+            const p = this._acquire();
+            p.x = x + (Math.random() - 0.5) * 2;
+            p.y = y + (Math.random() - 0.5) * 2;
+            p.vx = Math.cos(angle) * speed;
+            p.vy = Math.sin(angle) * speed;
+            p.life = life;
+            p.maxLife = life;
+            p.size = size;
+            p.w = kind === 'scrap' ? size * (0.6 + Math.random() * 1.4) : size;
+            p.h = kind === 'scrap' ? size * (0.4 + Math.random() * 0.9) : size;
+            p.drag = drag;
+            p.gravity = gravity;
+            p.kind = kind;
+            p.fadeOut = fadeOut;
+            p.color = color || this.getRandomHitColor();
+            this.particles.push(p);
         }
     }
 
     /** Short cyan energy flecks when a shield absorbs a hit. */
     createShieldHitParticles(x, y, count = 7) {
-        this.createHitParticles(x, y, count, {
-            speed: 1.9,
-            life: 12,
-            size: 1.35,
-            drag: 0.82,
-            gravity: -0.015,
-            kind: 'energy',
-            fadeOut: true,
-            colors: ['#e8f8ff', '#9fdcff', '#6ec8e8', '#ffffff', '#b8ecff']
-        });
+        this.createHitParticles(x, y, count, SHIELD_HIT_OPTS);
     }
 
     /** Tiny scrap chips when hull armor takes the hit. */
     createScrapHitParticles(x, y, count = 6) {
-        this.createHitParticles(x, y, count, {
-            speed: 2.1,
-            life: 14,
-            size: 1.55,
-            drag: 0.86,
-            gravity: 0.14,
-            kind: 'scrap',
-            fadeOut: true,
-            colors: ['#8a9098', '#c4c8ce', '#5a6068', '#a89878', '#d0d4d8', '#6e6460']
-        });
+        this.createHitParticles(x, y, count, SCRAP_HIT_OPTS);
     }
 
     resolveColor(color) {
@@ -116,21 +139,26 @@ class ParticleSystem {
     }
 
     getRandomHitColor() {
-        try {
-            const fromTheme = [
-                vfCssVar('--color-highlight'),
-                vfCssVar('--color-text'),
-                vfCssVar('--color-particle'),
-                vfCssVar('--color-explosion'),
-                vfCssVar('--color-secondary'),
-                vfCssVar('--current-text')
-            ].filter(c => c && c.indexOf('var(') === -1);
-            if (fromTheme.length) {
-                return fromTheme[Math.floor(Math.random() * fromTheme.length)];
+        const now = (typeof performance !== 'undefined') ? performance.now() : 0;
+        if (!this._themeColors || (now - this._themeAt) > 250) {
+            try {
+                const next = [];
+                const names = [
+                    '--color-highlight', '--color-text', '--color-particle',
+                    '--color-explosion', '--color-secondary', '--current-text'
+                ];
+                for (let i = 0; i < names.length; i++) {
+                    const c = vfCssVar(names[i]);
+                    if (c && c.indexOf('var(') === -1) next.push(c);
+                }
+                this._themeColors = next.length ? next : FALLBACK_HIT_COLORS;
+            } catch (e) {
+                this._themeColors = FALLBACK_HIT_COLORS;
             }
-        } catch (e) { /* ignore */ }
-        const colors = ['#ffffff', '#ffe8cc', '#ffcc66', '#ffaa44', '#ffeeaa'];
-        return colors[Math.floor(Math.random() * colors.length)];
+            this._themeAt = now;
+        }
+        const colors = this._themeColors;
+        return colors[(Math.random() * colors.length) | 0];
     }
 
     update() {
@@ -154,7 +182,7 @@ class ParticleSystem {
             if (particle.life <= 0) {
                 const last = list.length - 1;
                 if (i !== last) list[i] = list[last];
-                list.pop();
+                this._release(list.pop());
             }
         }
     }
@@ -164,7 +192,9 @@ class ParticleSystem {
         ctx.imageSmoothingEnabled = false;
         const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
         const cell = cv && cv.cell ? cv.cell() : null;
-        for (const particle of this.particles) {
+        const list = this.particles;
+        for (let i = 0; i < list.length; i++) {
+            const particle = list[i];
             const lifeT = particle.life / particle.maxLife;
             const alpha = particle.fadeOut
                 ? Math.max(0, lifeT)
@@ -216,6 +246,8 @@ class ParticleSystem {
     }
 
     clear() {
-        this.particles = [];
+        const list = this.particles;
+        for (let i = 0; i < list.length; i++) this._release(list[i]);
+        list.length = 0;
     }
 }

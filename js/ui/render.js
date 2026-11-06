@@ -88,7 +88,8 @@ window.combatVoxels = {
         const c = this.cell();
         if (c == null || !(c > 0)) return;
         const snap = (e) => this.snapEntity(e, c);
-        if (typeof playerManager !== 'undefined' && playerManager.player) snap(playerManager.player);
+        // Do not lattice-snap the pilot — continuous thruster velocity must
+        // survive snapWorld (see player/core.js). Enemies/FX stay on the grid.
         if (typeof enemyManager !== 'undefined') {
             if (enemyManager.enemy) snap(enemyManager.enemy);
             const sides = enemyManager.sideEnemies;

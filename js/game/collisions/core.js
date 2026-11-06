@@ -90,9 +90,6 @@ class CollisionManager {
                     hitSide = 1;
                     player.x = walls.right - player.width - 1;
                 }
-                if (typeof window !== 'undefined' && window.combatVoxels && window.combatVoxels.snapEntity) {
-                    window.combatVoxels.snapEntity(player);
-                }
                 const now = Date.now();
                 if (hitX != null && hitSide >= 0 && now - (this._terrainHitAt || 0) > 600) {
                     this._terrainHitAt = now;

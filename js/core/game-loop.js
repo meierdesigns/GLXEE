@@ -8,22 +8,50 @@ class GameLoop {
         this.lastTime = 0;
         this.frameCount = 0;
         this.gameRunning = true;
+        this._rafId = 0;
+        this._parkTimer = 0;
+        this._visKickBound = false;
     }
 
     start() {
         this.lastTime = 0;
         this.frameCount = 0;
-        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        this._clearPark();
         this._bindVisibilityKick();
         // Do not force gameRunning here — startGame() owns that flag. Boot must
         // leave the loop idle so menus are not fighting a combat RAF.
         if (!this.gameState.gameRunning) return;
-        this.loop(performance.now());
+        // One RAF chain only — stop/start and visibility kicks must not stack.
+        this._scheduleFrame();
     }
 
     stop() {
         this.gameState.gameRunning = false;
-        if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        this._clearPark();
+        this._cancelFrame();
+    }
+
+    _clearPark() {
+        if (this._parkTimer) {
+            clearTimeout(this._parkTimer);
+            this._parkTimer = 0;
+        }
+    }
+
+    _cancelFrame() {
+        if (this._rafId) {
+            cancelAnimationFrame(this._rafId);
+            this._rafId = 0;
+        }
+    }
+
+    /** Schedule the next frame only if none is already pending. */
+    _scheduleFrame() {
+        if (this._rafId) return;
+        this._rafId = requestAnimationFrame((time) => {
+            this._rafId = 0;
+            this.loop(time);
+        });
     }
 
     /** Some hosts (embedded browsers / webviews) keep document.hidden true while the
@@ -34,9 +62,9 @@ class GameLoop {
         this._visKickBound = true;
         document.addEventListener('visibilitychange', () => {
             if (document.hidden || !this.gameState.gameRunning) return;
-            if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+            this._clearPark();
             this.lastTime = 0;
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
         });
     }
 
@@ -67,7 +95,7 @@ class GameLoop {
         // frozen mission-start intro.
         if (typeof document !== 'undefined' && document.hidden && !this.isCombatSurfaceActive()) {
             this.lastTime = 0;
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
             return;
         }
 
@@ -75,12 +103,10 @@ class GameLoop {
         // Poll slowly instead of a empty 60 Hz RAF chain.
         if (!this.isCombatSurfaceActive()) {
             this.lastTime = 0;
-            if (this._parkTimer) clearTimeout(this._parkTimer);
+            this._clearPark();
             this._parkTimer = setTimeout(() => {
                 this._parkTimer = 0;
-                if (this.gameState.gameRunning) {
-                    requestAnimationFrame((time) => this.loop(time));
-                }
+                if (this.gameState.gameRunning) this._scheduleFrame();
             }, 250);
             return;
         }
@@ -97,7 +123,7 @@ class GameLoop {
         let safeDeltaTime;
         if (deltaTime < 0) {
             // Skip this frame if deltaTime is negative
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
             return;
         } else {
             safeDeltaTime = Math.max(deltaTime, 0.1); // Minimum 0.1ms to prevent division by zero
@@ -114,7 +140,7 @@ class GameLoop {
         
         // Only continue loop if game is still running
         if (this.gameState.gameRunning) {
-            requestAnimationFrame((time) => this.loop(time));
+            this._scheduleFrame();
         }
     }
 

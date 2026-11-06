@@ -9,12 +9,50 @@ const EXPLOSION_PARTICLE_DRAG = 0.86;
 // Largest ring base size in playfield pixels.
 const EXPLOSION_MAX_BASE = 22;
 const SHIP_VOXEL_DEBRIS_MAX = 120;
+const EXPLOSION_VOXEL_POOL_MAX = 220;
+const EXPLOSION_BURST_POOL_MAX = 40;
 
 class ExplosionSystem {
     constructor() {
         this.active = [];
         this.voxels = [];
+        this._voxelPool = [];
+        this._burstPool = [];
         this._sampleCanvas = null;
+        this._sampleBuf = [];
+        this._sampleFree = [];
+    }
+
+    _acquireVoxel() {
+        return this._voxelPool.pop() || {
+            x: 0, y: 0, vx: 0, vy: 0, rot: 0, spin: 0,
+            s: 1, c: '#fff', life: 0, ttl: 1, delay: 0, g: 0
+        };
+    }
+
+    _releaseVoxel(p) {
+        if (!p) return;
+        if (this._voxelPool.length < EXPLOSION_VOXEL_POOL_MAX) this._voxelPool.push(p);
+    }
+
+    _acquireBurst() {
+        const b = this._burstPool.pop();
+        if (b) {
+            if (!b.colors) b.colors = [];
+            else b.colors.length = 0;
+            return b;
+        }
+        return {
+            x: 0, y: 0, width: 14, height: 14, timer: 0, duration: 600,
+            rings: 2, ringScale: 1, sparkles: 6, colors: [],
+            presetId: 'default', fineRing: false
+        };
+    }
+
+    _releaseBurst(b) {
+        if (!b) return;
+        if (b.colors) b.colors.length = 0;
+        if (this._burstPool.length < EXPLOSION_BURST_POOL_MAX) this._burstPool.push(b);
     }
 
     resolvePreset(presetId) {
@@ -82,22 +120,30 @@ class ExplosionSystem {
             const bh = opts.height != null ? opts.height : 14;
             // Large sources: denser ring stepping so the burst isn't blocky.
             const fineRing = Math.max(bw, bh) >= 16;
-            this.active.push({
-                x: x,
-                y: y,
-                width: bw,
-                height: bh,
-                timer: 0,
-                duration: preset.ringDurationMs,
-                rings: fineRing ? Math.max(preset.rings, preset.rings + 1) : preset.rings,
-                ringScale: preset.ringScale * scale,
-                sparkles: fineRing
-                    ? Math.round(preset.sparkles * (1.2 + Math.min(1.2, Math.max(bw, bh) / 28)))
-                    : preset.sparkles,
-                colors: preset.colors ? preset.colors.slice() : [],
-                presetId: preset.id,
-                fineRing: fineRing
-            });
+            // Soft cap so stacked kills in a long fight can't grow the ring list forever.
+            if (this.active.length >= 28) {
+                const drop = this.active.length - 24;
+                for (let i = 0; i < drop; i++) this._releaseBurst(this.active[i]);
+                this.active.splice(0, drop);
+            }
+            const burst = this._acquireBurst();
+            burst.x = x;
+            burst.y = y;
+            burst.width = bw;
+            burst.height = bh;
+            burst.timer = 0;
+            burst.duration = preset.ringDurationMs;
+            burst.rings = fineRing ? Math.max(preset.rings, preset.rings + 1) : preset.rings;
+            burst.ringScale = preset.ringScale * scale;
+            burst.sparkles = fineRing
+                ? Math.round(preset.sparkles * (1.2 + Math.min(1.2, Math.max(bw, bh) / 28)))
+                : preset.sparkles;
+            if (preset.colors) {
+                for (let ci = 0; ci < preset.colors.length; ci++) burst.colors.push(preset.colors[ci]);
+            }
+            burst.presetId = preset.id;
+            burst.fineRing = fineRing;
+            this.active.push(burst);
         }
 
         if (opts.ship) {
@@ -164,20 +210,20 @@ class ExplosionSystem {
             const burst = (voxel ? 1.6 : 1.1) * power * (0.55 + Math.random() * 1.1);
             const tang = (Math.random() - 0.5) * (voxel ? 2.2 : 1.2) * power;
             // Always one lattice cell — no double-size chunks in VOXEL combat.
-            this.voxels.push({
-                x: wx,
-                y: wy,
-                vx: nx * burst + (-ny) * tang * 0.35,
-                vy: ny * burst + nx * tang * 0.35 - (voxel ? 0.15 : 0),
-                rot: Math.random() * Math.PI * 2,
-                spin: (Math.random() - 0.5) * (voxel ? 0.35 : 0.18),
-                s: cell,
-                c: p.c,
-                life: 0,
-                ttl: (voxel ? 700 : 480) + Math.random() * (voxel ? 900 : 520),
-                delay: voxel ? Math.min(220, dist * 2.2 + Math.random() * 80) : Math.random() * 40,
-                g: voxel ? 0.012 + Math.random() * 0.02 : 0.006
-            });
+            const vox = this._acquireVoxel();
+            vox.x = wx;
+            vox.y = wy;
+            vox.vx = nx * burst + (-ny) * tang * 0.35;
+            vox.vy = ny * burst + nx * tang * 0.35 - (voxel ? 0.15 : 0);
+            vox.rot = Math.random() * Math.PI * 2;
+            vox.spin = (Math.random() - 0.5) * (voxel ? 0.35 : 0.18);
+            vox.s = cell;
+            vox.c = p.c;
+            vox.life = 0;
+            vox.ttl = (voxel ? 700 : 480) + Math.random() * (voxel ? 900 : 520);
+            vox.delay = voxel ? Math.min(220, dist * 2.2 + Math.random() * 80) : Math.random() * 40;
+            vox.g = voxel ? 0.012 + Math.random() * 0.02 : 0.006;
+            this.voxels.push(vox);
         }
 
         // Hot core chips — bright voxels from the blast centre.
@@ -185,24 +231,27 @@ class ExplosionSystem {
         for (let i = 0; i < hotN; i++) {
             const a = Math.random() * Math.PI * 2;
             const sp = (voxel ? 2.4 : 1.6) * power * (0.7 + Math.random());
-            this.voxels.push({
-                x: cx,
-                y: cy,
-                vx: Math.cos(a) * sp,
-                vy: Math.sin(a) * sp,
-                rot: 0,
-                spin: (Math.random() - 0.5) * 0.4,
-                s: cell,
-                c: i % 2 ? '#ffe9a8' : '#ffffff',
-                life: 0,
-                ttl: 180 + Math.random() * 160,
-                delay: 0,
-                g: 0.004
-            });
+            const vox = this._acquireVoxel();
+            vox.x = cx;
+            vox.y = cy;
+            vox.vx = Math.cos(a) * sp;
+            vox.vy = Math.sin(a) * sp;
+            vox.rot = 0;
+            vox.spin = (Math.random() - 0.5) * 0.4;
+            vox.s = cell;
+            vox.c = i % 2 ? '#ffe9a8' : '#ffffff';
+            vox.life = 0;
+            vox.ttl = 180 + Math.random() * 160;
+            vox.delay = 0;
+            vox.g = 0.004;
+            this.voxels.push(vox);
         }
 
-        if (this.voxels.length > SHIP_VOXEL_DEBRIS_MAX * 1.5) {
-            this.voxels.splice(0, this.voxels.length - Math.floor(SHIP_VOXEL_DEBRIS_MAX * 1.5));
+        const cap = Math.floor(SHIP_VOXEL_DEBRIS_MAX * 1.5);
+        if (this.voxels.length > cap) {
+            const drop = this.voxels.length - cap;
+            for (let i = 0; i < drop; i++) this._releaseVoxel(this.voxels[i]);
+            this.voxels.splice(0, drop);
         }
     }
 
@@ -247,7 +296,9 @@ class ExplosionSystem {
             return [];
         }
 
-        const out = [];
+        const out = this._sampleBuf;
+        const free = this._sampleFree;
+        while (out.length) free.push(out.pop());
         for (let y = 0; y < h; y += step) {
             for (let x = 0; x < w; x += step) {
                 const i = (y * w + x) * 4;
@@ -257,11 +308,11 @@ class ExplosionSystem {
                 const g = data[i + 1];
                 const b = data[i + 2];
                 if (r + g + b < 40) continue;
-                out.push({
-                    x: x,
-                    y: y,
-                    c: 'rgb(' + r + ',' + g + ',' + b + ')'
-                });
+                const pt = free.pop() || { x: 0, y: 0, c: '' };
+                pt.x = x;
+                pt.y = y;
+                pt.c = 'rgb(' + r + ',' + g + ',' + b + ')';
+                out.push(pt);
             }
         }
         out.step = step;
@@ -276,7 +327,7 @@ class ExplosionSystem {
             if (rings[i].timer >= rings[i].duration) {
                 const last = rings.length - 1;
                 if (i !== last) rings[i] = rings[last];
-                rings.pop();
+                this._releaseBurst(rings.pop());
             }
         }
 
@@ -292,7 +343,7 @@ class ExplosionSystem {
             if (p.life >= p.ttl) {
                 const last = list.length - 1;
                 if (i !== last) list[i] = list[last];
-                list.pop();
+                this._releaseVoxel(list.pop());
                 continue;
             }
             p.vy += (p.g || 0) * f;
@@ -373,9 +424,14 @@ class ExplosionSystem {
     /** Relative ring pixel offsets for a given radius/step — same points every burst. */
     ringOffsets(ringRadius, angleStep, pixelSize) {
         if (!this._ringOff) this._ringOff = Object.create(null);
-        const key = ringRadius + ':' + angleStep + ':' + pixelSize;
+        // Quantise floats so fine-ring sizes don't mint unbounded cache keys.
+        const key = ringRadius + ':' + angleStep + ':' + Math.round(pixelSize * 100);
         let pts = this._ringOff[key];
         if (pts) return pts;
+        const keys = Object.keys(this._ringOff);
+        if (keys.length > 96) {
+            this._ringOff = Object.create(null);
+        }
         pts = [];
         for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
             pts.push(
@@ -483,8 +539,13 @@ class ExplosionSystem {
     }
 
     clear() {
+        for (let i = 0; i < this.active.length; i++) this._releaseBurst(this.active[i]);
         this.active.length = 0;
+        for (let i = 0; i < this.voxels.length; i++) this._releaseVoxel(this.voxels[i]);
         this.voxels.length = 0;
+        if (this._sampleBuf) {
+            while (this._sampleBuf.length) this._sampleFree.push(this._sampleBuf.pop());
+        }
     }
 }
 

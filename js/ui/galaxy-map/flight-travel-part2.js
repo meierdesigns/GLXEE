@@ -21,28 +21,30 @@ extendClass(GalaxyMapManager, {
                 return;
             }
             const path = (f.path || [f.from, f.to]).slice().reverse();
-            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (path.length < 2 || reduced) { this.commitFlight(origin.kind, origin.id); return; }
-            const icon = this.getShipIconUrl && this.getShipIconUrl();
-            const shipSvg = icon
-                ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
-                : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
+            if (path.length < 2) { this.commitFlight(origin.kind, origin.id); return; }
             // Easing is symmetric, so 1 - t on the reversed path is the ambush point.
             const t0 = Math.max(0, Math.min(1, 1 - (Number(f.t) || 0.5)));
             const at = this.pointOnPath(path, t0 < 0.5 ? 2 * t0 * t0 : 1 - Math.pow(-2 * t0 + 2, 2) / 2);
-            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('class', 'gm-ship-travel gm-ship-retreat');
-            g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${at.x},${at.y}"/>` +
-                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
-            svg.appendChild(g);
+            const parts = this.buildTravelShipGroup(
+                'gm-ship-travel gm-ship-retreat',
+                at.x + ',' + at.y,
+                at.angle,
+                at.x,
+                at.y
+            );
+            svg.appendChild(parts.g);
             const layer = svg.querySelector('.gm-route-layer');
             if (layer) layer.innerHTML = '';
             const marker = svg.querySelector('.gm-ship-marker');
             if (marker) marker.style.display = 'none';
+            let duration = f.duration || 3000;
+            if (this.mapFlightReduced && this.mapFlightReduced()) {
+                duration = Math.max(500, Math.min(1200, duration * 0.35));
+            }
             this._flight = {
                 kind: origin.kind, id: origin.id, from: path[0], to: path[path.length - 1], path: path,
-                g: g, trail: g.querySelector('.gm-travel-trail'), ship: g.querySelector('.gm-travel-ship'),
-                heading: g.querySelector('.gm-travel-heading'), duration: f.duration || 3000, t: t0,
+                g: parts.g, trail: parts.trail, ship: parts.ship,
+                heading: parts.heading, duration: duration, t: t0,
                 svg: svg, originalViewBox: svg.getAttribute('viewBox')
             };
             this.statusMsg = 'AMBUSH LOST · RETURNING TO LAST STATION';
@@ -72,30 +74,31 @@ extendClass(GalaxyMapManager, {
                 if (!this._flight) this.commitFlight(dest.kind, dest.id);
                 return;
             }
-            const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-            if (reduced) { this.commitFlight(dest.kind, dest.id); return; }
-            const icon = this.getShipIconUrl && this.getShipIconUrl();
-            const shipSvg = icon
-                ? `<image href="${icon}" ${this.shipIconBox().attrs} class="gm-ship-marker-img"/>`
-                : '<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body"/>';
             const t0 = Math.max(0, Math.min(1, Number(f.t) || 0));
             const e0 = t0 < 0.5 ? 2 * t0 * t0 : 1 - Math.pow(-2 * t0 + 2, 2) / 2;
             const at = this.pointOnPath(f.path, e0);
-            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-            g.setAttribute('class', 'gm-ship-travel');
             const done = f.path.slice(0, at.seg + 1).map((p) => p.x.toFixed(1) + ',' + p.y.toFixed(1));
             done.push(at.x.toFixed(1) + ',' + at.y.toFixed(1));
-            g.innerHTML = `<polyline class="gm-travel-trail" fill="none" points="${done.join(' ')}"/>` +
-                `<g class="gm-travel-ship" transform="translate(${at.x},${at.y})"><g class="gm-travel-heading" transform="rotate(${at.angle})">${shipSvg}${this.shipThrustRect()}</g></g>`;
-            svg.appendChild(g);
+            const parts = this.buildTravelShipGroup(
+                'gm-ship-travel',
+                done.join(' '),
+                at.angle,
+                at.x,
+                at.y
+            );
+            svg.appendChild(parts.g);
             const layer = svg.querySelector('.gm-route-layer');
             if (layer) layer.innerHTML = '';
             const marker = svg.querySelector('.gm-ship-marker');
             if (marker) marker.style.display = 'none';
+            let duration = f.duration || 3000;
+            if (this.mapFlightReduced && this.mapFlightReduced()) {
+                duration = Math.max(500, Math.min(1200, duration * 0.35));
+            }
             this._flight = {
                 kind: dest.kind, id: dest.id, origin: f.origin, from: f.from, to: f.to, path: f.path,
-                g: g, trail: g.querySelector('.gm-travel-trail'), ship: g.querySelector('.gm-travel-ship'),
-                heading: g.querySelector('.gm-travel-heading'), duration: f.duration || 3000, t: t0,
+                g: parts.g, trail: parts.trail, ship: parts.ship,
+                heading: parts.heading, duration: duration, t: t0,
                 svg: svg, originalViewBox: svg.getAttribute('viewBox')
             };
             this.runFlight(t0, 1, () => this.finishFlight());

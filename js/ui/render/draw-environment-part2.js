@@ -407,6 +407,7 @@ extendClass(RenderManager, {
             r = +m[1]; g = +m[2]; b = +m[3];
         }
         v = r < 0 || r > 255 || g > 255 || b > 255 ? null : ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
+        if (cache.size > 256) cache.clear();
         cache.set(css, v);
         return v;
     },
@@ -445,7 +446,7 @@ extendClass(RenderManager, {
     /** Cached per-world-row terrain noise (and lazily its craters) for one lattice width. */
     terrainRowCache(wr, cols) {
         let c = this._terrainRows;
-        if (!c || c.cols !== cols || c.rows.size > 600) c = this._terrainRows = { cols, rows: new Map() };
+        if (!c || c.cols !== cols) c = this._terrainRows = { cols, rows: new Map() };
         let rc = c.rows.get(wr);
         if (!rc) {
             const n = new Float64Array(cols);
@@ -458,6 +459,12 @@ extendClass(RenderManager, {
             }
             rc = { n, v, m, hits: new Array(cols) };
             c.rows.set(wr, rc);
+            // Drop rows far behind the scroll window (long runs used to wipe-all at 600).
+            if (c.rows.size > 240) {
+                const lo = wr - 180;
+                const hi = wr + 40;
+                c.rows.forEach((_, k) => { if (k < lo || k > hi) c.rows.delete(k); });
+            }
         }
         return rc;
     },

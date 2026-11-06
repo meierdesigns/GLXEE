@@ -148,6 +148,29 @@ extendClass(HomeStationUI, {
         this.focusActiveTab();
         this.syncNavHint && this.syncNavHint();
     },
+    /** True while Esc must not re-open the menu (post-close latch). */
+    isEscMenuCoolActive() {
+        return !!(this._escMenuCoolUntil && performance.now() < this._escMenuCoolUntil);
+    },
+    /**
+     * After Esc closes the menu, block Esc→open-menu until keyup and a short
+     * cooldown so mash/hold cannot soft-toggle the shell into a broken hangar.
+     */
+    armEscMenuCooldown(ms) {
+        const dur = typeof ms === 'number' ? ms : 350;
+        this._escMenuCoolUntil = performance.now() + dur;
+        if (this._escMenuCoolKeyUp) {
+            document.removeEventListener('keyup', this._escMenuCoolKeyUp, true);
+            this._escMenuCoolKeyUp = null;
+        }
+        this._escMenuCoolKeyUp = (ev) => {
+            if (ev.key !== 'Escape' && ev.key !== 'Backspace') return;
+            document.removeEventListener('keyup', this._escMenuCoolKeyUp, true);
+            this._escMenuCoolKeyUp = null;
+            // Keep the time floor so a quick re-press still waits out the cool-down.
+        };
+        document.addEventListener('keyup', this._escMenuCoolKeyUp, true);
+    },
     activateFocused() {
         const list = this.getFocusables();
         const el = list[this.focusIndex];

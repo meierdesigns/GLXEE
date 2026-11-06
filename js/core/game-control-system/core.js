@@ -54,9 +54,15 @@ class GameControlSystem {
         if (typeof soundManager !== 'undefined') {
             if (soundManager.markAudioUnlocked) soundManager.markAudioUnlocked();
             if (soundManager.ensureContext) soundManager.ensureContext();
-            if (soundManager.stopMenuMusic) soundManager.stopMenuMusic();
-            // Drop any leftover hub tracker so setStageContext can start planet music cleanly.
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            // Soft-leave hub sources only — do NOT hard-stop the tracker.
+            // A hard stop made every stage boot restart the combat motif from
+            // bar 1 (same DNA as the old intro fanfare), so it felt like the
+            // fanfare kept coming back. setStageContext crossfades instead.
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
         }
 
         // Always clear pause/settings overlays before combat HUD shows
@@ -345,7 +351,7 @@ class GameControlSystem {
 
         // Play game over sound
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
+            // playGameOver clears combat context and crossfades into the defeat motif.
             soundManager.playGameOver();
         }
     }

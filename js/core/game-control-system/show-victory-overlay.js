@@ -105,6 +105,13 @@ extendClass(GameControlSystem, {
             victoryOverlay.dataset.bound = '';
         }
         victoryOverlay.classList.remove('hidden');
+        // Retrigger panel entrance (CSS animation) on every show.
+        const panel = victoryOverlay.querySelector('.victory-content');
+        if (panel) {
+            panel.style.animation = 'none';
+            void panel.offsetWidth;
+            panel.style.animation = '';
+        }
         this.applyVictoryFactionFlavor(victoryOverlay);
         this.applyVictoryPixelIcons(victoryOverlay);
 
@@ -209,11 +216,12 @@ extendClass(GameControlSystem, {
 
     /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
      *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
-     *  snapshot) since selling/taking changes it while this screen stays open. Click sells
-     *  the stack; drag onto the SHIP grid below files it there. Still-pending cargo is wiped
-     *  when the screen closes (clearPendingCargo in hideVictoryOverlay) — the player has to
-     *  decide now. Plain resources aren't shown: those auto-bank straight to the station
-     *  wallet at victory (teleportCargoResourcesToStation), no decision needed. */
+     *  snapshot) since selling/taking changes it while this screen stays open. Click takes a
+     *  part onto the SHIP grid (right-click sells); blueprints stay click-to-sell. Drag onto
+     *  SHIP also files a part. Still-pending cargo is wiped when the screen closes
+     *  (clearPendingCargo in hideVictoryOverlay) — the player has to decide now. Plain
+     *  resources aren't shown: those auto-bank straight to the station wallet at victory
+     *  (teleportCargoResourcesToStation), no decision needed. */
     renderVictoryLootHtml() {
         if (typeof profileManager === 'undefined') return '';
         const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
@@ -275,7 +283,8 @@ extendClass(GameControlSystem, {
             const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
             const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
             const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
-                : (parsed ? `DRAG TO SHIP · CLICK TO SELL ALL · ${sellValue}c` : `CLICK TO SELL · ${sellValue}c`));
+                : (parsed ? `CLICK TO LOOT · DRAG TO SHIP · RIGHT-CLICK SELL · ${sellValue}c`
+                    : `CLICK TO SELL · ${sellValue}c`));
             const tip = tipLines.concat(actionLine.split('\n')).join('\n');
             return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
                 `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" style="--pk-c:${color}" ` +
@@ -466,6 +475,21 @@ extendClass(GameControlSystem, {
         if (!list || list.dataset.sellBound) return;
         list.dataset.sellBound = '1';
         list.addEventListener('click', (event) => {
+            const btn = event.target.closest('.victory-loot-cell');
+            if (!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const isBlueprint = btn.dataset.cargoBlueprint === '1';
+            // Parts: click loots onto the active ship. Blueprints can't file on a ship
+            // (craft-only), so left-click still sells those.
+            if (!isBlueprint && btn.classList.contains('is-draggable')) {
+                this.takeVictoryCargoItem(btn.dataset.cargoKey);
+                return;
+            }
+            if (!btn.classList.contains('is-sellable')) return;
+            this.sellVictoryCargoItem(btn.dataset.cargoKey, isBlueprint);
+        });
+        list.addEventListener('contextmenu', (event) => {
             const btn = event.target.closest('.victory-loot-cell.is-sellable');
             if (!btn) return;
             event.preventDefault();

@@ -221,7 +221,8 @@ extendClass(StartScreenManager, {
         const tabs = document.createElement('div');
         tabs.className = 'hs-menu-panel-tabs';
         this.embeddedMenuTabs.forEach((tab) => {
-            if (tab.id === 'portraits' && !this.devMode && this.embeddedMenuTab !== 'portraits') return;
+            if (tab.id === 'portraits'
+                && !this.devMode && this.embeddedMenuTab !== tab.id) return;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'hs-menu-panel-tab' + (tab.id === this.embeddedMenuTab ? ' active' : '');
@@ -248,10 +249,10 @@ extendClass(StartScreenManager, {
         body.className = 'hs-menu-panel-body';
         if (this.embeddedMenuTab === 'profiles') {
             this.fillEmbeddedProfiles(body);
+        } else if (this.embeddedMenuTab === 'audio') {
+            this.createSettingsUI(body, { bare: true, audioOnly: true });
         } else if (this.embeddedMenuTab === 'settings' || this.embeddedMenuTab === 'assets') {
-            this.createSettingsUI(body, { bare: true });
-        } else if (this.embeddedMenuTab === 'assets') {
-            this.fillEmbeddedAssets(body);
+            this.createSettingsUI(body, { bare: true, excludeSound: true });
         } else if (this.embeddedMenuTab === 'layout' && this.fillEmbeddedLayout) {
             this.fillEmbeddedLayout(body);
         } else if (this.embeddedMenuTab === 'portraits' && this.fillEmbeddedPortraits) {

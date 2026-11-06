@@ -89,28 +89,41 @@ Octaves roughly 1–5. Bass ch0, lead ch1, harmony ch2, drums ch3.
 6. `order` like `[0,0,1,0,2,1,0,0]` so the motif returns.
 7. Every `channels[i]` must have exactly `rowsPerPattern` tokens.
 
+## Architecture — Hauptmelodie × STYLE
+
+Each **planet × role** owns a Hauptmelodie (pitch DNA). Playback **STYLE**
+(JUNGLE / MINIMAL / AMEN / …) interprets that melody (rhythm, drums,
+articulation) — it must not invent a different hook.
+
+Roles per planet: **ingame** (combat), **map** (galaxy map), **victory**, **lose**.
+Hub **menu** stays a global Planet-Select motif.
+
 ## OST role map (inspiration only)
 
 | Key | VF GB analogue |
 |-----|----------------|
-| `menu` | Planet Select |
+| `menu` | Planet Select (hub) |
+| `map:mars` | Galaxy map · Mars motif |
+| `ingame:mars` / `mars` | Main BGM / combat |
 | `intro:*` | Title (short fanfare, `loop: false`) |
 | `mars` / `jupiter` / `saturn` | Main BGM 1–3 flavours |
 | `neptune` / `pluto` | Colder / late Main BGM |
 | `*-boss` | Boss / Final Boss |
-| `victory*` / `lose*` | Ending mood variants |
+| `victory:mars` / `lose:neptune` | End screens · planet motif |
 
 ## Key naming (import path / Soundtrack Editor)
 
 | Key | Use |
 |-----|-----|
-| `mars` / `mars-boss` | Base planet / boss |
-| `mars:pirate` | Combat on Mars vs Pirate |
+| `mars` / `ingame:mars` / `mars-boss` | Ingame / boss Hauptmelodie |
+| `map:jupiter` | Galaxy map · Jupiter |
+| `mars:pirate` | Combat on Mars vs Pirate (melody stays Mars) |
 | `mars-boss:kronax` | Boss vs Kronax |
 | `faction:voidborn` | Faction theme fallback |
 | `intro:mars:pirate` | Mission intro |
 | `menu` | Station / title hub |
-| `victory:pirate` / `lose:kronax` | End screens |
+| `victory:mars` / `lose:pluto` | End screens · planet melody |
+| `victory:pirate:mars` | Victory · Mars melody + Pirate skin |
 
 ## User request template
 

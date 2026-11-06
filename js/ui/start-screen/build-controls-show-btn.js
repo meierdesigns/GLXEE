@@ -157,6 +157,10 @@ extendClass(StartScreenManager, {
 
     handleKeyDown(event) {
         if (!this.visible) return false;
+        // Held Esc key-repeat must not keep exiting/rebuilding embedded panels.
+        if (event.repeat && (event.key === 'Escape' || event.key === 'Backspace')) {
+            return true;
+        }
         // Embedded in the station: keys belong to the station tab row until
         // the player pressed ENTER/SPACE on the menu tab.
         if (this.embeddedMode && typeof homeStationUI !== 'undefined' &&
@@ -167,6 +171,7 @@ extendClass(StartScreenManager, {
         if (!this.showCredits && !this.showLevels && !this.showFontMenu &&
             !(this.showSettings && !this.embeddedMode) &&
             event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+            if (event.repeat) return true;
             event.preventDefault();
             this.toggleDevMode();
             return true;

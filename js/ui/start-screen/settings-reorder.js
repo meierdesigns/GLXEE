@@ -17,8 +17,10 @@ const SETTINGS_NAV_KEY = 'vf_settings_nav_v2';
 const SETTINGS_DEFAULT_CLUSTERS = [
     { id: 'appearance', title: 'APPEARANCE', sections: ['theme', 'look', 'style', 'voxel', 'fx'] },
     { id: 'game', title: 'GAME', sections: ['game', 'enemies', 'shots'] },
-    { id: 'audio', title: 'AUDIO', sections: ['sound'] },
     { id: 'tools', title: 'TOOLS', sections: ['assets'] },
+];
+const SETTINGS_AUDIO_CLUSTERS = [
+    { id: 'audio', title: 'AUDIO', sections: ['sound'] },
 ];
 
 extendClass(StartScreenManager, {
@@ -203,8 +205,12 @@ extendClass(StartScreenManager, {
     },
 
     /** Master/detail layout: clustered section list on the left, the open section on the right. */
-    buildSettingsMaster(panel) {
-        if (!panel.querySelector('details.settings-section[data-section="debug"]')) {
+    buildSettingsMaster(panel, opts) {
+        const ephemeral = !!(opts && opts.ephemeral);
+        const defaultClusters = (opts && Array.isArray(opts.defaults) && opts.defaults.length)
+            ? opts.defaults
+            : SETTINGS_DEFAULT_CLUSTERS;
+        if (!panel.querySelector('details.settings-section[data-section="debug"]') && !ephemeral) {
             const debug = document.createElement('details');
             debug.className = 'settings-section';
             debug.dataset.section = 'debug';
@@ -283,13 +289,23 @@ extendClass(StartScreenManager, {
         if (!dets.length) return;
         const byId = new Map(dets.map((d) => [d.dataset.section, d]));
         let saved = null;
-        try { saved = JSON.parse(localStorage.getItem(SETTINGS_NAV_KEY) || 'null'); } catch (e) { saved = null; }
-        const layout = (Array.isArray(saved) && saved.length ? saved : SETTINGS_DEFAULT_CLUSTERS)
-            .map((c) => ({ id: String(c.id), title: String(c.title || 'CLUSTER'), sections: (c.sections || []).filter((id) => byId.has(id)) }));
+        if (!ephemeral) {
+            try { saved = JSON.parse(localStorage.getItem(SETTINGS_NAV_KEY) || 'null'); } catch (e) { saved = null; }
+        }
+        const layout = (Array.isArray(saved) && saved.length ? saved : defaultClusters)
+            .map((c) => ({
+                id: String(c.id),
+                title: String(c.title || 'CLUSTER'),
+                // Missing sections (e.g. SOUND after the AUDIO menu split) drop out.
+                sections: (c.sections || []).filter((id) => byId.has(id))
+            }))
+            .filter((c) => c.sections.length);
         const placed = new Set(layout.flatMap((c) => c.sections));
         dets.forEach((d) => {
             if (placed.has(d.dataset.section)) return;
-            const home = SETTINGS_DEFAULT_CLUSTERS.find((c) => c.sections.includes(d.dataset.section));
+            const home = defaultClusters.find((c) => c.sections.includes(d.dataset.section))
+                || SETTINGS_DEFAULT_CLUSTERS.find((c) => c.sections.includes(d.dataset.section))
+                || SETTINGS_AUDIO_CLUSTERS.find((c) => c.sections.includes(d.dataset.section));
             const target = (home && layout.find((c) => c.id === home.id)) || layout[layout.length - 1] || (layout[0] = { id: 'main', title: 'SETTINGS', sections: [] });
             target.sections.push(d.dataset.section);
         });
@@ -313,6 +329,7 @@ extendClass(StartScreenManager, {
             root.removeAttribute('data-vf-dragging');
         };
         const save = () => {
+            if (ephemeral) return;
             const out = Array.from(nav.querySelectorAll(':scope > .settings-cluster-block')).map((blk) => ({
                 id: blk.dataset.cluster,
                 title: blk.querySelector('.settings-cluster-title').textContent,

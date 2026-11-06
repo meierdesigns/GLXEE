@@ -329,19 +329,31 @@
     padding: 10px 28px;
 }
 
-/* --- Profiles overlay, large: same footprint as the station's big panels. */
+/* --- Profiles overlay: fill the bezel glass host; body scrolls inside. */
 .profile-selection-content.profile-selection-floating:not(.profile-selection-name-mode) {
-    max-width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
-    width: min(calc(1320px * var(--zk)), calc(96 * var(--cw)));
-    max-height: calc(94 * var(--sv-h));
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: none;
+    box-sizing: border-box;
     padding: 28px 32px;
 }
-.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-title { font-size: 34px; margin-bottom: 20px; }
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-title {
+    flex: 0 0 auto;
+    font-size: 34px;
+    margin-bottom: 20px;
+}
 .profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-body {
     grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.6fr);
     gap: 18px;
-    height: min(calc(70 * var(--ch)), calc(820px * var(--zk)));
+    flex: 1 1 0;
+    min-height: 0;
+    height: auto;
     max-height: none;
+}
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-actions,
+.profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-instructions {
+    flex: 0 0 auto;
 }
 .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item {
     padding: 14px 16px;
@@ -364,7 +376,7 @@
 @media (max-width: 560px) {
     .profile-selection-floating:not(.profile-selection-name-mode) .profile-selection-body {
         grid-template-columns: 1fr;
-        height: min(calc(72 * var(--ch)), calc(640px * var(--zk)));
+        height: auto;
     }
 }
 

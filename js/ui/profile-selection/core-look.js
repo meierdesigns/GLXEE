@@ -70,12 +70,24 @@ extendClass(ProfileSelectionManager, {
      */
     renderEmblemAtSize(crestEl, id) {
         if (!crestEl) return;
-        const w = Math.round(crestEl.getBoundingClientRect().width);
-        if (!(w > 0) || (crestEl.dataset.emblemPx === String(w) && crestEl.dataset.emblemFaction === id)) return;
-        const renderW = Math.round(w * ProfileSelectionManager.EMBLEM_OVERSAMPLE);
-        crestEl.innerHTML = this.getFactionEmblemHtml(id, renderW, 1);
+        // Read the last PAINTED faction before stamping the desired one — otherwise a
+        // same-size faction switch (Terran → Kronax) would early-return and keep the old crest.
+        const painted = crestEl.dataset.emblemFaction;
+        const paintedPx = crestEl.dataset.emblemPx;
+        // Always remember the desired faction: if layout width is still 0 (card not
+        // measured yet), ResizeObserver must know what to paint once size arrives.
         crestEl.dataset.emblemFaction = id;
-        crestEl.dataset.emblemPx = String(w);
+        const w = Math.round(crestEl.getBoundingClientRect().width);
+        if (!(w > 0)) return;
+        const empty = !crestEl.querySelector('img');
+        if (!empty && painted === id && paintedPx === String(w)) return;
+        const renderW = Math.round(w * ProfileSelectionManager.EMBLEM_OVERSAMPLE);
+        const html = this.getFactionEmblemHtml(id, renderW, 1);
+        crestEl.innerHTML = html;
+        crestEl.dataset.emblemFaction = id;
+        // Only lock the size when art actually landed — empty HTML must retry later.
+        if (html) crestEl.dataset.emblemPx = String(w);
+        else delete crestEl.dataset.emblemPx;
     },
     /** One shared observer for every .pfc-crest currently on screen; re-renders each at its new size. */
     _watchCrestSize(crestEl) {
@@ -104,12 +116,27 @@ extendClass(ProfileSelectionManager, {
         // Backdrop, cables, colours and the dialog content all change in ONE step (inside the cable swap), not in three staggered phases.
         const content = () => {
             if (!this.overlay || this.pendingFaction !== id) { if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' skipped (newer pick)'); return; }                 // a newer pick replaced this one
+            clearTimeout(this._lookContentTimer);
+            this._lookContentTimer = 0;
             const tC = performance.now();
             this.applyFactionContent(id);
             if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' rendered in ' + Math.round(performance.now() - tC) + 'ms');
         };
         if (window.vfLog) window.vfLog('wizard', 'pick ' + id);
         this.applyFactionVars(box, id, content);
+        // If the cable swap never delivers (stuck busy / cancelled mid-flight), fill
+        // empty lore/name panels anyway so a refresh never leaves the card blank.
+        clearTimeout(this._lookContentTimer);
+        this._lookContentTimer = setTimeout(() => {
+            this._lookContentTimer = 0;
+            if (!this.overlay || this.pendingFaction !== id) return;
+            const lore = this.overlay.querySelector('.profile-faction-lore-text');
+            const name = this.overlay.querySelector('.profile-faction-preview-name');
+            if ((lore && !lore.textContent.trim()) || (name && !name.textContent.trim())) {
+                if (window.vfLog) window.vfLog('wizard', 'content failsafe for ' + id);
+                content();
+            }
+        }, 650);
     },
     applyFactionContent(id) {
         // The menu / profile backdrops follow the faction being picked (CSS: html[data-pf]).
@@ -120,8 +147,17 @@ extendClass(ProfileSelectionManager, {
         }
         const emblem = this.overlay.querySelector('.profile-faction-preview-emblem');
         if (emblem) { this.renderEmblemAtSize(emblem, id); this._watchCrestSize(emblem); }
+        // Swatches are baked at createUI time — refill any that rendered before icons were ready.
+        this.overlay.querySelectorAll('.profile-faction-swatch').forEach((btn) => {
+            const fid = btn.dataset.faction;
+            const emb = btn.querySelector('.profile-faction-swatch-emblem');
+            if (fid && emb && !emb.querySelector('img')) emb.innerHTML = this.getFactionEmblemHtml(fid, 48);
+        });
         const nameCrest = this.overlay.querySelector('.profile-name-crest');
-        if (nameCrest && nameCrest.dataset.emblemFaction !== id) { nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48); nameCrest.dataset.emblemFaction = id; }
+        if (nameCrest && (nameCrest.dataset.emblemFaction !== id || !nameCrest.querySelector('img'))) {
+            nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48);
+            nameCrest.dataset.emblemFaction = id;
+        }
         const name = this.overlay.querySelector('.profile-faction-preview-name');
         if (name) name.textContent = this.getFactionLabel(id);
         const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
@@ -154,6 +190,17 @@ extendClass(ProfileSelectionManager, {
         // Swap the hero planet here too, not the moment the faction is picked —
         // otherwise it changes a beat before the cable-swap-gated content above.
         if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(id);
+        // Crest / swatch art may still be arriving (iconRenderer / layout width): retry a few times.
+        if (emblem && !emblem.querySelector('img')) {
+            clearTimeout(this._emblemRetryTimer);
+            let tries = 0;
+            const retryEmblem = () => {
+                if (!this.overlay || this.pendingFaction !== id) return;
+                this.renderEmblemAtSize(emblem, id);
+                if (!emblem.querySelector('img') && tries++ < 20) this._emblemRetryTimer = setTimeout(retryEmblem, 100);
+            };
+            this._emblemRetryTimer = setTimeout(retryEmblem, 100);
+        }
         // Re-run the swap-in animation on everything that changed with the faction.
         const inStartStep = !!this.overlay.querySelector('.profile-kit-ship');
         if (!inStartStep && this._lastLookFaction && this._lastLookFaction !== id) {
@@ -353,6 +400,9 @@ extendClass(ProfileSelectionManager, {
                 factionGui.swap(id, applyBezel);
             } else {
                 // Back on the shown faction: this pick is the newest, so it clears any earlier tint.
+                // Cancel an in-flight swap for another faction — otherwise its late apply would
+                // paint the wrong bezel and skip content (pendingFaction mismatch → blank card).
+                if (typeof factionGui !== 'undefined' && factionGui.cancelPending) factionGui.cancelPending();
                 bz.dataset.pendingFaction = id;
                 applyBezel();
             }

@@ -9,6 +9,12 @@ class HomeStationUI {
         this.overlay = null;
         this._keyHandler = null;
         this._mouseMoveHandler = null;
+        // Bumped on every createUI so deferred soft-mount rAFs no-op after a
+        // rapid Esc menu open/close (stale hangar preview on parked DOM).
+        this._uiGen = 0;
+        // After Esc closes the menu, suppress Esc→open-menu until keyup / cooldown.
+        this._escMenuCoolUntil = 0;
+        this._escMenuCoolKeyUp = null;
         this.onClose = null;
         this.tab = 'station'; // station | upgrade | hangar | components | shop | craft | travel | explorations | play
         this.upgradeSubTab = 'station'; // station | ships | modules
@@ -42,6 +48,7 @@ class HomeStationUI {
         this._hangarCardOffsets = {};
         this._hangarCardDragState = null;
         this._hangarPanelResize = null;
+        this._stationColResizeObs = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = true;
         // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.

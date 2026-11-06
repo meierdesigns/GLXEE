@@ -20,6 +20,7 @@ class CollisionManager {
         run(this.checkBulletSideEnemyCollisions);
         run(this.checkEnemyBulletPlayerCollisions);
         run(this.checkPlayerBulletEnemyBulletCollisions);
+        run(this.checkBomberPlayerCollisions);
         run(this.checkObstaclePlayerCollisions);
         run(this.checkObstacleEnemyCollisions);
         run(this.checkBulletObstacleCollisions);
@@ -104,11 +105,16 @@ class CollisionManager {
                     if (thick > 0) {
                         const dmg = thick <= 1 ? 3 : 8;
                         this.createDetailedHitEffect(hitX, hy, 'impact');
+                        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+                        this.spawnPlayerHitFx(hitX, hy);
                         if (typeof soundManager !== 'undefined') {
                             if (soundManager.playWallScrape) soundManager.playWallScrape();
-                            soundManager.playHurt();
+                            if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                                soundManager.playShieldHit();
+                            } else {
+                                soundManager.playHurt();
+                            }
                         }
-                        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
                         // Scraping the wall also chips it so you can grind an escape.
                         if (obstacleManager.damageTerrain) {
                             obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
@@ -193,27 +199,22 @@ class CollisionManager {
             const sx = side.x + side.width / 2;
             const sy = side.y + side.height / 2;
             const dmg = side.bomberDamage != null ? side.bomberDamage : 18;
-            if (typeof playerManager.takeDamage === 'function') {
-                playerManager.takeDamage(dmg);
+            const playerDefeated = typeof playerManager.takeDamage === 'function'
+                ? playerManager.takeDamage(dmg)
+                : false;
+            this.spawnPlayerHitFx(sx, sy);
+            if (typeof soundManager !== 'undefined') {
+                if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                    soundManager.playShieldHit();
+                } else if (soundManager.playHurt) {
+                    soundManager.playHurt();
+                }
+                if (soundManager.playExplosion) soundManager.playExplosion(1.1);
             }
-            if (typeof soundManager !== 'undefined') soundManager.playHurt();
-            if (typeof graphicsManager !== 'undefined') {
-                graphicsManager.createHitEffect(sx, sy, 6);
-            }
-            const killed = sides[j];
-            sides.splice(j, 1);
-            if (typeof soundManager !== 'undefined') soundManager.playExplosion(1.1);
-            if (enemyManager.notifyKill) {
-                enemyManager.notifyKill({
-                    type: killed.type,
-                    entryId: killed.entryId,
-                    faction: killed.faction,
-                    enemyClass: killed.enemyClass,
-                    cluster: killed.cluster,
-                    champion: false,
-                    x: sx,
-                    y: sy
-                });
+            // Kamikaze boom + kill credit (same pop path as a shot kill).
+            this.destroySideEnemy(sides, j);
+            if (playerDefeated && typeof game !== 'undefined' && game.gameOver) {
+                game.gameOver();
             }
         }
     }
@@ -310,21 +311,26 @@ class CollisionManager {
             if (obstacleManager.damageTerrain) {
                 obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
             }
-            return thick <= 1 ? 3 : 8;
+            return { dmg: thick <= 1 ? 3 : 8, hx: hitSide ? walls.right : walls.left, hy: hy };
         };
         const sides = enemyManager.getSideEnemies ? enemyManager.getSideEnemies() : [];
         for (let j = sides.length - 1; j >= 0; j--) {
             const e = sides[j];
             if (!e || e.entering || e.fleeing) continue;
-            const dmg = scrape(e);
-            if (!dmg) continue;
-            e.health -= dmg;
+            const hit = scrape(e);
+            if (!hit) continue;
+            e.health -= hit.dmg;
+            e.hitSpark = 'hull';
+            this.spawnEnemyHitFx(hit.hx, hit.hy, e);
             if (e.health <= 0) this.destroySideEnemy(sides, j);
         }
         const champ = enemyManager.getEnemy ? enemyManager.getEnemy() : null;
         if (champ && !(enemyManager.isExploding && enemyManager.isExploding())) {
-            const dmg = scrape(champ);
-            if (dmg) enemyManager.takeDamage(dmg);
+            const hit = scrape(champ);
+            if (hit) {
+                enemyManager.takeDamage(hit.dmg);
+                this.spawnEnemyHitFx(hit.hx, hit.hy, champ);
+            }
         }
     }
 
@@ -381,30 +387,44 @@ class CollisionManager {
         }
     }
 
-    /** Impact sparks + ring at the shot contact on an enemy hull. */
-    spawnEnemyHitFx(x, y, enemy) {
-        const shieldHit = !!(enemy && enemy.hitSpark === 'shield');
-        const span = enemy ? Math.max(enemy.width || 12, enemy.height || 12) : 14;
-        this.createExplosion(x, y, 'small_pop', {
-            scale: Math.min(1.15, 0.75 + span / 60),
-            width: Math.max(12, span * 0.45),
-            height: Math.max(12, span * 0.45),
-            silent: true
-        });
-        if (typeof graphicsManager === 'undefined') return;
-        const hot = shieldHit ? '#9fdcff' : 'var(--color-explosion)';
-        const core = shieldHit ? '#e8f8ff' : '#ffffff';
-        graphicsManager.createHitEffect(x, y, 16, hot);
-        graphicsManager.createHitEffect(x, y, 10, core);
-        if (graphicsManager.particleSystem && graphicsManager.particleSystem.createHitParticles) {
-            graphicsManager.particleSystem.createHitParticles(x, y, 12, {
-                speed: 2.4,
-                life: 28,
-                size: 2.2,
-                colors: shieldHit ? ['#9fdcff', '#ffffff', '#6ec8e8'] : ['#ffe566', '#ff8844', '#ffffff'],
-                drag: 0.84
+    /**
+     * Compact impact FX at shot contact: shield → energy flecks, hull → scrap chips.
+     * Used for both enemy and player ships.
+     */
+    spawnShipHitFx(x, y, hitSpark) {
+        const shieldHit = hitSpark === 'shield';
+        if (typeof graphicsManager === 'undefined' || !graphicsManager.particleSystem) return;
+        const ps = graphicsManager.particleSystem;
+        if (shieldHit && ps.createShieldHitParticles) {
+            ps.createShieldHitParticles(x, y, 8);
+        } else if (!shieldHit && ps.createScrapHitParticles) {
+            ps.createScrapHitParticles(x, y, 7);
+        } else if (ps.createHitParticles) {
+            ps.createHitParticles(x, y, 7, {
+                speed: shieldHit ? 1.9 : 2.1,
+                life: 13,
+                size: 1.45,
+                fadeOut: true,
+                gravity: shieldHit ? -0.015 : 0.14,
+                colors: shieldHit
+                    ? ['#9fdcff', '#ffffff', '#6ec8e8']
+                    : ['#8a9098', '#c4c8ce', '#5a6068']
             });
         }
+    }
+
+    /** Impact sparks at the shot contact on an enemy hull / shield. */
+    spawnEnemyHitFx(x, y, enemy) {
+        const shieldHit = !!(enemy && enemy.hitSpark === 'shield');
+        this.spawnShipHitFx(x, y, shieldHit ? 'shield' : 'hull');
+    }
+
+    /** Impact sparks when the player ship / shield is hit. */
+    spawnPlayerHitFx(x, y) {
+        const spark = (typeof playerManager !== 'undefined' && playerManager.hitSpark)
+            ? playerManager.hitSpark
+            : 'hull';
+        this.spawnShipHitFx(x, y, spark);
     }
 
     checkEnemyBulletPlayerCollisions(gameState) {
@@ -435,13 +455,15 @@ class CollisionManager {
 
                 const playerDefeated = playerManager.takeDamage(damage);
 
-                // Create hit particles
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(playerX, playerY, 4);
-                }
-
-                if (typeof soundManager !== 'undefined' && damage > 0) {
-                    soundManager.playHurt();
+                if (damage > 0) {
+                    this.spawnPlayerHitFx(playerX, playerY);
+                    if (typeof soundManager !== 'undefined') {
+                        if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                            soundManager.playShieldHit();
+                        } else {
+                            soundManager.playHurt();
+                        }
+                    }
                 }
 
                 if (playerDefeated) {

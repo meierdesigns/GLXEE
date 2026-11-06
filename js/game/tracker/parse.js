@@ -185,7 +185,11 @@ const VFTrackerParse = {
         if (!data || typeof data !== 'object') throw new Error('track must be an object');
 
         const bpm = Math.max(60, Math.min(240, Number(data.bpm) || 120));
-        const rowsPerBeat = Math.max(1, Math.min(8, Number(data.rowsPerBeat) || 1));
+        // Legacy banks mark 16-step / 16th grids as rowsPerBeat:1 (kick every 4 rows).
+        // MUSIC BPM is quarter-note tempo (beats/minute) — use rpb=4 so display matches
+        // tapped downbeats: rowDur=(60/bpm)/4, kick-every-4-rows → bpm.
+        let rowsPerBeat = Math.max(1, Math.min(8, Number(data.rowsPerBeat) || 1));
+        if (rowsPerBeat === 1) rowsPerBeat = 4;
         const rowsPerPattern = Math.max(4, Math.min(128, Number(data.rowsPerPattern) || 16));
         const channels = Math.max(1, Math.min(8, Number(data.channels) || 4));
 

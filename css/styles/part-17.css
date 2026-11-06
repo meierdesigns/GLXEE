@@ -873,12 +873,17 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 .profile-faction-preview.has-hero-planet { background-image: none !important; }
 
 /* Launch cutscene (js/ui/profile-selection/launch-cutscene.js): plays once after profile creation.
-   z-index below the bezel (#vf-bezel, 9993) so the pilot-hud frame stays on screen around it, the
-   same way the station and start-screen content sit behind the frame and show only through the
-   glass opening — it must not sit above tip floats/pause, only above the home-station (3600). */
+   Clamped to the bezel glass opening (--fr-open-*), same recipe as .vf-start-intro — never
+   inset:0 fullscreen over the hull band. z-index below the bezel (#vf-bezel, 9993) and above
+   the home-station (3600); must not sit above tip floats/pause. */
 .launch-cutscene {
     position: fixed;
-    inset: 0;
+    left: calc(var(--stage-x, 0px) + var(--fr-open-side));
+    top: calc(var(--stage-y, 0px) + var(--fr-open-top));
+    width: var(--fr-open-w);
+    height: var(--fr-open-h);
+    right: auto;
+    bottom: auto;
     z-index: 9990;
     background: #02040a;
     overflow: hidden;
@@ -912,7 +917,7 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
     top: 10%;
     transform: translateX(-50%);
     z-index: 5;
-    width: min(520px, 86vw);
+    width: min(520px, 86%);
     padding: 14px 18px 16px;
     text-align: center;
     pointer-events: none;

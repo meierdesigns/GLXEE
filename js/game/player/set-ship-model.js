@@ -148,21 +148,46 @@ extendClass(PlayerManager, {
             c.width = W * k;
             c.height = H * k;
             const ctx = c.getContext('2d', { willReadFrequently: true });
-            loader.renderShip(ctx, model, ((W - mw * fit) / 2) * k, ((H - mh * fit) / 2) * k, fit * k, null, 0, {});
+            loader.renderShip(ctx, model, ((W - mw * fit) / 2) * k, ((H - mh * fit) / 2) * k, fit * k, null, 0, {
+                showThrusterGlow: false,
+                allowColorMountSprites: true
+            });
             const data = ctx.getImageData(0, 0, c.width, c.height).data;
             const grid = [];
             let solid = 0;
+            let minC = c.width;
+            let maxC = -1;
+            let minR = c.height;
+            let maxR = -1;
             for (let r = 0; r < c.height; r++) {
                 const row = new Array(c.width);
                 for (let q = 0; q < c.width; q++) {
-                    const on = data[(r * c.width + q) * 4 + 3] > 110 ? 1 : 0;
+                    const on = data[(r * c.width + q) * 4 + 3] > 40 ? 1 : 0;
                     row[q] = on;
-                    solid += on;
+                    if (on) {
+                        solid += 1;
+                        if (q < minC) minC = q;
+                        if (q > maxC) maxC = q;
+                        if (r < minR) minR = r;
+                        if (r > maxR) maxR = r;
+                    }
                 }
                 grid.push(row);
             }
             if (solid < 4) { p.collision = null; return; } // art not ready yet
-            p.collision = { sprite: grid, colors: {}, drawW: W, drawH: H, insetL: 0, insetT: 0, insetR: 0, insetB: 0 };
+            const pw = W / c.width;
+            const ph = H / c.height;
+            p.collision = {
+                sprite: grid,
+                colors: {},
+                drawW: W,
+                drawH: H,
+                insetL: maxC >= minC ? minC * pw : 0,
+                insetT: maxR >= minR ? minR * ph : 0,
+                insetR: maxC >= minC ? (c.width - 1 - maxC) * pw : 0,
+                insetB: maxR >= minR ? (c.height - 1 - maxR) * ph : 0,
+                _maskTrust: null
+            };
             this._hitMaskKey = key;
         } catch (e) {
             p.collision = null;

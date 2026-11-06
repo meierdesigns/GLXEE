@@ -47,12 +47,22 @@ extendClass(HomeStationUI, {
         return null; // null → leave CSS defaults alone
     },
 
-    bindStationColumnResize() {
+    disconnectStationColumnResize() {
+        if (this._stationColResizeObs) {
+            this._stationColResizeObs.disconnect();
+            this._stationColResizeObs = null;
+        }
         const grid = this.overlay && this.overlay.querySelector('.hs-station-grid');
         if (!grid) return;
-        // Avoid stacking handles across soft remounts.
         grid.querySelectorAll('.hs-col-resize').forEach((h) => h.remove());
         grid.style.removeProperty('grid-template-columns');
+        grid.style.removeProperty('position');
+    },
+
+    bindStationColumnResize() {
+        this.disconnectStationColumnResize();
+        const grid = this.overlay && this.overlay.querySelector('.hs-station-grid');
+        if (!grid) return;
 
         const left = grid.querySelector('.hs-panel-stack') ||
             grid.querySelector('.hs-panel-parts') ||
@@ -82,6 +92,10 @@ extendClass(HomeStationUI, {
 
         const normalize = () => {
             if (!cols) return;
+            // Detached / pre-layout grids report 0 width — never rewrite fr weights then
+            // (Esc menu soft-park used to explode columns via offsetWidth||1).
+            const px = grid.offsetWidth;
+            if (!(px > 32) || !grid.isConnected) return;
             const clean = this._sanitizeStationCols(cols);
             if (!clean) {
                 cols = null;
@@ -91,7 +105,6 @@ extendClass(HomeStationUI, {
             }
             cols = clean;
             const total = cols[0] + cols[1];
-            const px = grid.offsetWidth || 1;
             const minLeft = Math.max(STATION_COLS_MIN, (STATION_LEFT_MIN_PX / px) * total);
             const minRight = Math.max(STATION_COLS_MIN, (STATION_RIGHT_MIN_PX / px) * total);
             // If mins can't both fit, fall back to CSS defaults instead of exploding ratios.
@@ -124,7 +137,9 @@ extendClass(HomeStationUI, {
         grid.appendChild(handle);
 
         const place = () => {
+            if (!grid.isConnected || !(grid.offsetWidth > 0)) return;
             const gRect = grid.getBoundingClientRect();
+            if (!(gRect.width > 0) || !(gRect.height > 0)) return;
             const scaleX = (gRect.width / (grid.clientWidth || grid.offsetWidth || 1)) || 1;
             const scaleY = (gRect.height / (grid.clientHeight || grid.offsetHeight || 1)) || 1;
             const aRect = left.getBoundingClientRect();
@@ -194,7 +209,10 @@ extendClass(HomeStationUI, {
             handle.addEventListener('pointercancel', up);
         });
 
-        if (window.ResizeObserver) new ResizeObserver(() => { place(); normalize(); }).observe(grid);
+        if (window.ResizeObserver) {
+            this._stationColResizeObs = new ResizeObserver(() => { place(); normalize(); });
+            this._stationColResizeObs.observe(grid);
+        }
     },
 
     /** Hangar: RESET ANATOMY / SET AS DEFAULT sit on the right of the ship's title row, so the stats row keeps its room. */

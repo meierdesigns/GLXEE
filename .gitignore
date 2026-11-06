@@ -1,6 +1,9 @@
 # Debug tools (local only)
 tools/debug/
 
+# Dev-only Music Editor (base melody) — not shipped in GitHub/itch download
+js/ui/dev/
+
 # ComfyUI generated assets (keep folder structure via .gitkeep)
 assets/_generated/**
 !assets/_generated/**/.gitkeep
@@ -63,4 +66,10 @@ archive/
 shot-probe.png
 verify-top.*
 .tmp-*.png
+.cursor-tmp-*.png
 kronax-full.png
+
+# Local import dumps / tracker MOD exports (not runtime)
+.import/
+assets/soundtracks/mod-templates/
+assets/soundtracks/mod-templates.zip

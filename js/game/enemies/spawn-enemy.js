@@ -143,8 +143,14 @@ extendClass(EnemyManager, {
             maxY: enemyMaxY,
             sprite: hitProfile.sprite,
             colors: hitProfile.colors,
-            collision: this.scaleEnemyCollision(hitProfile.collision, contentScale)
+            collision: this.scaleEnemyCollision(hitProfile.collision, contentScale),
+            _hitMaskReady: !!hitProfile.hitMaskReady
         };
+        if (this.enemy.collision) {
+            this.enemy.collision.drawW = this.enemy.width;
+            this.enemy.collision.drawH = this.enemy.height;
+            this.enemy.collision._maskTrust = null;
+        }
 
         // Faction kit on the hull — bosses swap pattern weapons later.
         if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossWeaponKit && isBossLvl) {

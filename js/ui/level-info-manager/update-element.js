@@ -269,5 +269,14 @@ extendClass(LevelInfoManager, {
                 el.classList.remove('vf-event-announce-pulse');
             }
         }, holdMs);
+        // Transit rail: pop the matching contact icon as soon as the event is announced.
+        if (this.revealTransitEvent) {
+            this.revealTransitEvent({
+                id: opts.id || opts.eventId || null,
+                role: opts.role || opts.catalogId || null,
+                type: opts.type || null,
+                accent: accent
+            });
+        }
     },
 });

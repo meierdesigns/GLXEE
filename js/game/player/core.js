@@ -196,6 +196,7 @@ class PlayerManager {
         const usableShield = online ? Math.min(this.shield, maxAbsByEnergy) : 0;
         const savedShield = this.shield;
 
+        let shieldUsed = 0;
         if (hpDamage > 0 && typeof enemyManager !== 'undefined' && enemyManager.applyDefenseToDamage) {
             const target = {
                 armor: this.armor,
@@ -205,17 +206,21 @@ class PlayerManager {
                 defenseMechanisms: this.defenseMechanisms
             };
             hpDamage = enemyManager.applyDefenseToDamage(target, hpDamage);
-            const used = Math.max(0, usableShield - (target.shield || 0));
-            this.shield = savedShield - used;
-            if (used > 0) {
-                this.energy = Math.max(0, this.energy - used * costPer);
+            shieldUsed = Math.max(0, usableShield - (target.shield || 0));
+            this.shield = savedShield - shieldUsed;
+            if (shieldUsed > 0) {
+                this.energy = Math.max(0, this.energy - shieldUsed * costPer);
             }
         } else if (hpDamage > 0 && usableShield > 0) {
             const absorbed = Math.min(usableShield, hpDamage);
             this.shield = savedShield - absorbed;
             this.energy = Math.max(0, this.energy - absorbed * costPer);
             hpDamage -= absorbed;
+            shieldUsed = absorbed;
         }
+
+        // Hull flash when armor eats damage; shield spark when the barrier soaks it.
+        this.hitSpark = hpDamage > 0 ? 'hull' : (shieldUsed > 0 ? 'shield' : 'hull');
 
         if (typeof chargeSystem !== 'undefined' && chargeSystem.onPlayerHitWhileCharging) {
             chargeSystem.onPlayerHitWhileCharging();

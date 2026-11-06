@@ -4,10 +4,13 @@
  * Built-in vftracks — oriented on Volley Fire (GB, 1990 / Akihiko Mori):
  * clear pulse hooks, wave bass ostinato, sparse harmony, noise hats.
  * Original melodies inspired by that era's Toei GB shooter feel (not a rip).
- * Role map ≈ GB OST: Title→intro, Planet Select→menu, Main BGM 1–3→planets,
- * Boss / Final Boss→boss keys.
+ * Role map ≈ GB OST: Title→intro, Planet Select→menu, Main BGM→ingame,
+ * Map / Victory / Lose / Shop = per-planet Hauptmelodien (styles interpret them).
+ * Boss keys (`mars-boss` …) own separate siege melodies — not combat remixes.
  */
 const VFTrackerDefaults = {
+    /** Playback roles that own a distinct Hauptmelodie per planet. */
+    ROLES: ['ingame', 'map', 'victory', 'lose', 'shop', 'boss'],
     /** Game Boy-ish voices: wave bass, two pulses, noise. */
     _baseInstruments() {
         return [
@@ -50,145 +53,145 @@ const VFTrackerDefaults = {
      * Lead answers itself — never random walks.
      */
 
-    // Motif: A C E D | C A G A  (A minor head)
+    // Mars — marching even 8ths, clear A-minor hook (combat workhorse).
     mars() {
         return this._track(
-            { title: 'Main Orbit 1', planet: 'mars', notes: 'motif A-C-E-D · develop · return' },
+            { title: 'Main Orbit 1', planet: 'mars', notes: 'march A-C-E-D · even 8ths' },
             132,
             [
                 this._pat(0,
-                    'A-2:1:56 . A-2:1:40 . A-2:1:56 . E-2:1:44 . A-2:1:56 . A-2:1:40 . E-2:1:48 . E-2:1:36',
-                    'A-4:2:48 . C-5:2:40 . E-5:2:52 . D-5:2:44 . C-5:2:46 . A-4:2:38 . G-4:2:40 . A-4:2:44',
-                    'E-4:3:16 . . . A-4:3:14 . . . E-4:3:16 . . . A-4:3:14 . . .',
-                    'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .'
+                    'A-2:1:60 . A-2:1:44 . A-2:1:58 . E-2:1:48 . A-2:1:60 . A-2:1:42 . E-2:1:52 . E-2:1:38',
+                    'A-4:2:52 . C-5:2:44 . E-5:2:56 . D-5:2:48 . C-5:2:50 . A-4:2:40 . G-4:2:42 . A-4:2:46',
+                    'E-4:3:20 . A-4:3:12 . E-4:3:16 . A-4:3:10 . E-4:3:18 . A-4:3:12 . E-4:3:14 . A-4:3:08',
+                    'A-2:5:68 . A-4:4:18 . A-2:5:54 . A-4:4:14 A-2:5:66 . A-4:4:18 . A-2:5:50 A-4:4:12 . .'
                 ),
                 this._pat(1,
-                    'F-2:1:52 . F-2:1:36 . F-2:1:52 . C-2:1:40 . G-2:1:52 . G-2:1:36 . E-2:1:46 . G-2:1:34',
-                    'F-4:2:44 . A-4:2:36 . C-5:2:48 . B-4:2:40 . A-4:2:42 . G-4:2:34 . E-4:2:36 . F-4:2:40',
-                    'C-4:3:14 . . . F-4:3:12 . . . D-4:3:14 . . . G-4:3:12 . . .',
-                    'F-2:5:58 . A-4:4:14 . F-2:5:46 . A-4:4:10 G-2:5:58 . A-4:4:14 . G-2:5:44 A-4:4:08 . .'
+                    'F-2:1:56 . F-2:1:40 . F-2:1:54 . C-2:1:44 . G-2:1:56 . G-2:1:40 . E-2:1:50 . G-2:1:36',
+                    'F-4:2:48 . A-4:2:40 . C-5:2:52 . B-4:2:44 . A-4:2:46 . G-4:2:36 . E-4:2:38 . F-4:2:42',
+                    'C-4:3:18 . F-4:3:10 . C-4:3:14 . F-4:3:08 . D-4:3:16 . G-4:3:10 . D-4:3:12 . G-4:3:08',
+                    'F-2:5:62 . A-4:4:16 . F-2:5:48 . A-4:4:12 G-2:5:62 . A-4:4:16 . G-2:5:46 A-4:4:10 . .'
                 ),
                 this._pat(2,
-                    'A-2:1:60 . A-2:1:42 . C-3:1:50 . E-2:1:46 . A-2:1:60 . A-2:1:42 . G-2:1:52 . E-2:1:40',
-                    'A-5:2:52 . C-6:2:44 . E-6:2:56 . D-6:2:48 . C-6:2:50 . A-5:2:42 . G-5:2:44 . A-5:2:48',
-                    'A-4:3:18 . E-4:3:12 . E-4:3:12 A-4:3:18 . C-5:3:20 . E-4:3:12 A-4:3:16 . G-4:3:12 . E-4:3:10 .',
-                    'A-2:5:70 A-4:4:18 . A-4:4:12 A-2:5:54 . A-4:4:14 . A-2:5:66 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+                    'A-2:1:64 A-2:1:40 . C-3:1:54 . E-2:1:50 A-2:1:64 . G-2:1:56 . E-2:1:44 . A-2:1:58',
+                    'A-5:2:58 . C-6:2:48 . E-6:2:62 . D-6:2:52 . C-6:2:54 . A-5:2:44 . G-5:2:46 . A-5:2:52',
+                    'A-4:3:22 E-4:3:14 . C-5:3:20 . A-4:3:18 E-4:3:12 . G-4:3:16 . E-4:3:10 . A-4:3:14',
+                    'A-2:5:74 A-4:4:22 . A-4:4:14 A-2:5:58 A-4:4:16 . A-2:5:70 A-4:4:20 . A-4:4:12 A-2:5:54 A-4:4:14 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
         );
     },
 
-    // Motif: E G B A | G E D E  (E minor head)
+    // Jupiter — syncopated offbeat lead, wide leaps, sparse bass hits.
     jupiter() {
         return this._track(
-            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'motif E-G-B-A · develop · return' },
-            124,
+            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'syncop E-G-B-A · offbeat lead' },
+            118,
             [
                 this._pat(0,
-                    'E-2:1:54 . E-2:1:38 . E-2:1:54 . B-1:1:42 . E-2:1:54 . E-2:1:38 . B-1:1:46 . B-1:1:34',
-                    'E-4:2:46 . G-4:2:38 . B-4:2:50 . A-4:2:42 . G-4:2:44 . E-4:2:36 . D-4:2:38 . E-4:2:42',
-                    'B-3:3:14 . . . E-4:3:12 . . . B-3:3:14 . . . E-4:3:12 . . .',
-                    'E-2:5:60 . A-4:4:14 . E-2:5:48 . A-4:4:10 E-2:5:60 . A-4:4:14 . E-2:5:44 A-4:4:08 . .'
+                    'E-2:1:58 . . . E-2:1:46 . B-1:1:50 . . E-2:1:54 . . B-1:1:42 . . .',
+                    '. E-4:2:48 . . G-4:2:40 . B-4:2:54 . . A-4:2:44 . G-4:2:38 . E-4:2:42 .',
+                    '. . B-3:3:18 . . . E-4:3:14 . . . B-3:3:16 . . . E-4:3:12 .',
+                    'E-2:5:56 . . A-4:4:10 . E-2:5:44 . A-4:4:08 . E-2:5:52 . . A-4:4:10 . E-2:5:40 .'
                 ),
                 this._pat(1,
-                    'C-3:1:50 . C-3:1:34 . C-3:1:50 . G-2:1:38 . D-3:1:50 . D-3:1:34 . B-1:1:44 . D-2:1:32',
-                    'C-5:2:42 . E-5:2:34 . G-5:2:46 . F#5:2:38 . E-5:2:40 . D-5:2:32 . B-4:2:34 . C-5:2:38',
-                    'G-4:3:12 . . . C-5:3:10 . . . A-4:3:12 . . . D-5:3:10 . . .',
-                    'C-3:5:56 . A-4:4:12 . C-3:5:44 . A-4:4:08 D-3:5:56 . A-4:4:12 . D-3:5:40 A-4:4:06 . .'
+                    'C-3:1:52 . . . G-2:1:40 . D-3:1:48 . . C-3:1:50 . . B-1:1:38 . . .',
+                    '. C-5:2:44 . . E-5:2:36 . G-5:2:50 . . F#5:2:40 . E-5:2:34 . C-5:2:38 .',
+                    '. . G-4:3:16 . . . C-5:3:12 . . . A-4:3:14 . . . D-5:3:10 .',
+                    'C-3:5:50 . . A-4:4:08 . C-3:5:40 . A-4:4:06 . D-3:5:48 . . A-4:4:08 . D-3:5:36 .'
                 ),
                 this._pat(2,
-                    'E-2:1:58 . E-2:1:40 . G-2:1:48 . B-1:1:44 . E-2:1:58 . E-2:1:40 . D-2:1:50 . B-1:1:38',
-                    'E-5:2:50 . G-5:2:42 . B-5:2:54 . A-5:2:46 . G-5:2:48 . E-5:2:40 . D-5:2:42 . E-5:2:46',
-                    'E-4:3:16 . B-3:3:10 . B-3:3:10 E-4:3:16 . G-4:3:18 . B-3:3:10 E-4:3:14 . D-4:3:10 . B-3:3:08 .',
-                    'E-2:5:66 A-4:4:16 . A-4:4:10 E-2:5:52 . A-4:4:12 . E-2:5:62 A-4:4:14 . A-4:4:08 E-2:5:46 A-4:4:10 .'
+                    'E-2:1:62 . . B-1:1:48 . E-2:1:56 . . G-2:1:52 . E-2:1:60 . . D-2:1:46 . E-2:1:54',
+                    '. E-5:2:56 . G-5:2:46 . B-5:2:60 . A-5:2:50 . G-5:2:48 . E-5:2:42 . D-5:2:40 . E-5:2:52',
+                    'E-4:3:20 . . B-3:3:14 E-4:3:18 . G-4:3:22 . . E-4:3:16 . D-4:3:12 . B-3:3:10 .',
+                    'E-2:5:64 . A-4:4:14 . E-2:5:50 A-4:4:12 . A-4:4:08 E-2:5:60 . A-4:4:14 . E-2:5:46 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 1]
+        );
+    },
+
+    // Saturn — galloping dense bass + lead every row (rings spinning).
+    saturn() {
+        return this._track(
+            { title: 'Main Orbit 3', planet: 'saturn', notes: 'gallop D-F-A-G · dense drive' },
+            144,
+            [
+                this._pat(0,
+                    'D-2:1:62 D-2:1:40 D-2:1:50 D-2:1:34 A-1:1:56 A-1:1:36 D-2:1:60 D-2:1:38 D-2:1:52 D-2:1:32 A-1:1:48 A-1:1:30 D-2:1:58 D-2:1:36 A-1:1:44 A-1:1:28',
+                    'D-4:2:50 F-4:2:36 A-4:2:54 G-4:2:40 F-4:2:44 D-4:2:32 C-4:2:36 D-4:2:42 D-4:2:48 F-4:2:34 A-4:2:52 G-4:2:38 F-4:2:42 D-4:2:30 C-4:2:34 D-4:2:40',
+                    'A-3:3:18 D-4:3:10 A-3:3:14 D-4:3:08 A-3:3:16 D-4:3:10 A-3:3:12 D-4:3:08 A-3:3:18 D-4:3:10 A-3:3:14 D-4:3:08 A-3:3:16 D-4:3:10 A-3:3:12 D-4:3:08',
+                    'D-2:5:70 A-4:4:20 D-2:5:42 A-4:4:12 D-2:5:64 A-4:4:18 A-4:4:10 . D-2:5:70 A-4:4:20 D-2:5:42 A-4:4:12 D-2:5:60 A-4:4:16 A-4:4:10 A-4:4:06'
+                ),
+                this._pat(1,
+                    'G-1:1:58 G-1:1:36 G-1:1:46 G-1:1:30 D-1:1:52 D-1:1:32 A-1:1:56 A-1:1:34 G-1:1:50 G-1:1:28 E-2:1:48 E-2:1:30 A-1:1:54 A-1:1:32 E-2:1:42 E-2:1:26',
+                    'G-3:2:46 Bb3:2:32 D-4:2:50 C-4:2:36 Bb3:2:40 A-3:2:28 G-3:2:32 A-3:2:38 G-3:2:44 Bb3:2:30 D-4:2:48 C-4:2:34 Bb3:2:38 A-3:2:26 G-3:2:30 A-3:2:36',
+                    'D-3:3:16 G-3:3:08 D-3:3:12 G-3:3:06 E-3:3:14 A-3:3:08 E-3:3:10 A-3:3:06 D-3:3:16 G-3:3:08 D-3:3:12 G-3:3:06 E-3:3:14 A-3:3:08 E-3:3:10 A-3:3:06',
+                    'G-1:5:66 A-4:4:18 G-1:5:40 A-4:4:10 A-1:5:60 A-4:4:16 A-4:4:08 . G-1:5:66 A-4:4:18 A-1:5:40 A-4:4:10 A-1:5:56 A-4:4:14 A-4:4:08 A-4:4:05'
+                ),
+                this._pat(2,
+                    'D-2:1:68 D-2:1:44 F-2:1:56 F-2:1:38 A-1:1:60 A-1:1:40 D-2:1:66 D-2:1:42 C-2:1:54 C-2:1:36 A-1:1:50 A-1:1:32 D-2:1:64 D-2:1:40 A-1:1:48 A-1:1:30',
+                    'D-5:2:56 F-5:2:42 A-5:2:60 G-5:2:46 F-5:2:50 D-5:2:38 C-5:2:42 D-5:2:48 D-5:2:54 F-5:2:40 A-5:2:58 G-5:2:44 F-5:2:48 D-5:2:36 C-5:2:40 D-5:2:46',
+                    'D-4:3:22 A-3:3:14 F-4:3:20 A-3:3:12 D-4:3:18 A-3:3:10 C-4:3:16 A-3:3:08 D-4:3:22 A-3:3:14 F-4:3:20 A-3:3:12 D-4:3:18 A-3:3:10 C-4:3:16 A-3:3:08',
+                    'D-2:5:78 A-4:4:24 D-2:5:48 A-4:4:16 D-2:5:72 A-4:4:22 A-4:4:14 A-4:4:08 D-2:5:76 A-4:4:24 D-2:5:46 A-4:4:14 D-2:5:68 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Neptune — half-time ice: long tones, wide silence, cold pulse.
+    neptune() {
+        return this._track(
+            { title: 'Ice Lane', planet: 'neptune', notes: 'half-time B-D-F#-E · cold space' },
+            104,
+            [
+                this._pat(0,
+                    'B-1:1:52 . . . . . F#1:1:40 . . . . . B-1:1:46 . . .',
+                    'B-3:2:44 . . . D-4:2:36 . . . F#4:2:48 . . . E-4:2:38 . . .',
+                    'F#3:3:12 . . . . . . . B-3:3:10 . . . . . . .',
+                    '. . A-4:4:08 . . . B-1:5:42 . . . A-4:4:06 . . . . .'
+                ),
+                this._pat(1,
+                    'G-1:1:46 . . . . . D-1:1:34 . . . . . A-1:1:42 . . .',
+                    'G-3:2:38 . . . B-3:2:30 . . . D-4:2:42 . . . C#4:2:32 . . .',
+                    'D-3:3:10 . . . . . . . G-3:3:08 . . . . . . .',
+                    '. . A-4:4:06 . . . G-1:5:36 . . . A-4:4:05 . . . . .'
+                ),
+                this._pat(2,
+                    'B-1:1:56 . . . F#1:1:44 . . . A-1:1:48 . . . E-1:1:38 . . .',
+                    'B-4:2:50 . . D-5:2:40 . . F#5:2:54 . . E-5:2:44 . . D-5:2:42 . B-4:2:46 .',
+                    'B-3:3:16 . . F#3:3:10 . . B-3:3:14 . . D-4:3:18 . . F#3:3:10 . B-3:3:12 .',
+                    'B-1:5:50 . . A-4:4:10 . B-1:5:40 . . A-4:4:08 . B-1:5:46 . A-4:4:06 . . .'
                 )
             ],
             [0, 0, 1, 0, 2, 0, 1, 0]
         );
     },
 
-    // Motif: D F A G | F D C D  (D minor head, faster)
-    saturn() {
-        return this._track(
-            { title: 'Main Orbit 3', planet: 'saturn', notes: 'motif D-F-A-G · develop · return' },
-            140,
-            [
-                this._pat(0,
-                    'D-2:1:56 D-2:1:36 . D-2:1:56 . A-1:1:42 . D-2:1:56 D-2:1:36 . A-1:1:46 . A-1:1:34',
-                    'D-4:2:48 . F-4:2:40 . A-4:2:52 . G-4:2:44 . F-4:2:46 . D-4:2:38 . C-4:2:40 . D-4:2:44',
-                    'A-3:3:16 . . . D-4:3:14 . . . A-3:3:16 . . . D-4:3:14 . . .',
-                    'D-2:5:64 A-4:4:16 D-2:5:40 A-4:4:10 D-2:5:58 A-4:4:14 . D-2:5:64 A-4:4:16 D-2:5:38 A-4:4:10 D-2:5:50 A-4:4:12 .'
-                ),
-                this._pat(1,
-                    'G-1:1:52 G-1:1:32 . G-1:1:52 . D-1:1:38 . A-1:1:52 A-1:1:32 . E-2:1:44 . A-1:1:30',
-                    'G-3:2:44 . Bb3:2:36 . D-4:2:48 . C-4:2:40 . Bb3:2:42 . A-3:2:34 . G-3:2:36 . A-3:2:40',
-                    'D-3:3:14 . . . G-3:3:12 . . . E-3:3:14 . . . A-3:3:12 . . .',
-                    'G-1:5:60 A-4:4:14 G-1:5:38 A-4:4:08 A-1:5:56 A-4:4:12 . A-1:5:60 A-4:4:14 A-1:5:36 A-4:4:08 A-1:5:48 A-4:4:10 .'
-                ),
-                this._pat(2,
-                    'D-2:1:60 . D-2:1:40 . F-2:1:50 . A-1:1:44 . D-2:1:60 . D-2:1:40 . C-2:1:52 . A-1:1:38',
-                    'D-5:2:52 . F-5:2:44 . A-5:2:56 . G-5:2:48 . F-5:2:50 . D-5:2:42 . C-5:2:44 . D-5:2:48',
-                    'D-4:3:18 . A-3:3:12 . A-3:3:12 D-4:3:18 . F-4:3:20 . A-3:3:12 D-4:3:16 . C-4:3:12 . A-3:3:10 .',
-                    'D-2:5:70 A-4:4:18 . A-4:4:10 D-2:5:54 A-4:4:14 A-4:4:08 . D-2:5:66 A-4:4:16 . A-4:4:08 D-2:5:48 A-4:4:10 .'
-                )
-            ],
-            [0, 0, 1, 0, 2, 1, 0, 0]
-        );
-    },
-
-    // Motif: B D F# E | D B A B  (B minor, colder spacing)
-    neptune() {
-        return this._track(
-            { title: 'Ice Lane', planet: 'neptune', notes: 'motif B-D-F#-E · develop · return' },
-            118,
-            [
-                this._pat(0,
-                    'B-1:1:50 . . B-1:1:36 . F#1:1:44 . . F#1:1:32 . B-1:1:50 . . F#1:1:40 . F#1:1:30 .',
-                    'B-3:2:42 . D-4:2:34 . F#4:2:46 . E-4:2:38 . D-4:2:40 . B-3:2:32 . A-3:2:34 . B-3:2:38',
-                    'F#3:3:12 . . . B-3:3:10 . . . F#3:3:12 . . . B-3:3:10 . . .',
-                    '. A-4:4:12 . . B-1:5:48 . A-4:4:08 . . A-4:4:12 . B-1:5:42 . A-4:4:06 . .'
-                ),
-                this._pat(1,
-                    'G-1:1:46 . . G-1:1:32 . D-1:1:40 . . D-1:1:28 . A-1:1:46 . . E-1:1:36 . E-1:1:26 .',
-                    'G-3:2:38 . B-3:2:30 . D-4:2:42 . C#4:2:34 . B-3:2:36 . A-3:2:28 . G-3:2:30 . A-3:2:34',
-                    'D-3:3:10 . . . G-3:3:08 . . . E-3:3:10 . . . A-3:3:08 . . .',
-                    '. A-4:4:10 . . G-1:5:44 . A-4:4:06 . . A-4:4:10 . A-1:5:40 . A-4:4:05 . .'
-                ),
-                this._pat(2,
-                    'B-1:1:54 . . B-1:1:38 . F#1:1:46 . . A-1:1:42 . B-1:1:54 . . F#1:1:40 . E-1:1:34 .',
-                    'B-4:2:46 . D-5:2:38 . F#5:2:50 . E-5:2:42 . D-5:2:44 . B-4:2:36 . A-4:2:38 . B-4:2:42',
-                    'B-3:3:14 . F#3:3:08 . F#3:3:08 B-3:3:14 . D-4:3:16 . F#3:3:08 B-3:3:12 . A-3:3:08 . F#3:3:06 .',
-                    'B-1:5:54 . A-4:4:12 . B-1:5:42 . A-4:4:08 . B-1:5:50 A-4:4:10 . A-4:4:06 . . . .'
-                )
-            ],
-            [0, 0, 1, 0, 2, 1, 0, 0]
-        );
-    },
-
-    // Motif: C Eb G F | Eb C Bb C  (C minor, urgent)
+    // Pluto — urgent triplet clusters then silence (Kuiper stabs).
     pluto() {
         return this._track(
-            { title: 'Kuiper Rush', planet: 'pluto', notes: 'motif C-Eb-G-F · develop · return' },
-            148,
+            { title: 'Kuiper Rush', planet: 'pluto', notes: 'cluster C-Eb-G-F · stab silence' },
+            152,
             [
                 this._pat(0,
-                    'C-2:1:56 C-2:1:34 . C-2:1:56 . G-1:1:42 . C-2:1:56 C-2:1:34 . G-1:1:46 . G-1:1:32',
-                    'C-4:2:48 . Eb4:2:40 . G-4:2:52 . F-4:2:44 . Eb4:2:46 . C-4:2:38 . Bb3:2:40 . C-4:2:44',
-                    'G-3:3:16 . . . C-4:3:14 . . . G-3:3:16 . . . C-4:3:14 . . .',
-                    'C-2:5:68 A-4:4:16 C-2:5:40 A-4:4:10 C-2:5:60 A-4:4:14 . C-2:5:68 A-4:4:16 C-2:5:38 A-4:4:10 C-2:5:52 A-4:4:12 .'
+                    'C-2:1:64 C-2:1:48 C-2:1:36 . G-1:1:54 G-1:1:40 . . C-2:1:62 C-2:1:46 C-2:1:34 . G-1:1:50 . . .',
+                    'C-4:2:54 Eb4:2:44 G-4:2:58 . F-4:2:48 Eb4:2:40 . . C-4:2:52 Bb3:2:38 C-4:2:46 . Eb4:2:42 . . .',
+                    'G-3:3:20 C-4:3:14 G-3:3:12 . C-4:3:16 G-3:3:10 . . G-3:3:18 C-4:3:12 G-3:3:10 . C-4:3:14 . . .',
+                    'C-2:5:72 A-4:4:22 C-2:5:44 . C-2:5:64 A-4:4:16 . . C-2:5:70 A-4:4:20 C-2:5:42 . C-2:5:58 A-4:4:12 . .'
                 ),
                 this._pat(1,
-                    'Ab1:1:52 Ab1:1:30 . Ab1:1:52 . Eb1:1:38 . Bb1:1:52 Bb1:1:30 . F-2:1:44 . Bb1:1:28',
-                    'Ab3:2:44 . C-4:2:36 . Eb4:2:48 . D-4:2:40 . C-4:2:42 . Bb3:2:34 . Ab3:2:36 . Bb3:2:40',
-                    'Eb3:3:14 . . . Ab3:3:12 . . . F-3:3:14 . . . Bb3:3:12 . . .',
-                    'Ab1:5:62 A-4:4:14 Ab1:5:38 A-4:4:08 Bb1:5:58 A-4:4:12 . Bb1:5:62 A-4:4:14 Bb1:5:36 A-4:4:08 Bb1:5:48 A-4:4:10 .'
+                    'Ab1:1:58 Ab1:1:42 Ab1:1:30 . Eb1:1:48 Eb1:1:34 . . Bb1:1:56 Bb1:1:40 Bb1:1:28 . F-2:1:46 . . .',
+                    'Ab3:2:48 C-4:2:38 Eb4:2:52 . D-4:2:42 C-4:2:34 . . Bb3:2:46 Ab3:2:32 Bb3:2:40 . C-4:2:36 . . .',
+                    'Eb3:3:18 Ab3:3:12 Eb3:3:10 . Ab3:3:14 Eb3:3:08 . . F-3:3:16 Bb3:3:10 F-3:3:08 . Bb3:3:12 . . .',
+                    'Ab1:5:66 A-4:4:18 Ab1:5:40 . Bb1:5:60 A-4:4:14 . . Bb1:5:64 A-4:4:18 Bb1:5:38 . Bb1:5:52 A-4:4:10 . .'
                 ),
                 this._pat(2,
-                    'C-2:1:60 . C-2:1:38 . Eb2:1:50 . G-1:1:44 . C-2:1:60 . C-2:1:38 . Bb1:1:52 . G-1:1:36',
-                    'C-5:2:52 . Eb5:2:44 . G-5:2:56 . F-5:2:48 . Eb5:2:50 . C-5:2:42 . Bb4:2:44 . C-5:2:48',
-                    'C-4:3:18 . G-3:3:12 . G-3:3:12 C-4:3:18 . Eb4:3:20 . G-3:3:12 C-4:3:16 . Bb3:3:12 . G-3:3:10 .',
-                    'C-2:5:74 A-4:4:18 . A-4:4:10 C-2:5:56 A-4:4:14 A-4:4:08 . C-2:5:70 A-4:4:16 . A-4:4:08 C-2:5:50 A-4:4:10 .'
+                    'C-2:1:70 C-2:1:52 C-2:1:40 Eb2:1:58 G-1:1:50 . C-2:1:66 C-2:1:48 Bb1:1:44 . C-2:1:68 C-2:1:50 G-1:1:46 . C-2:1:60 .',
+                    'C-5:2:60 Eb5:2:48 G-5:2:64 F-5:2:52 Eb5:2:50 . C-5:2:56 Bb4:2:42 C-5:2:54 . Eb5:2:46 G-5:2:58 . C-5:2:50 .',
+                    'C-4:3:24 G-3:3:16 Eb4:3:20 G-3:3:14 C-4:3:22 . Bb3:3:18 G-3:3:12 C-4:3:20 . Eb4:3:16 G-3:3:12 . C-4:3:14 .',
+                    'C-2:5:80 A-4:4:26 C-2:5:50 A-4:4:18 C-2:5:74 A-4:4:22 A-4:4:12 . C-2:5:76 A-4:4:24 C-2:5:48 A-4:4:16 C-2:5:68 A-4:4:18 A-4:4:10 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
@@ -242,7 +245,7 @@ const VFTrackerDefaults = {
         );
     },
 
-    /** Planet Select — motif G B D E | D B A G, then sequenced. */
+    /** Planet Select / station hub — motif G B D E | D B A G, then sequenced. */
     menu() {
         return this._track(
             { title: 'Planet Select', planet: 'menu', notes: 'motif G-B-D-E · develop · return' },
@@ -271,46 +274,404 @@ const VFTrackerDefaults = {
         );
     },
 
-    /** Boss = planet motif doubled + denser drums (same head DNA). */
-    _bossFor(planetId, bpm) {
-        const id = String(planetId || 'mars').toLowerCase();
-        const base = typeof this[id] === 'function' ? this[id]() : this.mars();
-        const compact = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.toCompact)
-            ? VFTrackerParse.toCompact(base)
-            : base;
-        const patterns = (compact.patterns || []).slice(0, 2).map((p, pi) => {
-            const ch = (p.channels || []).slice();
-            while (ch.length < 4) ch.push('.');
-            // Keep lead motif; thicken drums.
-            const drums = pi === 0
-                ? ch[3]
-                : String(ch[3]).replace(/:4:(\d+)/g, (m, v) => ':4:' + Math.min(28, Number(v) + 4));
-            return this._pat(pi, ch[0], ch[1], ch[2], drums);
-        });
-        // Append a pressure variant: motif up a fifth if parse available, else repeat P0.
-        let pressureLead = patterns[0].channels[1];
-        if (typeof VFTrackerParse !== 'undefined') {
-            pressureLead = VFTrackerParse.transposeChannelString(patterns[0].channels[1], 7);
+    /** Lead-motif pitch names from planet combat P0 (Hauptmelodie DNA). */
+    _motifPitches(planetId) {
+        const id = this.normalizePlanetKey(planetId);
+        let combat;
+        if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id) && typeof this[id] === 'function') {
+            combat = this[id]();
+        } else if (typeof this.forPlanet === 'function') {
+            combat = this.forPlanet(id);
+        } else {
+            combat = this.mars();
         }
-        patterns.push(this._pat(2,
-            patterns[0].channels[0],
-            pressureLead,
-            patterns[0].channels[2],
-            patterns[0].channels[3]
-        ));
+        const lead = (((combat.patterns || [])[0] || {}).channels || [])[1] || '';
+        const pitches = [];
+        String(lead).trim().split(/\s+/).forEach((tok) => {
+            if (!tok || tok === '.') return;
+            const cell = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.parseCell)
+                ? VFTrackerParse.parseCell(tok) : null;
+            if (cell && cell.note && cell.note !== 'OFF') pitches.push(cell.note);
+        });
+        return pitches.length ? pitches : ['A-4', 'C-5', 'E-5', 'D-5'];
+    },
+
+    _rootBass(note) {
+        if (!note || typeof VFTrackerParse === 'undefined') return 'A-2';
+        const midi = VFTrackerParse.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return 'A-2';
+        return VFTrackerParse.midiToNote(midi - 24) || 'A-2';
+    },
+
+    _shiftNote(note, semi) {
+        if (!note || typeof VFTrackerParse === 'undefined') return note;
+        const midi = VFTrackerParse.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return note;
+        return VFTrackerParse.midiToNote(midi + (Number(semi) || 0)) || note;
+    },
+
+    /**
+     * Rebuild role arrangements from planet motif pitches — not a thin combat remix.
+     * map = ambient orbit · victory = call/answer fanfare · lose = descending fade ·
+     * shop = mid-tempo bazaar groove.
+     */
+    _roleFromPlanet(planetId, role) {
+        const id = this.normalizePlanetKey(planetId);
+        const m = this._motifPitches(id);
+        const a = m[0]; const b = m[1] || m[0]; const c = m[2] || m[0];
+        const d = m[3] || m[1] || m[0]; const e = m[4] || m[2] || m[0];
+        const f = m[5] || m[1] || m[0]; const g = m[6] || m[3] || m[0];
+        const h = m[7] || m[0];
+        const root = this._rootBass(a);
+        const fifth = this._shiftNote(root, 7);
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        let patterns;
+        let bpm;
+        let order;
+        if (role === 'map') {
+            // Ambient: held bass, lead only on bar anchors, almost no kit.
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 48), '.', '.', '.', tok(root, 1, 36), '.', '.', '.',
+                        tok(fifth, 1, 42), '.', '.', '.', tok(root, 1, 32), '.', '.', '.'].join(' '),
+                    [tok(a, 2, 36), '.', '.', '.', '.', '.', '.', '.',
+                        tok(c, 2, 30), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', '.', '.', '.', '.', '.', '.',
+                        tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', tok('A-4', 4, 8), '.', '.', '.', '.', '.',
+                        '.', '.', tok('A-4', 4, 6), '.', '.', '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 44), '.', '.', '.', tok(root, 1, 34), '.', '.', '.',
+                        tok(this._shiftNote(root, 5) || fifth, 1, 40), '.', '.', '.', tok(root, 1, 30), '.', '.', '.'].join(' '),
+                    [tok(e, 2, 32), '.', '.', '.', '.', '.', '.', '.',
+                        tok(g, 2, 28), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', '.',
+                        '.', '.', '.', '.', tok(this._shiftNote(a, 12) || a, 3, 8), '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', '.', '.', tok('A-4', 4, 6), '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 96;
+            order = [0, 0, 1, 0, 1, 0, 0, 1];
+        } else if (role === 'victory') {
+            // Fanfare: rising call / answer, dense kick, octave climax.
+            const up = (n) => this._shiftNote(n, 12) || n;
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 64), '.', tok(root, 1, 48), '.', tok(fifth, 1, 56), '.', tok(root, 1, 44), '.',
+                        tok(root, 1, 62), '.', tok(fifth, 1, 50), '.', tok(root, 1, 58), '.', tok(fifth, 1, 40), '.'].join(' '),
+                    [tok(a, 2, 54), tok(b, 2, 46), tok(c, 2, 58), tok(d, 2, 50),
+                        '.', tok(a, 2, 42), '.', '.',
+                        tok(c, 2, 56), tok(d, 2, 48), tok(e, 2, 60), tok(f, 2, 52),
+                        '.', tok(c, 2, 44), '.', '.'].join(' '),
+                    [tok(c, 3, 22), '.', tok(a, 3, 16), '.', tok(e, 3, 20), '.', tok(c, 3, 14), '.',
+                        tok(c, 3, 22), '.', tok(a, 3, 16), '.', tok(e, 3, 20), '.', tok(c, 3, 14), '.'].join(' '),
+                    [tok(root, 5, 72), '.', tok('A-4', 4, 24), '.', tok(root, 5, 58), '.', tok('A-4', 4, 18), '.',
+                        tok(root, 5, 72), '.', tok('A-4', 4, 24), '.', tok(root, 5, 54), tok('A-4', 4, 16), '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 60), '.', tok(root, 1, 52), '.', tok(fifth, 1, 58), '.', tok(this._shiftNote(root, 12) || root, 1, 50), '.',
+                        tok(root, 1, 64), '.', tok(fifth, 1, 54), '.', tok(root, 1, 60), '.', 'OFF', '.'].join(' '),
+                    [tok(up(a), 2, 58), tok(up(b), 2, 50), tok(up(c), 2, 62), tok(up(d), 2, 54),
+                        tok(up(e), 2, 60), tok(up(f), 2, 52), tok(up(g), 2, 56), tok(up(h), 2, 48),
+                        tok(up(c), 2, 64), '.', tok(up(a), 2, 54), '.', tok(up(a), 2, 58), '.', 'OFF', '.'].join(' '),
+                    [tok(up(c), 3, 24), tok(up(a), 3, 16), tok(up(e), 3, 22), tok(up(c), 3, 14),
+                        tok(up(c), 3, 24), tok(up(a), 3, 16), tok(up(e), 3, 22), tok(up(c), 3, 14),
+                        tok(up(a), 3, 26), '.', tok(up(c), 3, 18), '.', tok(up(a), 3, 20), '.', '.', '.'].join(' '),
+                    [tok(root, 5, 76), tok('A-4', 4, 22), tok(root, 5, 50), tok('A-4', 4, 16),
+                        tok(root, 5, 70), tok('A-4', 4, 20), tok(root, 5, 48), tok('A-4', 4, 14),
+                        tok(root, 5, 78), '.', tok('A-4', 4, 26), '.', tok(root, 5, 60), tok('A-4', 4, 18), '.', '.'].join(' ')
+                )
+            ];
+            bpm = 138;
+            order = [0, 0, 1, 0, 1, 0];
+        } else if (role === 'shop') {
+            // Bazaar: mid-tempo swing, sparse kit, motif as trade call.
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 46), '.', tok(root, 1, 28), '.', tok(fifth, 1, 40), '.', tok(root, 1, 24), '.',
+                        tok(root, 1, 44), '.', tok(fifth, 1, 30), '.', tok(root, 1, 36), '.', tok(fifth, 1, 22), '.'].join(' '),
+                    [tok(a, 2, 36), '.', '.', tok(b, 2, 28), '.', tok(c, 2, 34), '.', '.',
+                        tok(d, 2, 32), '.', '.', tok(c, 2, 26), '.', tok(a, 2, 30), '.', '.'].join(' '),
+                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', tok(c, 3, 8), '.', '.', tok(a, 3, 10), '.', '.',
+                        tok(e, 3, 12), '.', tok(c, 3, 8), '.', '.', tok(a, 3, 9), '.', '.'].join(' '),
+                    [tok(root, 5, 42), '.', tok('A-4', 4, 10), '.', tok(root, 5, 28), '.', '.', tok('A-4', 4, 8),
+                        tok(root, 5, 40), '.', tok('A-4', 4, 10), '.', tok(root, 5, 26), '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 42), '.', tok(root, 1, 26), '.', tok(fifth, 1, 38), '.', tok(this._shiftNote(root, 5) || fifth, 1, 24), '.',
+                        tok(root, 1, 44), '.', tok(fifth, 1, 28), '.', tok(root, 1, 34), '.', 'OFF', '.'].join(' '),
+                    [tok(e, 2, 34), '.', tok(f, 2, 26), '.', tok(g, 2, 32), '.', tok(h, 2, 24), '.',
+                        tok(c, 2, 36), '.', tok(a, 2, 28), '.', tok(b, 2, 30), '.', '.', '.'].join(' '),
+                    ['.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', tok(c, 3, 8), '.', '.', tok(a, 3, 9),
+                        '.', tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', tok(a, 3, 8), '.', '.', '.'].join(' '),
+                    ['.', tok(root, 5, 30), '.', tok('A-4', 4, 8), '.', tok(root, 5, 36), '.', tok('A-4', 4, 6),
+                        '.', tok(root, 5, 28), '.', '.', tok('A-4', 4, 8), '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 108;
+            order = [0, 0, 1, 0, 1, 0, 0, 1];
+        } else {
+            // Lose: descending, half-time, hollow kit.
+            const down = (n, s) => this._shiftNote(n, s) || n;
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 44), '.', '.', '.', tok(root, 1, 30), '.', '.', '.',
+                        tok(down(root, -2), 1, 36), '.', '.', '.', tok(down(root, -5), 1, 26), '.', '.', '.'].join(' '),
+                    [tok(a, 2, 34), '.', '.', tok(down(a, -2), 2, 28), '.', '.', tok(down(a, -5), 2, 24), '.',
+                        '.', tok(down(a, -7), 2, 20), '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(down(c, -12), 3, 12), '.', '.', '.', tok(down(a, -12), 3, 8), '.', '.', '.',
+                        tok(down(e, -12), 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(root, 5, 40), '.', '.', tok('A-4', 4, 8), '.', '.', '.', '.',
+                        tok(root, 5, 30), '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(down(root, -5), 1, 38), '.', '.', '.', tok(down(root, -7), 1, 26), '.', '.', '.',
+                        tok(down(root, -12), 1, 32), '.', '.', '.', tok(down(root, -12), 1, 20), '.', 'OFF', '.'].join(' '),
+                    [tok(down(c, -5), 2, 28), '.', '.', '.', tok(down(a, -7), 2, 22), '.', '.', '.',
+                        tok(down(a, -12), 2, 18), '.', '.', '.', '.', '.', 'OFF', '.'].join(' '),
+                    ['.', '.', tok(down(a, -12), 3, 8), '.', '.', '.', '.', '.',
+                        '.', '.', tok(down(e, -12), 3, 6), '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', tok(root, 5, 28), '.', tok('A-4', 4, 6), '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 78;
+            order = [0, 1, 0, 0, 1, 0];
+        }
+        const titles = {
+            map: 'Map · ' + id,
+            victory: 'Victory · ' + id,
+            lose: 'Defeat · ' + id,
+            shop: 'Shop · ' + id
+        };
+        const notes = {
+            map: 'map role = ambient orbit from motif',
+            victory: 'victory role = fanfare from motif',
+            lose: 'lose role = descending fade from motif',
+            shop: 'shop role = bazaar groove from motif'
+        };
         return this._track(
-            { title: id.toUpperCase() + ' Boss', planet: id, notes: 'boss = planet motif × pressure' },
-            bpm || Math.min(156, (compact.bpm || 132) + 8),
+            {
+                title: titles[role] || (id + ' · ' + role),
+                planet: id,
+                role: role,
+                notes: notes[role] || role
+            },
+            bpm,
             patterns,
+            order
+        );
+    },
+
+    /** Galaxy map BGM — per-planet Hauptmelodie, soft arrangement. */
+    map(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'map');
+    },
+
+    /** Victory screen — per-planet Hauptmelodie, lifted. */
+    victory(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'victory');
+    },
+
+    /** Lose screen — per-planet Hauptmelodie, sparse. */
+    lose(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'lose');
+    },
+
+    /** Resolve planet + role → raw track (ingame = combat loop). */
+    forRole(planetId, role) {
+        const r = String(role || 'ingame').toLowerCase();
+        if (r === 'map') return this.map(planetId);
+        if (r === 'victory' || r === 'win') return this.victory(planetId);
+        if (r === 'lose' || r === 'defeat') return this.lose(planetId);
+        if (r === 'shop' || r === 'trade' || r === 'trader') return this.shop(planetId);
+        return this.forPlanet(planetId);
+    },
+
+    /** Victory / docked trader — per-planet bazaar Hauptmelodie. */
+    shop(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'shop');
+    },
+
+    /**
+     * Boss Hauptmelodien — own head DNA, not a combat remix.
+     * Heavier kit, darker intervals, pressure P2. Planet colour stays via key/feel.
+     */
+
+    // Mars boss — chromatic menace (Ab→G→A) vs combat's even march.
+    'mars-boss'() {
+        return this._track(
+            { title: 'Dust Siege', planet: 'mars', role: 'boss', notes: 'boss Ab-G-A-E · chromatic threat' },
+            136,
+            [
+                this._pat(0,
+                    'A-1:1:68 . Ab1:1:52 . A-1:1:64 . E-1:1:50 . A-1:1:66 . G-1:1:48 . E-1:1:56 . Ab1:1:42',
+                    'A-4:2:56 Ab4:2:44 G-4:2:52 E-4:2:40 . A-4:2:54 G-4:2:42 Ab4:2:48 E-4:2:36',
+                    'E-3:3:22 . Ab3:3:14 . E-3:3:18 . A-3:3:12 . E-3:3:20 . G-3:3:12 . Ab3:3:16 . E-3:3:10',
+                    'A-1:5:78 A-4:4:24 A-1:5:52 A-4:4:16 A-1:5:72 A-4:4:22 A-4:4:12 . A-1:5:76 A-4:4:24 A-1:5:50 A-4:4:14 A-1:5:68 A-4:4:18 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'F-1:1:62 . F-1:1:46 . Ab1:1:58 . C-2:1:44 . G-1:1:60 . E-1:1:42 . G-1:1:54 . Bb1:1:38',
+                    'F-4:2:50 Ab4:2:38 C-5:2:56 Bb4:2:42 . F-4:2:48 E-4:2:36 G-4:2:44 Bb4:2:34',
+                    'C-3:3:18 . F-3:3:12 . Ab3:3:16 . C-4:3:10 . D-3:3:16 . G-3:3:10 . Bb3:3:14 . D-4:3:08',
+                    'F-1:5:70 A-4:4:20 F-1:5:46 A-4:4:12 G-1:5:68 A-4:4:18 A-4:4:10 . F-1:5:72 A-4:4:20 G-1:5:44 A-4:4:12 G-1:5:64 A-4:4:16 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'A-1:1:74 A-1:1:50 Ab1:1:58 E-1:1:54 A-1:1:72 . G-1:1:60 . E-1:1:48 A-1:1:66 Ab1:1:46 E-1:1:56',
+                    'A-5:2:64 Ab5:2:50 G-5:2:58 E-5:2:46 A-5:2:62 . G-5:2:52 Ab5:2:56 E-5:2:44 A-5:2:60 G-5:2:48',
+                    'A-3:3:26 E-3:3:16 Ab3:3:22 E-3:3:14 A-3:3:24 . G-3:3:18 E-3:3:12 A-3:3:20 Ab3:3:14 E-3:3:10',
+                    'A-1:5:84 A-4:4:28 A-1:5:56 A-4:4:18 A-1:5:78 A-4:4:24 A-4:4:14 A-4:4:08 A-1:5:82 A-4:4:26 A-1:5:54 A-4:4:16 A-1:5:74 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
             [0, 0, 1, 0, 2, 1, 0, 2]
         );
     },
 
-    'mars-boss'() { return this._bossFor('mars', 128); },
-    'jupiter-boss'() { return this._bossFor('jupiter', 120); },
-    'saturn-boss'() { return this._bossFor('saturn', 134); },
-    'neptune-boss'() { return this._bossFor('neptune', 126); },
-    'pluto-boss'() { return this._bossFor('pluto', 142); },
+    // Jupiter boss — crushing on-beat hits vs combat's offbeat syncop.
+    'jupiter-boss'() {
+        return this._track(
+            { title: 'Giant Impact', planet: 'jupiter', role: 'boss', notes: 'boss E-Bb-B-F# · crushing hits' },
+            124,
+            [
+                this._pat(0,
+                    'E-1:1:70 . E-1:1:48 . Bb1:1:62 . B-1:1:50 . E-1:1:68 . F#1:1:44 . B-1:1:58 . Bb1:1:40',
+                    'E-4:2:58 . Bb4:2:46 . B-4:2:60 . F#4:2:48 . E-4:2:54 . D-4:2:40 . B-3:2:46 . Bb3:2:36',
+                    'B-2:3:24 . E-3:3:14 . Bb2:3:18 . B-2:3:12 . F#3:3:20 . B-2:3:12 . E-3:3:16 . Bb2:3:10',
+                    'E-1:5:80 . A-4:4:22 E-1:5:54 . A-4:4:14 E-1:5:74 . A-4:4:20 A-4:4:10 E-1:5:78 . A-4:4:22 E-1:5:50 . A-4:4:14 E-1:5:70 . A-4:4:16'
+                ),
+                this._pat(1,
+                    'C-2:1:64 . G-1:1:46 . C-2:1:58 . Eb2:1:44 . D-2:1:62 . A-1:1:42 . B-1:1:54 . F#1:1:38',
+                    'C-5:2:52 . Eb5:2:40 . G-5:2:56 . F-5:2:44 . D-5:2:50 . C-5:2:38 . B-4:2:44 . A-4:2:34',
+                    'G-3:3:20 . C-4:3:12 . Eb3:3:16 . G-3:3:10 . A-3:3:18 . D-4:3:10 . F#3:3:14 . B-3:3:08',
+                    'C-2:5:72 . A-4:4:18 C-2:5:48 . A-4:4:12 D-2:5:70 . A-4:4:18 A-4:4:08 C-2:5:74 . A-4:4:18 D-2:5:46 . A-4:4:12 D-2:5:66 . A-4:4:14'
+                ),
+                this._pat(2,
+                    'E-1:1:76 E-1:1:52 Bb1:1:60 B-1:1:56 E-1:1:74 . F#1:1:58 . B-1:1:50 E-1:1:70 Bb1:1:48 B-1:1:54',
+                    'E-5:2:66 Bb5:2:52 B-5:2:70 F#5:2:54 E-5:2:62 . D-5:2:50 Bb4:2:56 B-4:2:48 E-5:2:64 F#5:2:52',
+                    'E-3:3:28 B-2:3:16 Bb2:3:22 B-2:3:14 E-3:3:26 . F#3:3:18 B-2:3:12 E-3:3:22 Bb2:3:14 B-2:3:10',
+                    'E-1:5:86 A-4:4:28 E-1:5:58 A-4:4:18 E-1:5:80 A-4:4:24 A-4:4:14 A-4:4:08 E-1:5:84 A-4:4:26 E-1:5:56 A-4:4:16 E-1:5:76 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Saturn boss — broken-ring chase: dotted menace vs combat gallop.
+    'saturn-boss'() {
+        return this._track(
+            { title: 'Ring Breaker', planet: 'saturn', role: 'boss', notes: 'boss D-C#-A-G · dotted chase' },
+            150,
+            [
+                this._pat(0,
+                    'D-1:1:70 . D-1:1:48 C#2:1:56 . A-1:1:62 . D-1:1:68 G-1:1:44 . D-1:1:60 . A-1:1:50 C#2:1:40 .',
+                    'D-4:2:56 . C#5:2:44 A-4:2:58 . G-4:2:48 . D-4:2:52 F-4:2:38 . A-4:2:50 . G-4:2:42 C#4:2:34 .',
+                    'A-2:3:22 . D-3:3:14 C#3:3:18 . A-2:3:16 . G-2:3:12 D-3:3:14 . A-2:3:18 . C#3:3:12 G-2:3:08 .',
+                    'D-1:5:82 A-4:4:26 . A-4:4:14 D-1:5:70 A-4:4:20 . A-4:4:10 D-1:5:78 A-4:4:24 . A-4:4:14 D-1:5:66 A-4:4:18 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'G-1:1:64 . Bb1:1:46 F-1:1:54 . C-2:1:58 . A-1:1:50 E-2:1:44 . G-1:1:60 . Bb1:1:42 F-1:1:36 .',
+                    'G-3:2:50 . Bb3:2:38 D-4:2:54 . C-4:2:44 . A-3:2:46 E-4:2:36 . G-3:2:48 . Bb3:2:34 D-4:2:40 .',
+                    'D-2:3:18 . G-2:3:10 Bb2:3:14 . D-3:3:16 . E-2:3:12 A-2:3:10 . D-2:3:16 . G-2:3:10 Bb2:3:08 .',
+                    'G-1:5:74 A-4:4:22 . A-4:4:12 A-1:5:66 A-4:4:18 . A-4:4:08 G-1:5:72 A-4:4:20 . A-4:4:12 A-1:5:62 A-4:4:16 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'D-1:1:78 D-1:1:54 C#2:1:62 A-1:1:58 D-1:1:76 . G-1:1:64 . A-1:1:52 D-1:1:72 C#2:1:48 A-1:1:56',
+                    'D-5:2:64 C#6:2:50 A-5:2:68 G-5:2:52 D-5:2:60 . F-5:2:54 A-5:2:58 G-5:2:46 D-5:2:62 C#5:2:48',
+                    'D-3:3:28 A-2:3:16 C#3:3:22 A-2:3:14 D-3:3:26 . G-2:3:18 A-2:3:12 D-3:3:22 C#3:3:14 A-2:3:10',
+                    'D-1:5:88 A-4:4:30 D-1:5:60 A-4:4:20 D-1:5:82 A-4:4:26 A-4:4:16 A-4:4:10 D-1:5:86 A-4:4:28 D-1:5:58 A-4:4:18 D-1:5:78 A-4:4:22 A-4:4:14 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Neptune boss — dread pulse under ice: rising minor vs combat half-time space.
+    'neptune-boss'() {
+        return this._track(
+            { title: 'Ice Tyrant', planet: 'neptune', role: 'boss', notes: 'boss B-C-D#-F# · dread rise' },
+            112,
+            [
+                this._pat(0,
+                    'B-1:1:60 . . B-1:1:42 . C-2:1:52 . . D#2:1:46 . . F#1:1:50 . B-1:1:44 . .',
+                    'B-3:2:50 . C-4:2:40 . D#4:2:54 . F#4:2:44 . B-4:2:56 . A-4:2:42 . F#4:2:46 . D#4:2:36',
+                    'F#2:3:16 . . B-2:3:12 . . C-3:3:14 . . D#3:3:18 . . F#2:3:10 . B-2:3:12 .',
+                    'B-1:5:64 . . A-4:4:14 . B-1:5:50 . A-4:4:10 . B-1:5:60 . A-4:4:14 . B-1:5:46 A-4:4:08 . .'
+                ),
+                this._pat(1,
+                    'G-1:1:54 . . A-1:1:38 . Bb1:1:48 . . C-2:1:42 . . D-1:1:46 . G-1:1:40 . .',
+                    'G-3:2:44 . Bb3:2:34 . C-4:2:48 . D-4:2:38 . Eb4:2:50 . D-4:2:36 . C-4:2:40 . Bb3:2:30',
+                    'D-2:3:14 . . G-2:3:10 . . Bb2:3:12 . . C-3:3:16 . . D-2:3:08 . G-2:3:10 .',
+                    'G-1:5:56 . . A-4:4:12 . G-1:5:44 . A-4:4:08 . A-1:5:54 . A-4:4:12 . G-1:5:40 A-4:4:06 . .'
+                ),
+                this._pat(2,
+                    'B-1:1:66 . C-2:1:50 . D#2:1:58 . F#1:1:52 B-1:1:64 . A-1:1:48 . F#1:1:54 . D#2:1:46 B-1:1:58',
+                    'B-4:2:58 C-5:2:46 D#5:2:62 F#5:2:50 B-5:2:66 . A-5:2:52 F#5:2:56 D#5:2:44 B-4:2:54 C-5:2:42',
+                    'B-2:3:22 F#2:3:14 C-3:3:18 D#3:3:12 F#3:3:20 . B-2:3:16 F#2:3:10 B-2:3:18 C-3:3:12 D#2:3:08',
+                    'B-1:5:72 A-4:4:20 . A-4:4:12 B-1:5:58 A-4:4:16 . A-4:4:08 B-1:5:68 A-4:4:18 . A-4:4:12 B-1:5:54 A-4:4:14 A-4:4:08 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 0, 1, 2]
+        );
+    },
+
+    // Pluto boss — siege siren: descending alarm vs combat stab clusters.
+    'pluto-boss'() {
+        return this._track(
+            { title: 'Kuiper Siege', planet: 'pluto', role: 'boss', notes: 'boss C-Bb-Ab-G · descending alarm' },
+            158,
+            [
+                this._pat(0,
+                    'C-1:1:72 C-1:1:52 . Bb1:1:60 . Ab1:1:54 G-1:1:48 . C-1:1:70 C-1:1:50 . Bb1:1:56 . Ab1:1:44 . G-1:1:40',
+                    'C-5:2:60 Bb4:2:48 Ab4:2:54 G-4:2:42 . C-5:2:56 Bb4:2:44 Ab4:2:50 G-4:2:38 C-4:2:46 Bb3:2:34 Ab3:2:40 G-3:2:30',
+                    'G-2:3:24 C-3:3:16 Bb2:3:18 Ab2:3:12 G-2:3:20 . C-3:3:22 Bb2:3:14 Ab2:3:16 G-2:3:10 C-3:3:18 Bb2:3:12 Ab2:3:08',
+                    'C-1:5:84 A-4:4:28 C-1:5:56 A-4:4:18 C-1:5:76 A-4:4:22 A-4:4:12 . C-1:5:82 A-4:4:26 C-1:5:54 A-4:4:16 C-1:5:72 A-4:4:20 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'Ab1:1:66 Ab1:1:46 . Gb1:1:54 . Eb1:1:50 F-1:1:42 . Bb1:1:64 Bb1:1:46 . Ab1:1:52 . Gb1:1:40 . F-1:1:36',
+                    'Ab4:2:54 Gb4:2:42 Eb4:2:48 D-4:2:36 . Bb4:2:52 Ab4:2:40 Gb4:2:46 F-4:2:34 Eb4:2:42 D-4:2:30 C-4:2:36 Bb3:2:28',
+                    'Eb2:3:20 Ab2:3:14 Gb2:3:16 Eb2:3:10 F-2:3:18 . Bb2:3:20 Ab2:3:12 Gb2:3:14 F-2:3:08 Bb2:3:16 Ab2:3:10 Gb2:3:06',
+                    'Ab1:5:76 A-4:4:24 Ab1:5:50 A-4:4:14 Bb1:5:72 A-4:4:20 A-4:4:10 . Ab1:5:78 A-4:4:24 Bb1:5:48 A-4:4:14 Bb1:5:68 A-4:4:18 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'C-1:1:80 C-1:1:58 Bb1:1:66 Ab1:1:54 G-1:1:60 . C-1:1:76 Bb1:1:52 Ab1:1:58 G-1:1:46 C-1:1:72 Bb1:1:50 Ab1:1:56 G-1:1:44',
+                    'C-6:2:68 Bb5:2:54 Ab5:2:60 G-5:2:48 C-6:2:64 . Bb5:2:56 Ab5:2:58 G-5:2:46 C-5:2:54 Bb4:2:42 Ab4:2:48 G-4:2:38',
+                    'C-3:3:30 G-2:3:18 Bb2:3:24 Ab2:3:14 G-2:3:22 C-3:3:28 . Bb2:3:20 Ab2:3:16 G-2:3:12 C-3:3:24 Bb2:3:14 Ab2:3:10',
+                    'C-1:5:90 A-4:4:32 C-1:5:62 A-4:4:22 C-1:5:84 A-4:4:28 A-4:4:16 A-4:4:10 C-1:5:88 A-4:4:30 C-1:5:60 A-4:4:20 C-1:5:80 A-4:4:24 A-4:4:14 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    /**
+     * Fallback boss for unknown / explored slugs: donor planet's boss Hauptmelodie
+     * (keyed remix), never a combat-loop pressure clone.
+     */
+    _bossFor(planetId, bpm) {
+        const id = this.normalizePlanetKey
+            ? this.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase();
+        if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id)) {
+            const key = id + '-boss';
+            if (typeof this[key] === 'function') {
+                const track = this[key]();
+                if (bpm && track) track.bpm = bpm;
+                return track;
+            }
+        }
+        const { primary } = this._donorPair ? this._donorPair(id) : { primary: 'mars' };
+        const key = primary + '-boss';
+        if (typeof this[key] === 'function' && typeof this.remixPlanet === 'function') {
+            // remixPlanet with boss:true pulls handcrafted boss DNA via _handcraftedRaw.
+            const remixed = this.remixPlanet(id, { boss: true });
+            if (bpm && remixed) remixed.bpm = bpm;
+            return remixed;
+        }
+        if (typeof this[key] === 'function') return this[key]();
+        return this['mars-boss']();
+    },
 
     PLANETS: ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'],
 
@@ -384,6 +745,102 @@ const VFTrackerDefaults = {
         return VFTrackerParse.transposeChannelString(str, octaves * 12);
     },
 
+    _emptyRow() {
+        return '. . . . . . . . . . . . . . . .';
+    },
+
+    _padRow(str) {
+        const empty = this._emptyRow();
+        if (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.padChannelString) {
+            return VFTrackerParse.padChannelString(str || empty, 16);
+        }
+        return String(str || empty);
+    },
+
+    /**
+     * Stretch a short P0/P1/P2 combat loop into a longer form so the hamster
+     * wheel (order like [0,0,1,0,2,1,0,0]) stops repeating every ~8 bars.
+     * Derives breakdown + drop packs from the same DNA — no new melodies.
+     */
+    _withLongForm(raw, opts) {
+        if (!raw || !raw.patterns || raw.patterns.length < 2) return raw;
+        if (raw.meta && raw.meta.longForm) return raw;
+        if (raw.patterns.length >= 5) return raw;
+
+        const compact = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.toCompact)
+            ? VFTrackerParse.toCompact(raw)
+            : raw;
+        const empty = this._emptyRow();
+        const pats = (compact.patterns || []).map((p, i) => ({
+            id: i,
+            channels: (p.channels || []).slice()
+        }));
+        while (pats.length < 3) {
+            const src = pats[0] || { channels: [empty, empty, empty, empty] };
+            pats.push({ id: pats.length, channels: src.channels.slice() });
+        }
+        const ch = (pi, ci) => this._padRow((pats[pi].channels && pats[pi].channels[ci]) || empty);
+
+        // P3 breakdown — bass stays, lead thinned, arp out, kit half-time.
+        pats.push({
+            id: 3,
+            channels: [
+                ch(0, 0),
+                this._padRow(this._thinChannel(ch(0, 1), 2)),
+                empty,
+                this._padRow(this._thinChannel(ch(0, 3), 2))
+            ]
+        });
+        // P4 drop / rebuild — bass+drums from P1, arp ticks, lead silent.
+        pats.push({
+            id: 4,
+            channels: [
+                ch(1, 0),
+                empty,
+                this._padRow(this._thinChannel(ch(1, 2), 2)),
+                ch(1, 3)
+            ]
+        });
+
+        const boss = !!(opts && opts.boss);
+        // ~24 slots before loop (~3× old 8-bar cycle).
+        const order = boss
+            ? [
+                0, 0, 1, 0,
+                1, 2, 1, 2,
+                0, 3, 4, 3,
+                0, 1, 2, 2,
+                4, 0, 1, 2,
+                0, 2, 1, 3
+            ]
+            : [
+                0, 0, 1, 0,
+                1, 1, 2, 1,
+                0, 3, 1, 3,
+                0, 1, 2, 2,
+                4, 0, 1, 2,
+                0, 1, 0, 3
+            ];
+
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: Object.assign({}, compact.meta || {}, {
+                longForm: true,
+                notes: ((compact.meta && compact.meta.notes) ? compact.meta.notes + ' · ' : '')
+                    + 'long form A/B/C/break/drop'
+            }),
+            bpm: compact.bpm,
+            rowsPerBeat: compact.rowsPerBeat || 1,
+            rowsPerPattern: compact.rowsPerPattern || 16,
+            channels: 4,
+            instruments: (compact.instruments || this._baseInstruments()).map((inst) => Object.assign({}, inst)),
+            patterns: pats,
+            order: order,
+            loop: compact.loop !== false
+        };
+    },
+
     /**
      * Explored planets: one donor motif track, musical key + small BPM nudge.
      * Never splice channels from two songs — that kills motif continuity.
@@ -423,7 +880,7 @@ const VFTrackerDefaults = {
         }
 
         const labels = { mars: 'Dust', jupiter: 'Giant', saturn: 'Ring', neptune: 'Ice', pluto: 'Kuiper' };
-        return {
+        const built = {
             format: 'vftrack',
             version: 1,
             meta: {
@@ -442,6 +899,8 @@ const VFTrackerDefaults = {
             order: order,
             loop: !intro
         };
+        if (intro) return built;
+        return this._withLongForm(built, { boss: boss });
     },
 
     forPlanet(planetId) {
@@ -449,25 +908,43 @@ const VFTrackerDefaults = {
         if (raw === 'intro' || raw.indexOf('intro:') === 0) {
             return this.intro(raw.split(':')[1] || 'mars');
         }
-        if (typeof this[raw] === 'function') return this[raw]();
+        // Named role helpers (map/victory/…) — do not long-form those.
+        if (raw.indexOf('-boss') === -1 && typeof this[raw] === 'function'
+            && (raw === 'menu' || raw === 'map' || raw === 'victory' || raw === 'lose' || raw === 'shop')) {
+            return this[raw]();
+        }
         const id = this.normalizePlanetKey(raw);
         const wantBoss = raw.indexOf('boss') !== -1 || /-(?:boss|b)$/.test(raw);
-        if (this.isHandcraftedPlanet(id)) {
+        let built = null;
+        if (typeof this[raw] === 'function') {
+            built = this[raw]();
+        } else if (this.isHandcraftedPlanet(id)) {
             if (wantBoss) {
                 const key = id + '-boss';
-                if (typeof this[key] === 'function') return this[key]();
-                return this._bossFor(id, 128);
+                built = (typeof this[key] === 'function') ? this[key]() : this._bossFor(id, 128);
+            } else if (typeof this[id] === 'function') {
+                built = this[id]();
             }
-            if (typeof this[id] === 'function') return this[id]();
         }
-        return this.remixPlanet(id, { boss: wantBoss });
+        if (!built) built = this.remixPlanet(id, { boss: wantBoss });
+        // Combat / boss loops get the long form; roles already returned above.
+        return this._withLongForm(built, { boss: wantBoss });
     },
 
     allKeys() {
-        return [
-            'menu', 'intro',
+        const planets = this.PLANETS || ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
+        const keys = [
+            'menu', 'intro', 'map', 'victory', 'lose', 'shop',
             'mars', 'jupiter', 'saturn', 'neptune', 'pluto',
             'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'
         ];
+        planets.forEach((p) => {
+            keys.push('map:' + p);
+            keys.push('victory:' + p);
+            keys.push('lose:' + p);
+            keys.push('shop:' + p);
+            keys.push('ingame:' + p);
+        });
+        return keys;
     }
 };

@@ -262,6 +262,8 @@ extendClass(StartScreenManager, {
 
     createSettingsUI(content, opts) {
         const bare = !!(opts && opts.bare);
+        const audioOnly = !!(opts && opts.audioOnly);
+        const excludeSound = audioOnly || !!(opts && opts.excludeSound);
         this.ensureEnemyClassSizeSettings();
         this.ensureShotSizeSettings();
         if (typeof VFBgMouseParallax !== 'undefined') {
@@ -356,20 +358,25 @@ extendClass(StartScreenManager, {
         right.dataset.cluster = 'audio-game';
 
         // Prefer SHOTS once on first land so the new rows are visible;
-        // otherwise keep the last-opened section.
-        let openSection = 'shots';
-        try {
-            const seen = localStorage.getItem('vf_settings_shots_seen_v1');
-            if (seen) {
-                openSection = localStorage.getItem('vf_settings_open_section') || 'enemies';
-            } else {
-                localStorage.setItem('vf_settings_shots_seen_v1', '1');
-                localStorage.setItem('vf_settings_open_section', 'shots');
-                openSection = 'shots';
-            }
-        } catch (e) { /* optional */ }
+        // otherwise keep the last-opened section. AUDIO opens on SOUND.
+        let openSection = audioOnly ? 'sound' : 'shots';
+        if (!audioOnly) {
+            try {
+                const seen = localStorage.getItem('vf_settings_shots_seen_v1');
+                if (seen) {
+                    openSection = localStorage.getItem('vf_settings_open_section') || 'enemies';
+                    if (excludeSound && openSection === 'sound') openSection = 'enemies';
+                } else {
+                    localStorage.setItem('vf_settings_shots_seen_v1', '1');
+                    localStorage.setItem('vf_settings_open_section', 'shots');
+                    openSection = 'shots';
+                }
+            } catch (e) { /* optional */ }
+        }
 
         const addSection = (parent, sectionId, sectionTitle, predicate) => {
+            if (audioOnly && sectionId !== 'sound') return;
+            if (excludeSound && sectionId === 'sound' && !audioOnly) return;
             const items = this.settingsItems
                 .map((item, index) => ({ item, index }))
                 .filter(({ item }) => predicate(item));
@@ -425,14 +432,15 @@ extendClass(StartScreenManager, {
                 && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'pixelSize' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
         addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);
         addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx' && !isVoxelItem(item));
-        addSection(right, 'sound', 'SOUND', (item) =>
+        const isSoundItem = (item) =>
             item.type === 'volume' ||
             item.name === 'Sound' ||
             item.name === 'Music' ||
             item.type === 'youtubeUrl' ||
             item.type === 'soundCode' ||
-            item.action === 'startupSound'
-        );
+            item.action === 'startupSound' ||
+            item.action === 'soundtrackEditor';
+        addSection(right, 'sound', 'SOUND', isSoundItem);
         addSection(right, 'game', 'GAME', (item) =>
             item.name === 'Difficulty' || item.action === 'difficultyEditor'
                 || item.action === 'factionCommand'
@@ -444,18 +452,24 @@ extendClass(StartScreenManager, {
         addSection(right, 'assets', 'ASSETS', (item) =>
             (item.type === 'action' && item.action !== 'difficultyEditor'
                 && item.action !== 'factionCommand'
-                && item.action !== 'startupSound') || item.type === 'assetStatus'
+                && item.action !== 'startupSound'
+                && item.action !== 'soundtrackEditor') || item.type === 'assetStatus'
         );
 
-        this.attachShipRenderPreview(bare ? left : middle);
+        if (!audioOnly) this.attachShipRenderPreview(bare ? left : middle);
 
-        panel.appendChild(left);
-        if (!bare) {
-            panel.classList.add('settings-panel-3col');
-            panel.appendChild(middle);
+        if (!audioOnly) {
+            panel.appendChild(left);
+            if (!bare) {
+                panel.classList.add('settings-panel-3col');
+                panel.appendChild(middle);
+            }
         }
         panel.appendChild(right);
-        this.buildSettingsMaster(panel);
+        this.buildSettingsMaster(panel, audioOnly ? {
+            defaults: [{ id: 'audio', title: 'AUDIO', sections: ['sound'] }],
+            ephemeral: true
+        } : null);
         content.appendChild(panel);
 
         if (!bare) {

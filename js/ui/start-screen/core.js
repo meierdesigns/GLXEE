@@ -12,6 +12,7 @@ class StartScreenManager {
         this.embeddedMenuTabs = [
             { id: 'profiles', label: 'PROFILES', icon: 'menuProfiles' },
             { id: 'settings', label: 'SETTINGS', icon: 'menuSettings' },
+            { id: 'audio', label: 'AUDIO', icon: 'menuAudio' },
             { id: 'layout', label: 'LAYOUT', icon: 'menuSettings' },
             { id: 'portraits', label: 'PORTRAITS', icon: 'menuProfiles' },
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
@@ -31,7 +32,7 @@ class StartScreenManager {
                 items: [
                     { id: 'PROFILES', label: 'LOAD', icon: 'menuLoad', desc: 'Continue with an existing pilot' },
                     { id: 'GALAXIES', icon: 'menuPlanets', desc: 'Browse and create galaxies' },
-                    { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display, audio and controls' }
+                    { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display and controls' }
                 ]
             },
             {

@@ -50,28 +50,269 @@ class LevelInfoManager {
         this.startUpdateLoop();
         this.updateLevelData(this.collectLevelData());
     }
-    /** Tube/sluice levels: vertical progress track to the exit gate, under the LOADOUT card. */
+    /** Seconds before a scheduled contact that the rail may reveal it. */
+    getTransitWarnSec(role) {
+        if (typeof combatEventConfigManager !== 'undefined') {
+            const ms = combatEventConfigManager.getAnnounceMs({ role: role || 'assault' });
+            return Math.max(2.5, Math.min(6, (ms || 1800) / 1000 + 2));
+        }
+        return 4;
+    }
+    /**
+     * Force-reveal a transit contact when combat announces it mid-run.
+     * Matches nearest upcoming role tick, or drops an ad-hoc icon at the ship.
+     */
+    revealTransitEvent(spec) {
+        const el = this.transitMap;
+        if (!el || el.hidden) return;
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        if (!(om && om.objective && om.objective.type === 'reachGoal')) return;
+        this._transitForced = this._transitForced || {};
+        const role = String((spec && (spec.role || spec.catalogId)) || 'assault');
+        const id = String((spec && spec.id) || ('force_' + role + '_' + Date.now()));
+        const seconds = Math.max(1, Number(om.objective.seconds) || 1);
+        const elapsedSec = Math.max(0, Number(om.elapsedMs) || 0) / 1000;
+        const events = this.collectTransitEvents(seconds, elapsedSec);
+        let match = null;
+        for (let i = 0; i < events.length; i++) {
+            const ev = events[i];
+            if (ev.known) continue;
+            if (ev.role === role || !match) {
+                match = ev;
+                if (ev.role === role) break;
+            }
+        }
+        if (match) {
+            this._transitForced[match.id] = true;
+        } else {
+            this._transitForced[id] = {
+                id: id,
+                role: role,
+                type: (spec && spec.type) || '',
+                pct: Math.max(2, Math.min(96, this._transitPct || 0)),
+                adHoc: true
+            };
+        }
+        this.updateTransitMap();
+    }
+    /**
+     * Scheduled transit contacts clustered into map ticks.
+     * spawnAt (seconds) → vertical % of the reachGoal run.
+     */
+    collectTransitEvents(seconds, elapsedSec) {
+        const total = Math.max(1, Number(seconds) || 1);
+        const nowSec = Math.max(0, Number(elapsedSec) || 0);
+        const forced = this._transitForced || {};
+        const em = typeof enemyManager !== 'undefined' ? enemyManager : null;
+        const schedule = (em && Array.isArray(em.schedule)) ? em.schedule : [];
+        const raw = [];
+        for (let i = 0; i < schedule.length; i++) {
+            const e = schedule[i];
+            if (!e || e.champion) continue;
+            const t = Number(e.spawnAt);
+            if (!(t >= 0) || t >= 999999) continue;
+            raw.push({
+                id: String(e.id || ('t' + i)),
+                t: t,
+                role: String(e.role || 'assault'),
+                type: String(e.type || ''),
+                spawned: !!e.spawned
+            });
+        }
+        raw.sort((a, b) => a.t - b.t);
+        const clusters = [];
+        const clusterGap = 2.5;
+        for (let i = 0; i < raw.length; i++) {
+            const ev = raw[i];
+            const last = clusters[clusters.length - 1];
+            if (last && (ev.t - last.t) < clusterGap) {
+                last.count += 1;
+                last.spawned = last.spawned && ev.spawned;
+                last.ids.push(ev.id);
+                if (ev.role === 'bomber' || (ev.role === 'gunner' && last.role === 'assault')) {
+                    last.role = ev.role;
+                }
+                if (!last.type && ev.type) last.type = ev.type;
+            } else {
+                clusters.push({
+                    id: ev.id,
+                    ids: [ev.id],
+                    t: ev.t,
+                    role: ev.role,
+                    type: ev.type,
+                    count: 1,
+                    spawned: ev.spawned
+                });
+            }
+        }
+        const out = clusters.map((c) => {
+            let accent = '#c0c0c0';
+            let label = String(c.role || 'EVENT').toUpperCase();
+            if (typeof combatEventConfigManager !== 'undefined') {
+                const cfg = combatEventConfigManager.getConfig(c.role) || {};
+                if (cfg.accent) accent = cfg.accent;
+                if (cfg.shortName) label = cfg.shortName;
+            }
+            if (c.count > 1) label += ' ×' + c.count;
+            const warn = this.getTransitWarnSec(c.role);
+            const forcedHit = !!(forced[c.id] || (c.ids && c.ids.some((id) => forced[id])));
+            const known = forcedHit || nowSec >= (c.t - warn) || !!c.spawned;
+            return {
+                id: c.id,
+                role: c.role,
+                type: c.type,
+                label: label,
+                accent: accent,
+                spawned: c.spawned,
+                known: known,
+                pct: Math.max(2, Math.min(96, Math.round((c.t / total) * 100)))
+            };
+        });
+        Object.keys(forced).forEach((key) => {
+            const f = forced[key];
+            if (!f || !f.adHoc) return;
+            let accent = '#c0c0c0';
+            let label = String(f.role || 'EVENT').toUpperCase();
+            if (typeof combatEventConfigManager !== 'undefined') {
+                const cfg = combatEventConfigManager.getConfig(f.role) || {};
+                if (cfg.accent) accent = cfg.accent;
+                if (cfg.shortName) label = cfg.shortName;
+            }
+            out.push({
+                id: f.id,
+                role: f.role,
+                type: f.type || '',
+                label: label,
+                accent: accent,
+                spawned: false,
+                known: true,
+                adHoc: true,
+                pct: Math.max(2, Math.min(96, Number(f.pct) || 0))
+            });
+        });
+        return out;
+    }
+    /** Tube/sluice levels: progress rail + icons that pop in once a contact is known. */
     updateTransitMap() {
         const el = this.transitMap;
         if (!el) return;
         const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
         const isTransit = !!(om && om.objective && om.objective.type === 'reachGoal');
         el.hidden = !isTransit;
-        if (!isTransit) return;
+        if (!isTransit) {
+            this._transitEventSig = '';
+            this._transitIconSig = '';
+            this._transitForced = {};
+            return;
+        }
         const seconds = Math.max(1, Number(om.objective.seconds) || 1);
         const elapsed = Math.max(0, Number(om.elapsedMs) || 0);
+        const elapsedSec = elapsed / 1000;
         const arrived = !!om.goal;
         const pct = (om.completed || om.won || arrived)
             ? 100
             : Math.max(0, Math.min(100, Math.round((elapsed / (seconds * 1000)) * 100)));
+        this._transitPct = pct;
         el.style.setProperty('--vf-transit-pct', pct + '%');
         el.classList.toggle('gi-transit-arrived', arrived);
-        if (!el.firstElementChild) {
+        if (!el.querySelector('.gi-transit-track') || !el.querySelector('.gi-transit-icons')) {
             el.innerHTML = '<div class="gi-transit-track">' +
                 '<div class="gi-transit-gate">GATE</div>' +
                 '<div class="gi-transit-fill"></div>' +
                 '<div class="gi-transit-ship"></div>' +
-                '</div>';
+                '</div>' +
+                '<div class="gi-transit-icons" aria-hidden="true"></div>';
+            this._transitEventSig = '';
+            this._transitIconSig = '';
+        }
+        const track = el.querySelector('.gi-transit-track');
+        const iconRail = el.querySelector('.gi-transit-icons');
+        const events = this.collectTransitEvents(seconds, elapsedSec);
+        const sig = events.map((e) => e.id + '@' + e.pct + ':' + e.role).join('|');
+        if (track && sig !== this._transitEventSig) {
+            this._transitEventSig = sig;
+            Array.from(track.querySelectorAll('.gi-transit-event')).forEach((n) => n.remove());
+            const frag = document.createDocumentFragment();
+            for (let i = 0; i < events.length; i++) {
+                const ev = events[i];
+                if (ev.adHoc) continue;
+                const mark = document.createElement('div');
+                mark.className = 'gi-transit-event';
+                mark.dataset.id = ev.id;
+                mark.dataset.pct = String(ev.pct);
+                mark.style.bottom = ev.pct + '%';
+                mark.style.setProperty('--evt-accent', ev.accent);
+                mark.title = ev.label;
+                frag.appendChild(mark);
+            }
+            track.appendChild(frag);
+        }
+        const knownEvents = events.filter((e) => e.known);
+        const iconSig = knownEvents.map((e) => e.id + '@' + e.pct + ':' + e.role).join('|');
+        if (iconRail && iconSig !== this._transitIconSig) {
+            const prevKnown = this._transitIconSig
+                ? this._transitIconSig.split('|').map((s) => s.split('@')[0])
+                : [];
+            this._transitIconSig = iconSig;
+            const keep = {};
+            Array.from(iconRail.querySelectorAll('.gi-transit-icon')).forEach((n) => {
+                keep[n.dataset.id] = n;
+            });
+            for (let i = 0; i < knownEvents.length; i++) {
+                const ev = knownEvents[i];
+                let node = keep[ev.id];
+                const fresh = !node;
+                if (!node) {
+                    node = document.createElement('div');
+                    node.className = 'gi-transit-icon';
+                    node.dataset.id = ev.id;
+                    node.innerHTML = ev.type
+                        ? this.enemyIconHtml(ev.type, ev.label)
+                        : this.iconHtml('menuEnemies', 14, ev.label);
+                    iconRail.appendChild(node);
+                }
+                node.dataset.pct = String(ev.pct);
+                node.style.bottom = ev.pct + '%';
+                node.style.setProperty('--evt-accent', ev.accent);
+                node.title = ev.label;
+                node.setAttribute('aria-label', ev.label);
+                if (fresh || prevKnown.indexOf(ev.id) === -1) {
+                    node.classList.remove('is-known');
+                    // Retrigger pop-in for newly revealed contacts.
+                    void node.offsetWidth;
+                    node.classList.add('is-known');
+                } else {
+                    node.classList.add('is-known');
+                }
+                delete keep[ev.id];
+            }
+            Object.keys(keep).forEach((id) => {
+                if (keep[id] && keep[id].parentNode) keep[id].parentNode.removeChild(keep[id]);
+            });
+        }
+        const byId = {};
+        for (let i = 0; i < events.length; i++) byId[events[i].id] = events[i];
+        const marks = el.querySelectorAll('.gi-transit-event');
+        for (let i = 0; i < marks.length; i++) {
+            const mark = marks[i];
+            const ev = byId[mark.dataset.id];
+            const mp = Number(mark.dataset.pct) || 0;
+            const known = !!(ev && ev.known);
+            const passed = pct >= mp || !!(ev && ev.spawned);
+            const active = known && !passed && Math.abs(pct - mp) <= 4;
+            mark.classList.toggle('is-known', known);
+            mark.classList.toggle('is-passed', passed);
+            mark.classList.toggle('is-active', active);
+        }
+        const icons = el.querySelectorAll('.gi-transit-icon');
+        for (let i = 0; i < icons.length; i++) {
+            const node = icons[i];
+            const ev = byId[node.dataset.id];
+            const mp = Number(node.dataset.pct) || 0;
+            const passed = pct >= mp || !!(ev && ev.spawned);
+            const active = !passed && Math.abs(pct - mp) <= 4;
+            node.classList.toggle('is-passed', passed);
+            node.classList.toggle('is-active', active && !passed);
         }
         const gateEl = el.querySelector('.gi-transit-gate');
         if (gateEl) {

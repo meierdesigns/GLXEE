@@ -3,7 +3,10 @@
 /**
  * Library + playback facade for vftrack soundtracks.
  * Storage: vf_tracker_library_v1 (per-key JSON tracks).
- * Keys include planet, planet:faction, planet-boss:faction, victory[:faction], lose[:faction].
+ * Keys include planet / ingame:planet, map:planet, shop:planet,
+ * victory[:faction][:planet], lose[:faction][:planet], planet:faction,
+ * planet-boss:faction. Hauptmelodien are planet×role; STYLE interprets them
+ * at playback. Scene feel (difficulty / planet tier) nudges tempo + STYLE.
  */
 class VFTrackerManager {
     constructor() {
@@ -19,6 +22,9 @@ class VFTrackerManager {
         /** Manager-owned mixer state — survives fadeOut/stop player swaps. */
         this._themeIndex = 0;
         this._jungleAmount = 0;
+        /** Scene feel: tempo × user BPM, STYLE amount offset (combat intensity). */
+        this._sceneTempoMul = 1;
+        this._sceneStyleBoost = 0;
         this.loadLibrary();
         /** Typical authored combat BPM — local-audio rate is musicBpm / this. */
         this.referenceBpm = 132;
@@ -101,6 +107,48 @@ class VFTrackerManager {
         if (k === 'menu' || k === 'station' || k === 'hub') {
             return VFTrackerDefaults.menu();
         }
+        if (k === 'map' || k.indexOf('map:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.map ? VFTrackerDefaults.map(planet) : VFTrackerDefaults.menu();
+        }
+        if (k === 'shop' || k.indexOf('shop:') === 0) {
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.shop
+                ? VFTrackerDefaults.shop(planet)
+                : (VFTrackerDefaults.forRole
+                    ? VFTrackerDefaults.forRole(planet, 'shop')
+                    : VFTrackerDefaults.menu());
+        }
+        if (k === 'ingame' || k.indexOf('ingame:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.forRole
+                ? VFTrackerDefaults.forRole(planet, 'ingame')
+                : VFTrackerDefaults.forPlanet(planet);
+        }
+        if (k === 'victory' || k.indexOf('victory:') === 0
+            || k === 'lose' || k.indexOf('lose:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const parts = k.split(':');
+            const kind = parts[0];
+            const planet = parts[1] && !((typeof VFTrackerFactionCompose !== 'undefined'
+                && VFTrackerFactionCompose.normalizeFaction
+                && VFTrackerFactionCompose.normalizeFaction(parts[1])))
+                ? parts[1]
+                : (parts[2] || 'mars');
+            if (kind === 'victory' && VFTrackerDefaults.victory) return VFTrackerDefaults.victory(planet);
+            if (kind === 'lose' && VFTrackerDefaults.lose) return VFTrackerDefaults.lose(planet);
+        }
         if (k === 'intro' || k.indexOf('intro:') === 0) {
             if (typeof VFTrackerFactionCompose !== 'undefined') {
                 const composed = VFTrackerFactionCompose.resolveKey(k);
@@ -119,7 +167,7 @@ class VFTrackerManager {
         // Bare planet id — including explored / ambush / editor slugs.
         if (k.indexOf(':') === -1 && /^[a-z][a-z0-9_]*(-boss)?$/.test(k)
             && k !== 'menu' && k !== 'intro' && k !== 'victory' && k !== 'lose'
-            && k !== 'faction' && k !== 'station' && k !== 'hub') {
+            && k !== 'shop' && k !== 'faction' && k !== 'station' && k !== 'hub') {
             return VFTrackerDefaults.forPlanet(k);
         }
         return null;
@@ -164,9 +212,18 @@ class VFTrackerManager {
         const keys = new Set(VFTrackerDefaults.allKeys());
         keys.add('menu');
         keys.add('intro');
+        keys.add('map');
         keys.add('victory');
         keys.add('lose');
-        ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => keys.add('intro:' + p));
+        keys.add('shop');
+        ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => {
+            keys.add('intro:' + p);
+            keys.add('map:' + p);
+            keys.add('ingame:' + p);
+            keys.add('victory:' + p);
+            keys.add('lose:' + p);
+            keys.add('shop:' + p);
+        });
         if (typeof VFTrackerFactionCompose !== 'undefined') {
             VFTrackerFactionCompose.FACTIONS.forEach((f) => {
                 keys.add('faction:' + f);
@@ -177,6 +234,8 @@ class VFTrackerManager {
                     keys.add(p + ':' + f);
                     keys.add(p + '-boss:' + f);
                     keys.add('intro:' + p + ':' + f);
+                    keys.add('victory:' + f + ':' + p);
+                    keys.add('lose:' + f + ':' + p);
                 });
             });
         }
@@ -186,7 +245,12 @@ class VFTrackerManager {
 
     setVolume(v) {
         this.volume = Math.max(0, Math.min(1, Number(v) || 0));
-        this.player.setVolume(this.volume);
+        if (this.player && this.player.setVolume) this.player.setVolume(this.volume);
+        // Keep the fading-out leg at the same loudness so volume drags mid-
+        // crossfade do not leave one voice blasting while the other ducks.
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setVolume) p.setVolume(this.volume);
+        });
     }
 
     /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-2 user fine-tune multiplier. */
@@ -227,27 +291,41 @@ class VFTrackerManager {
         return v || 'default';
     }
 
+    /** Authored BPM of the active track (fallback: reference 132). */
+    getAuthoredBpm() {
+        const t = this.player && this.player.track;
+        const b = t && Number(t.bpm);
+        if (Number.isFinite(b) && b > 0) return b;
+        return this.referenceBpm || 132;
+    }
+
     getTempoScale() {
         const bpm = this.getPlaybackBpm();
-        const ref = this.referenceBpm || 132;
-        return Math.max(0.5, Math.min(4, bpm / ref));
+        const ref = this.getAuthoredBpm();
+        return Math.max(0.25, Math.min(8, bpm / Math.max(1, ref)));
     }
 
     getPlaybackBpm() {
-        if (Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0) {
-            return this._basePlaybackBpm;
+        // Heard tempo = user MUSIC BPM × scene feel (combat/boss nudge).
+        const base = Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0
+            ? this._basePlaybackBpm
+            : null;
+        if (base != null) {
+            const sceneMul = Number(this._sceneTempoMul);
+            const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
+            return Math.max(60, Math.min(300, Math.round(base * mul)));
         }
         const b = Number(this.player && this.player.playbackBpm);
         if (Number.isFinite(b) && b > 0) return b;
         const s = Number(this.player && this.player.tempoScale);
         const ref = this.referenceBpm || 132;
         if (Number.isFinite(s) && s > 0) return Math.round(ref * s);
-        return Math.round(ref * 3.5);
+        return Math.round(ref);
     }
 
     /** Absolute playback tempo in BPM (game clock + tracker). */
     setPlaybackBpm(bpm) {
-        const b = Math.max(60, Math.min(600, Math.round(Number(bpm) || 120)));
+        const b = Math.max(60, Math.min(300, Math.round(Number(bpm) || 120)));
         this._basePlaybackBpm = b;
         return this._applyPlaybackTempo();
     }
@@ -260,20 +338,89 @@ class VFTrackerManager {
 
     /**
      * Style intensity 0..1 — how far into the selected STYLE
-     * (break layer + mix morph + relative tempo boost on top of MUSIC BPM).
+     * (break layer + mix morph). Tempo stays on the MUSIC BPM slider.
      */
     setJungleAmount(amount) {
         let t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (t < 0.03) t = 0;
         this._jungleAmount = t;
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        return t;
+    }
+
+    /** User STYLE amount + scene intensity boost (combat difficulty / tier). */
+    _effectiveJungleAmount() {
+        const user = Math.max(0, Math.min(1, Number(this._jungleAmount) || 0));
+        const boost = Number(this._sceneStyleBoost) || 0;
+        let t = Math.max(0, Math.min(1, user + boost));
+        if (t < 0.03) t = 0;
+        return t;
+    }
+
+    _pushJungleToPlayers(amount) {
+        const t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (this.player && this.player.setJungleAmount) this.player.setJungleAmount(t);
         else if (this.player) this.player.jungleAmount = t;
         (this._outgoing || []).forEach((p) => {
             if (p && p.setJungleAmount) p.setJungleAmount(t);
             else if (p) p.jungleAmount = t;
         });
+    }
+
+    /**
+     * Adapt heard tempo + STYLE intensity to the active scene.
+     * role: combat|boss|victory|lose|map|shop|menu|intro
+     * difficulty: easy|normal|hard (menu preset)
+     * planetTier: 0..4 (EASY…NIGHTMARE planet curve)
+     */
+    setSceneFeel(opts) {
+        const o = opts || {};
+        const role = String(o.role || 'menu').toLowerCase();
+        const diff = String(o.difficulty || '').toLowerCase();
+        const tierRaw = o.planetTier;
+        const tier = Number.isFinite(Number(tierRaw)) ? Math.max(0, Math.min(4, Number(tierRaw))) : null;
+        let tempoMul = 1;
+        let styleBoost = 0;
+        if (role === 'combat' || role === 'boss' || role === 'ingame') {
+            if (diff === 'easy') { tempoMul = 0.94; styleBoost = -0.08; }
+            else if (diff === 'hard') { tempoMul = 1.07; styleBoost = 0.14; }
+            else { tempoMul = 1; styleBoost = 0; }
+            if (tier != null) {
+                tempoMul *= 0.96 + tier * 0.035;
+                styleBoost += -0.06 + tier * 0.055;
+            }
+            if (role === 'boss') {
+                tempoMul *= 1.05;
+                styleBoost += 0.1;
+            }
+        } else if (role === 'victory') {
+            tempoMul = 1.03;
+            styleBoost = 0.06;
+        } else if (role === 'lose') {
+            tempoMul = 0.84;
+            styleBoost = -0.18;
+        } else if (role === 'shop') {
+            tempoMul = 0.92;
+            styleBoost = -0.1;
+        } else if (role === 'map') {
+            tempoMul = 0.9;
+            styleBoost = -0.12;
+        } else if (role === 'intro') {
+            tempoMul = 1.02;
+            styleBoost = 0.04;
+        } else {
+            tempoMul = 1;
+            styleBoost = 0;
+        }
+        this._sceneTempoMul = Math.max(0.75, Math.min(1.35, tempoMul));
+        this._sceneStyleBoost = Math.max(-0.35, Math.min(0.45, styleBoost));
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
         this._applyPlaybackTempo();
-        return t;
+        return { tempoMul: this._sceneTempoMul, styleBoost: this._sceneStyleBoost };
+    }
+
+    clearSceneFeel() {
+        return this.setSceneFeel({ role: 'menu' });
     }
 
     getThemeIndex() {
@@ -294,7 +441,6 @@ class VFTrackerManager {
             if (p && p.setThemeIndex) p.setThemeIndex(i);
             else if (p) p.themeIndex = i;
         });
-        this._applyPlaybackTempo();
         return i;
     }
 
@@ -323,48 +469,59 @@ class VFTrackerManager {
     }
 
     /**
-     * Effective sequencer BPM = MUSIC BPM × style/theme boost × AMOUNT.
-     * Style never ignores the BPM slider (no fixed 560 target).
+     * MUSIC BPM slider = true heard tempo (beats/minute).
+     * tempoScale = musicBpm / authoredTrackBpm so display == what you hear.
+     * BPM = (beats / seconds) × 60 → rowDuration = 60 / bpm / rowsPerBeat.
      */
     _applyPlaybackTempo() {
-        const base = Number.isFinite(this._basePlaybackBpm)
-            ? this._basePlaybackBpm
-            : this.getPlaybackBpm();
-        const styleMag = Math.max(0, Math.min(1, Math.abs(this.getJungleAmount()) || 0));
-        const themeIdx = this.getThemeIndex();
-        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
-            ? VFTrackerThemes.metaOf(themeIdx)
-            : { tempoBoost: 0 };
-        // Tempo tint scales with AMOUNT only — no forced floor that locks every
-        // section to the same feel when a non-PLANET STYLE is selected.
-        const themeBoost = themeIdx > 0 ? (Number(meta.tempoBoost) || 0) * styleMag : 0;
-        const side = meta.breakSide || 'off';
-        const styleBoost = side === 'jungle' || side === 'hybrid' ? styleMag * 0.35
-            : side === 'dnb' ? styleMag * 0.24
-                : side === 'drive' ? styleMag * 0.16
-                    : side === 'elektro' ? styleMag * 0.12
-                        : 0;
-        const rel = 1 + Math.max(styleBoost, themeBoost);
-        const b = Math.max(60, Math.min(600, Math.round(base * rel)));
-        const ref = this.referenceBpm || 132;
-        const scale = Math.max(0.5, Math.min(4, b / ref));
+        // User slider BPM only — scene mul applied once below (never via getPlaybackBpm).
+        let base = Number.isFinite(this._basePlaybackBpm) ? this._basePlaybackBpm : 0;
+        if (!(base > 0)) {
+            const raw = Number(this.player && this.player.playbackBpm);
+            base = (Number.isFinite(raw) && raw > 0) ? raw : (this.referenceBpm || 132);
+        }
+        const sceneMul = Number(this._sceneTempoMul);
+        const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
+        const b = Math.max(60, Math.min(300, Math.round(base * mul)));
+        const authored = this.getAuthoredBpm();
+        const scale = Math.max(0.25, Math.min(8, b / Math.max(1, authored)));
+        // Local-file rate stays vs reference 132 (files have no per-track BPM).
+        const fileRate = Math.max(0.5, Math.min(4, b / (this.referenceBpm || 132)));
         if (this.player) {
-            this.player.playbackBpm = b;
             this.player.tempoScale = scale;
+            this.player.playbackBpm = b;
+            // Debounce re-anchor while the BPM fader is dragged — every tick
+            // used to cut+retrig all voices and pump the bus loudness.
+            this._queueTempoNotify(this.player);
         }
         (this._outgoing || []).forEach((p) => {
             if (!p) return;
+            const pAuth = (p.track && Number(p.track.bpm) > 0) ? Number(p.track.bpm) : authored;
+            p.tempoScale = Math.max(0.25, Math.min(8, b / Math.max(1, pAuth)));
             p.playbackBpm = b;
-            p.tempoScale = scale;
+            this._queueTempoNotify(p);
         });
         if (this.player && this.player.isPlaying()
             && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
             beatSyncManager.setBpm(b);
         }
         if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
-            localAudioManager.setPlaybackRate(scale);
+            localAudioManager.setPlaybackRate(fileRate);
         }
         return b;
+    }
+
+    /** Coalesce rapid BPM-slider updates into one schedule re-anchor. */
+    _queueTempoNotify(player) {
+        if (!player || !player.notifyTempoChanged) return;
+        if (player._tempoNotifyTimer) {
+            clearTimeout(player._tempoNotifyTimer);
+            player._tempoNotifyTimer = null;
+        }
+        player._tempoNotifyTimer = setTimeout(() => {
+            player._tempoNotifyTimer = null;
+            try { player.notifyTempoChanged(); } catch (e) { /* ignore */ }
+        }, 70);
     }
 
     setTempoScale(scale) {
@@ -395,30 +552,45 @@ class VFTrackerManager {
         const k = String(key || '').toLowerCase();
         if (!k) return 'combat';
         if (k === 'menu' || k === 'station' || k === 'hub') return 'menu';
+        if (k === 'map' || k.indexOf('map:') === 0) return 'map';
+        if (k === 'shop' || k.indexOf('shop:') === 0) return 'shop';
         if (k === 'intro' || k.indexOf('intro:') === 0) return 'intro';
         if (k === 'victory' || k.indexOf('victory:') === 0) return 'victory';
         if (k === 'lose' || k.indexOf('lose:') === 0) return 'lose';
+        if (k === 'ingame' || k.indexOf('ingame:') === 0) return 'combat';
         return 'combat';
+    }
+
+    /** Play galaxy-map BGM for a planet Hauptmelodie. */
+    playMap(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('map:' + id);
+    }
+
+    /** Play trader / shop BGM for a planet Hauptmelodie. */
+    playShop(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('shop:' + id);
     }
 
     _syncPlayerSettings(target) {
         if (!target) return;
         const src = this.player;
         const theme = this.getThemeIndex();
-        const jungle = this.getJungleAmount();
+        const jungle = this._effectiveJungleAmount();
         const tempoScale = (src && src.tempoScale) || this.getTempoScale();
         const playbackBpm = (src && src.playbackBpm) || this.getPlaybackBpm();
         target.tempoScale = tempoScale;
         target.playbackBpm = playbackBpm;
         target.jungleAmount = jungle;
         target.themeIndex = theme;
-        target.channelMixBase = ((src && src.channelMixBase) || [1.1, 0.42, 2.4, 1.25]).slice();
-        target.channelMixJungle = ((src && src.channelMixJungle) || [1.75, 0.06, 0.95, 2.85]).slice();
-        target.channelMixDnb = ((src && src.channelMixDnb) || [2.15, 0.1, 0.75, 1.95]).slice();
-        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.95, 0.08, 0.85, 2.4]).slice();
-        target.channelMixElektro = ((src && src.channelMixElektro) || [2.05, 0.16, 1.05, 1.95]).slice();
-        target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.45, 0.28, 1.65, 1.35]).slice();
-        target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.85, 0.72, 0.95, 2.05]).slice();
+        target.channelMixBase = ((src && src.channelMixBase) || [1.05, 0.55, 1.55, 1.15]).slice();
+        target.channelMixJungle = ((src && src.channelMixJungle) || [1.25, 0.38, 1.05, 1.55]).slice();
+        target.channelMixDnb = ((src && src.channelMixDnb) || [1.45, 0.32, 0.95, 1.4]).slice();
+        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.35, 0.35, 1.0, 1.5]).slice();
+        target.channelMixElektro = ((src && src.channelMixElektro) || [1.4, 0.34, 1.05, 1.35]).slice();
+        target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.15, 0.48, 1.35, 1.1]).slice();
+        target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.3, 0.62, 1.0, 1.35]).slice();
         target.channelMix = ((src && src.channelMix) || target.channelMixBase).slice();
         target.channelUserMix = ((src && src.channelUserMix) || [1, 1, 1, 1]).slice();
         target.channelVoices = ((src && src.channelVoices) || ['default', 'default', 'default', 'default']).slice();
@@ -433,6 +605,17 @@ class VFTrackerManager {
 
     _retireOutgoing(oldPlayer, fadeSec) {
         if (!oldPlayer) return;
+        // Cap concurrent fade-outs at one: a track swap retriggered before the
+        // previous fade finished (rapid slider drags, quick planet hops) used to
+        // stack a second and third still-audible outgoing player on top of the
+        // new one — heard as the music "overlapping"/stumbling. Cut any player
+        // already fading out immediately instead of letting it keep sounding.
+        if (this._outgoing && this._outgoing.length) {
+            this._outgoing.forEach((p) => {
+                try { p.stop(true); } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
         this._outgoing.push(oldPlayer);
         const dur = oldPlayer.fadeOut ? oldPlayer.fadeOut(fadeSec) : 0;
         setTimeout(() => {
@@ -448,16 +631,24 @@ class VFTrackerManager {
         if (!track) return false;
         // Theme / style belong on every song — reassert before keep-or-swap.
         this._reassertMixerSettings();
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        const prevRole = this._trackRole(this.currentKey);
+        const nextRole = this._trackRole(k);
+        const sameRole = prevRole === nextRole;
+        const fp = this._fingerprint(track);
         // Same song already audible (even under a new key) — keep row position.
-        // Never keep across roles (combat↔menu/intro/end): style heads must not
-        // glue hub and in-game into one continuous loop (PLANET-style swaps).
-        if (!(opts && opts.force) && !(opts && opts.onEnded) && this.player.isPlaying()) {
-            const sameRole = this._trackRole(this.currentKey) === this._trackRole(k);
+        // Never keep across roles (combat↔menu/intro/end/shop).
+        // onEnded alone must NOT force a restart: playIntro used to re-crossfade
+        // the same fanfare whenever setStageContext/reevaluate re-armed it.
+        if (!(opts && opts.force) && this.player.isPlaying()) {
             if (sameRole) {
-                const fp = this._fingerprint(track);
                 if ((fp && fp === this._currentFingerprint) || this.currentKey === k) {
                     this.currentKey = k;
                     if (fp) this._currentFingerprint = fp;
+                    if (opts && typeof opts.onEnded === 'function') {
+                        this.player._onEnded = opts.onEnded;
+                        this.player._endedFired = false;
+                    }
                     return true;
                 }
             }
@@ -474,7 +665,9 @@ class VFTrackerManager {
         const hasOutgoing = !!(this._outgoing && this._outgoing.length);
         const doFade = fade > 0 && !(opts && opts.forceHard);
 
-        // Crossfade: outgoing player keeps sounding while the new one fades in.
+        // Distinct tracks always dual-crossfade (incl. same-role planet hops).
+        // Soft in-place restarts cut mid-bar and sounded like a broken switch;
+        // _retireOutgoing caps stacked fades so quick hops stay clean.
         if (wasPlaying && doFade) {
             const incoming = new VFTrackerPlayer();
             this._syncPlayerSettings(incoming);
@@ -486,7 +679,7 @@ class VFTrackerManager {
         }
 
         this.currentKey = k;
-        this._currentFingerprint = this._fingerprint(track);
+        this._currentFingerprint = fp;
         // Always ease in when a fade is requested — covers intro→combat and
         // source handoffs where the previous player already finished.
         const fadeIn = opts && opts.fadeIn != null
@@ -498,29 +691,43 @@ class VFTrackerManager {
             fadeIn: (wasPlaying || hasOutgoing || doFade) ? fadeIn : 0,
             onEnded: opts && opts.onEnded
         });
+        // Track is loaded — finish STYLE + BPM adaptation against this song's
+        // authored BPM (same result as nudging MUSIC BPM / STYLE in AUDIO).
+        this._applyStylePlaybackForTrack();
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.start) {
             const planetHint = (track.meta && track.meta.planet) || k.split(':')[0].split('-')[0];
             beatSyncManager.start(
-                planetHint === 'menu' || planetHint === 'intro' ? 'mars' : planetHint,
-                this.player.bpm || track.bpm
+                planetHint === 'menu' || planetHint === 'intro' || planetHint === 'map'
+                    ? 'mars' : planetHint,
+                this.getPlaybackBpm()
             );
         }
         return true;
     }
 
     /**
-     * Play a one-shot intro, then invoke onEnded (combat loop, etc.).
+     * After a real track load: reassert mixer + adapt MUSIC BPM to STYLE × song
+     * so playback does not stay half-styled until the AUDIO faders move.
      */
-    playIntro(key, opts) {
-        const k = String(key || 'intro');
-        const track = (opts && opts.track) || this.getTrack(k);
-        if (!track) return false;
-        // Force non-loop even if a library override set loop:true.
-        const oneShot = Object.assign({}, VFTrackerParse.toCompact(track), { loop: false });
-        return this.play(k, oneShot, {
-            onEnded: opts && opts.onEnded,
-            fade: opts && opts.fade != null ? opts.fade : this.crossfadeSeconds
-        });
+    _applyStylePlaybackForTrack() {
+        if (typeof volumeControlsManager !== 'undefined'
+            && volumeControlsManager.applyStylePlaybackForTrack) {
+            volumeControlsManager.applyStylePlaybackForTrack();
+            this._pushJungleToPlayers(this._effectiveJungleAmount());
+            this._applyPlaybackTempo();
+            return;
+        }
+        this._reassertMixerSettings();
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        this._applyPlaybackTempo();
+    }
+
+    /**
+     * Intro fanfare retired (was a one-shot before combat). Kept as API stub
+     * so old callers no-op instead of cutting the bus.
+     */
+    playIntro(/* key, opts */) {
+        return false;
     }
 
     playPlanet(planetId) {
@@ -529,9 +736,10 @@ class VFTrackerManager {
     }
 
     playMenu() {
-        // Always restart hub music when entering planet select / station —
-        // same as PLANET (default) style song swaps, even with THEME heads on.
-        return this.play('menu', null, { force: true });
+        // Keep position when hub music is already the same track (faction /
+        // wizard / station remounts call startMenuMusic often). play() still
+        // swaps when the role or fingerprint differs (e.g. combat → menu).
+        return this.play('menu');
     }
 
     /** First library/default key that would actually play from `keys`. */
@@ -552,7 +760,25 @@ class VFTrackerManager {
         const list = Array.isArray(keys) ? keys : [keys];
         const target = this.firstPlayableKey(list);
         if (!target) return null;
-        if (this.currentKey === target && this.player.isPlaying()) return target;
+        if (this.currentKey === target && this.player.isPlaying()) {
+            // Keep playhead, but still push STYLE / scene feel to the live player.
+            this._reassertMixerSettings();
+            this._pushJungleToPlayers(this._effectiveJungleAmount());
+            this._applyPlaybackTempo();
+            return target;
+        }
+        // Same map/combat motif under an alias key — keep playhead.
+        if (this.player.isPlaying() && this._trackRole(this.currentKey) === this._trackRole(target)) {
+            const track = this.getTrack(target);
+            const fp = this._fingerprint(track);
+            if (fp && fp === this._currentFingerprint) {
+                this.currentKey = target;
+                this._reassertMixerSettings();
+                this._pushJungleToPlayers(this._effectiveJungleAmount());
+                this._applyPlaybackTempo();
+                return target;
+            }
+        }
         if (this.play(target)) return target;
         return null;
     }
@@ -591,6 +817,27 @@ class VFTrackerManager {
     isPlaying(key) {
         if (key != null) return this.currentKey === key && this.player.isPlaying();
         return this.player.isPlaying();
+    }
+
+    /**
+     * True while the current player OR a still-fading outgoing leg is audible.
+     * fadeOut() swaps in a blank player — without this, ensureMusicPlaying /
+     * enemy overrides would start a second song on top of the fade.
+     */
+    isAudible() {
+        if (this.player && this.player.isPlaying && this.player.isPlaying()) return true;
+        const out = this._outgoing || [];
+        for (let i = 0; i < out.length; i++) {
+            const p = out[i];
+            if (p && p.isPlaying && p.isPlaying()) return true;
+        }
+        return false;
+    }
+
+    /** Audible playhead for the Music Editor score sheet. */
+    getPlayhead() {
+        if (this.player && this.player.getPlayhead) return this.player.getPlayhead();
+        return { playing: false, orderIndex: 0, rowIndex: 0, pattern: 0, frac: 0, absRow: 0 };
     }
 
     downloadTrack(key, filename) {

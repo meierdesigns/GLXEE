@@ -127,6 +127,16 @@
     };
 
     GamepadCursor.prototype._resolveTarget = function () {
+        // Galaxy map stick focus uses SVG selection frames, not this HUD frame.
+        try {
+            if (typeof galaxyMapManager !== 'undefined'
+                && galaxyMapManager.isInputActive
+                && galaxyMapManager.isInputActive()
+                && (!galaxyMapManager.hasCardFocus || !galaxyMapManager.hasCardFocus())) {
+                this.target = null;
+                return null;
+            }
+        } catch (e) { /* ignore */ }
         if (this.target && document.body.contains(this.target)
             && (this.target.classList.contains('nav-focused')
                 || this.target.classList.contains('selected'))) {

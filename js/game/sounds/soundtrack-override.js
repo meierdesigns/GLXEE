@@ -17,18 +17,24 @@ extendClass(SoundManager, {
             this._pendingMissionIntro = false;
             this._introPlaying = false;
             this._activeOverrideKey = ambientKey;
+            // Undo victory duck / stale bus level without restarting the loop.
+            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+                vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume ? this.musicBusVolume() : 0.2));
+            }
             return;
         }
         // Always re-bind combat music when a stage boots (don't trust stale keys).
         this._activeOverrideKey = null;
-        // Fresh stage boot → play one-shot intro before the combat loop.
-        this._pendingMissionIntro = true;
+        // No one-shot intro fanfare — that played a short track then hard-cut
+        // into the combat loop (heard as "one song, then another jumps in").
+        // Hub/map → combat crossfades once via play().
+        this._pendingMissionIntro = false;
         this._introPlaying = false;
         this._reevaluateMusic();
         this._ensureCombatMusicPlaying();
     },
 
-    /** True when the vftrack that combat would pick is already audible. */
+    /** True when the preferred track for this stage is already audible. */
     _combatSongAlreadyPlaying(planetId) {
         if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.isPlaying
             || !vfTrackerManager.isPlaying()) {
@@ -37,18 +43,15 @@ extendClass(SoundManager, {
         const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
             ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
             : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        // Prefer-only: never treat regular combat as "same song" during boss
+        // (that left the stage loop running through the boss chamber).
         const keys = this.combatTrackKeys
-            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction, { preferOnly: true })
             : [id];
-        if (keys.indexOf(id) === -1) keys.push(id);
         const target = vfTrackerManager.firstPlayableKey
             ? vfTrackerManager.firstPlayableKey(keys)
             : null;
-        if (target && vfTrackerManager.isPlaying(target)) return true;
-        for (let i = 0; i < keys.length; i++) {
-            if (vfTrackerManager.isPlaying(keys[i])) return true;
-        }
-        return false;
+        return !!(target && vfTrackerManager.isPlaying(target));
     },
 
     introTrackKeys(planetId, factionId) {
@@ -64,52 +67,14 @@ extendClass(SoundManager, {
         return keys;
     },
 
-    _startMissionIntroThenCombat(planetId) {
-        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
-            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
-            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
-        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.playIntro) {
-            this._pendingMissionIntro = false;
-            this._introPlaying = false;
-            return false;
-        }
-        if (!this.ensureContext()) return false;
-        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-        if (typeof localAudioManager !== 'undefined') {
-            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
-            else localAudioManager.stop();
-        }
-        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly({ keepTracker: true });
-        const keys = this.introTrackKeys(id, this._currentHostileFaction);
-        vfTrackerManager.setEnabled(true);
-        vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
-        let started = false;
-        for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            if (!vfTrackerManager.hasTrack(k)) continue;
-            const ok = vfTrackerManager.playIntro(k, {
-                onEnded: () => {
-                    if (!this._introPlaying) return;
-                    this._introPlaying = false;
-                    this._pendingMissionIntro = false;
-                    // Resume combat / override loop after the fanfare.
-                    this._activeOverrideKey = null;
-                    this.startPlanetAmbient(this._currentPlanetId || id);
-                }
-            });
-            if (ok) {
-                started = true;
-                this._introPlaying = true;
-                this._pendingMissionIntro = false;
-                this.clearPendingMusic && this.clearPendingMusic();
-                break;
-            }
-        }
-        if (!started) {
-            this._pendingMissionIntro = false;
-            this._introPlaying = false;
-        }
-        return started;
+    /**
+     * Mission intro fanfare disabled — it interrupted combat/hub too often.
+     * Stage boot goes straight to the combat loop via startPlanetAmbient.
+     */
+    _startMissionIntroThenCombat(/* planetId */) {
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
+        return false;
     },
 
     _resolveHostileFaction(planetId) {
@@ -134,8 +99,10 @@ extendClass(SoundManager, {
         if (key === this._activeEnemyTypesKey) return;
         this._activeEnemyTypesKey = key;
         this._activeEnemyTypes = list;
-        // Only swap when the resolved override identity changes — spawn/despawn
-        // churn of untracked types must not restart the combat loop.
+        // Remember types for the next silent boot, but never yank an already
+        // audible combat/hub song to an enemy/stage override mid-fight —
+        // that was the "track jumps to something else" glitch.
+        if (this._musicActuallyPlaying() && this._activeOverrideKey) return;
         const before = this._activeOverrideKey;
         this._reevaluateMusic();
         if (this._activeOverrideKey === before && this._musicActuallyPlaying()) return;
@@ -160,32 +127,47 @@ extendClass(SoundManager, {
         return null;
     },
 
-    /** Candidate vftrack keys for current planet / stage / hostile faction. */
-    combatTrackKeys(planetId, stageId, factionId) {
+    /**
+     * Candidate vftrack keys for current planet / stage / hostile faction.
+     * Boss stages prefer *-boss keys only when `preferOnly` (keep-same checks);
+     * playback may still list soft fallbacks afterward.
+     */
+    combatTrackKeys(planetId, stageId, factionId, opts) {
         const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
             ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
             : String(planetId || 'mars').toLowerCase().split('-')[0];
         const stage = String(stageId || this._currentStageId || '').toLowerCase();
         const boss = stage === 'boss' || stage === 'b';
         const faction = String(factionId || this._currentHostileFaction || '').toLowerCase();
+        const preferOnly = !!(opts && opts.preferOnly);
         const keys = [];
         // Prefer planet×faction (works for explored/ambush ids via motif mapping).
         // Do NOT fall back to bare faction:theme — that made every planet share
         // one loop whenever the planet slug wasn't mars..pluto.
-        if (boss && faction) keys.push(id + '-boss:' + faction);
+        if (boss) {
+            if (faction) keys.push(id + '-boss:' + faction);
+            keys.push(id + '-boss');
+            if (!preferOnly) {
+                // Last-resort only — never used for "already playing" keep.
+                if (faction) keys.push(id + ':' + faction);
+                keys.push(id);
+            }
+            return keys;
+        }
         if (faction) keys.push(id + ':' + faction);
-        if (boss) keys.push(id + '-boss');
         keys.push(id);
         return keys;
     },
 
     _musicActuallyPlaying() {
-        if (this._introPlaying) return true;
-        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()) {
-            return true;
+        // Intro path is retired — never treat a stale pending flag as audible.
+        if (typeof vfTrackerManager !== 'undefined') {
+            if (vfTrackerManager.isAudible && vfTrackerManager.isAudible()) return true;
+            if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()) return true;
         }
-        if (typeof localAudioManager !== 'undefined' && localAudioManager.el && !localAudioManager.el.paused) {
-            return true;
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.isAudible && localAudioManager.isAudible()) return true;
+            if (localAudioManager.el && !localAudioManager.el.paused) return true;
         }
         if (typeof youtubeSoundtrackManager !== 'undefined'
             && youtubeSoundtrackManager.mode
@@ -205,13 +187,9 @@ extendClass(SoundManager, {
 
     _reevaluateMusic() {
         if (!this._musicContextActive) return;
-        // Never interrupt the launch fanfare for enemy/stage override swaps.
-        if (this._introPlaying || this._pendingMissionIntro) {
-            if (this._pendingMissionIntro && this.musicEnabled) {
-                this._startMissionIntroThenCombat(this._currentPlanetId || 'mars');
-            }
-            return;
-        }
+        // Intro fanfare path retired — never re-arm it from enemy/stage churn.
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
         const resolved = this._resolveSoundtrackOverride();
         const overrideKey = resolved ? resolved.key : null;
         const ambientKey = overrideKey || ('ambient:' + (this._currentPlanetId || 'mars')

@@ -52,6 +52,11 @@ extendClass(HomeStationUI, {
         this._tpsFitCellPx = null;
         this._tpsFittingLock = false;
         this.mountTradingPostModal();
+        if (typeof soundManager !== 'undefined' && soundManager.startShopMusic) {
+            const planet = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || 'mars';
+            soundManager.startShopMusic(planet, { resume: 'map' });
+        }
         const msg = 'DOCKED AT ' + post.name + (isNew ? ' · TRADER UNLOCKED AT HOME STATION' : '');
         if (this.showStatusToast) this.showStatusToast(msg);
         else this.statusMsg = msg;
@@ -63,6 +68,9 @@ extendClass(HomeStationUI, {
         if (this._shopCategoryBeforeDock) this.shopCategory = this._shopCategoryBeforeDock;
         this._shopCategoryBeforeDock = null;
         this.statusMsg = '';
+        if (typeof soundManager !== 'undefined' && soundManager.stopShopMusic) {
+            soundManager.stopShopMusic();
+        }
     },
 
     closeTradingPostModal() {

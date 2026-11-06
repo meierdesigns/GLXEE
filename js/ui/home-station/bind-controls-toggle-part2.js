@@ -88,13 +88,14 @@ extendClass(HomeStationUI, {
             }
 
             if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+                if (e.repeat) {
+                    e.preventDefault();
+                    return;
+                }
                 e.preventDefault();
                 if (typeof startScreenManager !== 'undefined') {
-                    this.statusMsg = startScreenManager.devMode
-                        ? 'DEV MODE OFF'
-                        : 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED';
-                    // toggleDevMode patches station chrome via syncDevModeChrome —
-                    // do not call createUI() again (was a full double rebuild).
+                    // Toast text comes from the post-toggle state inside toggleDevMode,
+                    // so a swallowed double-fire cannot leave an ON label on an OFF mode.
                     startScreenManager.toggleDevMode();
                 }
                 return;
@@ -107,6 +108,13 @@ extendClass(HomeStationUI, {
                 return;
             }
             if (e.key === 'Escape' || e.key === 'Backspace') {
+                // Key-repeat while Esc is held re-opens the menu mid soft-remount
+                // and parks/rebuilds hangar DOM until the layout tears.
+                if (e.repeat) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 if (this._resBuyModal) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -155,13 +163,25 @@ extendClass(HomeStationUI, {
                     this.focusIndex = 0;
                     this.tab = back;
                     this.persistTab();
+                    // Hard remount: soft park across menu left station grid RO
+                    // writing 0-width column weights (cover/panels destroyed).
+                    this.disconnectStationColumnResize && this.disconnectStationColumnResize();
+                    this._softBodyCache = null;
+                    this._softBodyTab = null;
+                    this._hsShellReady = false;
                     this.createUI();
+                    // Closing the menu: don't let the next Esc (or held repeat)
+                    // bounce straight back into openMainMenuOverlay.
+                    this.armEscMenuCooldown();
                 } else {
                     // Top of the hierarchy: ESC in the area row opens the menu
                     // (its tabs appear as the sub-nav row below the areas).
                     if (this.getFocusedNavRow() !== 'area') {
                         this._navLevel = 'tabs';
                         if (!this.focusNavRow || !this.focusNavRow('area')) this.focusActiveTab();
+                        return;
+                    }
+                    if (this.isEscMenuCooldownActive()) {
                         return;
                     }
                     this._lastGameTab = this.tab;

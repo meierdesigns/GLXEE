@@ -25,6 +25,43 @@ class MissionStartManager {
         this.sideFrom = [];
         this.sideTo = [];
         this._armed = false;
+        this._introClock = 0;
+    }
+
+    /** Wall-clock countdown/GO — must not depend on the combat RAF (pause / FX remote / park). */
+    _clearIntroClock() {
+        if (this._introClock) {
+            clearTimeout(this._introClock);
+            this._introClock = 0;
+        }
+    }
+
+    _armCountdownClock() {
+        this._clearIntroClock();
+        const tick = () => {
+            this._introClock = 0;
+            if (!this.active || this.phase !== 'countdown') return;
+            this.countdownValue -= 1;
+            if (this.countdownValue > 0) {
+                this.setText(String(this.countdownValue), false);
+                if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
+                    try { soundManager.playShoot(); } catch (e) { /* ignore */ }
+                }
+                this._introClock = setTimeout(tick, 900);
+                return;
+            }
+            this.setPhase('go');
+            this.goTimer = 0;
+            this.setText('GO!', false);
+            if (typeof soundManager !== 'undefined' && soundManager.playExplosion) {
+                try { soundManager.playExplosion(); } catch (e) { /* ignore */ }
+            }
+            this._introClock = setTimeout(() => {
+                this._introClock = 0;
+                if (this.active && this.phase === 'go') this.startFlyIn();
+            }, 620);
+        };
+        this._introClock = setTimeout(tick, 900);
     }
 
     isActive() {
@@ -40,6 +77,7 @@ class MissionStartManager {
     }
 
     arm() {
+        this._clearIntroClock();
         this._armed = true;
         this.active = true;
         this.setPhase('awaitFire');
@@ -293,53 +331,24 @@ class MissionStartManager {
     onFire() {
         if (!this.active || this.phase !== 'awaitFire') return false;
         this.setPhase('countdown');
-        this._lastTick = 0;
         this.countdownValue = 3;
         this.countdownTimer = 0;
+        this.goTimer = 0;
         this.syncFactionChrome();
         this.setText('3', false);
         if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
             try { soundManager.playShoot(); } catch (e) { /* ignore */ }
         }
+        this._armCountdownClock();
         return true;
     }
 
     update(deltaTime) {
         if (!this.active) return;
 
-        // Countdown / GO run on wall-clock time: the loop caps deltaTime per frame, so a slow frame rate would stretch them.
-        const now = performance.now();
-        const real = this._lastTick ? Math.min(1000, now - this._lastTick) : deltaTime;
-        this._lastTick = now;
-
-        if (this.phase === 'countdown') {
-            this.countdownTimer += Math.max(deltaTime, real);
-            if (this.countdownTimer >= 900) {
-                this.countdownTimer = 0;
-                this.countdownValue -= 1;
-                if (this.countdownValue > 0) {
-                    this.setText(String(this.countdownValue), false);
-                    if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
-                        try { soundManager.playShoot(); } catch (e) { /* ignore */ }
-                    }
-                } else {
-                    this.setPhase('go');
-                    this.goTimer = 0;
-                    this.setText('GO!', false);
-                    if (typeof soundManager !== 'undefined' && soundManager.playExplosion) {
-                        try { soundManager.playExplosion(); } catch (e) { /* ignore */ }
-                    }
-                }
-            }
-            return;
-        }
-
-        if (this.phase === 'go') {
-            this.goTimer += Math.max(deltaTime, real);
-            // Slightly longer GO beat so the burst reads before fly-in.
-            if (this.goTimer >= 620) {
-                this.startFlyIn();
-            }
+        // Countdown / GO advance via _armCountdownClock (setTimeout), so pause / FX remote
+        // / parked combat RAF cannot freeze the "3…2…1…GO" beat.
+        if (this.phase === 'countdown' || this.phase === 'go') {
             return;
         }
 
@@ -380,6 +389,7 @@ class MissionStartManager {
     }
 
     startFlyIn() {
+        this._clearIntroClock();
         this.setPhase('preparingFlyIn');
         this.hideOverlay();
         this.prepareFlyIn().catch((err) => {

@@ -617,6 +617,7 @@ const hudLayoutEditor = (function () {
     function bindGlobalToggle() {
         window.addEventListener('keydown', function (e) {
             if (!e.shiftKey || (e.key !== 'c' && e.key !== 'C')) return;
+            if (e.repeat) return;
             if (typeof startScreenManager === 'undefined' || startScreenManager.visible) return;
             // The home station (js/ui/home-station/bind-controls-toggle-part2.js) has its own,
             // entirely separate `document` keydown listener for Shift+C, and it keeps handling the
@@ -628,6 +629,9 @@ const hudLayoutEditor = (function () {
             // cancelled each other out, so devMode net stayed unchanged while the station's own
             // toast still reported "DEV MODE ON" — a clean double-fire, not a dev-mode bug.
             if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) return;
+            // Profile overlay (js/core/input-handler/core.js) already toggles Shift+C itself;
+            // firing again here flipped the mode straight back off.
+            if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA') return;
             e.preventDefault();

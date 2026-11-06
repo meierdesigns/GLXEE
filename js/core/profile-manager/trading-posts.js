@@ -184,11 +184,13 @@ extendClass(ProfileManager, {
         let bestScore = -Infinity;
         // Several rings around the planet; the first spot clear of every lane
         // (and of other bodies) wins, else the one with the most clearance.
-        // Rings hug the planet: its drawn radius (map.js sizes planets 32..92 units
-        // across from the id) plus the (small) station and a gap, in these map pixels.
+        // Orbit must clear the drawn planet disc (planetNodeSize ≈ raw, surface
+        // ≈ raw·0.37) plus the station icon — raw/4 was too tight for large planets
+        // and parked stations inside the glow with a broken tether.
         const idSum = String(anchor.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-        const planetR = (32 + (idSum % 7) * 10) / 4;
-        [planetR + 9, planetR + 14, planetR + 20].forEach((radius) => {
+        const raw = 32 + (idSum % 7) * 10;
+        const planetR = Math.max(16, raw * 0.42);
+        [planetR + 12, planetR + 18, planetR + 26].forEach((radius) => {
             for (let i = 0; i < 24; i++) {
                 const a = ((seed % 360) + i * 15) * Math.PI / 180;
                 const x = Math.min(1, Math.max(0, anchor.x + Math.cos(a) * radius / SX));

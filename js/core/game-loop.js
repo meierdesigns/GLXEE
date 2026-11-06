@@ -14,6 +14,7 @@ class GameLoop {
         this.lastTime = 0;
         this.frameCount = 0;
         if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        this._bindVisibilityKick();
         // Do not force gameRunning here — startGame() owns that flag. Boot must
         // leave the loop idle so menus are not fighting a combat RAF.
         if (!this.gameState.gameRunning) return;
@@ -23,6 +24,20 @@ class GameLoop {
     stop() {
         this.gameState.gameRunning = false;
         if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+    }
+
+    /** Some hosts (embedded browsers / webviews) keep document.hidden true while the
+     *  fight is on screen; RAF may also pause while truly backgrounded. Kick the
+     *  loop when the page is shown again so combat cannot stay stuck on a black frame. */
+    _bindVisibilityKick() {
+        if (this._visKickBound || typeof document === 'undefined') return;
+        this._visKickBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden || !this.gameState.gameRunning) return;
+            if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+            this.lastTime = 0;
+            requestAnimationFrame((time) => this.loop(time));
+        });
     }
 
     /** True only while the fight screen is the active surface. */
@@ -45,9 +60,12 @@ class GameLoop {
     loop(currentTime) {
         if (!this.gameState.gameRunning) return;
 
-        // Tab in background: keep the RAF chain alive but skip sim/draw so we
-        // don't burn CPU. Quality is unchanged when the tab is visible again.
-        if (typeof document !== 'undefined' && document.hidden) {
+        // Tab in background (menus only): keep the RAF chain alive but skip
+        // sim/draw. NEVER skip while the fight surface is active — embedded
+        // browsers / some Electron webviews report document.hidden=true even
+        // when the player can see the stage, which left a black canvas and a
+        // frozen mission-start intro.
+        if (typeof document !== 'undefined' && document.hidden && !this.isCombatSurfaceActive()) {
             this.lastTime = 0;
             requestAnimationFrame((time) => this.loop(time));
             return;
@@ -114,15 +132,10 @@ class GameLoop {
         // Increment frame count
         this.gameState.frameCount++;
         
-        // Don't update game logic if paused or game over
-        if (this.gameState.isPaused || !this.gameState.gameRunning) {
-            // Still update UI even when paused
-            if (typeof uiManager !== 'undefined') uiManager.updateUI();
-            return;
-        }
-
+        // Mission intro (countdown clock is setTimeout; fly-in still needs the loop).
+        // Keep driving it while the FX remote freezes combat, otherwise the hatch/fly-in stalls.
         const introActive = typeof missionStartManager !== 'undefined' && missionStartManager.isActive();
-        if (introActive) {
+        if (introActive && this.gameState.gameRunning) {
             missionStartManager.update(deltaTime);
             if (typeof objectiveManager !== 'undefined' && objectiveManager.updateArrivalIntro) {
                 objectiveManager.updateArrivalIntro(deltaTime, missionStartManager.phase);
@@ -130,6 +143,13 @@ class GameLoop {
             if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(16);
+            if (typeof uiManager !== 'undefined') uiManager.updateUI();
+            return;
+        }
+
+        // Don't update game logic if paused or game over
+        if (this.gameState.isPaused || !this.gameState.gameRunning) {
+            // Still update UI even when paused
             if (typeof uiManager !== 'undefined') uiManager.updateUI();
             return;
         }

@@ -50,9 +50,21 @@
         const bz = document.getElementById('vf-bezel');
         const from = bz && bz.getAttribute('data-faction');
         const tA = performance.now();
-        apply();
-        if (window.vfLog) window.vfLog('cables', 'apply() took ' + Math.round(performance.now() - tA) + 'ms');
-        if (bz && from && from !== fac && NS.morphBezelShape) NS.morphBezelShape(from, fac, 700);
+        // apply() must never leave cableBusy stuck: a throw would queue every later
+        // wizard/faction swap forever and the faction panels would stay empty.
+        try {
+            apply();
+            if (window.vfLog) window.vfLog('cables', 'apply() took ' + Math.round(performance.now() - tA) + 'ms');
+            if (bz && from && from !== fac && NS.morphBezelShape) NS.morphBezelShape(from, fac, 700);
+        } catch (err) {
+            if (window.vfLog) window.vfLog('cables', 'apply() FAILED: ' + (err && err.message));
+            try { ghost.remove(); } catch (e2) { /* ignore */ }
+            svg.classList.remove('vfc-in', 'vfc-hold');
+            cableBusy = false;
+            const q = cableQueued; cableQueued = null;
+            if (q) cableSwitch(q[0], q[1]);
+            return;
+        }
         // The swap repaints every filtered frame layer in one go (a long frame). Start the cable motion only after that frame,
         // so the animation does not begin inside the stall and then jump.
         // The end timer only starts once the motion has been released, so a long swap frame can never cut the animation short.

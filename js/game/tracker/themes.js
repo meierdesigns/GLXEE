@@ -1,14 +1,19 @@
 "use strict";
 
 /**
- * Selectable melody / bass Grundthemen for VF Tracker.
- * Theme 0 = keep planet-authored channels. 1+ replace bass/lead/arp with
- * style heads; break layer + mix morph are driven by STYLE AMOUNT (0..1).
+ * Selectable music STYLES for VF Tracker.
+ * Theme 0 = PLANET: play authored Hauptmelodien as written.
+ * Theme 1+ = stylize only: keep the song's notes & rhythm; colour via mix,
+ * light drum blend, break overlay, twin, and preferred BPM.
+ * AMOUNT (0..1) scales how far into that colour — never rebuilds the hook.
  *
  * Indices 0–6 stay stable (renames only). New styles append at the end.
  */
 const VFTrackerThemes = {
     REF_BPM: 174,
+    /** localStorage key for Music Editor bank overrides (dev-only edits). */
+    OVERRIDE_KEY: 'vf_music_theme_banks_v1',
+    _bankOverrides: null,
 
     /** UI / storage order — indices 0–6 must stay stable once shipped. */
     list: [
@@ -26,18 +31,19 @@ const VFTrackerThemes = {
     /**
      * Per-style playback hints used by the tracker player / tempo morph.
      * breakSide: 'jungle' | 'dnb' | 'elektro' | 'hybrid' | 'drive' | 'off'
+     * preferredBpm: MUSIC BPM snap target (60..300) shown as a mark on the speed fader.
      */
     _meta: {
-        planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0 },
-        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.42, themeBreak: 0.95 },
-        // Dark minimal techno: heavy 4/4 + sub — ref https://www.youtube.com/watch?v=mv8vJQaUpDU
-        minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.14, themeBreak: 0.92 },
-        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.32, themeBreak: 0.9 },
-        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.26, themeBreak: 0.78 },
-        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.68 },
-        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.14, themeBreak: 0.45 },
-        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.28, themeBreak: 0.92 },
-        nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.18, themeBreak: 0.88 }
+        // preferredBpm = heard tempo when the STYLE is picked (auto-applied).
+        planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0, preferredBpm: 132 },
+        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.28, themeBreak: 0.7, preferredBpm: 160 },
+        minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.08, themeBreak: 0.55, preferredBpm: 128 },
+        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.24, themeBreak: 0.65, preferredBpm: 164 },
+        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.2, themeBreak: 0.5, preferredBpm: 170 },
+        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.18, themeBreak: 0.48, preferredBpm: 172 },
+        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.1, themeBreak: 0.35, preferredBpm: 168 },
+        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.6, preferredBpm: 174 },
+        nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.12, themeBreak: 0.55, preferredBpm: 108 }
     },
 
     count() {
@@ -67,6 +73,29 @@ const VFTrackerThemes = {
             ? indexOrId
             : this.idOf(indexOrId);
         return this._meta[id] || this._meta.planet;
+    },
+
+    /** Preferred MUSIC BPM for a style (snap + fader mark). */
+    preferredBpmOf(indexOrId) {
+        const meta = this.metaOf(indexOrId);
+        const bpm = Number(meta && meta.preferredBpm);
+        if (!Number.isFinite(bpm)) return 132;
+        return Math.max(60, Math.min(300, Math.round(bpm)));
+    },
+
+    /**
+     * Style tempo fitted to the playing song's authored BPM.
+     * PLANET → authored. Other styles scale preferredBpm vs REF 132 onto the track.
+     */
+    adaptedBpmOf(indexOrId, authoredBpm) {
+        const authored = Math.max(60, Math.min(300, Number(authoredBpm) || 132));
+        const id = typeof indexOrId === 'string' ? indexOrId : this.idOf(indexOrId);
+        if (!id || id === 'planet') return Math.round(authored);
+        const pref = this.preferredBpmOf(indexOrId);
+        const scaled = authored * (pref / (this.REF_BPM > 0 ? 132 : 132));
+        // Soft clamp toward preferred so extreme songs stay musical.
+        const blended = authored * 0.35 + scaled * 0.65;
+        return Math.max(60, Math.min(300, Math.round(blended)));
     },
 
     /** Three development patterns (P0 state / P1 sequence / P2 climax), 16 rows. */
@@ -265,18 +294,95 @@ const VFTrackerThemes = {
         { k: 1 }, { h: 0.5 }, { s: 1, h: 0.35 }, { h: 0.45 }
     ],
 
+    _ensureOverrides() {
+        if (this._bankOverrides) return this._bankOverrides;
+        this._bankOverrides = {};
+        try {
+            const raw = localStorage.getItem(this.OVERRIDE_KEY);
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (data && typeof data === 'object') this._bankOverrides = data;
+            }
+        } catch (e) { /* ignore */ }
+        return this._bankOverrides;
+    },
+
+    /** Active bank for a style id (override → built-in). */
+    bankOf(id) {
+        const key = String(id || '');
+        if (!key || key === 'planet') return null;
+        const ov = this._ensureOverrides();
+        if (ov[key] && Array.isArray(ov[key]) && ov[key].length) return ov[key];
+        return this._banks[key] || null;
+    },
+
+    /** Fallback kit when a STYLE bank has no drums strand yet. */
+    defaultDrums(patternIndex) {
+        const kits = [
+            'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .',
+            'A-2:5:58 . A-4:4:14 . A-2:5:46 . A-4:4:10 G-2:5:58 . A-4:4:14 . G-2:5:44 A-4:4:08 . .',
+            'A-2:5:70 A-4:4:18 . A-4:4:12 A-2:5:54 . A-4:4:14 . A-2:5:66 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+        ];
+        return kits[Math.abs(patternIndex | 0) % kits.length];
+    },
+
+    /** Deep-clone built-in bank (for the Music Editor). */
+    cloneBank(id) {
+        const bank = this._banks[id];
+        if (!bank) return null;
+        return bank.map((p, i) => ({
+            bass: String(p.bass || ''),
+            lead: String(p.lead || ''),
+            arp: String(p.arp || ''),
+            drums: String(p.drums || '') || this.defaultDrums(i)
+        }));
+    },
+
+    getBankOverride(id) {
+        const ov = this._ensureOverrides();
+        return ov[String(id || '')] || null;
+    },
+
+    setBankOverride(id, bank) {
+        const key = String(id || '');
+        if (!key || key === 'planet') return;
+        const ov = this._ensureOverrides();
+        if (!bank) {
+            delete ov[key];
+        } else {
+            ov[key] = bank.map((p) => ({
+                bass: String(p.bass || ''),
+                lead: String(p.lead || ''),
+                arp: String(p.arp || ''),
+                drums: String(p.drums || '')
+            }));
+        }
+        try {
+            localStorage.setItem(this.OVERRIDE_KEY, JSON.stringify(ov));
+        } catch (e) { /* quota */ }
+    },
+
+    clearBankOverrides() {
+        this._bankOverrides = {};
+        try { localStorage.removeItem(this.OVERRIDE_KEY); } catch (e) { /* ignore */ }
+    },
+
     /**
-     * Resolve theme channel cell for patternIndex / row / channel (0 bass,1 lead,2 arp).
-     * Returns null to keep planet-authored cell (theme 0 / unknown).
+     * Raw STYLE bank cell for patternIndex / row / channel
+     * (0 bass, 1 lead, 2 arp, 3 drums). null = no style strand.
      */
     cellAt(themeIndex, patternIndex, rowIndex, channel) {
         const id = this.idOf(themeIndex);
         if (!id || id === 'planet') return null;
-        const bank = this._banks[id];
+        const bank = this.bankOf(id);
         if (!bank || !bank.length) return null;
         const pat = bank[Math.abs(patternIndex | 0) % bank.length];
         if (!pat) return null;
-        const key = channel === 0 ? 'bass' : channel === 1 ? 'lead' : channel === 2 ? 'arp' : null;
+        const key = channel === 0 ? 'bass'
+            : channel === 1 ? 'lead'
+            : channel === 2 ? 'arp'
+            : channel === 3 ? 'drums'
+            : null;
         if (!key || !pat[key]) return null;
         if (typeof VFTrackerParse === 'undefined' || !VFTrackerParse.expandChannelString) return null;
         const padded = VFTrackerParse.padChannelString
@@ -284,5 +390,72 @@ const VFTrackerThemes = {
             : pat[key];
         const cells = VFTrackerParse.expandChannelString(padded, 16);
         return cells[rowIndex % 16] || null;
+    },
+
+    /**
+     * Collect pitch notes from an authored pattern channel (melody DNA).
+     * @param {object} pat normalized pattern ({ rows: [[{note,inst,vol},…],…] })
+     * @param {number} channel 0..2
+     */
+    pitchPoolFromPattern(pat, channel) {
+        const pool = [];
+        const rows = (pat && pat.rows) || [];
+        for (let r = 0; r < rows.length; r++) {
+            const cell = rows[r] && rows[r][channel];
+            if (cell && cell.note && cell.note !== 'OFF') pool.push(String(cell.note));
+        }
+        return pool;
+    },
+
+    /**
+     * Light STYLE colour on an authored cell — song stays intact.
+     * Bass / lead / arp: keep note + timing; only nudge velocity.
+     * Drums: blend toward style kit velocity at high AMOUNT (never replace groove).
+     * @param {number} styleAmount 0..1 (AMOUNT fader)
+     * @returns {object|null} cell to trigger, or null for rest
+     */
+    interpretCell(themeIndex, patternIndex, rowIndex, channel, authoredCell, pitchPool, styleAmount) {
+        const mag = Math.max(0, Math.min(1, Number(styleAmount) || 0));
+        if (!(Number(themeIndex) > 0) || mag < 0.03) return authoredCell || null;
+
+        const styleCell = this.cellAt(themeIndex, patternIndex, rowIndex, channel);
+
+        // Drums: keep authored hits; borrow style velocity when both hit.
+        if (channel === 3) {
+            if (!authoredCell || !authoredCell.note || authoredCell.note === 'OFF') {
+                // Only at high AMOUNT, fill a rest with a soft style kit tick.
+                if (mag > 0.7 && styleCell && styleCell.note && styleCell.note !== 'OFF') {
+                    return {
+                        note: styleCell.note,
+                        inst: styleCell.inst || 4,
+                        vol: Math.max(6, Math.min(28, Math.round((styleCell.vol != null ? styleCell.vol : 20) * 0.45)))
+                    };
+                }
+                return authoredCell || null;
+            }
+            if (styleCell && styleCell.note && styleCell.note !== 'OFF' && mag > 0.25) {
+                const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+                const sVol = styleCell.vol != null ? styleCell.vol : aVol;
+                return {
+                    note: authoredCell.note,
+                    inst: authoredCell.inst || styleCell.inst || 5,
+                    vol: Math.max(8, Math.min(56, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
+                };
+            }
+            return authoredCell;
+        }
+
+        // Melodic channels: never move pitches or timing — only gentle velocity tint.
+        if (!authoredCell || !authoredCell.note) return authoredCell || null;
+        if (authoredCell.note === 'OFF') return authoredCell;
+        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') return authoredCell;
+        const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+        const sVol = styleCell.vol != null ? styleCell.vol : aVol;
+        const tint = aVol + (sVol - aVol) * mag * 0.35;
+        return {
+            note: authoredCell.note,
+            inst: authoredCell.inst || 1,
+            vol: Math.max(16, Math.min(56, Math.round(tint)))
+        };
     }
 };

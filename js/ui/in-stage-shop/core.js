@@ -365,6 +365,16 @@ class InStageShop {
             && game.gameState.pauseGame) {
             game.gameState.pauseGame();
         }
+        if (typeof soundManager !== 'undefined' && soundManager.startShopMusic) {
+            const planet = (typeof soundManager._endMusicPlanet !== 'undefined'
+                && soundManager._endMusicPlanet)
+                || soundManager._currentPlanetId
+                || (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || 'mars';
+            soundManager.startShopMusic(planet, {
+                resume: this.fromVictory ? 'victory' : 'menu'
+            });
+        }
         this.renderDom();
     }
 
@@ -393,6 +403,9 @@ class InStageShop {
         if (el) el.remove();
         const wasVictory = this.fromVictory;
         this.fromVictory = false;
+        if (typeof soundManager !== 'undefined' && soundManager.stopShopMusic) {
+            soundManager.stopShopMusic();
+        }
         if (!wasVictory
             && typeof game !== 'undefined'
             && game.gameState

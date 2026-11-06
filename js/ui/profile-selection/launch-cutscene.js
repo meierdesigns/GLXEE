@@ -1,8 +1,9 @@
 "use strict";
 
-// Full-screen launch cutscene after new-pilot creation. Style follows the
-// chosen story path (hunt / escort / raid / salvage / …) so each story feels
-// different before the home-station handoff. SKIP-able after a short arm delay.
+// Launch cutscene after new-pilot creation, clamped to the bezel screen opening
+// (--fr-open-*). Style follows the chosen story path (hunt / escort / raid /
+// salvage / …) so each story feels different before the home-station handoff.
+// SKIP-able after a short arm delay.
 class LaunchCutsceneManager {
     constructor() {
         this.active = false;
@@ -116,7 +117,9 @@ class LaunchCutsceneManager {
         skipBtn.textContent = 'SKIP ▶';
         skipBtn.addEventListener('click', () => this.skip());
         overlay.appendChild(skipBtn);
-        document.documentElement.appendChild(overlay);
+        // Body (not <html>): stay in the same stacking tree as #vf-bezel so the
+        // hull band covers the rim; CSS clamps us to --fr-open-*.
+        document.body.appendChild(overlay);
         this.overlay = overlay;
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -139,9 +142,11 @@ class LaunchCutsceneManager {
     }
 
     _syncSize() {
-        if (!this.canvas) return;
-        const w = window.innerWidth;
-        const h = window.innerHeight;
+        if (!this.canvas || !this.overlay) return;
+        // Match the screen-opening box (not the full viewport).
+        const box = this.overlay.getBoundingClientRect();
+        const w = Math.max(1, Math.round(box.width));
+        const h = Math.max(1, Math.round(box.height));
         const dpr = window.devicePixelRatio || 1;
         this.canvas.width = Math.round(w * dpr);
         this.canvas.height = Math.round(h * dpr);

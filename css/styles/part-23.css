@@ -341,18 +341,25 @@ html[data-faction="voidborn"] body :is(.victory-title, .game-over .game-over-con
     html[data-faction="voidborn"] body :is(.victory-title, .game-over .game-over-content h2) { animation: none; }
 }
 
-/* Victory / defeat title: hard dark outline first, then a soft faction glow — the stacked accent rings,
-   italic and blur-breathing made e.g. the voidborn "ASCENSION" hard to read. */
+/* Victory / defeat title: hard dark outline + soft glow; stepped opacity pulse
+   (no blur/scale — those made faction titles hard to read). */
 html[data-faction] body :is(.victory-title, .game-over .game-over-content h2) {
     font-style: normal !important;
     filter: none !important;
-    animation: none !important;
     letter-spacing: 0.18em !important;
     text-shadow:
         -2px -2px 0 #05060a, 2px -2px 0 #05060a, -2px 2px 0 #05060a, 2px 2px 0 #05060a,
         0 -2px 0 #05060a, 0 2px 0 #05060a, -2px 0 0 #05060a, 2px 0 0 #05060a,
         3px 3px 0 #05060a,
         0 0 10px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent) !important;
+    animation: victory-title-pulse 2.4s steps(4, end) infinite !important;
+}
+@keyframes victory-title-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.78; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html[data-faction] body :is(.victory-title, .game-over .game-over-content h2) { animation: none !important; }
 }
 html body :is(.victory-screen, .game-over) .victory-subtitle {
     text-shadow:
@@ -360,15 +367,30 @@ html body :is(.victory-screen, .game-over) .victory-subtitle {
         0 -2px 0 #05060a, 0 2px 0 #05060a, -2px 0 0 #05060a, 2px 0 0 #05060a !important;
 }
 
-/* Victory screen uses the width: wide panel, planet big behind the header, resources as one icon row,
-   the buttons in a row below it. Everything stays inside the screen opening (no bleed into the bezel). */
+/* Victory fills the glass opening 1:1 — no floating card / letterbox inside the stage. */
+html body .victory-screen {
+    align-items: stretch !important;
+    justify-content: stretch !important;
+}
 html body .victory-screen .victory-content {
-    width: min(94%, 1120px) !important;
-    max-height: calc(100% - 16px);
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
     box-sizing: border-box;
     padding-top: 14px !important;
     padding-bottom: 14px !important;
     gap: 10px;
+    animation: victory-panel-in 0.42s steps(6, end) both;
+}
+@keyframes victory-panel-in {
+    0% { opacity: 0; transform: translateY(12px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .victory-screen .victory-content { animation: none; }
 }
 html body .victory-screen .victory-content > * { margin-top: 0 !important; margin-bottom: 0 !important; }
 html body .victory-screen .outcome-progress { padding-top: 200px; min-height: 0; gap: 12px; }
@@ -431,6 +453,14 @@ html body .outcome-planet-icon.has-atmo::before {
         color-mix(in srgb, var(--atmo) 10%, transparent) calc(74% * var(--dk, 1)),
         color-mix(in srgb, var(--atmo) 10%, transparent) calc(84% * var(--dk, 1)),
         transparent calc(84% * var(--dk, 1)));
+    animation: victory-atmo-breathe 3.6s steps(5, end) infinite;
+}
+@keyframes victory-atmo-breathe {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 0.9; transform: scale(1.05); }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .outcome-planet-icon.has-atmo::before { animation: none; }
 }
 
 /* Victory: title above the planet (both were z-index 1, the later planet won); planet raster centred on its
@@ -1609,12 +1639,13 @@ html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-shield {
     white-space: nowrap;
 }
 
-/* Victory panel: stats / loot / buttons stretch across the full width. */
+/* Victory panel: fill the glass; stats / loot / buttons stretch across the full width. */
 html body .victory-screen .victory-content {
-    width: min(96%, 1180px) !important;
-    max-height: calc(100% - 12px) !important;
-    height: auto !important;
-    min-height: min(88%, calc(100% - 12px));
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    min-height: 0 !important;
     justify-content: space-between !important;
     gap: 14px !important;
     padding-left: 28px !important;

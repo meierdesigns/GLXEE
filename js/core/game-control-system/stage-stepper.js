@@ -165,5 +165,13 @@ extendClass(GameControlSystem, {
         box.hidden = !box.innerHTML;
         box.classList.toggle('is-ambush', !!(box.querySelector('canvas.outcome-ambush-ship')));
         if (this.paintOutcomeAmbushShip) this.paintOutcomeAmbushShip(box);
+        // Combat parks planet spin; restart so the outcome globe turns again.
+        if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
+            if (planetSVGManager._spinTimer) {
+                clearInterval(planetSVGManager._spinTimer);
+                planetSVGManager._spinTimer = null;
+            }
+            planetSVGManager.startPlanetSpin();
+        }
     }
 });

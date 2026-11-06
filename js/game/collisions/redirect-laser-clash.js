@@ -126,7 +126,14 @@ extendClass(CollisionManager, {
                     // Indestructible bulwark: ram damage, then it bounces off instead of breaking.
                     if (!this.bounceBulwark(obs, playerX, playerY)) continue;
                     if (playerManager.takeDamage(dmg)) game.gameOver();
-                    if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                    this.spawnPlayerHitFx(playerX, playerY);
+                    if (typeof soundManager !== 'undefined') {
+                        if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                            soundManager.playShieldHit();
+                        } else {
+                            soundManager.playHurt();
+                        }
+                    }
                     break;
                 }
 
@@ -137,13 +144,15 @@ extendClass(CollisionManager, {
                 const playerDefeated = playerManager.takeDamage(dmg);
 
                 this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId, obs);
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(playerX, playerY, 10);
-                }
+                this.spawnPlayerHitFx(playerX, playerY);
 
                 if (typeof soundManager !== 'undefined') {
                     soundManager.playExplosion(0.6);
-                    soundManager.playHurt();
+                    if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                        soundManager.playShieldHit();
+                    } else {
+                        soundManager.playHurt();
+                    }
                 }
 
                 if (playerDefeated) {
@@ -176,6 +185,7 @@ extendClass(CollisionManager, {
                     // Shoving a bulwark into the enemy hurts it; the block itself bounces off.
                     if (!this.bounceBulwark(obs, enemyX, enemyY)) continue;
                     enemyManager.takeDamage(dmg);
+                    this.spawnEnemyHitFx(enemyX, enemyY, enemyManager.getEnemy && enemyManager.getEnemy());
                     if (typeof soundManager !== 'undefined') soundManager.playHit();
                     break;
                 }
@@ -187,8 +197,8 @@ extendClass(CollisionManager, {
                 const enemyDefeated = enemyManager.takeDamage(dmg);
 
                 this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId, obs);
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(enemyX, enemyY, 12);
+                if (!enemyDefeated) {
+                    this.spawnEnemyHitFx(enemyX, enemyY, enemyManager.getEnemy && enemyManager.getEnemy());
                 }
 
                 if (typeof soundManager !== 'undefined') {
@@ -222,12 +232,61 @@ extendClass(CollisionManager, {
         return false;
     },
 
+    /**
+     * Shot vs hull: prefer the silhouette mask / opaque insets so empty
+     * footprint padding (wing gaps, letterbox) does not count as a hit.
+     * Broken/sparse masks fall back to padded inset AABB instead of rejecting.
+     */
+    confirmShotHit(shotBounds, hull) {
+        if (!hull || !shotBounds) return true;
+        const spr = this.getCollisionSprite(hull);
+        if (spr && spr.sprite && spr.sprite.length) {
+            try {
+                if (this.spriteOverlapsRect(hull, spr, shotBounds)) return true;
+                if (this.collisionMaskIsTrustworthy(hull, spr)) return false;
+            } catch (e) {
+                // Mask path must never abort the frame's collision pass.
+            }
+        }
+        const tight = this.getCollisionBounds(hull, { x: 0, y: 0, width: 0, height: 0 }, {
+            ignoreInsets: false,
+            insetPad: 1.5
+        });
+        return shotBounds.x < tight.x + tight.width
+            && shotBounds.x + shotBounds.width > tight.x
+            && shotBounds.y < tight.y + tight.height
+            && shotBounds.y + shotBounds.height > tight.y;
+    },
+
+    /** True when the hull mask has enough solid pixels to safely reject misses. */
+    collisionMaskIsTrustworthy(obj, spr) {
+        const info = spr || this.getCollisionSprite(obj);
+        if (!info || !info.sprite || !info.sprite.length) return false;
+        if (obj && obj.collision && obj.collision._maskTrust != null) {
+            return !!obj.collision._maskTrust;
+        }
+        const sprite = info.sprite;
+        let solid = 0;
+        let total = 0;
+        for (let r = 0; r < sprite.length; r += 2) {
+            const row = sprite[r];
+            if (!row || !row.length) continue;
+            for (let c = 0; c < row.length; c += 2) {
+                total += 1;
+                if (row[c]) solid += 1;
+            }
+        }
+        const trust = solid >= 24 && (solid / Math.max(1, total)) >= 0.04;
+        if (obj && obj.collision) obj.collision._maskTrust = trust;
+        return trust;
+    },
+
     isColliding(obj1, obj2) {
         const shot1 = this.isShotEntity(obj1);
         const shot2 = this.isShotEntity(obj2);
         const anyShot = shot1 || shot2;
-        // Shots vs hull: use the full entity footprint the sprite is fitted into.
-        // Tight mask insets were shrinking the AABB below the visible ship.
+        // Broadphase uses the full footprint so silhouette insets cannot drop a
+        // glancing visual hit; confirmShotHit then tests the real hull mask.
         const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1, {
             ignoreInsets: anyShot && !shot1,
             matchVoxelDraw: shot1
@@ -251,10 +310,14 @@ extendClass(CollisionManager, {
             if (!sweptHit) return false;
             // Carved rocks: confirm the swept strip still touches remaining pixels
             // (previously skipped entirely → shots tunneled through thin lips).
+            const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
             if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
-                const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
                 if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, swept)) return false;
                 if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, swept)) return false;
+            }
+            if (anyShot) {
+                if (shot1 && shot2) return true;
+                return this.confirmShotHit(shot1 ? swept : b2, shot1 ? obj2 : obj1);
             }
             return true;
         }
@@ -264,12 +327,10 @@ extendClass(CollisionManager, {
             if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, b2)) return false;
         }
 
-        // Shots vs hull: AABB is authoritative. Boss / capital pixel masks are
-        // sparse after VOXEL bake and were letting clear overlaps register as misses
-        // (and an exception in the mask path aborted the whole collision pass,
-        // which also killed terrain wall hits in the same frame).
+        // Shots vs hull: refine against silhouette (not empty footprint padding).
         if (anyShot) {
-            return true;
+            if (shot1 && shot2) return true;
+            return this.confirmShotHit(shot1 ? b1 : b2, shot1 ? obj2 : obj1);
         }
 
         const s1 = this.getCollisionSprite(obj1);
@@ -294,12 +355,13 @@ extendClass(CollisionManager, {
             return o;
         }
         const ignoreInsets = !!(opts && opts.ignoreInsets);
+        const pad = (opts && opts.insetPad) || 0;
         const c = obj.collision;
-        if (!ignoreInsets && c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
-            const insetL = c.insetL || 0;
-            const insetT = c.insetT || 0;
-            const insetR = c.insetR || 0;
-            const insetB = c.insetB || 0;
+        if (!ignoreInsets && c && (c.insetL || c.insetT || c.insetR || c.insetB || pad)) {
+            const insetL = Math.max(0, (c.insetL || 0) - pad);
+            const insetT = Math.max(0, (c.insetT || 0) - pad);
+            const insetR = Math.max(0, (c.insetR || 0) - pad);
+            const insetB = Math.max(0, (c.insetB || 0) - pad);
             o.x = obj.x + insetL;
             o.y = obj.y + insetT;
             o.width = Math.max(1, obj.width - insetL - insetR);

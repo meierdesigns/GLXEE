@@ -138,6 +138,7 @@ extendClass(MissionStartManager, {
     },
 
     complete() {
+        if (this._clearIntroClock) this._clearIntroClock();
         this.applyPlayerFlyIn(1);
         // Enemies enter only once the player can fly (see updateEnemyEntry).
         this.enemyInElapsed = 0;
@@ -164,6 +165,7 @@ extendClass(MissionStartManager, {
     },
 
     cancel() {
+        if (this._clearIntroClock) this._clearIntroClock();
         this.endEnemyEntry();
         this.active = false;
         this.phase = null;

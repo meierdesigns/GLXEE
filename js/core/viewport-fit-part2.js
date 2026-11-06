@@ -7,7 +7,7 @@
     const onFxEsc = (...args) => NS.onFxEsc(...args); // defined in a later part
     const startSway = (...args) => NS.startSway(...args); // defined in a later part
     const fillFxPlate = (...args) => NS.fillFxPlate(...args); // defined in viewport-fit-plate.js
-    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot }); // functions (hoisted)
+    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot, syncFxAudioMusicSplit }); // functions (hoisted)
 
     function restoreFxScroll() {
         const body = document.querySelector('#vf-fx .vf-fx-body');
@@ -196,9 +196,19 @@
     const FXGEOM_KEY = 'vf-fx-geom';
     let fxGeom = null;
     try { fxGeom = JSON.parse(localStorage.getItem(FXGEOM_KEY) || 'null'); } catch (e) { fxGeom = null; }
+    if (fxGeom && fxGeom.w) vfs.fxGeomW = fxGeom.w;
+    function syncFxAudioMusicSplit() {
+        if (vfs._fxFilling || !vfs.fxOpen || vfs.fxTab !== 'audio') return;
+        const want = typeof NS.fxWantAudioMusicSplit === 'function' ? NS.fxWantAudioMusicSplit() : false;
+        if (want !== !!vfs.fxAudioWide) fillFxPlate();
+    }
     function applyFxGeom() {
         const plate = document.getElementById('vf-fx');
-        if (plate && !fxGeom) setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        if (plate && !fxGeom) {
+            setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+            vfs.fxGeomW = plate.offsetWidth || vfs.fxGeomW || 0;
+            return;
+        }
         if (!plate || !fxGeom) return;
         const W = window.innerWidth, H = window.innerHeight;
         // Clamp the scaled (visual) box: scale pivots on transform-origin, so it sits offset from left/top.
@@ -210,6 +220,7 @@
         plate.style.width = w + 'px'; plate.style.height = h + 'px';
         plate.style.left = l + 'px'; plate.style.top = t + 'px';
         plate.style.right = 'auto'; plate.style.bottom = 'auto';
+        vfs.fxGeomW = w;
     }
     function startFxDrag(e, mode) {
         const plate = document.getElementById('vf-fx');
@@ -236,11 +247,16 @@
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
             try { localStorage.setItem(FXGEOM_KEY, JSON.stringify(fxGeom)); } catch (err) { /* ignore */ }
+            // Rebuild AUDIO split only after resize ends (avoids remount mid-drag).
+            if (mode !== 'move') syncFxAudioMusicSplit();
         };
         document.addEventListener('pointermove', move);
         document.addEventListener('pointerup', up);
     }
-    window.addEventListener('resize', applyFxGeom);
+    window.addEventListener('resize', function () {
+        applyFxGeom();
+        syncFxAudioMusicSplit();
+    });
     /** Re-run the station FLEET preview so colour edits show at once (for the faction being edited). */
     function refreshFleetPreviewLive(faction) {
         // enemySizeOverlay is no longer loaded (SIZES live in this panel), so restart the station preview directly.
@@ -253,6 +269,33 @@
         startPerfProbe('perf');
     }
     function onFxClick(e) {
+        const secToggle = e.target.closest && e.target.closest('[data-fx-sec-toggle]');
+        if (secToggle) {
+            e.preventDefault();
+            e.stopPropagation();
+            const key = secToggle.getAttribute('data-fx-sec-toggle');
+            if (!key) return;
+            if (!vfs._fxAudioCollapsed) {
+                let map = {};
+                try {
+                    const raw = JSON.parse(localStorage.getItem('vf_fx_audio_collapsed') || '{}');
+                    if (raw && typeof raw === 'object' && !Array.isArray(raw)) map = raw;
+                } catch (err) { /* ignore */ }
+                vfs._fxAudioCollapsed = map;
+            }
+            const map = vfs._fxAudioCollapsed;
+            map[key] = !map[key];
+            try { localStorage.setItem('vf_fx_audio_collapsed', JSON.stringify(map)); } catch (err) { /* ignore */ }
+            const sec = secToggle.closest('.vf-fx-sec');
+            const c = !!map[key];
+            if (sec) sec.classList.toggle('is-collapsed', c);
+            secToggle.setAttribute('aria-expanded', String(!c));
+            const caret = secToggle.querySelector('.vf-fx-sec-caret');
+            if (caret) caret.textContent = c ? '▼' : '▲';
+            const body = sec && sec.querySelector('.vf-fx-sec-body');
+            if (body) body.hidden = c;
+            return;
+        }
         const b = e.target.closest && e.target.closest('button');
         const ui = getUi();
         if (!b || !ui) return;
@@ -402,6 +445,10 @@
             if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setMusicTheme) {
                 volumeControlsManager.setMusicTheme(parseInt(sel.value, 10));
             }
+            if (typeof musicEditorUI !== 'undefined' && musicEditorUI.syncStyleFromVolume
+                && !musicEditorUI._syncingStyle) {
+                musicEditorUI.syncStyleFromVolume({ reload: true });
+            }
             fillFxPlate();
             return;
         }
@@ -409,6 +456,15 @@
             const ch = Number(sel.dataset.voiceCh);
             if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
                 volumeControlsManager.setChannelVoice(ch, sel.value || 'default');
+            }
+            const row = sel.closest('.vf-fx-voice-row');
+            const pick = row && row.querySelector('.vf-fx-voice-pick');
+            if (pick) {
+                const ids = String(pick.dataset.voiceIds || '').split('|');
+                let i = ids.indexOf(sel.value);
+                if (i < 0) i = 0;
+                pick.value = String(i);
+                pick.style.setProperty('--look-fill', (i / Math.max(1, ids.length - 1) * 100) + '%');
             }
             return;
         }
@@ -464,14 +520,14 @@
             applyFrameStyle();
             return;
         }
-        if (inp.dataset.voiceCh != null && inp.classList && inp.classList.contains('vf-fx-voice')) {
+        if (inp.dataset.voiceCh != null && inp.classList && inp.classList.contains('vf-fx-voice-pick')) {
             const ch = Number(inp.dataset.voiceCh);
             const ids = String(inp.dataset.voiceIds || '').split('|');
-            const labels = String(inp.dataset.voiceLabels || '').split('|');
             const i = Math.max(0, Math.min(ids.length - 1, Number(inp.value) || 0));
             inp.style.setProperty('--look-fill', (i / Math.max(1, ids.length - 1) * 100) + '%');
-            const nameOut = inp.nextElementSibling;
-            if (nameOut) nameOut.textContent = labels[i] || ids[i] || 'DEFAULT';
+            const row = inp.closest('.vf-fx-voice-row');
+            const select = row && row.querySelector('select.vf-fx-voice');
+            if (select) select.value = ids[i] || 'default';
             if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
                 volumeControlsManager.setChannelVoice(ch, ids[i] || 'default');
             }
@@ -502,7 +558,7 @@
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
         inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
-        if (!(parts[0] === 'au' && parts[1] === 'jungle')) {
+        if (!(parts[0] === 'au' && (parts[1] === 'jungle' || parts[1] === 'theme' || parts[1] === 'bpm' || parts[1] === 'speed'))) {
             inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
         }
         if (parts[0] === 'fx') ui.setFx(parts[1], v + '%');
@@ -526,19 +582,62 @@
         }
         else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
             if ((parts[1] === 'bpm' || parts[1] === 'speed') && volumeControlsManager.setMusicBpm) {
-                // au:bpm is absolute; legacy au:speed was a × multiplier.
+                // au:bpm is reference-equivalent BPM; legacy au:speed was a × multiplier.
+                let bpmVal;
                 if (parts[1] === 'speed' && v <= 4) {
-                    volumeControlsManager.setMusicBpm(Math.round(v * (volumeControlsManager.referenceBpm || 132)));
+                    bpmVal = Math.round(v * (volumeControlsManager.referenceBpm || 132));
                 } else {
-                    volumeControlsManager.setMusicBpm(Math.max(60, Math.min(600, v)));
+                    bpmVal = Math.max(60, Math.min(300, v));
+                }
+                if (volumeControlsManager.snapMusicBpm) bpmVal = volumeControlsManager.snapMusicBpm(bpmVal);
+                volumeControlsManager.setMusicBpm(bpmVal);
+                const snapped = volumeControlsManager.getMusicBpm
+                    ? volumeControlsManager.getMusicBpm()
+                    : bpmVal;
+                if (Number(inp.value) !== snapped) {
+                    inp.value = String(snapped);
+                    inp.style.setProperty('--look-fill', ((snapped - min) / Math.max(1, max - min) * 100) + '%');
+                }
+                if (volumeControlsManager.applyBpmMark) {
+                    volumeControlsManager.applyBpmMark(inp, min, max);
+                }
+                const out = inp.nextElementSibling;
+                if (out) {
+                    out.textContent = volumeControlsManager.formatMusicSpeed
+                        ? volumeControlsManager.formatMusicSpeed(snapped)
+                        : (Math.round(snapped) + ' BPM');
                 }
             } else if (parts[1] === 'jungle' && volumeControlsManager.setJungleAmount) {
                 volumeControlsManager.setJungleAmount(Math.max(0, Math.min(100, v)) / 100);
                 const out = inp.nextElementSibling;
                 if (out) out.textContent = v === 0 ? 'OFF' : v + '%';
             } else if (parts[1] === 'theme' && volumeControlsManager.setMusicTheme) {
-                // Legacy THEME slider (pre-dropdown) — keep wiring alive.
                 volumeControlsManager.setMusicTheme(v);
+                const list = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list)
+                    ? VFTrackerThemes.list : null;
+                const out = inp.nextElementSibling;
+                if (out && list && list[v]) out.textContent = list[v].label;
+                // setMusicTheme may bump STRENGTH — keep the amount row in sync.
+                const plate = inp.closest('.vf-bezel-fx');
+                const strength = plate && plate.querySelector('[data-sl="au:jungle"]');
+                if (strength && volumeControlsManager.getJungleAmount) {
+                    const pct = Math.round(Math.max(0, Math.min(1, Number(volumeControlsManager.getJungleAmount()) || 0)) * 100);
+                    strength.value = String(pct);
+                    strength.style.setProperty('--look-fill', pct + '%');
+                    if (strength.nextElementSibling) {
+                        strength.nextElementSibling.textContent = pct === 0 ? 'OFF' : pct + '%';
+                    }
+                }
+                // Move preferred-BPM mark on MUSIC BPM to the new STYLE.
+                const bpmInp = plate && plate.querySelector('[data-sl="au:bpm"]');
+                if (bpmInp && volumeControlsManager.applyBpmMark) {
+                    volumeControlsManager.applyBpmMark(bpmInp, +bpmInp.min || 60, +bpmInp.max || 300);
+                }
+                // Mirror into Music Editor STYLE select (same index / label).
+                if (typeof musicEditorUI !== 'undefined' && musicEditorUI.syncStyleFromVolume
+                    && !musicEditorUI._syncingStyle) {
+                    musicEditorUI.syncStyleFromVolume({ reload: true });
+                }
             } else if (parts[1] === 'xfade') {
                 const sec = Math.max(0.2, Math.min(3, v));
                 if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = sec;
@@ -584,7 +683,10 @@
             startSway();
             document.addEventListener('keydown', onFxEsc, true);
             // In combat: freeze the field (no dark pause menu) so the effects can be judged.
-            if (gs && gs.gameRunning && !gs.isPaused) {
+            // Skip while mission-start intro is running — pausing there froze the countdown.
+            const introOn = typeof missionStartManager !== 'undefined' && missionStartManager.isActive
+                && missionStartManager.isActive();
+            if (gs && gs.gameRunning && !gs.isPaused && !introOn) {
                 gs.pauseGame();
                 vfs.fxPausedByUs = true;
             }

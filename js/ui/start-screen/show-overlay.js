@@ -94,11 +94,17 @@ extendClass(StartScreenManager, {
     },
 
     syncEmbeddedFlags() {
-        this.showSettings = this.embeddedMode && this.embeddedMenuTab === 'settings';
+        this.showSettings = this.embeddedMode && (
+            this.embeddedMenuTab === 'settings'
+            || this.embeddedMenuTab === 'audio'
+            || this.embeddedMenuTab === 'assets'
+        );
         this.showCredits = this.embeddedMode && this.embeddedMenuTab === 'credits';
     },
 
     setEmbeddedMenuTab(tabId) {
+        // MUSIC editor moved to the bezel remote (wave 71U).
+        if (tabId === 'music') tabId = 'audio';
         const ok = this.embeddedMenuTabs.some((t) => t.id === tabId);
         if (!ok) return;
         this.embeddedMenuTab = tabId;
@@ -116,7 +122,10 @@ extendClass(StartScreenManager, {
     },
 
     cycleEmbeddedMenuTab(dir) {
-        const ids = this.embeddedMenuTabs.map((t) => t.id).filter((id) => id !== 'portraits' || this.devMode);
+        const ids = this.embeddedMenuTabs.map((t) => t.id).filter((id) => {
+            if (id === 'portraits') return this.devMode || this.embeddedMenuTab === id;
+            return true;
+        });
         const idx = ids.indexOf(this.embeddedMenuTab);
         const next = (idx + dir + ids.length) % ids.length;
         this.setEmbeddedMenuTab(ids[next]);

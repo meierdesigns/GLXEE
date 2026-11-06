@@ -1236,26 +1236,37 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 
 .gi-transit-map {
     flex: 1 1 auto;
-    width: 100%;
+    align-self: center;
+    width: 48px;
+    min-width: 48px;
+    max-width: 48px;
     min-height: 60px;
     box-sizing: border-box;
-    padding: 8px 5px;
+    padding: 10px 4px 10px 5px;
     border: var(--ui-border-width) solid var(--color-primary);
     background: color-mix(in srgb, var(--color-primary) 6%, #05060a);
     display: flex;
-    flex-direction: column;
-    align-items: center;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 4px;
 }
 .gi-transit-map[hidden] {
     display: none !important;
 }
 .gi-transit-track {
     position: relative;
-    flex: 1 1 auto;
-    width: 10px;
+    flex: 0 0 12px;
+    width: 12px;
     min-height: 0;
+    align-self: stretch;
     border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 40%, transparent);
     background: color-mix(in srgb, var(--color-primary) 10%, #000);
+}
+.gi-transit-icons {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
 }
 .gi-transit-fill {
     position: absolute;
@@ -1271,6 +1282,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     position: absolute;
     left: 50%;
     bottom: var(--vf-transit-pct, 0%);
+    z-index: 3;
     width: 8px;
     height: 8px;
     transform: translate(-50%, 50%) rotate(45deg);
@@ -1282,6 +1294,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     position: absolute;
     top: -2px;
     left: 50%;
+    z-index: 4;
     transform: translate(-50%, -100%);
     font-size: var(--font-sm);
     letter-spacing: 0.08em;
@@ -1294,6 +1307,96 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
 }
 .gi-transit-arrived .gi-transit-ship {
     box-shadow: 0 0 8px 2px #fff;
+}
+.gi-transit-event {
+    position: absolute;
+    left: 50%;
+    z-index: 2;
+    width: 5px;
+    height: 5px;
+    transform: translate(-50%, 50%) rotate(45deg);
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--evt-accent, #c0c0c0) 70%, #fff);
+    background: var(--evt-accent, #c0c0c0);
+    box-shadow: 0 0 3px color-mix(in srgb, var(--evt-accent, #c0c0c0) 55%, transparent);
+    opacity: 0.35;
+    pointer-events: none;
+}
+.gi-transit-event.is-known {
+    opacity: 0.95;
+}
+.gi-transit-event.is-passed {
+    opacity: 0.22;
+    box-shadow: none;
+    background: color-mix(in srgb, var(--evt-accent, #c0c0c0) 35%, #05060a);
+}
+.gi-transit-event.is-active {
+    opacity: 1;
+    width: 6px;
+    height: 6px;
+    box-shadow: 0 0 5px 1px var(--evt-accent, #c0c0c0);
+}
+.gi-transit-icon {
+    position: absolute;
+    left: 50%;
+    z-index: 2;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    padding: 1px;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--evt-accent, #c0c0c0) 75%, #fff);
+    background: color-mix(in srgb, var(--evt-accent, #c0c0c0) 22%, #05060a);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--evt-accent, #c0c0c0) 45%, transparent);
+    opacity: 0;
+    transform: translate(10px, 50%) scale(0.35);
+    pointer-events: none;
+    overflow: hidden;
+}
+.gi-transit-icon :is(img, .gi-icon, canvas) {
+    width: 14px !important;
+    height: 14px !important;
+    image-rendering: pixelated;
+}
+.gi-transit-icon.is-known {
+    animation: gi-transit-icon-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+.gi-transit-icon.is-passed {
+    opacity: 0.35;
+    filter: grayscale(0.55);
+    box-shadow: none;
+    animation: none;
+    transform: translate(-50%, 50%) scale(0.85);
+}
+.gi-transit-icon.is-active {
+    animation: gi-transit-icon-pulse 0.9s ease-in-out infinite alternate;
+}
+@keyframes gi-transit-icon-in {
+    0% {
+        opacity: 0;
+        transform: translate(12px, 50%) scale(0.3);
+    }
+    70% {
+        opacity: 1;
+        transform: translate(-54%, 50%) scale(1.12);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, 50%) scale(1);
+    }
+}
+@keyframes gi-transit-icon-pulse {
+    from {
+        box-shadow: 0 0 4px color-mix(in srgb, var(--evt-accent, #c0c0c0) 40%, transparent);
+        transform: translate(-50%, 50%) scale(1);
+    }
+    to {
+        box-shadow: 0 0 10px 2px var(--evt-accent, #c0c0c0);
+        transform: translate(-50%, 50%) scale(1.08);
+    }
 }
 
 .gi-mission-side {
@@ -2068,6 +2171,23 @@ html[data-ui-controls="off"] .game-canvas-container > .ui-controls-show-btn {
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
+}
+.volume-slider.has-bpm-mark {
+    background:
+        linear-gradient(
+            to right,
+            transparent calc(var(--bpm-mark, 0%) - 1px),
+            #fff calc(var(--bpm-mark, 0%) - 1px),
+            #fff calc(var(--bpm-mark, 0%) + 1px),
+            transparent calc(var(--bpm-mark, 0%) + 1px)
+        ),
+        linear-gradient(
+            to right,
+            var(--color-primary) 0%,
+            var(--color-primary) var(--vol-fill, 0%),
+            color-mix(in srgb, var(--color-primary) 20%, var(--color-background)) var(--vol-fill, 0%),
+            color-mix(in srgb, var(--color-primary) 20%, var(--color-background)) 100%
+        );
 }
 
 /* Enemy sidebar card (elite / capital / boss): portrait with the faction crest in its lower-right

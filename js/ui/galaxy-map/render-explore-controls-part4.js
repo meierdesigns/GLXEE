@@ -440,20 +440,42 @@ extendClass(GalaxyMapManager, {
         return size * frac;
     },
     postLanesSvg() {
-        if (!this.routePath || typeof profileManager === 'undefined') return '';
+        if (typeof profileManager === 'undefined') return '';
         let out = '';
+        // Straight radial tethers only: routePath detours break when gm-lane-rot
+        // spins the polyline around the planet (free end leaves the station).
+        const W = typeof GM_MAP_W !== 'undefined' ? GM_MAP_W : 640;
+        const H = typeof GM_MAP_H !== 'undefined' ? GM_MAP_H : 320;
+        const pad = typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48;
+        const SX = (W - pad * 2) * 2.0, SY = (H - pad * 2) * 2.0;
         (this.getTradingPosts() || []).forEach((post) => {
             const open = profileManager.isTradingPostUnlocked ? profileManager.isTradingPostUnlocked(post) : true;
             (post.anchors || [post.planetId]).forEach((pid) => {
-                if (!this.nodeById || !this.nodeById[pid]) return;
-                const pts = this.routePath({ kind: 'post', id: post.id }, { kind: 'planet', id: pid });
-                if (!pts || pts.length < 2) return;
-                // Start outside the station icon, end on the planet disc (measured along the curve).
-                const p = this.trimPolyline(pts, 6, this.planetSurfaceRadius(pid) * this.nodeObjScale() * 0.88);
-                const pn = this.nodeById[pid];
-                const cx = (640 / 2 + (pn.x - 0.5) * (640 - 96) * 2.0).toFixed(2);
-                const cy = (320 / 2 + (pn.y - 0.5) * (320 - 96) * 2.0).toFixed(2);
-                out += `<g class="gm-lane-rot" data-post="${post.id}" data-a="${post.orbitA == null ? 0 : post.orbitA}" data-cx="${cx}" data-cy="${cy}">`
+                const pn = this.nodeById && this.nodeById[pid];
+                if (!pn) return;
+                let cx = W / 2 + (pn.x - 0.5) * SX;
+                let cy = H / 2 + (pn.y - 0.5) * SY;
+                let sx = W / 2 + (post.x - 0.5) * SX;
+                let sy = H / 2 + (post.y - 0.5) * SY;
+                if (this.latticeMapPt) {
+                    const pL = this.latticeMapPt(cx, cy);
+                    const sL = this.latticeMapPt(sx, sy);
+                    cx = pL.x; cy = pL.y; sx = sL.x; sy = sL.y;
+                }
+                const dx = sx - cx, dy = sy - cy;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 1) return;
+                const ux = dx / dist, uy = dy / dist;
+                const planetR = this.planetSurfaceRadius(pid) * this.nodeObjScale() * 0.88;
+                // Station art: 18×18 cells centred on 0, scaled by planetPixelSize * 0.42.
+                const pp = (this.planetPixelSize ? this.planetPixelSize(pid) : 2) * this.nodeObjScale();
+                const stationR = Math.max(4, 9 * pp * 0.42 * 0.92);
+                if (dist <= planetR + stationR + 1) return;
+                const p = [
+                    { x: cx + ux * planetR, y: cy + uy * planetR },
+                    { x: sx - ux * stationR, y: sy - uy * stationR }
+                ];
+                out += `<g class="gm-lane-rot" data-post="${post.id}" data-a="${post.orbitA == null ? 0 : post.orbitA}" data-cx="${cx.toFixed(2)}" data-cy="${cy.toFixed(2)}">`
                     + this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1], traffic: true }) + '</g>';
             });
         });

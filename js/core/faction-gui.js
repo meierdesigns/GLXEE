@@ -127,10 +127,13 @@ const factionGui = (() => {
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) factionShipStyles.applyDocumentFactionTheme(id);
     }
 
+    /** Drop any in-flight swap callback (instant apply / newer pick already painted the frame). */
+    function cancelPending() { swapTok = {}; }
+
     /** The one door to the cable swap, for flows that recolour the frame themselves (pilot wizard): same gate as go(). */
     function swap(id, apply) {
         const sw = window.vfFitScope && window.vfFitScope.cableSwitch;
-        if (!ready || !sw || reduce()) { apply(); return; }
+        if (!ready || !sw || reduce()) { cancelPending(); apply(); return; }
         // Decode the target faction's art first, so the cable/background swap never shows the fallback room.
         const fp = typeof factionPacks !== 'undefined' && factionPacks.warmFaction ? factionPacks.warmFaction(id, 500) : Promise.resolve();
         if (window.vfLog) { window.vfLog('gui', 'swap -> ' + id + ' | ready=' + ready); if (window.vfLog.watch) window.vfLog.watch('swap ' + id); }
@@ -163,6 +166,6 @@ const factionGui = (() => {
     /** A flow that stamped the document itself (pilot wizard) tells the switch what is shown now. */
     function sync(id) { shown = id; desired = id; }
 
-    return { go, follow, swap, sync, reconcile, expected, get shown() { return shown; }, get busy() { return busy; }, get armed() { return ready; } };
+    return { go, follow, swap, cancelPending, sync, reconcile, expected, get shown() { return shown; }, get busy() { return busy; }, get armed() { return ready; } };
 })();
 window.factionGui = factionGui;

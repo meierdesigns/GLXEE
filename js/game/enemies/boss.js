@@ -95,7 +95,12 @@ extendClass(EnemyManager, {
         e.width = Math.round(e.width * bossMul);
         e.height = Math.round(e.height * bossMul);
         e.x = cx - e.width / 2;
-        if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, bossMul);
+        if (e.collision) {
+            e.collision = this.scaleEnemyCollision(e.collision, bossMul);
+            e.collision.drawW = e.width;
+            e.collision.drawH = e.height;
+            e.collision._maskTrust = null;
+        }
         const mods = this.currentTierMods();
         // TTK target ~22s boss vs REF laser eDPS (balance-config). Was 0.6.
         this.maxHealth = Math.round(this.maxHealth * mods.boss * 1.45);

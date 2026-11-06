@@ -217,6 +217,8 @@ extendClass(PickupManager, {
      * disguised chill perk.
      */
     spawnPowerUp(o) {
+        // Already detonated on shot contact — nothing left to drop.
+        if (o && o._trapSpent) return;
         if (o && o.trap === 'bomb') {
             this.trapBlast(o.x + o.width / 2, o.y + o.height / 2);
             return;
@@ -325,8 +327,14 @@ extendClass(PickupManager, {
         if (dist > TRAP_BLAST_RADIUS) return;
         const maxHp = playerManager.getMaxHealth ? playerManager.getMaxHealth() : 100;
         const dmg = maxHp * TRAP_BLAST_DAMAGE * (1 - 0.6 * dist / TRAP_BLAST_RADIUS);
-        if (typeof soundManager !== 'undefined' && soundManager.playHurt) soundManager.playHurt();
         if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+        if (typeof collisionManager !== 'undefined' && collisionManager.spawnPlayerHitFx) {
+            collisionManager.spawnPlayerHitFx(x, y);
+        }
+        if (typeof soundManager !== 'undefined') {
+            if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) soundManager.playShieldHit();
+            else if (soundManager.playHurt) soundManager.playHurt();
+        }
     },
 
     /** Active power-up state { left, total } or null. */

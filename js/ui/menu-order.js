@@ -8,7 +8,9 @@
 // that order is saved in the browser and overrides the lists below.
 // '|' is a cluster divider (a line between tab groups) and can be moved like a tab.
 // Available ids: play, travel, explorations, upgrade, hangar, components,
-// missions, craft, shop, factions, profiles, settings, assets, credits
+// missions, craft, shop, factions, profiles, settings, audio, assets,
+// portraits, credits
+// (Music Editor lives on the bezel AUDIO remote when widened.)
 const MENU_ORDER = {
     main: [
         'station',
@@ -25,6 +27,7 @@ const MENU_ORDER = {
     ],
     esc: [
         'settings',
+        'audio',
         'layout',
         'assets',
         'components',
@@ -78,7 +81,15 @@ const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
         const esc = saved.esc.slice();
         // PORTRAITS (dev mode) belongs right before CREDITS, not at the row's end.
         if (known.indexOf('portraits') === -1 && esc.indexOf('credits') !== -1) esc.splice(esc.indexOf('credits'), 0, 'portraits');
-        MENU_ORDER.esc = esc.concat(MENU_ORDER.esc.filter((id) => isNew(id) && esc.indexOf(id) === -1)).filter((id) => id !== 'station');
+        // MUSIC editor moved to the bezel remote — drop stale ESC-menu entries.
+        // AUDIO left SETTINGS: place it right after SETTINGS (or before LAYOUT).
+        if (known.indexOf('audio') === -1) {
+            if (esc.indexOf('settings') !== -1) esc.splice(esc.indexOf('settings') + 1, 0, 'audio');
+            else if (esc.indexOf('layout') !== -1) esc.splice(esc.indexOf('layout'), 0, 'audio');
+            else esc.unshift('audio');
+        }
+        MENU_ORDER.esc = esc.concat(MENU_ORDER.esc.filter((id) => isNew(id) && esc.indexOf(id) === -1))
+            .filter((id) => id !== 'station' && id !== 'music');
     } catch (e) { /* ignore */ }
 })();
 

@@ -179,7 +179,12 @@ extendClass(ObstacleManager, {
         const obstacle = this.obstacles[index];
         if (obstacle && obstacle.isCrate) {
             this.spawnDebris(obstacle);
-            if (typeof pickupManager !== 'undefined' && pickupManager.spawnPowerUp) pickupManager.spawnPowerUp(obstacle);
+            // Shot-detonated BOMB crates set _trapSpent: boom already played,
+            // do not drop a drifting perk that looks like the bomb flying on.
+            if (!obstacle._trapSpent
+                && typeof pickupManager !== 'undefined' && pickupManager.spawnPowerUp) {
+                pickupManager.spawnPowerUp(obstacle);
+            }
             this.obstacles.splice(index, 1);
             return;
         }

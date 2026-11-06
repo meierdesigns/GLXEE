@@ -30,7 +30,15 @@ extendClass(GamepadManager, {
         const st = this._menuState[name];
         if (pressed && !st.active) {
             st.active = true;
-            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
+            // Map stick focus: keep the HTML HUD frame off so markGamepad
+            // cannot latch onto a leftover .nav-focused tab/button.
+            const mapStick = typeof galaxyMapManager !== 'undefined'
+                && galaxyMapManager.isInputActive && galaxyMapManager.isInputActive()
+                && (!galaxyMapManager.hasCardFocus || !galaxyMapManager.hasCardFocus());
+            if (typeof gamepadCursor !== 'undefined') {
+                if (mapStick && gamepadCursor._fadeOut) gamepadCursor._fadeOut();
+                else gamepadCursor.markGamepad();
+            }
             this.dispatchKey('keydown', key);
         } else if (!pressed && st.active) {
             st.active = false;

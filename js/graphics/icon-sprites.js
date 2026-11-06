@@ -57,6 +57,8 @@ const IconLabels = {
     menuSettings: 'SETTINGS',
     menuCredits: 'CREDITS',
     menuAssets: 'ASSETS',
+    menuMusic: 'MUSIC',
+    menuAudio: 'AUDIO',
     menuRetry: 'RETRY',
     menuHome: 'HOME',
     hsStation: 'STATION',

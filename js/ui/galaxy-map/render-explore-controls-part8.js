@@ -431,10 +431,14 @@ extendClass(GalaxyMapManager, {
                     else if (e.key === 'ArrowRight') this.focusStage(this._stageFocus + 1);
                     else if (e.key === 'ArrowUp') {
                         this.clearStageFocus();
+                        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
                         this.syncHostNavHint && this.syncHostNavHint();
                     } else if (e.key === 'ArrowDown') {
                         this.clearStageFocus();
-                        if (!this.focusActionButton()) this.syncHostNavHint && this.syncHostNavHint();
+                        if (!this.focusActionButton()) {
+                            this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+                            this.syncHostNavHint && this.syncHostNavHint();
+                        }
                     }
                     return;
                 }
@@ -445,6 +449,7 @@ extendClass(GalaxyMapManager, {
                     else if (e.key === 'ArrowUp') {
                         this.clearActionFocus();
                         if (!this.focusStage()) this.clearCardFocus();
+                        else this.syncGamepadMapCursor && this.syncGamepadMapCursor();
                     }
                     return;
                 }

@@ -200,7 +200,7 @@ extendClass(GameControlSystem, {
         this.showVictoryOverlay();
 
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
+            // playVictory clears combat context and crossfades into the victory motif.
             soundManager.playVictory();
         }
     },

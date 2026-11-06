@@ -26,6 +26,7 @@ class LocalAudioManager {
         if (this.el) return this.el;
         const el = document.createElement('audio');
         el.loop = true;
+        el.preload = 'auto';
         el.id = 'vfLocalAudioTrack';
         el.style.display = 'none';
         document.body.appendChild(el);
@@ -36,6 +37,7 @@ class LocalAudioManager {
     _makeEl() {
         const el = document.createElement('audio');
         el.loop = true;
+        el.preload = 'auto';
         el.style.display = 'none';
         document.body.appendChild(el);
         return el;
@@ -65,6 +67,19 @@ class LocalAudioManager {
 
     _retireEl(el, fadeSec) {
         if (!el) return;
+        // Cap stacked fades — rapid play() hops used to leave several
+        // still-audible <audio> elements under the new track.
+        if (this._outgoing && this._outgoing.length) {
+            this._outgoing.forEach((old) => {
+                try {
+                    old.pause();
+                    old.removeAttribute('src');
+                    old.load();
+                    if (old.parentNode) old.parentNode.removeChild(old);
+                } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
         this._outgoing.push(el);
         this._rampVolume(el, el.volume, 0, fadeSec, () => {
             try {
@@ -75,6 +90,17 @@ class LocalAudioManager {
             } catch (e) { /* ignore */ }
             this._outgoing = this._outgoing.filter((x) => x !== el);
         });
+    }
+
+    /** True if current or still-fading outgoing audio is audible. */
+    isAudible() {
+        if (this.el && !this.el.paused && this.el.src) return true;
+        const out = this._outgoing || [];
+        for (let i = 0; i < out.length; i++) {
+            const el = out[i];
+            if (el && !el.paused && el.src) return true;
+        }
+        return false;
     }
 
     play(key, dataUrl) {

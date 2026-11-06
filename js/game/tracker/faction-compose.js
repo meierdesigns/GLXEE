@@ -124,8 +124,22 @@ const VFTrackerFactionCompose = {
         const style = this.styleOf(faction);
         const baseRaw = VFTrackerDefaults.forPlanet(boss ? (planet + '-boss') : planet);
         const compact = VFTrackerParse.toCompact(baseRaw);
-        compact.bpm = Math.max(70, Math.min(160, Number(compact.bpm) + Math.round(style.bpmDelta * 0.35)));
-        compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+        // Boss: push tempo + darker instrument skin so the chamber can't be
+        // mistaken for the regular stage loop (even when DNA is related).
+        const bpmNudge = boss
+            ? Math.round(style.bpmDelta * 0.35) + 14
+            : Math.round(style.bpmDelta * 0.35);
+        compact.bpm = Math.max(70, Math.min(168, Number(compact.bpm) + bpmNudge));
+        compact.instruments = style.instruments.map((i) => {
+            const inst = Object.assign({}, i);
+            if (boss) {
+                if (inst.filter != null) inst.filter = Math.max(280, Math.round(inst.filter * 0.62));
+                if (inst.wave === 'triangle') inst.wave = 'sawtooth';
+                if (inst.volume != null) inst.volume = Math.min(0.95, Number(inst.volume) * 1.12);
+                if (inst.sustain != null) inst.sustain = Math.min(0.9, Number(inst.sustain) * 1.15);
+            }
+            return inst;
+        });
         compact.meta = {
             title: ((compact.meta && compact.meta.title) || planet) + ' / ' + style.label + (boss ? ' BOSS' : ''),
             author: 'VF Tracker',
@@ -135,18 +149,22 @@ const VFTrackerFactionCompose = {
         };
         const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
         const pad = (s) => VFTrackerParse.padChannelString(s, 16);
-        const transpose = Math.max(-2, Math.min(2, Math.round(style.transpose / 2)));
+        const transpose = boss
+            ? Math.max(-5, Math.min(5, Math.round(style.transpose / 2) - 2))
+            : Math.max(-2, Math.min(2, Math.round(style.transpose / 2)));
         compact.patterns = (compact.patterns || []).map((p, pi) => ({
             id: p.id,
             channels: (p.channels || []).map((ch, i) => {
-                // Keep planet drums on A/B; faction drums on chorus/fill only.
-                if (i === 3 && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3)) {
+                // Boss: faction kit on most packs. Stage: planet drums on A/B.
+                const bossKit = boss && drumBank.length && (pi % 5 !== 0);
+                const stageKit = !boss && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3);
+                if (i === 3 && (bossKit || stageKit)) {
                     return pad(drumBank[pi % drumBank.length] || drumBank[0]);
                 }
                 const melodic = transpose
                     ? VFTrackerParse.transposeChannelString(ch, transpose)
                     : ch;
-                if (i === 2 && (pi % 4) === 3) {
+                if (i === 2 && ((boss && (pi % 5) === 3) || (!boss && (pi % 4) === 3))) {
                     return pad(String(melodic).split(/\s+/).map((tok, ti) => (ti % 2 ? '.' : tok)).join(' '));
                 }
                 return pad(melodic);
@@ -213,17 +231,67 @@ const VFTrackerFactionCompose = {
         };
     },
 
+    /**
+     * End screens: planet Hauptmelodie (victory/lose role) + faction voice skin.
+     * Faction-only tables remain as fallback when no planet motif is available.
+     */
     _endingTrack(kind, factionId, planetId) {
-        const faction = this.normalizeFaction(factionId) || 'pirate';
-        const style = this.styleOf(faction);
-        const planet = planetId ? String(planetId).toLowerCase().split('-')[0] : '';
+        const faction = this.normalizeFaction(factionId) || '';
+        const style = this.styleOf(faction || 'pirate');
+        const planet = planetId
+            ? ((typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+                ? VFTrackerDefaults.normalizePlanetKey(planetId)
+                : String(planetId).toLowerCase().split('-')[0])
+            : '';
         const win = kind === 'victory';
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+
+        // Prefer per-planet role melody; fall back to legacy faction patterns.
+        let base = null;
+        if (planet && typeof VFTrackerDefaults !== 'undefined') {
+            base = win
+                ? (VFTrackerDefaults.victory && VFTrackerDefaults.victory(planet))
+                : (VFTrackerDefaults.lose && VFTrackerDefaults.lose(planet));
+        }
+        if (base) {
+            const compact = VFTrackerParse.toCompact(base);
+            compact.bpm = Math.max(70, Math.min(160,
+                Number(compact.bpm) + Math.round((style.bpmDelta || 0) * 0.35)));
+            if (faction) {
+                compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+                const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+                const transpose = Math.max(-2, Math.min(2, Math.round((style.transpose || 0) / 2)));
+                compact.patterns = (compact.patterns || []).map((p, pi) => ({
+                    id: p.id,
+                    channels: (p.channels || []).map((ch, i) => {
+                        if (i === 3 && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3)) {
+                            return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                        }
+                        return pad(transpose
+                            ? VFTrackerParse.transposeChannelString(ch, transpose)
+                            : ch);
+                    })
+                }));
+            }
+            compact.meta = Object.assign({}, compact.meta, {
+                title: (win ? 'Victory' : 'Defeat')
+                    + (planet ? ' · ' + planet : '')
+                    + (faction ? ' / ' + style.label : ''),
+                planet: planet,
+                faction: faction || '',
+                role: kind,
+                notes: kind + ' screen · planet melody'
+                    + (faction ? ' · ' + faction + ' skin' : '')
+            });
+            compact.loop = true;
+            return compact;
+        }
+
         const bpm = win
             ? Math.max(90, Math.min(140, 112 + Math.floor(style.bpmDelta / 2)))
             : Math.max(70, Math.min(110, 84 + Math.floor(style.bpmDelta / 3)));
-        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
-        const a = (win ? this._victoryPattern(faction) : this._losePattern(faction)).map(pad);
-        const b = (win ? this._victoryBridge(faction) : this._loseBridge(faction)).map(pad);
+        const a = (win ? this._victoryPattern(faction || 'pirate') : this._losePattern(faction || 'pirate')).map(pad);
+        const b = (win ? this._victoryBridge(faction || 'pirate') : this._loseBridge(faction || 'pirate')).map(pad);
         return {
             format: 'vftrack',
             version: 1,
@@ -231,8 +299,9 @@ const VFTrackerFactionCompose = {
                 title: (win ? 'Victory' : 'Defeat') + ' — ' + style.label + (planet ? ' @ ' + planet : ''),
                 author: 'VF Tracker',
                 planet: planet,
-                faction: faction,
-                notes: kind + ' screen'
+                faction: faction || 'pirate',
+                role: kind,
+                notes: kind + ' screen · faction fallback'
             },
             bpm,
             rowsPerBeat: 1,
@@ -486,7 +555,35 @@ const VFTrackerFactionCompose = {
                         : a.split('-')[0];
                 }
             }
+            // Bare victory/lose → default planet motif (styles interpret it).
+            if (!planet) planet = 'mars';
             return kind === 'victory' ? this.victory(faction, planet) : this.lose(faction, planet);
+        }
+
+        m = /^map(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1]
+                ? ((VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(m[1])
+                    : m[1].split('-')[0])
+                : 'mars';
+            if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.map) {
+                return VFTrackerDefaults.map(planet);
+            }
+            return null;
+        }
+
+        m = /^ingame(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1]
+                ? ((VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(m[1])
+                    : m[1].split('-')[0])
+                : 'mars';
+            if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.forRole) {
+                return VFTrackerDefaults.forRole(planet, 'ingame');
+            }
+            return null;
         }
 
         m = /^faction:([a-z]+)$/.exec(k);

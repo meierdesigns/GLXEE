@@ -721,6 +721,8 @@
         debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>'),
         audio: svg16('<path d="M2 6h3l4-3v10L5 10H2zM11 6c1 1 1 3 0 4M13 4c2 2 2 6 0 8"/>')
     };
+    /** Wide enough for AUDIO settings | Music Editor side-by-side (narrow stacks). */
+    const FX_AUDIO_SPLIT_MIN_W = 560;
     // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
     //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never
     //   heavy ON/OFF = the backdrop-filter layers (chroma / bloom / CRT)
@@ -763,11 +765,15 @@
     const FXTAB_KEY = 'vf-fx-tab';
     vfs.fxTab = 'fx';
     try {
-        const savedTab = localStorage.getItem(FXTAB_KEY);
+        let savedTab = localStorage.getItem(FXTAB_KEY);
+        if (savedTab === 'music') savedTab = 'audio'; // dropped dedicated MUSIC tab (editor lives on AUDIO widen)
         if (FX_TABS.some(function (t) { return t[0] === savedTab; })) vfs.fxTab = savedTab;
     } catch (e) { /* ignore */ }
     vfs.fxPausedByUs = false;
     vfs.fxHideTimer = 0;
+    vfs.fxGeomW = 0;
+    vfs.fxAudioWide = false;
+    vfs._fxFilling = false;
     function getUi() {
         return window.uiAppearanceManager || (typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager : null);
     }
@@ -775,5 +781,5 @@
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));

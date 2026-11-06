@@ -263,6 +263,19 @@ extendClass(StartScreenManager, {
         }
     },
 
+    /** Dev Music Editor lives on the bezel AUDIO remote when widened. */
+    openMusicEditor() {
+        const vfs = window.vfFitScope && window.vfFitScope.vfs;
+        if (!vfs) return;
+        vfs.fxTab = 'audio';
+        try { localStorage.setItem('vf-fx-tab', 'audio'); } catch (e) { /* ignore */ }
+        if (typeof window.vfFitScope.setFxOpen === 'function') {
+            window.vfFitScope.setFxOpen(true);
+        } else if (typeof window.vfFitScope.fillFxPlate === 'function') {
+            window.vfFitScope.fillFxPlate();
+        }
+    },
+
     openAssetGenerator(opts) {
         if (typeof assetGenUI === 'undefined' || !assetGenUI) {
             console.warn('Asset Generator UI not loaded');

@@ -30,11 +30,11 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.5 · TRACKER LIVE · STYLE MIX ONLINE                   │
+│  BUILD           1.14.7 · TRACKER LIVE · STYLE MIX ONLINE                   │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
-│  AUDIO           STYLE · AMOUNT · BPM · VOICES · PLANET × FACTION VFTRACK   │
+│  AUDIO           STYLE · AMOUNT · SPEED · VOICES · PLANET × FACTION VFTRACK │
 │  OBJECTIVE       CLEAR THE STAGE · SCOOP SALVAGE · HOLD THE LANE            │
 │  NEXT JUMP       HOME STATION → TRAVEL → UNKNOWN SECTOR                     │
 │  WARNING         EVERY SILHOUETTE ON SCAN IS A DOCTRINE                     │
@@ -171,7 +171,7 @@ only and never nested inside the download ZIP.
 | Ctrl + 1–8 | Select color palette |
 | `#` or Settings → Assets | Open Asset Generator |
 | Settings → Faction | Open Faction Command |
-| Bezel FX → AUDIO | Master / sounds / music; STYLE · AMOUNT · BPM · channel voices |
+| Bezel FX → AUDIO | Master / sounds / music; STYLE · AMOUNT · SPEED · channel voices |
 
 Menu navigation is keyboard-first: arrow keys move focus, Enter confirms, and
 Escape closes the active overlay. A gamepad drives the same focus path with an
@@ -197,8 +197,9 @@ Victory trader (optional) · refit · trade · rewrite the loadout · jump again
 A mission is either a **LIBERATE** run on an uncleared planet or a lower-paying
 **PATROL** on a cleared one. One mission can be active at a time. Faction
 contracts can target reachable galaxies and may teleport the pilot before launch.
-Stage boot plays a short **planet×faction intro fanfare**, then the combat
-vftrack loop; wrecks can drop salvage you must scoop before the sluice.
+Stage boot crossfades straight into the planet×faction combat vftrack loop
+(no separate intro fanfare cut); wrecks can drop salvage you must scoop before
+the sluice.
 
 <img src="assets/ui/readme-h-factions.svg" alt="CH.03 FACTIONS" width="960" />
 
@@ -600,18 +601,26 @@ Combat music is **VF Tracker** JSON (`*.vftrack.json` under `assets/soundtracks/
 not a drone bed. Voices stay in a pulse / wave / noise palette (Volley Fire GB
 era roles: Main-BGM, Boss, Select).
 
-- **Planet × hostile faction** composition picks the combat loop; explored planets
-  remix handcrafted motifs (blend / key / order) instead of random notes.
+- **Hauptmelodie × STYLE**: each planet owns distinct motifs for **ingame**,
+  **map**, **victory**, **lose**, **shop**, and **boss** (own siege hooks — not
+  combat remixes). The selected **STYLE** interprets those pitches (rhythm /
+  drums / articulation); it does not replace the hook.
+- **Scene feel**: menu difficulty + planet tier nudge combat tempo / STYLE
+  intensity (easy softer, hard/boss hotter); victory / lose / map / shop each
+  have their own feel so the bus matches what just happened.
+- **Planet × hostile faction** composition skins the combat loop; explored
+  planets remix handcrafted motifs (blend / key / order) instead of random notes.
 - **Intro fanfare** plays once on stage boot (`intro:` keys), then the loop.
-- **Boss**, **menu**, **victory**, and **lose** themes are distinct; victory /
-  lose can bridge per faction.
+- Hub **menu**, per-planet **map** / **victory** / **lose** / **shop** / **boss**
+  roles are distinct; faction can still colour instruments on end screens.
 - Multi-section arrangements (A / B / C / fill) and per-pattern faction drums
   keep long stages from looping flat.
 - Same song keeps position across stage / override swaps; track changes
   **crossfade** (~1.4s) instead of hard cuts.
 - Bezel FX → **AUDIO** (and settings): **STYLE** dropdown
   (PLANET · JUNGLE · MINIMAL · AMEN · REESE · NEURO · LIQUID · DNB · NIGHTRUN),
-  **AMOUNT** intensity, absolute **MUSIC BPM**, and per-channel **voice** selects
+  **AMOUNT** intensity, **MUSIC SPEED** as a × multiplier (default 3.50× ≈
+  old 462 reference BPM @ 132), and per-channel **voice** selects
   (BASS / LEAD / ARP / DRUMS). MINIMAL follows a dark-techno pulse
   ([Max Minimal reference](https://www.youtube.com/watch?v=mv8vJQaUpDU));
   NIGHTRUN is the darksynth / neon-highway head.
@@ -619,6 +628,10 @@ era roles: Main-BGM, Boss, Select).
   autoplay blocks; station and menu restore the correct track on return.
 - Dev **Soundtrack Editor** imports / exports vftrack files and ships an LLM
   prompt for Gemini-style editors (`assets/soundtracks/LLM_PROMPT.md`).
+- DevMode **Music Editor** (local `js/ui/dev/`, not uploaded) lives on the bezel
+  **AUDIO** remote always: narrow stacks settings above editor, wide is
+  side-by-side; settings can collapse to editor-only. Edits STYLE rhythm /
+  drum banks; overrides in localStorage. Melodies stay planet/role-owned.
 - **Environment SFX** (`js/game/sounds/env-sfx.js`) cover sluice / hatch / warp,
   obstacle breaks, pickups, and wall scrape on the sounds bus (bezel FX → AUDIO).
 
@@ -674,7 +687,7 @@ Short index — the full systems live in the sections above.
 - 4:3 stage, faction bezel, pilot HUD, PERF / DEBUG / AUDIO remote, boot loading screen.
 - Launch hatch and sluice exit; chain waves; prism / bulwark; salvage pickups.
 - Victory trader for the next stage; enemy hero cards; side-view weapon cards.
-- VF Tracker BGM: planet×faction loops, STYLE / AMOUNT / BPM / voices, crossfade, Soundtrack Editor.
+- VF Tracker BGM: planet×role Hauptmelodien (ingame/map/victory/lose/shop/boss), STYLE + scene feel (difficulty/tier); faction skins, crossfade, Soundtrack Editor.
 - Coded environment SFX: sluice / hatch / warp, breaks, pickups, wall scrape.
 - Gamepad focus cursor: combat, menus, fire-to-start, end-screen confirm.
 - Local HTTP/1.1 `npm start`; end screens restore across refresh; optional ComfyUI.
@@ -682,7 +695,7 @@ Short index — the full systems live in the sections above.
 ### Current build focus
 
 ```text
-AUDIO   ── STYLE · AMOUNT · BPM · voices ── planet×faction vftrack ── crossfade ── env SFX
+AUDIO   ── STYLE · AMOUNT · SPEED · voices ── planet×faction vftrack ── crossfade ── env SFX
    │
 SHELL   ── shared .vf-glass host ── undivided bezel opening ── header peek
    │
@@ -701,9 +714,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.5** ships live STYLE mixing (JUNGLE / DNB / MINIMAL / NIGHTRUN …),
-channel voices, BPM, crossfades, and a mute-key VOL / SND / MUS dropdown — on top
-of tracker BGM, env SFX, bezel glass, salvage, and the victory trader.
+Build **1.14.7** ships scene-aware tracker BGM (combat / boss / map / end screens),
+live STYLE mixing, channel voices, BPM, crossfades, mute-key VOL / SND / MUS, and
+Linux gamepad display-wake — on top of bezel glass, salvage, and the victory trader.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -961,7 +974,7 @@ be reviewed or reverted independently.
 | 70J | Music volume fix | Linear MASTER×MUSIC bus, migrate tiny defaults, force planet vftrack on stage boot |
 | 70K | Tracker arrangement variety | Multi-section planet/menu/boss loops (A/B/C/fill), per-pattern faction drums, victory/lose bridges |
 | 70L | Salvage pickups | Enemy blueprint/part drops spawn as world pickups into cargo; death forfeits them; victory teleports to station |
-| 70M | Mission intro fanfare | One-shot planet×faction vftrack before combat loop on stage boot (`intro:` keys) |
+| 70M | Mission intro fanfare | *(superseded by 72J)* was one-shot `intro:` before combat — caused a hard track jump |
 | 70N | Per-planet soundtrack | Explored planets remix handcrafted motifs (blend/key/order); no random-note BGM |
 | 70O | VF GB soundtrack | Tracks oriented on Volley Fire GB (1990): pulse/wave/noise palette, Main-BGM/Boss/Select roles |
 | 70P | Motivic BGM | Planet themes state→sequence→climax; intro/boss reuse motif; remix keeps one donor intact |
@@ -990,6 +1003,36 @@ be reviewed or reverted independently.
 | 71M | Mute volume trio | Bezel mute dropdown shows VOL + SND + MUS sliders (master / sounds / music) |
 | 71N | Release 1.14.5 | GitHub push + `.claude/GLXEE-V1.14.5.zip` with mute volume trio |
 | 71O | README media refresh | New cinematic `readme-banner.png`; live `-71o` combat / faction-command shots |
+| 71P | Music loop stability | Tempo-anchored tracker schedule, RAF pump, milder stall skip; STYLE heads actually replace bass/lead/arp |
+| 71Q | Dev music editor | DevMode MUSIC tab: STEPS/BARS/PACKS zoom, pack reorder/copy, live playhead (`js/ui/dev/`, not uploaded) |
+| 71R | Menu AUDIO tab | Sound + music leave SETTINGS; dedicated ESC-menu AUDIO tab (volumes, toggles, soundtrack, editors) |
+| 71S | Music editor drums | STYLE score shows 4th DRUMS strand; theme banks/player can override drums when set |
+| 71S | Esc menu layout guard | Ignore Esc key-repeat, cooldown after menu close, no hangar soft-park, stale soft-mount rAFs no-op |
+| 71T | Esc menu hard remount | Menu open/close forces shell rebuild; station column RO disconnects so 0-width park cannot trash the grid |
+| 71U | Music editor on remote | Drop ESC MUSIC tab; DevMode Music Editor is a bezel MUSIC tab + AUDIO widen split (settings \| editor) |
+| 71V | AUDIO split resize | Drag the settings\|editor border on the wide AUDIO remote; width persisted (dbl-click resets) |
+| 71W | Voice pick + vol | AUDIO remote BASS/LEAD/ARP/DRUMS keep dropdowns and gain option sliders; channel volume faders shrink |
+| 71X | Drop MUSIC tab | Remove redundant bezel MUSIC tab; DevMode Music Editor only via AUDIO widen split |
+| 71Y | Voice vol hover % | Channel volume % only on hover/focus; volume column widens into the freed readout space |
+| 71Z | Music speed readout | Show MUSIC SPEED as × (not raw 444 BPM); playback uses authored×scale again |
+| 72A | Melody × STYLE | Planet roles ingame/map/victory/lose own Hauptmelodien; STYLE interprets rhythm/drums instead of replacing hooks |
+| 72B | Distinct motifs | Planets get unique rhythms (march/syncop/gallop/half-time/clusters); map/victory/lose rebuilt as ambient/fanfare/fade; STYLE remaps lead hard |
+| 72C | Music level lock | Master compressor + soft ceiling; balanced STYLE mixes; break/drum ducking; capped note/twin peaks |
+| 72D | Music switch fix | Same-role hops soft in-place (no stacked crossfade); map music debounced; menu won't yank open map BGM |
+| 72E | Style soften + tempo | STYLE only tints song (no rhythm rebuild); milder breaks; tempo auto-fits style×authored BPM |
+| 72E | AUDIO editor always | DevMode Music Editor on narrow AUDIO remotes too (stack); wide stays side-by-side; collapse still editor-only |
+| 72F | Transit rail events | Slim tube progress rail; scheduled contact ticks (role accent) along the reachGoal track |
+| 72G | Transit reveal icons | Wider rail; contact icons animate in on the right once an event is known / announced |
+| 72H | Music scene adapt | Victory/defeat/shop/map motifs; difficulty+planet-tier feel; dual crossfade on planet hops; end screens keep the bus |
+| 72I | Boss Hauptmelodien | Per-planet boss siege motifs (Dust/Giant/Ring/Ice/Kuiper) — separate DNA from combat loops |
+| 72J | No music track jump | Stage boot skips intro fanfare (direct combat crossfade); mid-fight enemy overrides no longer swap the song |
+| 72K | Music Editor WYSIWYG | PREVIEW plays the STYLE bank on screen (not planet BGM); playhead ignores live game music |
+| 72L | Kill intro fanfare | playIntro no-ops; stage boot no hard music stop; victory keeps combat loop (no per-clear fanfare swap) |
+| 72M | Music bug sweep | Restore volume after victory duck; disconnect zombie buses/limiters; heard BPM includes scene feel |
+| 72N | Less repetitive BGM | Combat/boss loops expand to ~24-slot A/B/C/break/drop form (was 8-bar P0-heavy wheel) |
+| 72O | Distinct boss BGM | Boss no longer keeps stage loop; *-boss keys + darker/faster faction skin |
+| 72P | Controller display wake | Linux idle reset while gamepad connected: Wake Lock + `/__user-activity` D-Bus poke via dev-server |
+| 72Q | Release 1.14.7 | GitHub push + `.claude/GLXEE-V1.14.7.zip` runtime archive (music scenes, UI, gamepad wake) |
 
 The wave commit convention is:
 
@@ -1039,5 +1082,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.5** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.7** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

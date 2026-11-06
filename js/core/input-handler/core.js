@@ -75,6 +75,7 @@ class InputHandler {
             const tag = event.target && event.target.tagName;
             if (event.shiftKey && (event.key === 'c' || event.key === 'C') &&
                 tag !== 'INPUT' && tag !== 'TEXTAREA' && typeof startScreenManager !== 'undefined') {
+                if (event.repeat) return;
                 event.preventDefault();
                 startScreenManager.toggleDevMode();
             }

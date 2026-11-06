@@ -8594,11 +8594,13 @@ extendClass(ProfileManager, {
         let bestScore = -Infinity;
         // Several rings around the planet; the first spot clear of every lane
         // (and of other bodies) wins, else the one with the most clearance.
-        // Rings hug the planet: its drawn radius (map.js sizes planets 32..92 units
-        // across from the id) plus the (small) station and a gap, in these map pixels.
+        // Orbit must clear the drawn planet disc (planetNodeSize ≈ raw, surface
+        // ≈ raw·0.37) plus the station icon — raw/4 was too tight for large planets
+        // and parked stations inside the glow with a broken tether.
         const idSum = String(anchor.planetId || '').split('').reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-        const planetR = (32 + (idSum % 7) * 10) / 4;
-        [planetR + 9, planetR + 14, planetR + 20].forEach((radius) => {
+        const raw = 32 + (idSum % 7) * 10;
+        const planetR = Math.max(16, raw * 0.42);
+        [planetR + 12, planetR + 18, planetR + 26].forEach((radius) => {
             for (let i = 0; i < 24; i++) {
                 const a = ((seed % 360) + i * 15) * Math.PI / 180;
                 const x = Math.min(1, Math.max(0, anchor.x + Math.cos(a) * radius / SX));
@@ -20516,9 +20518,15 @@ var GameControlSystem = class GameControlSystem {
         if (typeof soundManager !== 'undefined') {
             if (soundManager.markAudioUnlocked) soundManager.markAudioUnlocked();
             if (soundManager.ensureContext) soundManager.ensureContext();
-            if (soundManager.stopMenuMusic) soundManager.stopMenuMusic();
-            // Drop any leftover hub tracker so setStageContext can start planet music cleanly.
-            if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+            // Soft-leave hub sources only — do NOT hard-stop the tracker.
+            // A hard stop made every stage boot restart the combat motif from
+            // bar 1 (same DNA as the old intro fanfare), so it felt like the
+            // fanfare kept coming back. setStageContext crossfades instead.
+            if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+            if (typeof localAudioManager !== 'undefined') {
+                if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+                else localAudioManager.stop();
+            }
         }
 
         // Always clear pause/settings overlays before combat HUD shows
@@ -20807,7 +20815,7 @@ var GameControlSystem = class GameControlSystem {
 
         // Play game over sound
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
+            // playGameOver clears combat context and crossfades into the defeat motif.
             soundManager.playGameOver();
         }
     }
@@ -21037,7 +21045,7 @@ extendClass(GameControlSystem, {
         this.showVictoryOverlay();
 
         if (typeof soundManager !== 'undefined') {
-            if (soundManager.stopPlanetAmbient) soundManager.stopPlanetAmbient();
+            // playVictory clears combat context and crossfades into the victory motif.
             soundManager.playVictory();
         }
     },
@@ -21242,6 +21250,13 @@ extendClass(GameControlSystem, {
             victoryOverlay.dataset.bound = '';
         }
         victoryOverlay.classList.remove('hidden');
+        // Retrigger panel entrance (CSS animation) on every show.
+        const panel = victoryOverlay.querySelector('.victory-content');
+        if (panel) {
+            panel.style.animation = 'none';
+            void panel.offsetWidth;
+            panel.style.animation = '';
+        }
         this.applyVictoryFactionFlavor(victoryOverlay);
         this.applyVictoryPixelIcons(victoryOverlay);
 
@@ -21346,11 +21361,12 @@ extendClass(GameControlSystem, {
 
     /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
      *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
-     *  snapshot) since selling/taking changes it while this screen stays open. Click sells
-     *  the stack; drag onto the SHIP grid below files it there. Still-pending cargo is wiped
-     *  when the screen closes (clearPendingCargo in hideVictoryOverlay) — the player has to
-     *  decide now. Plain resources aren't shown: those auto-bank straight to the station
-     *  wallet at victory (teleportCargoResourcesToStation), no decision needed. */
+     *  snapshot) since selling/taking changes it while this screen stays open. Click takes a
+     *  part onto the SHIP grid (right-click sells); blueprints stay click-to-sell. Drag onto
+     *  SHIP also files a part. Still-pending cargo is wiped when the screen closes
+     *  (clearPendingCargo in hideVictoryOverlay) — the player has to decide now. Plain
+     *  resources aren't shown: those auto-bank straight to the station wallet at victory
+     *  (teleportCargoResourcesToStation), no decision needed. */
     renderVictoryLootHtml() {
         if (typeof profileManager === 'undefined') return '';
         const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
@@ -21412,7 +21428,8 @@ extendClass(GameControlSystem, {
             const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
             const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
             const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
-                : (parsed ? `DRAG TO SHIP · CLICK TO SELL ALL · ${sellValue}c` : `CLICK TO SELL · ${sellValue}c`));
+                : (parsed ? `CLICK TO LOOT · DRAG TO SHIP · RIGHT-CLICK SELL · ${sellValue}c`
+                    : `CLICK TO SELL · ${sellValue}c`));
             const tip = tipLines.concat(actionLine.split('\n')).join('\n');
             return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
                 `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" style="--pk-c:${color}" ` +
@@ -21603,6 +21620,21 @@ extendClass(GameControlSystem, {
         if (!list || list.dataset.sellBound) return;
         list.dataset.sellBound = '1';
         list.addEventListener('click', (event) => {
+            const btn = event.target.closest('.victory-loot-cell');
+            if (!btn) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const isBlueprint = btn.dataset.cargoBlueprint === '1';
+            // Parts: click loots onto the active ship. Blueprints can't file on a ship
+            // (craft-only), so left-click still sells those.
+            if (!isBlueprint && btn.classList.contains('is-draggable')) {
+                this.takeVictoryCargoItem(btn.dataset.cargoKey);
+                return;
+            }
+            if (!btn.classList.contains('is-sellable')) return;
+            this.sellVictoryCargoItem(btn.dataset.cargoKey, isBlueprint);
+        });
+        list.addEventListener('contextmenu', (event) => {
             const btn = event.target.closest('.victory-loot-cell.is-sellable');
             if (!btn) return;
             event.preventDefault();
@@ -22038,6 +22070,14 @@ extendClass(GameControlSystem, {
         box.hidden = !box.innerHTML;
         box.classList.toggle('is-ambush', !!(box.querySelector('canvas.outcome-ambush-ship')));
         if (this.paintOutcomeAmbushShip) this.paintOutcomeAmbushShip(box);
+        // Combat parks planet spin; restart so the outcome globe turns again.
+        if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
+            if (planetSVGManager._spinTimer) {
+                clearInterval(planetSVGManager._spinTimer);
+                planetSVGManager._spinTimer = null;
+            }
+            planetSVGManager.startPlanetSpin();
+        }
     }
 });
 
@@ -22381,6 +22421,7 @@ var GameLoop = class GameLoop {
         this.lastTime = 0;
         this.frameCount = 0;
         if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+        this._bindVisibilityKick();
         // Do not force gameRunning here — startGame() owns that flag. Boot must
         // leave the loop idle so menus are not fighting a combat RAF.
         if (!this.gameState.gameRunning) return;
@@ -22390,6 +22431,20 @@ var GameLoop = class GameLoop {
     stop() {
         this.gameState.gameRunning = false;
         if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+    }
+
+    /** Some hosts (embedded browsers / webviews) keep document.hidden true while the
+     *  fight is on screen; RAF may also pause while truly backgrounded. Kick the
+     *  loop when the page is shown again so combat cannot stay stuck on a black frame. */
+    _bindVisibilityKick() {
+        if (this._visKickBound || typeof document === 'undefined') return;
+        this._visKickBound = true;
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden || !this.gameState.gameRunning) return;
+            if (this._parkTimer) { clearTimeout(this._parkTimer); this._parkTimer = 0; }
+            this.lastTime = 0;
+            requestAnimationFrame((time) => this.loop(time));
+        });
     }
 
     /** True only while the fight screen is the active surface. */
@@ -22412,9 +22467,12 @@ var GameLoop = class GameLoop {
     loop(currentTime) {
         if (!this.gameState.gameRunning) return;
 
-        // Tab in background: keep the RAF chain alive but skip sim/draw so we
-        // don't burn CPU. Quality is unchanged when the tab is visible again.
-        if (typeof document !== 'undefined' && document.hidden) {
+        // Tab in background (menus only): keep the RAF chain alive but skip
+        // sim/draw. NEVER skip while the fight surface is active — embedded
+        // browsers / some Electron webviews report document.hidden=true even
+        // when the player can see the stage, which left a black canvas and a
+        // frozen mission-start intro.
+        if (typeof document !== 'undefined' && document.hidden && !this.isCombatSurfaceActive()) {
             this.lastTime = 0;
             requestAnimationFrame((time) => this.loop(time));
             return;
@@ -22481,15 +22539,10 @@ var GameLoop = class GameLoop {
         // Increment frame count
         this.gameState.frameCount++;
         
-        // Don't update game logic if paused or game over
-        if (this.gameState.isPaused || !this.gameState.gameRunning) {
-            // Still update UI even when paused
-            if (typeof uiManager !== 'undefined') uiManager.updateUI();
-            return;
-        }
-
+        // Mission intro (countdown clock is setTimeout; fly-in still needs the loop).
+        // Keep driving it while the FX remote freezes combat, otherwise the hatch/fly-in stalls.
         const introActive = typeof missionStartManager !== 'undefined' && missionStartManager.isActive();
-        if (introActive) {
+        if (introActive && this.gameState.gameRunning) {
             missionStartManager.update(deltaTime);
             if (typeof objectiveManager !== 'undefined' && objectiveManager.updateArrivalIntro) {
                 objectiveManager.updateArrivalIntro(deltaTime, missionStartManager.phase);
@@ -22497,6 +22550,13 @@ var GameLoop = class GameLoop {
             if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(16);
+            if (typeof uiManager !== 'undefined') uiManager.updateUI();
+            return;
+        }
+
+        // Don't update game logic if paused or game over
+        if (this.gameState.isPaused || !this.gameState.gameRunning) {
+            // Still update UI even when paused
             if (typeof uiManager !== 'undefined') uiManager.updateUI();
             return;
         }
@@ -23039,6 +23099,7 @@ var InputHandler = class InputHandler {
             const tag = event.target && event.target.tagName;
             if (event.shiftKey && (event.key === 'c' || event.key === 'C') &&
                 tag !== 'INPUT' && tag !== 'TEXTAREA' && typeof startScreenManager !== 'undefined') {
+                if (event.repeat) return;
                 event.preventDefault();
                 startScreenManager.toggleDevMode();
             }
@@ -25660,6 +25721,8 @@ var CoreRenderManager = class CoreRenderManager {
         debug: svg16('<path d="M6 2h4v3h3v4h-3v5H6V9H3V5h3zM7 6h2M8 5v2"/>'),
         audio: svg16('<path d="M2 6h3l4-3v10L5 10H2zM11 6c1 1 1 3 0 4M13 4c2 2 2 6 0 8"/>')
     };
+    /** Wide enough for AUDIO settings | Music Editor side-by-side (narrow stacks). */
+    const FX_AUDIO_SPLIT_MIN_W = 560;
     // Performance switches (remote PERF tab). Stored per machine; applied as <html> attributes the CSS keys on.
     //   sway  AUTO = follow the OS "reduce motion" setting, ON = always sway, OFF = never
     //   heavy ON/OFF = the backdrop-filter layers (chroma / bloom / CRT)
@@ -25702,11 +25765,15 @@ var CoreRenderManager = class CoreRenderManager {
     const FXTAB_KEY = 'vf-fx-tab';
     vfs.fxTab = 'fx';
     try {
-        const savedTab = localStorage.getItem(FXTAB_KEY);
+        let savedTab = localStorage.getItem(FXTAB_KEY);
+        if (savedTab === 'music') savedTab = 'audio'; // dropped dedicated MUSIC tab (editor lives on AUDIO widen)
         if (FX_TABS.some(function (t) { return t[0] === savedTab; })) vfs.fxTab = savedTab;
     } catch (e) { /* ignore */ }
     vfs.fxPausedByUs = false;
     vfs.fxHideTimer = 0;
+    vfs.fxGeomW = 0;
+    vfs.fxAudioWide = false;
+    vfs._fxFilling = false;
     function getUi() {
         return window.uiAppearanceManager || (typeof uiAppearanceManager !== 'undefined' ? uiAppearanceManager : null);
     }
@@ -25714,7 +25781,7 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -25728,7 +25795,7 @@ var CoreRenderManager = class CoreRenderManager {
     const onFxEsc = (...args) => NS.onFxEsc(...args); // defined in a later part
     const startSway = (...args) => NS.startSway(...args); // defined in a later part
     const fillFxPlate = (...args) => NS.fillFxPlate(...args); // defined in viewport-fit-plate.js
-    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot }); // functions (hoisted)
+    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot, syncFxAudioMusicSplit }); // functions (hoisted)
 
     function restoreFxScroll() {
         const body = document.querySelector('#vf-fx .vf-fx-body');
@@ -25917,9 +25984,19 @@ var CoreRenderManager = class CoreRenderManager {
     const FXGEOM_KEY = 'vf-fx-geom';
     let fxGeom = null;
     try { fxGeom = JSON.parse(localStorage.getItem(FXGEOM_KEY) || 'null'); } catch (e) { fxGeom = null; }
+    if (fxGeom && fxGeom.w) vfs.fxGeomW = fxGeom.w;
+    function syncFxAudioMusicSplit() {
+        if (vfs._fxFilling || !vfs.fxOpen || vfs.fxTab !== 'audio') return;
+        const want = typeof NS.fxWantAudioMusicSplit === 'function' ? NS.fxWantAudioMusicSplit() : false;
+        if (want !== !!vfs.fxAudioWide) fillFxPlate();
+    }
     function applyFxGeom() {
         const plate = document.getElementById('vf-fx');
-        if (plate && !fxGeom) setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+        if (plate && !fxGeom) {
+            setFxOrigin(plate, plate.offsetWidth, plate.offsetHeight);
+            vfs.fxGeomW = plate.offsetWidth || vfs.fxGeomW || 0;
+            return;
+        }
         if (!plate || !fxGeom) return;
         const W = window.innerWidth, H = window.innerHeight;
         // Clamp the scaled (visual) box: scale pivots on transform-origin, so it sits offset from left/top.
@@ -25931,6 +26008,7 @@ var CoreRenderManager = class CoreRenderManager {
         plate.style.width = w + 'px'; plate.style.height = h + 'px';
         plate.style.left = l + 'px'; plate.style.top = t + 'px';
         plate.style.right = 'auto'; plate.style.bottom = 'auto';
+        vfs.fxGeomW = w;
     }
     function startFxDrag(e, mode) {
         const plate = document.getElementById('vf-fx');
@@ -25957,11 +26035,16 @@ var CoreRenderManager = class CoreRenderManager {
             document.removeEventListener('pointermove', move);
             document.removeEventListener('pointerup', up);
             try { localStorage.setItem(FXGEOM_KEY, JSON.stringify(fxGeom)); } catch (err) { /* ignore */ }
+            // Rebuild AUDIO split only after resize ends (avoids remount mid-drag).
+            if (mode !== 'move') syncFxAudioMusicSplit();
         };
         document.addEventListener('pointermove', move);
         document.addEventListener('pointerup', up);
     }
-    window.addEventListener('resize', applyFxGeom);
+    window.addEventListener('resize', function () {
+        applyFxGeom();
+        syncFxAudioMusicSplit();
+    });
     /** Re-run the station FLEET preview so colour edits show at once (for the faction being edited). */
     function refreshFleetPreviewLive(faction) {
         // enemySizeOverlay is no longer loaded (SIZES live in this panel), so restart the station preview directly.
@@ -25974,6 +26057,33 @@ var CoreRenderManager = class CoreRenderManager {
         startPerfProbe('perf');
     }
     function onFxClick(e) {
+        const secToggle = e.target.closest && e.target.closest('[data-fx-sec-toggle]');
+        if (secToggle) {
+            e.preventDefault();
+            e.stopPropagation();
+            const key = secToggle.getAttribute('data-fx-sec-toggle');
+            if (!key) return;
+            if (!vfs._fxAudioCollapsed) {
+                let map = {};
+                try {
+                    const raw = JSON.parse(localStorage.getItem('vf_fx_audio_collapsed') || '{}');
+                    if (raw && typeof raw === 'object' && !Array.isArray(raw)) map = raw;
+                } catch (err) { /* ignore */ }
+                vfs._fxAudioCollapsed = map;
+            }
+            const map = vfs._fxAudioCollapsed;
+            map[key] = !map[key];
+            try { localStorage.setItem('vf_fx_audio_collapsed', JSON.stringify(map)); } catch (err) { /* ignore */ }
+            const sec = secToggle.closest('.vf-fx-sec');
+            const c = !!map[key];
+            if (sec) sec.classList.toggle('is-collapsed', c);
+            secToggle.setAttribute('aria-expanded', String(!c));
+            const caret = secToggle.querySelector('.vf-fx-sec-caret');
+            if (caret) caret.textContent = c ? '▼' : '▲';
+            const body = sec && sec.querySelector('.vf-fx-sec-body');
+            if (body) body.hidden = c;
+            return;
+        }
         const b = e.target.closest && e.target.closest('button');
         const ui = getUi();
         if (!b || !ui) return;
@@ -26123,6 +26233,10 @@ var CoreRenderManager = class CoreRenderManager {
             if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setMusicTheme) {
                 volumeControlsManager.setMusicTheme(parseInt(sel.value, 10));
             }
+            if (typeof musicEditorUI !== 'undefined' && musicEditorUI.syncStyleFromVolume
+                && !musicEditorUI._syncingStyle) {
+                musicEditorUI.syncStyleFromVolume({ reload: true });
+            }
             fillFxPlate();
             return;
         }
@@ -26130,6 +26244,15 @@ var CoreRenderManager = class CoreRenderManager {
             const ch = Number(sel.dataset.voiceCh);
             if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
                 volumeControlsManager.setChannelVoice(ch, sel.value || 'default');
+            }
+            const row = sel.closest('.vf-fx-voice-row');
+            const pick = row && row.querySelector('.vf-fx-voice-pick');
+            if (pick) {
+                const ids = String(pick.dataset.voiceIds || '').split('|');
+                let i = ids.indexOf(sel.value);
+                if (i < 0) i = 0;
+                pick.value = String(i);
+                pick.style.setProperty('--look-fill', (i / Math.max(1, ids.length - 1) * 100) + '%');
             }
             return;
         }
@@ -26185,14 +26308,14 @@ var CoreRenderManager = class CoreRenderManager {
             applyFrameStyle();
             return;
         }
-        if (inp.dataset.voiceCh != null && inp.classList && inp.classList.contains('vf-fx-voice')) {
+        if (inp.dataset.voiceCh != null && inp.classList && inp.classList.contains('vf-fx-voice-pick')) {
             const ch = Number(inp.dataset.voiceCh);
             const ids = String(inp.dataset.voiceIds || '').split('|');
-            const labels = String(inp.dataset.voiceLabels || '').split('|');
             const i = Math.max(0, Math.min(ids.length - 1, Number(inp.value) || 0));
             inp.style.setProperty('--look-fill', (i / Math.max(1, ids.length - 1) * 100) + '%');
-            const nameOut = inp.nextElementSibling;
-            if (nameOut) nameOut.textContent = labels[i] || ids[i] || 'DEFAULT';
+            const row = inp.closest('.vf-fx-voice-row');
+            const select = row && row.querySelector('select.vf-fx-voice');
+            if (select) select.value = ids[i] || 'default';
             if (Number.isFinite(ch) && ch >= 0 && ch <= 3 && typeof volumeControlsManager !== 'undefined' && volumeControlsManager.setChannelVoice) {
                 volumeControlsManager.setChannelVoice(ch, ids[i] || 'default');
             }
@@ -26223,7 +26346,7 @@ var CoreRenderManager = class CoreRenderManager {
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
         inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
-        if (!(parts[0] === 'au' && parts[1] === 'jungle')) {
+        if (!(parts[0] === 'au' && (parts[1] === 'jungle' || parts[1] === 'theme' || parts[1] === 'bpm' || parts[1] === 'speed'))) {
             inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
         }
         if (parts[0] === 'fx') ui.setFx(parts[1], v + '%');
@@ -26247,19 +26370,62 @@ var CoreRenderManager = class CoreRenderManager {
         }
         else if (parts[0] === 'au' && typeof volumeControlsManager !== 'undefined') {
             if ((parts[1] === 'bpm' || parts[1] === 'speed') && volumeControlsManager.setMusicBpm) {
-                // au:bpm is absolute; legacy au:speed was a × multiplier.
+                // au:bpm is reference-equivalent BPM; legacy au:speed was a × multiplier.
+                let bpmVal;
                 if (parts[1] === 'speed' && v <= 4) {
-                    volumeControlsManager.setMusicBpm(Math.round(v * (volumeControlsManager.referenceBpm || 132)));
+                    bpmVal = Math.round(v * (volumeControlsManager.referenceBpm || 132));
                 } else {
-                    volumeControlsManager.setMusicBpm(Math.max(60, Math.min(600, v)));
+                    bpmVal = Math.max(60, Math.min(300, v));
+                }
+                if (volumeControlsManager.snapMusicBpm) bpmVal = volumeControlsManager.snapMusicBpm(bpmVal);
+                volumeControlsManager.setMusicBpm(bpmVal);
+                const snapped = volumeControlsManager.getMusicBpm
+                    ? volumeControlsManager.getMusicBpm()
+                    : bpmVal;
+                if (Number(inp.value) !== snapped) {
+                    inp.value = String(snapped);
+                    inp.style.setProperty('--look-fill', ((snapped - min) / Math.max(1, max - min) * 100) + '%');
+                }
+                if (volumeControlsManager.applyBpmMark) {
+                    volumeControlsManager.applyBpmMark(inp, min, max);
+                }
+                const out = inp.nextElementSibling;
+                if (out) {
+                    out.textContent = volumeControlsManager.formatMusicSpeed
+                        ? volumeControlsManager.formatMusicSpeed(snapped)
+                        : (Math.round(snapped) + ' BPM');
                 }
             } else if (parts[1] === 'jungle' && volumeControlsManager.setJungleAmount) {
                 volumeControlsManager.setJungleAmount(Math.max(0, Math.min(100, v)) / 100);
                 const out = inp.nextElementSibling;
                 if (out) out.textContent = v === 0 ? 'OFF' : v + '%';
             } else if (parts[1] === 'theme' && volumeControlsManager.setMusicTheme) {
-                // Legacy THEME slider (pre-dropdown) — keep wiring alive.
                 volumeControlsManager.setMusicTheme(v);
+                const list = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list)
+                    ? VFTrackerThemes.list : null;
+                const out = inp.nextElementSibling;
+                if (out && list && list[v]) out.textContent = list[v].label;
+                // setMusicTheme may bump STRENGTH — keep the amount row in sync.
+                const plate = inp.closest('.vf-bezel-fx');
+                const strength = plate && plate.querySelector('[data-sl="au:jungle"]');
+                if (strength && volumeControlsManager.getJungleAmount) {
+                    const pct = Math.round(Math.max(0, Math.min(1, Number(volumeControlsManager.getJungleAmount()) || 0)) * 100);
+                    strength.value = String(pct);
+                    strength.style.setProperty('--look-fill', pct + '%');
+                    if (strength.nextElementSibling) {
+                        strength.nextElementSibling.textContent = pct === 0 ? 'OFF' : pct + '%';
+                    }
+                }
+                // Move preferred-BPM mark on MUSIC BPM to the new STYLE.
+                const bpmInp = plate && plate.querySelector('[data-sl="au:bpm"]');
+                if (bpmInp && volumeControlsManager.applyBpmMark) {
+                    volumeControlsManager.applyBpmMark(bpmInp, +bpmInp.min || 60, +bpmInp.max || 300);
+                }
+                // Mirror into Music Editor STYLE select (same index / label).
+                if (typeof musicEditorUI !== 'undefined' && musicEditorUI.syncStyleFromVolume
+                    && !musicEditorUI._syncingStyle) {
+                    musicEditorUI.syncStyleFromVolume({ reload: true });
+                }
             } else if (parts[1] === 'xfade') {
                 const sec = Math.max(0.2, Math.min(3, v));
                 if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = sec;
@@ -26305,7 +26471,10 @@ var CoreRenderManager = class CoreRenderManager {
             startSway();
             document.addEventListener('keydown', onFxEsc, true);
             // In combat: freeze the field (no dark pause menu) so the effects can be judged.
-            if (gs && gs.gameRunning && !gs.isPaused) {
+            // Skip while mission-start intro is running — pausing there froze the countdown.
+            const introOn = typeof missionStartManager !== 'undefined' && missionStartManager.isActive
+                && missionStartManager.isActive();
+            if (gs && gs.gameRunning && !gs.isPaused && !introOn) {
                 gs.pauseGame();
                 vfs.fxPausedByUs = true;
             }
@@ -26355,9 +26524,62 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 2b: the FX plate builders (split from viewport-fit-part2.js; shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {});
-    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
+    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
     const { restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps } = NS; // from viewport-fit-part2.js (hoisted functions)
-    Object.assign(NS, { fillFxPlate }); // function (hoisted)
+    Object.assign(NS, { fillFxPlate, mountFxMusicEditor, fxDevModeOn, fxWantAudioMusicSplit, fxWantMusicEditor }); // function (hoisted)
+
+    function fxDevModeOn() {
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    }
+    /** DevMode AUDIO always hosts the Music Editor (narrow = stacked, wide = side-by-side). */
+    function fxWantMusicEditor() {
+        return fxDevModeOn() && vfs.fxTab === 'audio';
+    }
+    /** Wide enough for AUDIO settings | Music Editor side-by-side (else stacked). */
+    function fxWantAudioMusicSplit() {
+        if (!fxWantMusicEditor()) return false;
+        const plate = document.getElementById('vf-fx');
+        const w = vfs.fxGeomW || (plate && plate.offsetWidth) || 0;
+        return w >= (FX_AUDIO_SPLIT_MIN_W || 560);
+    }
+    function mountFxMusicEditor() {
+        const host = document.getElementById('vf-fx-music-editor');
+        if (!host) return;
+        const mount = function (ui) {
+            if (ui && ui.mount) ui.mount(host, { compact: true });
+            else {
+                host.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div>'
+                    + '<p class="vf-fx-row">Local-dev only (`js/ui/dev/` — not uploaded).</p>';
+            }
+        };
+        if (typeof musicEditorUI !== 'undefined') {
+            // mount() itself no-ops to a style sync when the editor is already live.
+            mount(musicEditorUI);
+            return;
+        }
+        if (vfs._musicEditorLoading) {
+            host.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div><p class="vf-fx-row">Loading…</p>';
+            return;
+        }
+        vfs._musicEditorLoading = true;
+        host.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div><p class="vf-fx-row">Loading…</p>';
+        const s = document.createElement('script');
+        s.src = 'js/ui/dev/music-editor.js?v=' + Date.now();
+        s.onload = function () {
+            vfs._musicEditorLoading = false;
+            const h = document.getElementById('vf-fx-music-editor');
+            if (h) mount(typeof musicEditorUI !== 'undefined' ? musicEditorUI : null);
+        };
+        s.onerror = function () {
+            vfs._musicEditorLoading = false;
+            const h = document.getElementById('vf-fx-music-editor');
+            if (h) {
+                h.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div>'
+                    + '<p class="vf-fx-row">Local-dev only (`js/ui/dev/` — not uploaded).</p>';
+            }
+        };
+        document.head.appendChild(s);
+    }
 
     function fxSeg(items, current, attr, wrap) {
         return '<span class="vf-fx-seg' + (wrap ? ' vf-fx-wrap' : '') + '">' + items.map(function (it) {
@@ -26408,49 +26630,94 @@ var CoreRenderManager = class CoreRenderManager {
         else if (/MaxActive/.test(key)) id = 'limit';
         return '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true">' + DF_ICONS[id] + '</svg>';
     }
-    function fxSlider(label, key, min, max, step, value, unit, displayValue) {
+    function fxSlider(label, key, min, max, step, value, unit, displayValue, markValue) {
         if (key.indexOf('df:') === 0 || key.indexOf('ss:') === 0) label = dfIcon(key) + '<em>' + label + '</em>';
         const shown = displayValue == null ? value : displayValue;
-        return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + step +
-            '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
+        const span = Math.max(1, max - min);
+        let markStyle = '';
+        let markClass = '';
+        let markAttr = '';
+        if (markValue != null && Number.isFinite(Number(markValue))) {
+            const mv = Math.max(min, Math.min(max, Number(markValue)));
+            const markPct = ((mv - min) / span * 100).toFixed(2);
+            markStyle = ';--bpm-mark:' + markPct + '%';
+            markClass = ' has-bpm-mark';
+            markAttr = ' data-bpm-mark="' + Math.round(mv) + '"';
+        }
+        return '<label class="vf-fx-row"><span>' + label + '</span><input type="range"' +
+            (markClass ? ' class="' + markClass.trim() + '"' : '') +
+            ' min="' + min + '" max="' + max + '" step="' + step +
+            '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '"' + markAttr +
+            ' style="--look-fill:' + ((value - min) / span * 100) + '%' + markStyle + '"><output>' +
             (key.indexOf('fx:') === 0 && +value === 0 ? 'OFF' : shown + (unit || '')) + '</output></label>';
     }
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
     }
-    /** Voice dropdown + channel volume slider (BASS / LEAD / ARP / DRUMS). */
+    /** Voice dropdown + option slider + channel volume (BASS / LEAD / ARP / DRUMS). */
     function fxVoiceSelect(label, ch, current, volPct) {
         const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
             ? VFTrackerVoices.optionsFor(ch)
             : [{ id: 'default', label: 'DEFAULT' }];
         const cur = String(current || 'default');
+        let idx = 0;
+        for (let i = 0; i < opts.length; i++) if (opts[i].id === cur) { idx = i; break; }
+        const max = Math.max(0, opts.length - 1);
         const keys = ['bass', 'lead', 'arp', 'drums'];
         const pct = Math.max(0, Math.min(200, Math.round(Number(volPct) || 100)));
+        const ids = opts.map(function (o) { return o.id; }).join('|');
+        const labels = opts.map(function (o) { return o.label; }).join('|');
         const html = opts.map(function (o) {
             return '<option value="' + o.id + '"' + (o.id === cur ? ' selected' : '') + '>' + o.label + '</option>';
         }).join('');
+        // Order: label | volume | dropdown | style pick (dropdown left of style fader).
         return '<label class="vf-fx-row vf-fx-voice-row"><span>' + label + '</span>' +
-            '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
             '<input type="range" class="vf-fx-voice-vol" min="0" max="200" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
-            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%">' +
+            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%" aria-label="' + label + ' volume">' +
+            '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
+            '<input type="range" class="vf-fx-voice-pick" min="0" max="' + max + '" step="1" value="' + idx +
+            '" data-voice-ch="' + ch + '" data-voice-ids="' + ids + '" data-voice-labels="' + labels +
+            '" style="--look-fill:' + (idx / Math.max(1, max) * 100) + '%" title="' + label + ' voice slider" aria-label="' + label + ' voice">' +
             '<output>' + pct + '%</output></label>';
     }
-    /** Music STYLE dropdown + AMOUNT slider on one row (same layout as MUSIC VOICES). */
+    /** Collapsed AUDIO sections { key: true }, loaded once from localStorage. */
+    function fxAudioCollapsedMap() {
+        if (!vfs._fxAudioCollapsed) {
+            let map = {};
+            try {
+                const raw = JSON.parse(localStorage.getItem('vf_fx_audio_collapsed') || '{}');
+                if (raw && typeof raw === 'object' && !Array.isArray(raw)) map = raw;
+            } catch (err) { /* ignore */ }
+            vfs._fxAudioCollapsed = map;
+        }
+        return vfs._fxAudioCollapsed;
+    }
+    /** Collapsible AUDIO block: clickable title + body (VOLUME / VOICES / PLAYBACK / TOGGLES). */
+    function fxAudioSection(key, label, bodyHtml) {
+        const c = !!fxAudioCollapsedMap()[key];
+        return '<section class="vf-fx-sec' + (c ? ' is-collapsed' : '') + '" data-fx-sec="' + key + '">' +
+            '<button type="button" class="vf-fx-title" data-fx-sec-toggle="' + key + '" aria-expanded="' + (!c) + '">' +
+            '<span class="vf-fx-sec-label">' + label + '</span>' +
+            '<i class="vf-fx-title-rule" aria-hidden="true"></i>' +
+            '<span class="vf-fx-sec-caret" aria-hidden="true">' + (c ? '▼' : '▲') + '</span></button>' +
+            '<div class="vf-fx-sec-body"' + (c ? ' hidden' : '') + '>' + bodyHtml + '</div></section>';
+    }
+    /** Music STYLE index slider + STRENGTH (amount) on the row below. */
     function fxStyleSelect(currentIdx, junglePct, jungleLabel) {
         const list = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list)
             ? VFTrackerThemes.list
             : [{ id: 'planet', label: 'PLANET' }];
-        const cur = Math.max(0, Math.min(list.length - 1, Math.round(Number(currentIdx) || 0)));
+        const max = Math.max(0, list.length - 1);
+        const cur = Math.max(0, Math.min(max, Math.round(Number(currentIdx) || 0)));
         const pct = Math.max(0, Math.min(100, Math.round(Number(junglePct) || 0)));
-        const shown = jungleLabel == null ? (pct === 0 ? 'OFF' : pct + '%') : jungleLabel;
-        const html = list.map(function (o, i) {
-            return '<option value="' + i + '"' + (i === cur ? ' selected' : '') + '>' + o.label + '</option>';
-        }).join('');
-        return '<label class="vf-fx-row vf-fx-voice-row"><span>STYLE</span>' +
-            '<select class="vf-fx-voice vf-fx-style" data-au-style="1" title="Music style">' + html + '</select>' +
-            '<input type="range" min="0" max="100" step="1" value="' + pct + '" data-sl="au:jungle"' +
-            ' data-unit="" style="--look-fill:' + pct + '%">' +
-            '<output>' + shown + '</output></label>';
+        const styleName = (list[cur] && list[cur].label) || 'PLANET';
+        const strengthLabel = jungleLabel == null ? (pct === 0 ? 'OFF' : pct + '%') : jungleLabel;
+        const fill = max > 0 ? (cur / max * 100) : 0;
+        return '<label class="vf-fx-row vf-fx-style-pick-row"><span>STYLE</span>' +
+            '<input type="range" class="vf-fx-voice-pick" min="0" max="' + max + '" step="1" value="' + cur +
+            '" data-sl="au:theme" data-unit="" style="--look-fill:' + fill + '%" title="Music style" aria-label="Music style">' +
+            '<output>' + styleName + '</output></label>' +
+            fxSlider('STRENGTH', 'au:jungle', 0, 100, 1, pct, '', strengthLabel);
     }
     // Fleet colours (hull / edge / accent / engine of the faction's ships): HUE continuous,
     // SAT / LIGHT in three steps. Slider moves are unsaved drafts shown live; SAVE keeps them.
@@ -26480,16 +26747,26 @@ var CoreRenderManager = class CoreRenderManager {
         const ui = getUi();
         const plate = buildFxPlate();
         if (!ui) return;
+        vfs._fxFilling = true;
+        try {
         vfs.fxScrollLock = true;
+        const devOn = fxDevModeOn();
+        if (vfs.fxTab === 'music') vfs.fxTab = 'audio'; // stale saved tab → AUDIO
         let h = '<div class="vf-fx-head"><span>' + (FX_TABS.filter(function (t) { return t[0] === vfs.fxTab; })[0] || ['', ''])[1] + '</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
             '<div class="vf-fx-tabs">' + FX_CLUSTERS.map(function (c, ci) {
-                const keys = c[1].map(function (id) {
+                const ids = c[1];
+                if (!ids.length) return '';
+                const keys = ids.map(function (id) {
                     const t = FX_TABS.filter(function (x) { return x[0] === id; })[0];
                     const html = '<button type="button" data-fx-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
                     return html;
                 }).join('');
-                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + c[1].length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
-            }).join('') + '</div><div class="vf-fx-body">';
+                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + ids.length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
+            }).join('') + '</div>';
+        const wantEditor = fxWantMusicEditor();
+        const wantSplit = wantEditor && fxWantAudioMusicSplit();
+        vfs.fxAudioWide = wantSplit;
+        h += '<div class="vf-fx-body' + (wantEditor ? ' is-audio-split' + (wantSplit ? '' : ' is-audio-stack') : '') + '">';
         if (vfs.fxTab === 'fx') {
             h += '<div class="vf-fx-row"><span>AREA</span>' + fxStepper([['SCREEN', 'INSIDE'], ['FRAME', 'OUTSIDE'], ['ALL', 'BOTH']], ui.fxArea, 'fx-area') + '</div>';
             [['glow', 'GLOW'], ['scanlines', 'SCANLINES'], ['crt', 'CRT'], ['chroma', 'CHROMA'], ['vignette', 'VIGNETTE'], ['noise', 'NOISE'], ['flicker', 'FLICKER'], ['bloom', 'BLOOM'], ['bloomSpread', 'B. SPREAD'], ['bloomThreshold', 'B. CUTOFF'], ['hdr', 'HDR']].forEach(function (r) {
@@ -26702,12 +26979,12 @@ var CoreRenderManager = class CoreRenderManager {
             const sm = (typeof soundManager !== 'undefined') ? soundManager : null;
             const settings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager.settings
                 : (typeof settingsManager !== 'undefined' && settingsManager ? settingsManager.settings : null);
-            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
-            const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
-            const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
+            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 75;
+            const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 50;
+            const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 65;
             const musicBpm = vol && vol.getMusicBpm
                 ? Math.round(vol.getMusicBpm())
-                : (vol && vol.getMusicSpeed ? Math.round(vol.getMusicSpeed() * 132) : 462);
+                : (vol && vol.getMusicSpeed ? Math.round(vol.getMusicSpeed() * 132) : 132);
             const jungleAmt = vol && vol.getJungleAmount ? Number(vol.getJungleAmount()) : 0;
             const junglePct = Math.round(Math.max(0, Math.min(1, Math.abs(jungleAmt) || 0)) * 100);
             const jungleLabel = junglePct === 0 ? 'OFF' : junglePct + '%';
@@ -26729,23 +27006,46 @@ var CoreRenderManager = class CoreRenderManager {
                 : 1.4;
             const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
             const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
-            h += '<div class="vf-fx-title">VOLUME</div>' +
+            const audioHtml = fxAudioSection('volume', 'VOLUME',
                 fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
                 fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
-                fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
-                '<div class="vf-fx-title">MUSIC VOICES</div>' +
+                fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%')) +
+                fxAudioSection('voices', 'MUSIC VOICES',
                 fxVoiceSelect('BASS', 0, voiceOf(0), chVolOf(0)) +
                 fxVoiceSelect('LEAD', 1, voiceOf(1), chVolOf(1)) +
                 fxVoiceSelect('ARP', 2, voiceOf(2), chVolOf(2)) +
-                fxVoiceSelect('DRUMS', 3, voiceOf(3), chVolOf(3)) +
-                '<div class="vf-fx-title">MUSIC PLAYBACK</div>' +
-                fxSlider('MUSIC BPM', 'au:bpm', 60, 600, 1, musicBpm, ' BPM') +
+                fxVoiceSelect('DRUMS', 3, voiceOf(3), chVolOf(3))) +
+                fxAudioSection('playback', 'MUSIC PLAYBACK',
+                fxSlider('MUSIC BPM', 'au:bpm', 60, 300, 1, musicBpm, '',
+                    (vol && vol.formatMusicSpeed)
+                        ? vol.formatMusicSpeed(musicBpm)
+                        : (Math.round(musicBpm) + ' BPM'),
+                    (vol && vol.getPreferredMusicBpm)
+                        ? vol.getPreferredMusicBpm(themeIdx)
+                        : ((typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.preferredBpmOf)
+                            ? VFTrackerThemes.preferredBpmOf(themeIdx) : 132)) +
                 fxStyleSelect(themeIdx, junglePct, jungleLabel) +
-                fxSlider('CROSSFADE', 'au:xfade', 0.2, 3, 0.05, xfade, 's') +
-                '<div class="vf-fx-title">TOGGLES</div>' +
+                fxSlider('CROSSFADE', 'au:xfade', 0.2, 3, 0.05, xfade, 's')) +
+                fxAudioSection('toggles', 'TOGGLES',
                 '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
                 '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +
-                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-au-reset="1">RESET AUDIO</button></div>';
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-au-reset="1">RESET AUDIO</button></div>');
+            if (wantEditor) {
+                let paneCollapsed = false;
+                try { paneCollapsed = localStorage.getItem('vf_fx_audio_settings_collapsed') === '1'; } catch (err) { /* ignore */ }
+                vfs._fxAudioSettingsCollapsed = paneCollapsed;
+                h += '<div class="vf-fx-audio-split' + (paneCollapsed ? ' is-settings-collapsed' : '')
+                    + (wantSplit ? '' : ' is-stacked') + '">'
+                    + '<div class="vf-fx-audio-settings">' + audioHtml + '</div>'
+                    + '<div class="vf-fx-audio-resize" role="button" tabindex="0" aria-expanded="' + (!paneCollapsed) + '"'
+                    + ' title="' + (paneCollapsed
+                        ? 'Click to show audio settings'
+                        : (wantSplit ? 'Drag to resize · click to collapse' : 'Click to collapse settings')) + '"></div>'
+                    + '<div class="vf-fx-music-host" id="vf-fx-music-editor"></div>'
+                    + '</div>';
+            } else {
+                h += audioHtml;
+            }
         }
         h += '</div>';
         plate.innerHTML = h;
@@ -26762,6 +27062,11 @@ var CoreRenderManager = class CoreRenderManager {
                 up.style.width = down.style.width = b.offsetWidth + 'px';
                 up.style.top = b.offsetTop + 'px';
                 down.style.top = (b.offsetTop + b.offsetHeight - 22) + 'px';
+                if (b.classList.contains('is-audio-split')) {
+                    up.hidden = true;
+                    down.hidden = true;
+                    return;
+                }
                 up.hidden = !(b.scrollTop > 2);
                 down.hidden = !(b.scrollTop + b.clientHeight < b.scrollHeight - 2);
             };
@@ -26774,7 +27079,149 @@ var CoreRenderManager = class CoreRenderManager {
             vfs.fxMoreSync = sync;
         })();
         applyFxGeom();
+        mountFxMusicEditor();
+        if (typeof NS.bindFxAudioSplitResize === 'function') NS.bindFxAudioSplitResize();
+        } finally {
+            vfs._fxFilling = false;
+        }
     }
+})(window.vfFitScope || (window.vfFitScope = {}));
+
+
+/* --- js/core/viewport-fit-audio-split.js?v=1 --- */
+"use strict";
+
+// Draggable / clickable border between AUDIO settings and Music Editor on the FX remote.
+// Click = collapse/expand settings; drag = resize.
+(function (NS) {
+    const vfs = NS.vfs || (NS.vfs = {});
+    const STORE = 'vf-fx-audio-split-w';
+    const COLLAPSE_STORE = 'vf_fx_audio_settings_collapsed';
+    const DEFAULT_W = 280;
+    const MIN_LEFT = 180;
+    const MIN_RIGHT = 220;
+    const CLICK_PX = 4;
+
+    function readSavedW() {
+        try {
+            const n = Number(localStorage.getItem(STORE));
+            if (Number.isFinite(n) && n >= MIN_LEFT && n <= 720) return Math.round(n);
+        } catch (e) { /* ignore */ }
+        return DEFAULT_W;
+    }
+
+    function applyW(settings, w) {
+        const px = Math.round(w);
+        settings.style.flex = '0 0 ' + px + 'px';
+        settings.style.width = px + 'px';
+        settings.style.maxWidth = 'none';
+        settings.style.minWidth = MIN_LEFT + 'px';
+    }
+
+    function clearW(settings) {
+        settings.style.flex = '';
+        settings.style.width = '';
+        settings.style.minWidth = '';
+        settings.style.maxWidth = '';
+    }
+
+    function setSettingsCollapsed(split, collapsed) {
+        if (!split) return;
+        const settings = split.querySelector('.vf-fx-audio-settings');
+        const handle = split.querySelector('.vf-fx-audio-resize');
+        split.classList.toggle('is-settings-collapsed', !!collapsed);
+        vfs._fxAudioSettingsCollapsed = !!collapsed;
+        try { localStorage.setItem(COLLAPSE_STORE, collapsed ? '1' : '0'); } catch (err) { /* ignore */ }
+        if (handle) {
+            handle.setAttribute('aria-expanded', String(!collapsed));
+            handle.setAttribute('aria-label', collapsed ? 'Expand audio settings' : 'Collapse audio settings');
+            handle.title = collapsed
+                ? 'Click to expand audio settings'
+                : 'Drag to resize · click to collapse';
+            // Keep the border first so the expand strip stays visible left of the editor.
+            if (collapsed) split.insertBefore(handle, split.firstChild);
+            else if (settings && settings.nextSibling !== handle) settings.after(handle);
+        }
+        if (!settings) return;
+        if (collapsed || split.classList.contains('is-stacked')) clearW(settings);
+        else applyW(settings, readSavedW());
+    }
+
+    function bindFxAudioSplitResize() {
+        const split = document.querySelector('#vf-fx .vf-fx-audio-split');
+        if (!split) return;
+        const settings = split.querySelector('.vf-fx-audio-settings');
+        const host = split.querySelector('.vf-fx-music-host');
+        if (!settings || !host) return;
+
+        let handle = split.querySelector('.vf-fx-audio-resize');
+        if (!handle) {
+            handle = document.createElement('div');
+            handle.className = 'vf-fx-audio-resize';
+            settings.after(handle);
+        }
+        handle.setAttribute('role', 'button');
+        handle.setAttribute('tabindex', '0');
+
+        const collapsed = split.classList.contains('is-settings-collapsed') || !!vfs._fxAudioSettingsCollapsed;
+        setSettingsCollapsed(split, collapsed);
+
+        if (handle._vfBound) return;
+        handle._vfBound = true;
+
+        handle.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter' && e.key !== ' ') return;
+            e.preventDefault();
+            setSettingsCollapsed(split, !split.classList.contains('is-settings-collapsed'));
+        });
+
+        handle.addEventListener('pointerdown', function (e) {
+            if (e.button != null && e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            handle.setPointerCapture(e.pointerId);
+            const startX = e.clientX;
+            const startW = settings.getBoundingClientRect().width;
+            const wasCollapsed = split.classList.contains('is-settings-collapsed');
+            let dragging = false;
+            handle.classList.add('is-dragging');
+            document.body.classList.add('pe-resizing');
+            vfs._fxAudioSplitDragging = true;
+
+            const stacked = split.classList.contains('is-stacked');
+            const move = function (ev) {
+                const dx = ev.clientX - startX;
+                if (!dragging && Math.abs(dx) < CLICK_PX) return;
+                // Collapsed or narrow stack: click toggles settings; no drag-resize.
+                if (wasCollapsed || stacked) return;
+                if (!dragging) {
+                    dragging = true;
+                    applyW(settings, startW);
+                }
+                const maxW = Math.max(MIN_LEFT, split.getBoundingClientRect().width - MIN_RIGHT - handle.offsetWidth);
+                applyW(settings, Math.max(MIN_LEFT, Math.min(maxW, startW + dx)));
+            };
+            const up = function () {
+                handle.classList.remove('is-dragging');
+                document.body.classList.remove('pe-resizing');
+                vfs._fxAudioSplitDragging = false;
+                handle.removeEventListener('pointermove', move);
+                handle.removeEventListener('pointerup', up);
+                handle.removeEventListener('pointercancel', up);
+                if (!dragging) {
+                    setSettingsCollapsed(split, !wasCollapsed);
+                    return;
+                }
+                const w = Math.round(settings.getBoundingClientRect().width);
+                try { localStorage.setItem(STORE, String(w)); } catch (err) { /* ignore */ }
+            };
+            handle.addEventListener('pointermove', move);
+            handle.addEventListener('pointerup', up);
+            handle.addEventListener('pointercancel', up);
+        });
+    }
+
+    Object.assign(NS, { bindFxAudioSplitResize, setFxAudioSettingsCollapsed: setSettingsCollapsed });
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -27717,9 +28164,21 @@ var CoreRenderManager = class CoreRenderManager {
         const bz = document.getElementById('vf-bezel');
         const from = bz && bz.getAttribute('data-faction');
         const tA = performance.now();
-        apply();
-        if (window.vfLog) window.vfLog('cables', 'apply() took ' + Math.round(performance.now() - tA) + 'ms');
-        if (bz && from && from !== fac && NS.morphBezelShape) NS.morphBezelShape(from, fac, 700);
+        // apply() must never leave cableBusy stuck: a throw would queue every later
+        // wizard/faction swap forever and the faction panels would stay empty.
+        try {
+            apply();
+            if (window.vfLog) window.vfLog('cables', 'apply() took ' + Math.round(performance.now() - tA) + 'ms');
+            if (bz && from && from !== fac && NS.morphBezelShape) NS.morphBezelShape(from, fac, 700);
+        } catch (err) {
+            if (window.vfLog) window.vfLog('cables', 'apply() FAILED: ' + (err && err.message));
+            try { ghost.remove(); } catch (e2) { /* ignore */ }
+            svg.classList.remove('vfc-in', 'vfc-hold');
+            cableBusy = false;
+            const q = cableQueued; cableQueued = null;
+            if (q) cableSwitch(q[0], q[1]);
+            return;
+        }
         // The swap repaints every filtered frame layer in one go (a long frame). Start the cable motion only after that frame,
         // so the animation does not begin inside the stall and then jump.
         // The end timer only starts once the motion has been released, so a long swap frame can never cut the animation short.
@@ -28591,10 +29050,13 @@ var factionGui = (() => {
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) factionShipStyles.applyDocumentFactionTheme(id);
     }
 
+    /** Drop any in-flight swap callback (instant apply / newer pick already painted the frame). */
+    function cancelPending() { swapTok = {}; }
+
     /** The one door to the cable swap, for flows that recolour the frame themselves (pilot wizard): same gate as go(). */
     function swap(id, apply) {
         const sw = window.vfFitScope && window.vfFitScope.cableSwitch;
-        if (!ready || !sw || reduce()) { apply(); return; }
+        if (!ready || !sw || reduce()) { cancelPending(); apply(); return; }
         // Decode the target faction's art first, so the cable/background swap never shows the fallback room.
         const fp = typeof factionPacks !== 'undefined' && factionPacks.warmFaction ? factionPacks.warmFaction(id, 500) : Promise.resolve();
         if (window.vfLog) { window.vfLog('gui', 'swap -> ' + id + ' | ready=' + ready); if (window.vfLog.watch) window.vfLog.watch('swap ' + id); }
@@ -28627,7 +29089,7 @@ var factionGui = (() => {
     /** A flow that stamped the document itself (pilot wizard) tells the switch what is shown now. */
     function sync(id) { shown = id; desired = id; }
 
-    return { go, follow, swap, sync, reconcile, expected, get shown() { return shown; }, get busy() { return busy; }, get armed() { return ready; } };
+    return { go, follow, swap, cancelPending, sync, reconcile, expected, get shown() { return shown; }, get busy() { return busy; }, get armed() { return ready; } };
 })();
 window.factionGui = factionGui;
 
@@ -29543,8 +30005,10 @@ extendClass(SoundManager, {
     playGameOver() {
         this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
         this._endMusicFaction = this._currentHostileFaction || null;
+        // Stop combat reevaluation so defeat motif is not yanked back to stage BGM.
+        if (this.clearMusicContext) this.clearMusicContext();
         this.clearActiveTimeouts();
-        this.stopPlanetAmbientNodesOnly();
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         this.ambientPlanetId = null;
         this.createBeep(300, 0.3, 'sine', 0.9);
         this.schedule(() => this.createBeep(250, 0.3, 'sine', 0.85), 300);
@@ -29556,15 +30020,43 @@ extendClass(SoundManager, {
     playVictory() {
         this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
         this._endMusicFaction = this._currentHostileFaction || null;
+        // Keep combat loop rolling through the victory screen. Swapping to the
+        // victory fanfare (then back on next stage) felt like the old intro
+        // fanfare every clear. Beeps still celebrate; music stays on the bus.
         this.clearActiveTimeouts();
-        this.stopPlanetAmbientNodesOnly();
-        this.ambientPlanetId = null;
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true, keepLocal: true });
         this.createBeep(500, 0.2, 'sine', 0.85);
         this.schedule(() => this.createBeep(600, 0.2, 'sine', 0.85), 200);
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        this.schedule(() => this.startEndMusic('victory'), 900);
+        // Soft duck only — no track swap.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+            const bus = this.musicBusVolume ? this.musicBusVolume() : 0.2;
+            vfTrackerManager.setVolume(Math.max(0.05, bus * 0.55));
+        }
+    },
+
+    /** Menu difficulty + planet tier for scene-feel (tempo / STYLE intensity). */
+    _musicSceneOpts(role) {
+        const difficulty = (typeof difficultyConfigManager !== 'undefined'
+            && difficultyConfigManager.current)
+            ? String(difficultyConfigManager.current).toLowerCase()
+            : 'normal';
+        let planetTier = null;
+        if (typeof game !== 'undefined' && game.currentLevel
+            && game.currentLevel.planetTier != null) {
+            planetTier = Number(game.currentLevel.planetTier);
+        } else if (typeof levelManager !== 'undefined' && levelManager.currentLevel
+            && levelManager.currentLevel.planetTier != null) {
+            planetTier = Number(levelManager.currentLevel.planetTier);
+        }
+        return { role: role || 'menu', difficulty, planetTier };
+    },
+
+    _applyMusicScene(role) {
+        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.setSceneFeel) return;
+        vfTrackerManager.setSceneFeel(this._musicSceneOpts(role));
     },
 
     /** Looping victory / lose vftrack, biased by hostile faction (+ optional planet). */
@@ -29575,17 +30067,84 @@ extendClass(SoundManager, {
         if (!this.ensureContext()) return;
         const faction = String(this._endMusicFaction || this._currentHostileFaction || '').toLowerCase();
         const planet = String(this._endMusicPlanet || this._currentPlanetId || '').toLowerCase().split('-')[0];
+        // Prefer planet Hauptmelodie; faction only skins instruments when both known.
         const keys = [];
         if (planet && faction) keys.push(mode + ':' + faction + ':' + planet);
-        if (faction) keys.push(mode + ':' + faction);
         if (planet) keys.push(mode + ':' + planet);
+        if (faction) keys.push(mode + ':' + faction);
         keys.push(mode);
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
         if (typeof vfTrackerManager === 'undefined') return;
+        this._applyMusicScene(mode);
         vfTrackerManager.setVolume(this.musicBusVolume());
         vfTrackerManager.setEnabled(true);
         if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
+    },
+
+    /**
+     * Trader / victory-shop / home-shop BGM — planet bazaar motif.
+     * Pass `{ resume: 'victory'|'map'|'menu' }` so close can restore.
+     */
+    startShopMusic(planetId, opts) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId
+                || this._endMusicPlanet
+                || this._currentPlanetId
+                || (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const key = 'shop:' + id;
+        this._shopMusicResume = (opts && opts.resume) || this._shopMusicResume || 'menu';
+        this.notePendingMusic('shop', key);
+        if (!this.musicEnabled) return;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined'
+            && localAudioManager.currentKey
+            && localAudioManager.currentKey !== key) {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager === 'undefined') return;
+        this._applyMusicScene('shop');
+        vfTrackerManager.setVolume(this.musicBusVolume());
+        vfTrackerManager.setEnabled(true);
+        const keys = [key, 'shop', 'menu'];
+        if (vfTrackerManager.playFirst && vfTrackerManager.playFirst(keys)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playShop && vfTrackerManager.playShop(id)) {
+            this.clearPendingMusic();
+            return;
+        }
+        this.clearPendingMusic();
+    },
+
+    /** Leave shop bus — restore victory / map / menu depending on how shop opened. */
+    stopShopMusic() {
+        const resume = this._shopMusicResume || 'menu';
+        this._shopMusicResume = null;
+        if (!this.musicEnabled) return;
+        if (resume === 'victory') {
+            this.startEndMusic('victory');
+            return;
+        }
+        if (resume === 'map' && this.startMapMusic) {
+            const id = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || this._currentPlanetId
+                || 'mars';
+            this.startMapMusic(id, { immediate: true });
+            return;
+        }
+        if (this.startMenuMusic) this.startMenuMusic();
     },
 
     playPowerUp() {
@@ -29605,14 +30164,9 @@ extendClass(SoundManager, {
         this.notePendingMusic('planet', id);
         this.markAudioUnlocked && this.markAudioUnlocked();
 
-        // Mission boot: coded intro fanfare, then this method again for combat.
-        if (this._pendingMissionIntro && this.musicEnabled && !this._introPlaying) {
-            if (this._startMissionIntroThenCombat && this._startMissionIntroThenCombat(id)) {
-                return;
-            }
-        }
-        // Intro already owning the bus — don't clobber it with combat yet.
-        if (this._introPlaying) return;
+        // Intro fanfare retired — never divert combat boot through playIntro.
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
 
         if (!this._currentHostileFaction && this._resolveHostileFaction) {
             this._currentHostileFaction = this._resolveHostileFaction(id);
@@ -29622,20 +30176,21 @@ extendClass(SoundManager, {
             : [id];
         if (combatKeys.indexOf(id) === -1) combatKeys.push(id);
 
-        // Same song already going — check BEFORE stop, or we always restart.
+        // Same preferred song already going — check BEFORE stop.
+        // Prefer-only: boss must not keep a regular combat key that happens
+        // to sit later in the fallback list.
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying) {
+            const preferKeys = this.combatTrackKeys
+                ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction, { preferOnly: true })
+                : combatKeys;
             const keepKey = typeof vfTrackerManager.firstPlayableKey === 'function'
-                ? vfTrackerManager.firstPlayableKey(combatKeys)
+                ? vfTrackerManager.firstPlayableKey(preferKeys)
                 : null;
             if (keepKey && vfTrackerManager.isPlaying(keepKey)) {
+                // Restore full bus (victory duck left volume at ~55%).
+                vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
                 this.clearPendingMusic();
                 return;
-            }
-            for (let i = 0; i < combatKeys.length; i++) {
-                if (vfTrackerManager.isPlaying(combatKeys[i])) {
-                    this.clearPendingMusic();
-                    return;
-                }
             }
         }
         if (typeof youtubeSoundtrackManager !== 'undefined'
@@ -29699,6 +30254,9 @@ extendClass(SoundManager, {
             }
             vfTrackerManager.setEnabled(true);
             vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+            const stage = String(this._currentStageId || '').toLowerCase();
+            const boss = stage === 'boss' || stage === 'b';
+            this._applyMusicScene(boss ? 'boss' : 'combat');
             const played = vfTrackerManager.playFirst(combatKeys);
             if (played) {
                 this.clearPendingMusic();
@@ -29800,7 +30358,90 @@ extendClass(SoundManager, {
         this.startPlanetAmbient(planetId);
     },
 
+    /**
+     * Galaxy map BGM — per-planet Hauptmelodie (map role), interpreted by STYLE.
+     * Debounced so arrow-hopping planets does not thrash the tracker bus.
+     * Pass `{ immediate: true }` on map open so the first cue is not delayed.
+     */
+    startMapMusic(planetId, opts) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const key = 'map:' + id;
+        this._pendingMapMusicId = id;
+        this.notePendingMusic('map', key);
+        if (!this.musicEnabled) return;
+        // Already on this map motif — keep playhead (no restart).
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (opts && opts.immediate) {
+            if (this._mapMusicTimer) {
+                try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+                this._mapMusicTimer = null;
+            }
+            this._applyMapMusic(id);
+            return;
+        }
+        if (this._mapMusicTimer) {
+            try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+        }
+        this._mapMusicTimer = setTimeout(() => {
+            this._mapMusicTimer = null;
+            if (this._pendingMapMusicId !== id) return;
+            this._applyMapMusic(id);
+        }, 280);
+    },
+
+    _applyMapMusic(planetId) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const key = 'map:' + id;
+        if (!this.musicEnabled) return;
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined'
+            && localAudioManager.currentKey
+            && localAudioManager.currentKey !== key) {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager === 'undefined') return;
+        this._applyMusicScene('map');
+        vfTrackerManager.setVolume(this.musicBusVolume());
+        vfTrackerManager.setEnabled(true);
+        if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        const keys = [key, 'map', 'menu'];
+        if (vfTrackerManager.playFirst && vfTrackerManager.playFirst(keys)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playMap && vfTrackerManager.playMap(id)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playMenu) vfTrackerManager.playMenu();
+        this.clearPendingMusic();
+    },
+
     startMenuMusic() {
+        // Embedded / open galaxy map owns the hub bus — don't yank it back to menu.
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible
+            && this.startMapMusic) {
+            this.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
+            return;
+        }
+        if (this._mapMusicTimer) {
+            try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+            this._mapMusicTimer = null;
+        }
         this.notePendingMusic('menu', 'menu');
         if (!this.musicEnabled) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
@@ -29811,9 +30452,36 @@ extendClass(SoundManager, {
         // Keep tracker for combat→menu crossfade; only kill the soft drone bus.
         this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         this.ambientPlanetId = null;
+        // Already on hub / map motif — keep going instead of restarting.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying()) {
+            const ck = String(vfTrackerManager.currentKey || '');
+            if (ck === 'menu' || ck === 'station' || ck === 'hub' || ck.indexOf('map:') === 0) {
+                vfTrackerManager.setVolume(this.musicBusVolume());
+                this.clearPendingMusic();
+                return;
+            }
+        }
 
         const menuTrack = (typeof soundtrackConfigManager !== 'undefined')
             ? soundtrackConfigManager.getMenuTrack() : null;
+        // Same hub song already going (faction/wizard remount, station reopen) —
+        // keep row position instead of restarting from the top.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying('menu')
+            && !(menuTrack && soundtrackConfigManager.hasTrack(menuTrack)
+                && (menuTrack.localAudioData || menuTrack.youtubeUrl))) {
+            vfTrackerManager.setVolume(this.musicBusVolume());
+            this.clearPendingMusic();
+            return;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.isPlaying
+            && localAudioManager.isPlaying('menu')
+            && menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
+            localAudioManager.setVolume(this.musicBusVolume());
+            this.clearPendingMusic();
+            return;
+        }
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
             if (typeof vfTrackerManager !== 'undefined') {
@@ -29836,7 +30504,8 @@ extendClass(SoundManager, {
             if (!this.ensureContext()) return;
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.setVolume(this.musicBusVolume());
-                if (vfTrackerManager.play('menu', menuTrack.trackerData, { force: true })) {
+                // No force: play() keeps position when the same menu track is already audible.
+                if (vfTrackerManager.play('menu', menuTrack.trackerData)) {
                     this.clearPendingMusic();
                 }
             }
@@ -29872,6 +30541,7 @@ extendClass(SoundManager, {
 
         if (!this.ensureContext()) return;
         if (typeof vfTrackerManager !== 'undefined') {
+            this._applyMusicScene('menu');
             vfTrackerManager.setVolume(this.musicBusVolume());
             if (vfTrackerManager.playMenu()) this.clearPendingMusic();
         }
@@ -29960,9 +30630,21 @@ extendClass(SoundManager, {
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.stop();
             }
-        } else if (this._musicContextActive) {
-            this._activeOverrideKey = null;
-            this._reevaluateMusic();
+        } else {
+            this.ensureMusicPlaying();
+        }
+    },
+
+    /** Start (or resume) music for the current context if it isn't already audible. */
+    ensureMusicPlaying() {
+        if (!this.musicEnabled) return;
+        // Include fading-out legs — volume drags must not spawn a second song.
+        if (this._musicActuallyPlaying && this._musicActuallyPlaying()) return;
+        if (this._musicContextActive) {
+            // Keep the current override slot; only fill silence.
+            this._ensureCombatMusicPlaying
+                ? this._ensureCombatMusicPlaying()
+                : this._reevaluateMusic();
         } else if (this.ambientPlanetId) {
             this.startPlanetAmbient(this.ambientPlanetId);
         } else {
@@ -30396,6 +31078,7 @@ var LocalAudioManager = class LocalAudioManager {
         if (this.el) return this.el;
         const el = document.createElement('audio');
         el.loop = true;
+        el.preload = 'auto';
         el.id = 'vfLocalAudioTrack';
         el.style.display = 'none';
         document.body.appendChild(el);
@@ -30406,6 +31089,7 @@ var LocalAudioManager = class LocalAudioManager {
     _makeEl() {
         const el = document.createElement('audio');
         el.loop = true;
+        el.preload = 'auto';
         el.style.display = 'none';
         document.body.appendChild(el);
         return el;
@@ -30435,6 +31119,19 @@ var LocalAudioManager = class LocalAudioManager {
 
     _retireEl(el, fadeSec) {
         if (!el) return;
+        // Cap stacked fades — rapid play() hops used to leave several
+        // still-audible <audio> elements under the new track.
+        if (this._outgoing && this._outgoing.length) {
+            this._outgoing.forEach((old) => {
+                try {
+                    old.pause();
+                    old.removeAttribute('src');
+                    old.load();
+                    if (old.parentNode) old.parentNode.removeChild(old);
+                } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
         this._outgoing.push(el);
         this._rampVolume(el, el.volume, 0, fadeSec, () => {
             try {
@@ -30445,6 +31142,17 @@ var LocalAudioManager = class LocalAudioManager {
             } catch (e) { /* ignore */ }
             this._outgoing = this._outgoing.filter((x) => x !== el);
         });
+    }
+
+    /** True if current or still-fading outgoing audio is audible. */
+    isAudible() {
+        if (this.el && !this.el.paused && this.el.src) return true;
+        const out = this._outgoing || [];
+        for (let i = 0; i < out.length; i++) {
+            const el = out[i];
+            if (el && !el.paused && el.src) return true;
+        }
+        return false;
     }
 
     play(key, dataUrl) {
@@ -30717,7 +31425,11 @@ var VFTrackerParse = {
         if (!data || typeof data !== 'object') throw new Error('track must be an object');
 
         const bpm = Math.max(60, Math.min(240, Number(data.bpm) || 120));
-        const rowsPerBeat = Math.max(1, Math.min(8, Number(data.rowsPerBeat) || 1));
+        // Legacy banks mark 16-step / 16th grids as rowsPerBeat:1 (kick every 4 rows).
+        // MUSIC BPM is quarter-note tempo (beats/minute) — use rpb=4 so display matches
+        // tapped downbeats: rowDur=(60/bpm)/4, kick-every-4-rows → bpm.
+        let rowsPerBeat = Math.max(1, Math.min(8, Number(data.rowsPerBeat) || 1));
+        if (rowsPerBeat === 1) rowsPerBeat = 4;
         const rowsPerPattern = Math.max(4, Math.min(128, Number(data.rowsPerPattern) || 16));
         const channels = Math.max(1, Math.min(8, Number(data.channels) || 4));
 
@@ -30837,36 +31549,43 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this.masterGain = null;
         this.volume = 0.2;
         this._timer = null;
+        this._raf = null;
         this._nextRowTime = 0;
+        /** Absolute row counter since play() — tempo-stable scheduling. */
+        this._rowAbs = 0;
+        this._anchorTime = 0;
+        this._anchorRow = 0;
+        this._anchorRowDur = 0;
         this._orderIndex = 0;
         this._rowIndex = 0;
         this._channels = [];
         this._noiseBuffer = null;
         // Wilson-style lookahead: short wake + enough scheduleAhead to survive
-        // combat-frame stalls without dumping overdue notes in a burst.
+        // combat-frame stalls. Tempo changes re-anchor via notifyTempoChanged.
         this.lookahead = 0.025;
-        this.scheduleAhead = 0.55;
-        /** Playback speed vs authored BPM (>1 = faster). Used when playbackBpm is unset. */
-        this.tempoScale = 3.5;
-        /** Absolute playback tempo (BPM). When set, overrides authored×scale. */
+        this.scheduleAhead = 0.5;
+        /** Playback speed vs authored track BPM (>1 = faster). */
+        this.tempoScale = 1;
+        /** Heard tempo (MUSIC BPM slider) — beats/minute. */
         this.playbackBpm = null;
         /**
          * Per-channel mix (bass / lead / arp / drums).
          * Lead (ch1) is ducked so square pulse doesn't bury the rest.
          */
-        this.channelMixBase = [1.1, 0.42, 2.4, 1.25];
-        /** Jungle mix: chopped, drums dominate, lead almost gone. */
-        this.channelMixJungle = [1.75, 0.06, 0.95, 2.85];
+        // Mix targets stay near loudness-sum ~4 so STYLE swaps don't pump the bus.
+        this.channelMixBase = [1.05, 0.55, 1.55, 1.15];
+        /** Jungle mix: chopped, drums forward, lead still readable. */
+        this.channelMixJungle = [1.25, 0.38, 1.05, 1.55];
         /** DnB mix: heavy sub, controlled kit, sparse lead. */
-        this.channelMixDnb = [2.15, 0.1, 0.75, 1.95];
+        this.channelMixDnb = [1.45, 0.32, 0.95, 1.4];
         /** Jungle DnB hybrid: big sub + Amen kit pressure. */
-        this.channelMixJungleDnb = [1.95, 0.08, 0.85, 2.4];
+        this.channelMixJungleDnb = [1.35, 0.35, 1.0, 1.5];
         /** Dark minimal techno: heavy sub+kick, quiet delayed lead, present ticks. */
-        this.channelMixElektro = [2.05, 0.16, 1.05, 1.95];
+        this.channelMixElektro = [1.4, 0.34, 1.05, 1.35];
         /** Liquid: soft drums, floating lead/arp. */
-        this.channelMixLiquid = [1.45, 0.28, 1.65, 1.35];
-        /** NIGHTRUN (darksynth): huge lead + bass, driving kit. */
-        this.channelMixNightrun = [1.85, 0.72, 0.95, 2.05];
+        this.channelMixLiquid = [1.15, 0.48, 1.35, 1.1];
+        /** NIGHTRUN (darksynth): lead + bass forward, driving kit. */
+        this.channelMixNightrun = [1.3, 0.62, 1.0, 1.35];
         this.channelMix = this.channelMixBase.slice();
         /** User-facing fine-tune on top of channelMix (0 = mute, 1 = authored level). */
         this.channelUserMix = [1, 1, 1, 1];
@@ -30924,17 +31643,17 @@ var VFTrackerPlayer = class VFTrackerPlayer {
     }
 
     _mixTargetForStyle() {
-        const base = this.channelMixBase || [1.1, 0.42, 2.4, 1.25];
+        const base = this.channelMixBase || [1.05, 0.55, 1.55, 1.15];
         const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
             ? VFTrackerThemes.metaOf(this.themeIndex)
             : { mix: 'base' };
         const key = meta.mix || 'base';
-        if (key === 'jungle') return this.channelMixJungle || [1.75, 0.06, 0.95, 2.85];
-        if (key === 'dnb') return this.channelMixDnb || [2.15, 0.1, 0.75, 1.95];
-        if (key === 'jungle_dnb') return this.channelMixJungleDnb || [1.95, 0.08, 0.85, 2.4];
-        if (key === 'elektro') return this.channelMixElektro || [2.05, 0.16, 1.05, 1.95];
-        if (key === 'liquid') return this.channelMixLiquid || [1.45, 0.28, 1.65, 1.35];
-        if (key === 'nightrun') return this.channelMixNightrun || [1.85, 0.72, 0.95, 2.05];
+        if (key === 'jungle') return this.channelMixJungle || [1.25, 0.38, 1.05, 1.55];
+        if (key === 'dnb') return this.channelMixDnb || [1.45, 0.32, 0.95, 1.4];
+        if (key === 'jungle_dnb') return this.channelMixJungleDnb || [1.35, 0.35, 1.0, 1.5];
+        if (key === 'elektro') return this.channelMixElektro || [1.4, 0.34, 1.05, 1.35];
+        if (key === 'liquid') return this.channelMixLiquid || [1.15, 0.48, 1.35, 1.1];
+        if (key === 'nightrun') return this.channelMixNightrun || [1.3, 0.62, 1.0, 1.35];
         return base;
     }
 
@@ -30943,14 +31662,13 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         let t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (t < 0.03) t = 0;
         this.jungleAmount = t;
-        // Soft morph — never crush lead/arp so section songs stay distinct.
-        const mag = t * 0.55;
-        const base = this.channelMixBase || [1.1, 0.42, 2.4, 1.25];
+        // Mix follows AMOUNT only (no forced floor) — avoids sudden bus pumps.
+        const mag = t;
+        const base = this.channelMixBase || [1.05, 0.55, 1.55, 1.15];
         const target = mag > 0 ? this._mixTargetForStyle() : base;
         this.channelMix = base.map((b, i) => {
             let v = b + ((target[i] != null ? target[i] : b) - b) * mag;
-            // Lead / arp keep audible song identity under every STYLE.
-            if (i === 1 || i === 2) v = Math.max(b * 0.72, v);
+            if (i === 1) v = Math.max(b * 0.55, v);
             return v;
         });
         if (this._channelBus && this.ctx) {
@@ -30990,11 +31708,69 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const user = (this.channelUserMix && this.channelUserMix[ch] != null) ? Number(this.channelUserMix[ch]) : 1;
         const b = Number.isFinite(base) && base > 0 ? base : 1;
         const u = Number.isFinite(user) && user >= 0 ? user : 1;
-        return Math.max(0.0001, b * u);
+        // Hard cap per bus — STYLE drums/bass used to climb past 2.5× and pump.
+        return Math.max(0.0001, Math.min(1.85, b * u));
+    }
+
+    /**
+     * Channel buses → masterGain (user volume) → fadeGain (crossfade) →
+     * soft ceiling → destination.
+     *
+     * Volume and fade stay on separate nodes so dragging MUSIC / channel
+     * sliders during a crossfade does not yank the envelope (or let one
+     * overlapping track punch through while the other stays ducked).
+     * No bus compressor — that used to duck sibling voices when one
+     * channel was turned up, then squash the whole mix flat ("stumpf").
+     */
+    _ensureMasterChain() {
+        if (!this.ctx) return;
+        if (!this.masterGain) {
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = Math.max(0.0001, this.volume);
+        }
+        if (!this._fadeGain) {
+            this._fadeGain = this.ctx.createGain();
+            this._fadeGain.gain.value = 1;
+        }
+        if (this._masterChained) return;
+        try {
+            this.masterGain.disconnect();
+        } catch (e) { /* first wire */ }
+        try {
+            this._fadeGain.disconnect();
+        } catch (e2) { /* first wire */ }
+        // Soft peak ceiling only — transparent until actual overs.
+        if (!this._limiter) {
+            const lim = this.ctx.createDynamicsCompressor();
+            lim.threshold.value = -2.5;
+            lim.knee.value = 6;
+            lim.ratio.value = 8;
+            lim.attack.value = 0.002;
+            lim.release.value = 0.12;
+            this._limiter = lim;
+        }
+        try {
+            this._limiter.disconnect();
+        } catch (e3) { /* first wire */ }
+        this.masterGain.connect(this._fadeGain);
+        this._fadeGain.connect(this._limiter);
+        this._limiter.connect(this.ctx.destination);
+        this._masterChained = true;
+    }
+
+    _disconnectChannelBuses() {
+        const buses = this._channelBus || [];
+        for (let i = 0; i < buses.length; i++) {
+            const bus = buses[i];
+            if (!bus) continue;
+            try { bus.disconnect(); } catch (e) { /* ignore */ }
+        }
+        this._channelBus = [];
     }
 
     _ensureChannelBus(ch) {
         if (!this.ctx || !this.masterGain) return null;
+        this._ensureMasterChain();
         if (!this._channelBus[ch]) {
             const bus = this.ctx.createGain();
             bus.gain.value = this._busGain(ch);
@@ -31058,8 +31834,8 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         if (!this.masterGain) {
             this.masterGain = this.ctx.createGain();
             this.masterGain.gain.value = Math.max(0.0001, this.volume);
-            this.masterGain.connect(this.ctx.destination);
         }
+        this._ensureMasterChain();
         if (!this._noiseBuffer) this._noiseBuffer = this._makeNoiseBuffer();
         return this.ctx;
     }
@@ -31077,31 +31853,29 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         if (!this.masterGain || !this.ctx) return;
         const now = this.ctx.currentTime;
         const target = Math.max(0.0001, this.volume);
-        // Don't yank a live crossfade — retarget the ramp end instead.
-        if (this._fadeOutTimer) return;
-        if (this._fadeInUntil && now < this._fadeInUntil) {
-            try {
-                this.masterGain.gain.linearRampToValueAtTime(target, this._fadeInUntil);
-            } catch (e) { /* ignore */ }
-            return;
-        }
+        // Volume lives on masterGain — fade envelope is on _fadeGain, so
+        // slider moves stay linear even mid-crossfade.
         try {
             const cur = Math.max(0.0001, this.masterGain.gain.value);
             this.masterGain.gain.cancelScheduledValues(now);
             this.masterGain.gain.setValueAtTime(cur, now);
-            this.masterGain.gain.linearRampToValueAtTime(target, now + 0.08);
+            this.masterGain.gain.linearRampToValueAtTime(target, now + 0.05);
         } catch (e) { /* ignore */ }
     }
 
     effectiveBpm() {
+        // MUSIC BPM slider is the heard tempo (beats/minute). Prefer it so the
+        // UI value matches row timing: seconds/beat = 60 / bpm.
         const abs = Number(this.playbackBpm);
         if (Number.isFinite(abs) && abs > 0) {
             return Math.max(60, Math.min(960, abs));
         }
-        if (!this.track) return 0;
         const scale = Number(this.tempoScale);
         const mul = Number.isFinite(scale) && scale > 0 ? scale : 1;
-        return Math.max(60, Math.min(960, Number(this.track.bpm) * mul));
+        if (this.track && Number.isFinite(Number(this.track.bpm))) {
+            return Math.max(60, Math.min(960, Number(this.track.bpm) * mul));
+        }
+        return 0;
     }
 
     rowDuration() {
@@ -31122,15 +31896,19 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const ctx = this.ensureContext(opts && opts.context);
         if (!this.masterGain) {
             this.masterGain = ctx.createGain();
-            this.masterGain.connect(ctx.destination);
         }
+        this._ensureMasterChain();
         this.track = normalized;
         this.playing = true;
         this._endedFired = false;
         this._onEnded = (opts && typeof opts.onEnded === 'function') ? opts.onEnded : null;
         this._orderIndex = 0;
         this._rowIndex = 0;
+        this._rowAbs = 0;
         this._channels = [];
+        // Drop orphaned channel buses — leaving them connected stacked silent
+        // GainNodes on masterGain across every in-place play().
+        this._disconnectChannelBuses();
         this._channelBus = [];
         for (let i = 0; i < normalized.channels; i++) {
             this._channels.push({ gain: null, source: null, release: 0.1 });
@@ -31142,18 +31920,101 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             : 0;
         this._fadeInUntil = fadeIn > 0 ? (ctx.currentTime + fadeIn) : 0;
         try {
+            // User volume on masterGain; crossfade envelope on _fadeGain.
             this.masterGain.gain.cancelScheduledValues(ctx.currentTime);
-            if (fadeIn > 0) {
-                this.masterGain.gain.setValueAtTime(0.0001, ctx.currentTime);
-                this.masterGain.gain.linearRampToValueAtTime(this.volume, ctx.currentTime + fadeIn);
-            } else {
-                this.masterGain.gain.setValueAtTime(this.volume, ctx.currentTime);
+            this.masterGain.gain.setValueAtTime(this.volume, ctx.currentTime);
+            if (this._fadeGain) {
+                this._fadeGain.gain.cancelScheduledValues(ctx.currentTime);
+                if (fadeIn > 0) {
+                    // Equal-power (sine) fade-in: paired with the equal-power
+                    // fade-out so outgoing + incoming sum to constant loudness.
+                    this._fadeGain.gain.setValueCurveAtTime(
+                        this._equalPowerCurve(1, true), ctx.currentTime, fadeIn
+                    );
+                } else {
+                    this._fadeGain.gain.setValueAtTime(1, ctx.currentTime);
+                }
             }
         } catch (e) { /* ignore */ }
-        this._nextRowTime = ctx.currentTime + 0.02;
-        this._timer = setInterval(() => this._tick(), this.lookahead * 1000);
-        this._tick();
+        const t0 = ctx.currentTime + 0.02;
+        this._anchorTime = t0;
+        this._anchorRow = 0;
+        this._anchorRowDur = this.rowDuration();
+        this._nextRowTime = t0;
+        this._startScheduler();
         return normalized;
+    }
+
+    /**
+     * Re-anchor musical time after a live BPM change. Drop the stale schedule
+     * pocket (notes already queued at the old row duration) so cranking speed
+     * does not tangle old+new timing.
+     */
+    notifyTempoChanged() {
+        if (!this.playing || !this.ctx || !this.track) return;
+        const newDur = this.rowDuration();
+        const oldDur = Math.max(1e-4, this._anchorRowDur || newDur);
+        // Unchanged tempo (theme/style reassert, play() follow-up) — keep pocket.
+        if (Math.abs(newDur - oldDur) / oldDur < 0.002) {
+            this._anchorRowDur = newDur;
+            return;
+        }
+        const now = this.ctx.currentTime;
+        const audible = this._anchorRow + Math.max(0, (now - this._anchorTime) / oldDur);
+        // Silent cut — never snap gain to peak (that pumped volume on every
+        // BPM drag, including notes still waiting in the schedule pocket).
+        for (let i = 0; i < this._channels.length; i++) {
+            this._stopChannel(i, now, { silent: true });
+        }
+        // Reschedule from the audible head at the new tempo (old future pocket dropped).
+        const nextAbs = Math.ceil(audible - 1e-6);
+        const pos = this._absRowToPos(nextAbs);
+        this._orderIndex = pos.order;
+        this._rowIndex = pos.row;
+        this._rowAbs = nextAbs;
+        this._anchorRow = audible;
+        this._anchorTime = now;
+        this._anchorRowDur = newDur;
+        this._nextRowTime = this._rowWhen(this._rowAbs);
+    }
+
+    _rowWhen(absRow) {
+        const dur = Math.max(1e-4, this._anchorRowDur || this.rowDuration());
+        return this._anchorTime + (Number(absRow) - this._anchorRow) * dur;
+    }
+
+    _startScheduler() {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+        if (this._raf) {
+            cancelAnimationFrame(this._raf);
+            this._raf = null;
+        }
+        this._timer = setInterval(() => this._tick(), this.lookahead * 1000);
+        const pump = () => {
+            if (!this.playing) {
+                this._raf = null;
+                return;
+            }
+            this._tick();
+            this._raf = requestAnimationFrame(pump);
+        };
+        this._raf = requestAnimationFrame(pump);
+        this._tick();
+    }
+
+    /** Equal-power fade curve (cos for fade-out, sin for fade-in), peak..0.0001 or reverse. */
+    _equalPowerCurve(peak, fadeIn) {
+        const steps = 32;
+        const curve = new Float32Array(steps + 1);
+        const p = Math.max(0.0001, Number(peak) || 0.0001);
+        for (let i = 0; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            curve[i] = Math.max(0.0001, p * (fadeIn ? Math.sin(t) : Math.cos(t)));
+        }
+        return curve;
     }
 
     /**
@@ -31162,16 +32023,18 @@ var VFTrackerPlayer = class VFTrackerPlayer {
      */
     fadeOut(seconds) {
         const dur = Math.max(0.05, Number(seconds) || this.fadeSeconds || 1.4);
-        if (!this.masterGain || !this.ctx) {
+        if (!this.ctx || (!this._fadeGain && !this.masterGain)) {
             this.stop(true);
             return dur;
         }
         const now = this.ctx.currentTime;
         try {
-            const g = this.masterGain.gain;
+            // Fade on the envelope node so setVolume can still retarget loudness.
+            const g = (this._fadeGain || this.masterGain).gain;
+            const start = Math.max(0.0001, g.value);
             g.cancelScheduledValues(now);
-            g.setValueAtTime(Math.max(0.0001, g.value), now);
-            g.linearRampToValueAtTime(0.0001, now + dur);
+            // Equal-power (cosine) fade-out — see fade-in above.
+            g.setValueCurveAtTime(this._equalPowerCurve(start, false), now, dur);
         } catch (e) { /* ignore */ }
         if (this._fadeOutTimer) clearTimeout(this._fadeOutTimer);
         this._fadeOutTimer = setTimeout(() => {
@@ -31181,21 +32044,34 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         return dur;
     }
 
-    _stopChannel(ch, when) {
+    _stopChannel(ch, when, opts) {
         const slot = this._channels[ch];
         if (!slot || !slot.gain) return;
-        const t = Math.max(when, this.ctx ? this.ctx.currentTime : when);
-        // Soft cut — never read live .value for future-scheduled notes (causes gaps).
+        const now = this.ctx ? this.ctx.currentTime : 0;
+        const t = Math.max(when, now);
         const rowDur = this.track ? this.rowDuration() : 0.1;
-        const rel = Math.max(0.06, Math.min(0.22, (slot.release || 0.1) * 1.4, rowDur * 0.45));
+        // Cap release to the row so high BPM does not smear into the next hit.
+        const rel = Math.max(0.012, Math.min(0.22, (slot.release || 0.1) * 1.4, rowDur * 0.45));
         const peak = Math.max(0.0001, slot.peak || 0.2);
         try {
             const g = slot.gain.gain;
             g.cancelScheduledValues(t);
-            g.setValueAtTime(peak, t);
-            g.exponentialRampToValueAtTime(0.0001, t + rel);
-            if (slot.source) {
-                try { slot.source.stop(t + rel + 0.03); } catch (e) { /* already stopped */ }
+            if (opts && opts.silent) {
+                // Tempo re-anchor: fade from the live level — never jump to peak.
+                const cur = Math.max(0.0001, Math.min(peak, Number(g.value) || 0.0001));
+                g.setValueAtTime(cur, now);
+                g.linearRampToValueAtTime(0.0001, now + 0.025);
+                if (slot.source) {
+                    try { slot.source.stop(now + 0.04); } catch (e) { /* already stopped */ }
+                }
+            } else {
+                // Soft cut for note→note — don't read live .value for future
+                // scheduled notes (causes gaps); release from authored peak.
+                g.setValueAtTime(peak, t);
+                g.exponentialRampToValueAtTime(0.0001, t + rel);
+                if (slot.source) {
+                    try { slot.source.stop(t + rel + 0.03); } catch (e2) { /* already stopped */ }
+                }
             }
         } catch (e) { /* ignore */ }
         slot.gain = null;
@@ -31235,7 +32111,8 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             source.frequency.setValueAtTime(Math.max(20, freq), when);
         }
         const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
-        const peak = Math.max(0.0001, inst.volume * vol64);
+        // Break oneshots stay under authored notes so kit rows don't spike.
+        const peak = Math.max(0.0001, Math.min(0.38, inst.volume * vol64 * 0.72));
         const a = Math.max(0.001, inst.attack);
         const d = Math.max(0.001, inst.decay);
         const s = Math.max(0.0001, peak * inst.sustain);
@@ -31297,7 +32174,8 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         }
 
         const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
-        const peak = Math.max(0.0001, inst.volume * vol64);
+        // Cap note peaks so dense patterns (Saturn) don't blow past sparse ones.
+        const peak = Math.max(0.0001, Math.min(0.52, inst.volume * vol64));
         const a = Math.max(0.001, inst.attack);
         const d = Math.max(0.001, inst.decay);
         const s = Math.max(0.0001, peak * inst.sustain);
@@ -31349,16 +32227,16 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                         : styleSide === 'elektro' ? 0.998 : 0.995;
                 const f2 = wantLeadTwin ? freq * 0.5 : freq * detune;
                 osc2.frequency.setValueAtTime(Math.max(20, f2), when);
-                const twinScale = (styleSide === 'drive' || themeId === 'nightrun'
-                    ? (wantLeadTwin ? 0.22 + styleMag * 0.28 : 0.28 + styleMag * 0.35)
+                const twinScale = Math.min(0.28, (styleSide === 'drive' || themeId === 'nightrun'
+                    ? (wantLeadTwin ? 0.12 + styleMag * 0.14 : 0.14 + styleMag * 0.16)
                     : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb'
-                        ? (0.22 + styleMag * 0.32)
+                        ? (0.12 + styleMag * 0.14)
                         : styleSide === 'jungle'
-                            ? (0.14 + styleMag * 0.22)
+                            ? (0.08 + styleMag * 0.1)
                             : styleSide === 'elektro'
-                                ? (0.1 + styleMag * 0.16)
-                                : (0.16 + styleMag * 0.22)) * styleMag;
-                const twinPeak = Math.max(0.0001, peak * twinScale);
+                                ? (0.06 + styleMag * 0.08)
+                                : (0.08 + styleMag * 0.1)) * styleMag);
+                const twinPeak = Math.max(0.0001, Math.min(0.22, peak * twinScale));
                 const gate = Math.max(0.18, a + d + r
                     + (styleSide === 'drive' || themeId === 'nightrun' ? 0.3
                         : styleSide === 'dnb' || styleSide === 'hybrid' ? 0.22
@@ -31416,19 +32294,50 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             ? VFTrackerThemes.metaOf(themeIdx)
             : { themeBreak: 0 };
         const themeBreak = Number(themeMeta.themeBreak) || 0;
-        // Always keep authored section notes (planet / menu / victory / lose / …).
+        // STYLE interprets authored Hauptmelodien (rhythm/drums/articulation);
+        // pitches stay on the planet/role motif. Theme 0 = authored as written.
         if (row) {
+            const pools = [];
+            if (themeIdx > 0 && styleMag >= 0.03
+                && typeof VFTrackerThemes !== 'undefined'
+                && VFTrackerThemes.pitchPoolFromPattern) {
+                for (let c = 0; c < 3; c++) {
+                    pools[c] = VFTrackerThemes.pitchPoolFromPattern(pat, c);
+                }
+            }
+            // Light break colour only — scales with AMOUNT, no forced floor.
+            const breakAmtPre = styleMag < 0.03 ? 0
+                : styleMag * (themeIdx > 0
+                    ? (0.22 + Math.min(0.55, themeBreak) * 0.28)
+                    : 0.35);
             for (let c = 0; c < track.channels; c++) {
-                const cell = row[c];
+                let cell = row[c];
+                if (c <= 3 && themeIdx > 0
+                    && typeof VFTrackerThemes !== 'undefined'
+                    && VFTrackerThemes.interpretCell) {
+                    cell = VFTrackerThemes.interpretCell(
+                        themeIdx, this._orderIndex, rowIndex, c,
+                        row[c], pools[c] || null, styleMag);
+                }
+                // Mild duck when break overlay is up — song kit stays the groove.
+                if (c === 3 && cell && breakAmtPre > 0.2) {
+                    const duck = Math.max(0.45, 1 - breakAmtPre * 0.4);
+                    if (cell.note !== 'OFF') {
+                        cell = {
+                            note: cell.note,
+                            inst: cell.inst,
+                            vol: Math.max(8, Math.round((cell.vol != null ? cell.vol : 40) * duck))
+                        };
+                    }
+                }
                 if (cell) this._trigger(c, cell, when);
             }
         }
-        // Light break overlay only — AMOUNT scales it; no forced floor that
-        // makes every screen sound like the same kit.
+        // Break overlay: STYLE kit colour as spice, not a second song.
         const breakAmt = styleMag < 0.03 ? 0
             : styleMag * (themeIdx > 0
-                ? (0.22 + Math.min(0.45, themeBreak) * 0.35)
-                : 0.55);
+                ? (0.22 + Math.min(0.55, themeBreak) * 0.28)
+                : 0.35);
         const breakSide = (styleSide !== 'off' ? styleSide : null)
             || (themeMeta.breakSide && themeMeta.breakSide !== 'off' ? themeMeta.breakSide : null)
             || 'jungle';
@@ -31471,13 +32380,13 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         }
         const step = (bank || [])[rowIndex % 16];
         if (!step) return;
-        const volScale = side === 'jungle' || side === 'hybrid'
-            ? (0.5 + amt * 0.95)
+        const volScale = Math.min(0.85, side === 'jungle' || side === 'hybrid'
+            ? (0.32 + amt * 0.45)
             : side === 'drive'
-                ? (0.55 + amt * 0.8)
+                ? (0.34 + amt * 0.4)
                 : side === 'elektro'
-                    ? (0.58 + amt * 0.72)
-                    : (0.45 + amt * 0.8);
+                    ? (0.36 + amt * 0.38)
+                    : (0.3 + amt * 0.4));
         const rowDur = this.rowDuration();
         const gate = Math.max(0.045, Math.min(
             side === 'jungle' || side === 'hybrid' ? 0.14
@@ -31541,19 +32450,30 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         if (!this.playing || !this.track || !this.ctx) return;
         const rowDur = this.rowDuration();
         if (!(rowDur > 0)) return;
+        if (!(this._anchorRowDur > 0)) this._anchorRowDur = rowDur;
         const now = this.ctx.currentTime;
-        // Only drop rows that fell completely outside the lookahead window.
-        // Mildly late rows still play (slightly late) — skipping them made holes.
-        const dropBefore = now - this.scheduleAhead;
-        while (this.playing && this._nextRowTime < dropBefore) {
-            if (!this._advanceRowIndex()) return;
-            this._nextRowTime += rowDur;
-        }
-        const horizon = now + this.scheduleAhead;
-        while (this.playing && this._nextRowTime < horizon) {
-            const when = Math.max(this._nextRowTime, now + 0.008);
+        // ~0.5s / ~12 rows ahead so combat-frame stalls rarely go late.
+        const ahead = Math.max(this.scheduleAhead, Math.min(0.55, rowDur * 12));
+        const horizon = now + ahead;
+        while (this.playing) {
+            const ideal = this._rowWhen(this._rowAbs);
+            if (ideal >= horizon) break;
+            let when = ideal;
+            if (ideal < now + 0.001) {
+                // Play this musical row, then re-anchor — never skip pattern
+                // content to catch wall-clock (that jumped inside the tracks).
+                when = now + 0.003;
+                this._scheduleRow(when);
+                this._rowAbs += 1;
+                this._anchorTime = when;
+                this._anchorRow = this._rowAbs - 1;
+                this._anchorRowDur = rowDur;
+                this._nextRowTime = this._rowWhen(this._rowAbs);
+                continue;
+            }
             this._scheduleRow(when);
-            this._nextRowTime += rowDur;
+            this._rowAbs += 1;
+            this._nextRowTime = this._rowWhen(this._rowAbs);
         }
     }
 
@@ -31566,6 +32486,10 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             clearInterval(this._timer);
             this._timer = null;
         }
+        if (this._raf) {
+            cancelAnimationFrame(this._raf);
+            this._raf = null;
+        }
         this.playing = false;
         this._onEnded = null;
         const when = this.ctx ? this.ctx.currentTime : 0;
@@ -31574,12 +32498,23 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         }
         this._channels = [];
         this.track = null;
-        // Never hard-mute the bus on stop — a following play() would race the
-        // mute and leave planet music silent. Channels are already silenced.
-        if (immediate && this.masterGain && this.ctx) {
+        // Never hard-mute the bus on soft stop — a following play() would race
+        // the mute and leave planet music silent. Channels are already silenced.
+        if (immediate && this.ctx) {
             try {
-                this.masterGain.gain.cancelScheduledValues(when);
+                if (this.masterGain) this.masterGain.gain.cancelScheduledValues(when);
+                if (this._fadeGain) {
+                    this._fadeGain.gain.cancelScheduledValues(when);
+                    this._fadeGain.gain.setValueAtTime(0.0001, when);
+                }
             } catch (e) { /* ignore */ }
+            // Tear the output chain off destination so faded-out crossfade
+            // legs cannot accumulate zombie limiters on the shared context.
+            this._disconnectChannelBuses();
+            try { if (this._limiter) this._limiter.disconnect(); } catch (e2) { /* ignore */ }
+            try { if (this._fadeGain) this._fadeGain.disconnect(); } catch (e3) { /* ignore */ }
+            try { if (this.masterGain) this.masterGain.disconnect(); } catch (e4) { /* ignore */ }
+            this._masterChained = false;
         }
     }
 
@@ -31589,6 +32524,60 @@ var VFTrackerPlayer = class VFTrackerPlayer {
 
     isPlaying() {
         return !!this.playing;
+    }
+
+    /**
+     * Audible playhead for UI (Music Editor score). Uses musical time, not the
+     * lookahead schedule cursor, so the highlight matches what you hear.
+     */
+    getPlayhead() {
+        if (!this.playing || !this.track || !this.ctx) {
+            return { playing: false, orderIndex: 0, rowIndex: 0, pattern: 0, frac: 0, absRow: 0 };
+        }
+        const now = this.ctx.currentTime;
+        const dur = Math.max(1e-4, this._anchorRowDur || this.rowDuration());
+        let abs = this._anchorRow + (now - this._anchorTime) / dur;
+        if (!(abs > 0)) abs = 0;
+        const floor = Math.floor(abs);
+        const frac = Math.max(0, Math.min(1, abs - floor));
+        const pos = this._absRowToPos(floor);
+        // Pattern id from the order slot (not orderIndex%3 — that mapped the
+        // wrong pack whenever order repeated P0/P1 before P2).
+        const patId = (this.track.order && this.track.order[pos.order] != null)
+            ? Number(this.track.order[pos.order])
+            : 0;
+        return {
+            playing: true,
+            orderIndex: pos.order,
+            rowIndex: pos.row,
+            pattern: Number.isFinite(patId) ? patId : 0,
+            frac,
+            absRow: abs
+        };
+    }
+
+    _absRowToPos(absRow) {
+        const track = this.track;
+        if (!track || !track.order || !track.order.length) return { order: 0, row: 0 };
+        let left = Math.max(0, Math.floor(Number(absRow) || 0));
+        let oi = 0;
+        for (let g = 0; g < 100000; g++) {
+            const pat = track.patternById[track.order[oi]];
+            const rows = (pat && pat.rows && pat.rows.length) ? pat.rows.length : 16;
+            if (left < rows) return { order: oi, row: left };
+            left -= rows;
+            oi += 1;
+            if (oi >= track.order.length) {
+                if (!track.loop) {
+                    const last = track.order.length - 1;
+                    const lp = track.patternById[track.order[last]];
+                    const lr = (lp && lp.rows && lp.rows.length) ? lp.rows.length : 16;
+                    return { order: last, row: Math.max(0, lr - 1) };
+                }
+                oi = 0;
+            }
+        }
+        return { order: 0, row: 0 };
     }
 }
 
@@ -31600,10 +32589,13 @@ var VFTrackerPlayer = class VFTrackerPlayer {
  * Built-in vftracks — oriented on Volley Fire (GB, 1990 / Akihiko Mori):
  * clear pulse hooks, wave bass ostinato, sparse harmony, noise hats.
  * Original melodies inspired by that era's Toei GB shooter feel (not a rip).
- * Role map ≈ GB OST: Title→intro, Planet Select→menu, Main BGM 1–3→planets,
- * Boss / Final Boss→boss keys.
+ * Role map ≈ GB OST: Title→intro, Planet Select→menu, Main BGM→ingame,
+ * Map / Victory / Lose / Shop = per-planet Hauptmelodien (styles interpret them).
+ * Boss keys (`mars-boss` …) own separate siege melodies — not combat remixes.
  */
 var VFTrackerDefaults = {
+    /** Playback roles that own a distinct Hauptmelodie per planet. */
+    ROLES: ['ingame', 'map', 'victory', 'lose', 'shop', 'boss'],
     /** Game Boy-ish voices: wave bass, two pulses, noise. */
     _baseInstruments() {
         return [
@@ -31646,145 +32638,145 @@ var VFTrackerDefaults = {
      * Lead answers itself — never random walks.
      */
 
-    // Motif: A C E D | C A G A  (A minor head)
+    // Mars — marching even 8ths, clear A-minor hook (combat workhorse).
     mars() {
         return this._track(
-            { title: 'Main Orbit 1', planet: 'mars', notes: 'motif A-C-E-D · develop · return' },
+            { title: 'Main Orbit 1', planet: 'mars', notes: 'march A-C-E-D · even 8ths' },
             132,
             [
                 this._pat(0,
-                    'A-2:1:56 . A-2:1:40 . A-2:1:56 . E-2:1:44 . A-2:1:56 . A-2:1:40 . E-2:1:48 . E-2:1:36',
-                    'A-4:2:48 . C-5:2:40 . E-5:2:52 . D-5:2:44 . C-5:2:46 . A-4:2:38 . G-4:2:40 . A-4:2:44',
-                    'E-4:3:16 . . . A-4:3:14 . . . E-4:3:16 . . . A-4:3:14 . . .',
-                    'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .'
+                    'A-2:1:60 . A-2:1:44 . A-2:1:58 . E-2:1:48 . A-2:1:60 . A-2:1:42 . E-2:1:52 . E-2:1:38',
+                    'A-4:2:52 . C-5:2:44 . E-5:2:56 . D-5:2:48 . C-5:2:50 . A-4:2:40 . G-4:2:42 . A-4:2:46',
+                    'E-4:3:20 . A-4:3:12 . E-4:3:16 . A-4:3:10 . E-4:3:18 . A-4:3:12 . E-4:3:14 . A-4:3:08',
+                    'A-2:5:68 . A-4:4:18 . A-2:5:54 . A-4:4:14 A-2:5:66 . A-4:4:18 . A-2:5:50 A-4:4:12 . .'
                 ),
                 this._pat(1,
-                    'F-2:1:52 . F-2:1:36 . F-2:1:52 . C-2:1:40 . G-2:1:52 . G-2:1:36 . E-2:1:46 . G-2:1:34',
-                    'F-4:2:44 . A-4:2:36 . C-5:2:48 . B-4:2:40 . A-4:2:42 . G-4:2:34 . E-4:2:36 . F-4:2:40',
-                    'C-4:3:14 . . . F-4:3:12 . . . D-4:3:14 . . . G-4:3:12 . . .',
-                    'F-2:5:58 . A-4:4:14 . F-2:5:46 . A-4:4:10 G-2:5:58 . A-4:4:14 . G-2:5:44 A-4:4:08 . .'
+                    'F-2:1:56 . F-2:1:40 . F-2:1:54 . C-2:1:44 . G-2:1:56 . G-2:1:40 . E-2:1:50 . G-2:1:36',
+                    'F-4:2:48 . A-4:2:40 . C-5:2:52 . B-4:2:44 . A-4:2:46 . G-4:2:36 . E-4:2:38 . F-4:2:42',
+                    'C-4:3:18 . F-4:3:10 . C-4:3:14 . F-4:3:08 . D-4:3:16 . G-4:3:10 . D-4:3:12 . G-4:3:08',
+                    'F-2:5:62 . A-4:4:16 . F-2:5:48 . A-4:4:12 G-2:5:62 . A-4:4:16 . G-2:5:46 A-4:4:10 . .'
                 ),
                 this._pat(2,
-                    'A-2:1:60 . A-2:1:42 . C-3:1:50 . E-2:1:46 . A-2:1:60 . A-2:1:42 . G-2:1:52 . E-2:1:40',
-                    'A-5:2:52 . C-6:2:44 . E-6:2:56 . D-6:2:48 . C-6:2:50 . A-5:2:42 . G-5:2:44 . A-5:2:48',
-                    'A-4:3:18 . E-4:3:12 . E-4:3:12 A-4:3:18 . C-5:3:20 . E-4:3:12 A-4:3:16 . G-4:3:12 . E-4:3:10 .',
-                    'A-2:5:70 A-4:4:18 . A-4:4:12 A-2:5:54 . A-4:4:14 . A-2:5:66 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+                    'A-2:1:64 A-2:1:40 . C-3:1:54 . E-2:1:50 A-2:1:64 . G-2:1:56 . E-2:1:44 . A-2:1:58',
+                    'A-5:2:58 . C-6:2:48 . E-6:2:62 . D-6:2:52 . C-6:2:54 . A-5:2:44 . G-5:2:46 . A-5:2:52',
+                    'A-4:3:22 E-4:3:14 . C-5:3:20 . A-4:3:18 E-4:3:12 . G-4:3:16 . E-4:3:10 . A-4:3:14',
+                    'A-2:5:74 A-4:4:22 . A-4:4:14 A-2:5:58 A-4:4:16 . A-2:5:70 A-4:4:20 . A-4:4:12 A-2:5:54 A-4:4:14 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
         );
     },
 
-    // Motif: E G B A | G E D E  (E minor head)
+    // Jupiter — syncopated offbeat lead, wide leaps, sparse bass hits.
     jupiter() {
         return this._track(
-            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'motif E-G-B-A · develop · return' },
-            124,
+            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'syncop E-G-B-A · offbeat lead' },
+            118,
             [
                 this._pat(0,
-                    'E-2:1:54 . E-2:1:38 . E-2:1:54 . B-1:1:42 . E-2:1:54 . E-2:1:38 . B-1:1:46 . B-1:1:34',
-                    'E-4:2:46 . G-4:2:38 . B-4:2:50 . A-4:2:42 . G-4:2:44 . E-4:2:36 . D-4:2:38 . E-4:2:42',
-                    'B-3:3:14 . . . E-4:3:12 . . . B-3:3:14 . . . E-4:3:12 . . .',
-                    'E-2:5:60 . A-4:4:14 . E-2:5:48 . A-4:4:10 E-2:5:60 . A-4:4:14 . E-2:5:44 A-4:4:08 . .'
+                    'E-2:1:58 . . . E-2:1:46 . B-1:1:50 . . E-2:1:54 . . B-1:1:42 . . .',
+                    '. E-4:2:48 . . G-4:2:40 . B-4:2:54 . . A-4:2:44 . G-4:2:38 . E-4:2:42 .',
+                    '. . B-3:3:18 . . . E-4:3:14 . . . B-3:3:16 . . . E-4:3:12 .',
+                    'E-2:5:56 . . A-4:4:10 . E-2:5:44 . A-4:4:08 . E-2:5:52 . . A-4:4:10 . E-2:5:40 .'
                 ),
                 this._pat(1,
-                    'C-3:1:50 . C-3:1:34 . C-3:1:50 . G-2:1:38 . D-3:1:50 . D-3:1:34 . B-1:1:44 . D-2:1:32',
-                    'C-5:2:42 . E-5:2:34 . G-5:2:46 . F#5:2:38 . E-5:2:40 . D-5:2:32 . B-4:2:34 . C-5:2:38',
-                    'G-4:3:12 . . . C-5:3:10 . . . A-4:3:12 . . . D-5:3:10 . . .',
-                    'C-3:5:56 . A-4:4:12 . C-3:5:44 . A-4:4:08 D-3:5:56 . A-4:4:12 . D-3:5:40 A-4:4:06 . .'
+                    'C-3:1:52 . . . G-2:1:40 . D-3:1:48 . . C-3:1:50 . . B-1:1:38 . . .',
+                    '. C-5:2:44 . . E-5:2:36 . G-5:2:50 . . F#5:2:40 . E-5:2:34 . C-5:2:38 .',
+                    '. . G-4:3:16 . . . C-5:3:12 . . . A-4:3:14 . . . D-5:3:10 .',
+                    'C-3:5:50 . . A-4:4:08 . C-3:5:40 . A-4:4:06 . D-3:5:48 . . A-4:4:08 . D-3:5:36 .'
                 ),
                 this._pat(2,
-                    'E-2:1:58 . E-2:1:40 . G-2:1:48 . B-1:1:44 . E-2:1:58 . E-2:1:40 . D-2:1:50 . B-1:1:38',
-                    'E-5:2:50 . G-5:2:42 . B-5:2:54 . A-5:2:46 . G-5:2:48 . E-5:2:40 . D-5:2:42 . E-5:2:46',
-                    'E-4:3:16 . B-3:3:10 . B-3:3:10 E-4:3:16 . G-4:3:18 . B-3:3:10 E-4:3:14 . D-4:3:10 . B-3:3:08 .',
-                    'E-2:5:66 A-4:4:16 . A-4:4:10 E-2:5:52 . A-4:4:12 . E-2:5:62 A-4:4:14 . A-4:4:08 E-2:5:46 A-4:4:10 .'
+                    'E-2:1:62 . . B-1:1:48 . E-2:1:56 . . G-2:1:52 . E-2:1:60 . . D-2:1:46 . E-2:1:54',
+                    '. E-5:2:56 . G-5:2:46 . B-5:2:60 . A-5:2:50 . G-5:2:48 . E-5:2:42 . D-5:2:40 . E-5:2:52',
+                    'E-4:3:20 . . B-3:3:14 E-4:3:18 . G-4:3:22 . . E-4:3:16 . D-4:3:12 . B-3:3:10 .',
+                    'E-2:5:64 . A-4:4:14 . E-2:5:50 A-4:4:12 . A-4:4:08 E-2:5:60 . A-4:4:14 . E-2:5:46 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 1]
+        );
+    },
+
+    // Saturn — galloping dense bass + lead every row (rings spinning).
+    saturn() {
+        return this._track(
+            { title: 'Main Orbit 3', planet: 'saturn', notes: 'gallop D-F-A-G · dense drive' },
+            144,
+            [
+                this._pat(0,
+                    'D-2:1:62 D-2:1:40 D-2:1:50 D-2:1:34 A-1:1:56 A-1:1:36 D-2:1:60 D-2:1:38 D-2:1:52 D-2:1:32 A-1:1:48 A-1:1:30 D-2:1:58 D-2:1:36 A-1:1:44 A-1:1:28',
+                    'D-4:2:50 F-4:2:36 A-4:2:54 G-4:2:40 F-4:2:44 D-4:2:32 C-4:2:36 D-4:2:42 D-4:2:48 F-4:2:34 A-4:2:52 G-4:2:38 F-4:2:42 D-4:2:30 C-4:2:34 D-4:2:40',
+                    'A-3:3:18 D-4:3:10 A-3:3:14 D-4:3:08 A-3:3:16 D-4:3:10 A-3:3:12 D-4:3:08 A-3:3:18 D-4:3:10 A-3:3:14 D-4:3:08 A-3:3:16 D-4:3:10 A-3:3:12 D-4:3:08',
+                    'D-2:5:70 A-4:4:20 D-2:5:42 A-4:4:12 D-2:5:64 A-4:4:18 A-4:4:10 . D-2:5:70 A-4:4:20 D-2:5:42 A-4:4:12 D-2:5:60 A-4:4:16 A-4:4:10 A-4:4:06'
+                ),
+                this._pat(1,
+                    'G-1:1:58 G-1:1:36 G-1:1:46 G-1:1:30 D-1:1:52 D-1:1:32 A-1:1:56 A-1:1:34 G-1:1:50 G-1:1:28 E-2:1:48 E-2:1:30 A-1:1:54 A-1:1:32 E-2:1:42 E-2:1:26',
+                    'G-3:2:46 Bb3:2:32 D-4:2:50 C-4:2:36 Bb3:2:40 A-3:2:28 G-3:2:32 A-3:2:38 G-3:2:44 Bb3:2:30 D-4:2:48 C-4:2:34 Bb3:2:38 A-3:2:26 G-3:2:30 A-3:2:36',
+                    'D-3:3:16 G-3:3:08 D-3:3:12 G-3:3:06 E-3:3:14 A-3:3:08 E-3:3:10 A-3:3:06 D-3:3:16 G-3:3:08 D-3:3:12 G-3:3:06 E-3:3:14 A-3:3:08 E-3:3:10 A-3:3:06',
+                    'G-1:5:66 A-4:4:18 G-1:5:40 A-4:4:10 A-1:5:60 A-4:4:16 A-4:4:08 . G-1:5:66 A-4:4:18 A-1:5:40 A-4:4:10 A-1:5:56 A-4:4:14 A-4:4:08 A-4:4:05'
+                ),
+                this._pat(2,
+                    'D-2:1:68 D-2:1:44 F-2:1:56 F-2:1:38 A-1:1:60 A-1:1:40 D-2:1:66 D-2:1:42 C-2:1:54 C-2:1:36 A-1:1:50 A-1:1:32 D-2:1:64 D-2:1:40 A-1:1:48 A-1:1:30',
+                    'D-5:2:56 F-5:2:42 A-5:2:60 G-5:2:46 F-5:2:50 D-5:2:38 C-5:2:42 D-5:2:48 D-5:2:54 F-5:2:40 A-5:2:58 G-5:2:44 F-5:2:48 D-5:2:36 C-5:2:40 D-5:2:46',
+                    'D-4:3:22 A-3:3:14 F-4:3:20 A-3:3:12 D-4:3:18 A-3:3:10 C-4:3:16 A-3:3:08 D-4:3:22 A-3:3:14 F-4:3:20 A-3:3:12 D-4:3:18 A-3:3:10 C-4:3:16 A-3:3:08',
+                    'D-2:5:78 A-4:4:24 D-2:5:48 A-4:4:16 D-2:5:72 A-4:4:22 A-4:4:14 A-4:4:08 D-2:5:76 A-4:4:24 D-2:5:46 A-4:4:14 D-2:5:68 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Neptune — half-time ice: long tones, wide silence, cold pulse.
+    neptune() {
+        return this._track(
+            { title: 'Ice Lane', planet: 'neptune', notes: 'half-time B-D-F#-E · cold space' },
+            104,
+            [
+                this._pat(0,
+                    'B-1:1:52 . . . . . F#1:1:40 . . . . . B-1:1:46 . . .',
+                    'B-3:2:44 . . . D-4:2:36 . . . F#4:2:48 . . . E-4:2:38 . . .',
+                    'F#3:3:12 . . . . . . . B-3:3:10 . . . . . . .',
+                    '. . A-4:4:08 . . . B-1:5:42 . . . A-4:4:06 . . . . .'
+                ),
+                this._pat(1,
+                    'G-1:1:46 . . . . . D-1:1:34 . . . . . A-1:1:42 . . .',
+                    'G-3:2:38 . . . B-3:2:30 . . . D-4:2:42 . . . C#4:2:32 . . .',
+                    'D-3:3:10 . . . . . . . G-3:3:08 . . . . . . .',
+                    '. . A-4:4:06 . . . G-1:5:36 . . . A-4:4:05 . . . . .'
+                ),
+                this._pat(2,
+                    'B-1:1:56 . . . F#1:1:44 . . . A-1:1:48 . . . E-1:1:38 . . .',
+                    'B-4:2:50 . . D-5:2:40 . . F#5:2:54 . . E-5:2:44 . . D-5:2:42 . B-4:2:46 .',
+                    'B-3:3:16 . . F#3:3:10 . . B-3:3:14 . . D-4:3:18 . . F#3:3:10 . B-3:3:12 .',
+                    'B-1:5:50 . . A-4:4:10 . B-1:5:40 . . A-4:4:08 . B-1:5:46 . A-4:4:06 . . .'
                 )
             ],
             [0, 0, 1, 0, 2, 0, 1, 0]
         );
     },
 
-    // Motif: D F A G | F D C D  (D minor head, faster)
-    saturn() {
-        return this._track(
-            { title: 'Main Orbit 3', planet: 'saturn', notes: 'motif D-F-A-G · develop · return' },
-            140,
-            [
-                this._pat(0,
-                    'D-2:1:56 D-2:1:36 . D-2:1:56 . A-1:1:42 . D-2:1:56 D-2:1:36 . A-1:1:46 . A-1:1:34',
-                    'D-4:2:48 . F-4:2:40 . A-4:2:52 . G-4:2:44 . F-4:2:46 . D-4:2:38 . C-4:2:40 . D-4:2:44',
-                    'A-3:3:16 . . . D-4:3:14 . . . A-3:3:16 . . . D-4:3:14 . . .',
-                    'D-2:5:64 A-4:4:16 D-2:5:40 A-4:4:10 D-2:5:58 A-4:4:14 . D-2:5:64 A-4:4:16 D-2:5:38 A-4:4:10 D-2:5:50 A-4:4:12 .'
-                ),
-                this._pat(1,
-                    'G-1:1:52 G-1:1:32 . G-1:1:52 . D-1:1:38 . A-1:1:52 A-1:1:32 . E-2:1:44 . A-1:1:30',
-                    'G-3:2:44 . Bb3:2:36 . D-4:2:48 . C-4:2:40 . Bb3:2:42 . A-3:2:34 . G-3:2:36 . A-3:2:40',
-                    'D-3:3:14 . . . G-3:3:12 . . . E-3:3:14 . . . A-3:3:12 . . .',
-                    'G-1:5:60 A-4:4:14 G-1:5:38 A-4:4:08 A-1:5:56 A-4:4:12 . A-1:5:60 A-4:4:14 A-1:5:36 A-4:4:08 A-1:5:48 A-4:4:10 .'
-                ),
-                this._pat(2,
-                    'D-2:1:60 . D-2:1:40 . F-2:1:50 . A-1:1:44 . D-2:1:60 . D-2:1:40 . C-2:1:52 . A-1:1:38',
-                    'D-5:2:52 . F-5:2:44 . A-5:2:56 . G-5:2:48 . F-5:2:50 . D-5:2:42 . C-5:2:44 . D-5:2:48',
-                    'D-4:3:18 . A-3:3:12 . A-3:3:12 D-4:3:18 . F-4:3:20 . A-3:3:12 D-4:3:16 . C-4:3:12 . A-3:3:10 .',
-                    'D-2:5:70 A-4:4:18 . A-4:4:10 D-2:5:54 A-4:4:14 A-4:4:08 . D-2:5:66 A-4:4:16 . A-4:4:08 D-2:5:48 A-4:4:10 .'
-                )
-            ],
-            [0, 0, 1, 0, 2, 1, 0, 0]
-        );
-    },
-
-    // Motif: B D F# E | D B A B  (B minor, colder spacing)
-    neptune() {
-        return this._track(
-            { title: 'Ice Lane', planet: 'neptune', notes: 'motif B-D-F#-E · develop · return' },
-            118,
-            [
-                this._pat(0,
-                    'B-1:1:50 . . B-1:1:36 . F#1:1:44 . . F#1:1:32 . B-1:1:50 . . F#1:1:40 . F#1:1:30 .',
-                    'B-3:2:42 . D-4:2:34 . F#4:2:46 . E-4:2:38 . D-4:2:40 . B-3:2:32 . A-3:2:34 . B-3:2:38',
-                    'F#3:3:12 . . . B-3:3:10 . . . F#3:3:12 . . . B-3:3:10 . . .',
-                    '. A-4:4:12 . . B-1:5:48 . A-4:4:08 . . A-4:4:12 . B-1:5:42 . A-4:4:06 . .'
-                ),
-                this._pat(1,
-                    'G-1:1:46 . . G-1:1:32 . D-1:1:40 . . D-1:1:28 . A-1:1:46 . . E-1:1:36 . E-1:1:26 .',
-                    'G-3:2:38 . B-3:2:30 . D-4:2:42 . C#4:2:34 . B-3:2:36 . A-3:2:28 . G-3:2:30 . A-3:2:34',
-                    'D-3:3:10 . . . G-3:3:08 . . . E-3:3:10 . . . A-3:3:08 . . .',
-                    '. A-4:4:10 . . G-1:5:44 . A-4:4:06 . . A-4:4:10 . A-1:5:40 . A-4:4:05 . .'
-                ),
-                this._pat(2,
-                    'B-1:1:54 . . B-1:1:38 . F#1:1:46 . . A-1:1:42 . B-1:1:54 . . F#1:1:40 . E-1:1:34 .',
-                    'B-4:2:46 . D-5:2:38 . F#5:2:50 . E-5:2:42 . D-5:2:44 . B-4:2:36 . A-4:2:38 . B-4:2:42',
-                    'B-3:3:14 . F#3:3:08 . F#3:3:08 B-3:3:14 . D-4:3:16 . F#3:3:08 B-3:3:12 . A-3:3:08 . F#3:3:06 .',
-                    'B-1:5:54 . A-4:4:12 . B-1:5:42 . A-4:4:08 . B-1:5:50 A-4:4:10 . A-4:4:06 . . . .'
-                )
-            ],
-            [0, 0, 1, 0, 2, 1, 0, 0]
-        );
-    },
-
-    // Motif: C Eb G F | Eb C Bb C  (C minor, urgent)
+    // Pluto — urgent triplet clusters then silence (Kuiper stabs).
     pluto() {
         return this._track(
-            { title: 'Kuiper Rush', planet: 'pluto', notes: 'motif C-Eb-G-F · develop · return' },
-            148,
+            { title: 'Kuiper Rush', planet: 'pluto', notes: 'cluster C-Eb-G-F · stab silence' },
+            152,
             [
                 this._pat(0,
-                    'C-2:1:56 C-2:1:34 . C-2:1:56 . G-1:1:42 . C-2:1:56 C-2:1:34 . G-1:1:46 . G-1:1:32',
-                    'C-4:2:48 . Eb4:2:40 . G-4:2:52 . F-4:2:44 . Eb4:2:46 . C-4:2:38 . Bb3:2:40 . C-4:2:44',
-                    'G-3:3:16 . . . C-4:3:14 . . . G-3:3:16 . . . C-4:3:14 . . .',
-                    'C-2:5:68 A-4:4:16 C-2:5:40 A-4:4:10 C-2:5:60 A-4:4:14 . C-2:5:68 A-4:4:16 C-2:5:38 A-4:4:10 C-2:5:52 A-4:4:12 .'
+                    'C-2:1:64 C-2:1:48 C-2:1:36 . G-1:1:54 G-1:1:40 . . C-2:1:62 C-2:1:46 C-2:1:34 . G-1:1:50 . . .',
+                    'C-4:2:54 Eb4:2:44 G-4:2:58 . F-4:2:48 Eb4:2:40 . . C-4:2:52 Bb3:2:38 C-4:2:46 . Eb4:2:42 . . .',
+                    'G-3:3:20 C-4:3:14 G-3:3:12 . C-4:3:16 G-3:3:10 . . G-3:3:18 C-4:3:12 G-3:3:10 . C-4:3:14 . . .',
+                    'C-2:5:72 A-4:4:22 C-2:5:44 . C-2:5:64 A-4:4:16 . . C-2:5:70 A-4:4:20 C-2:5:42 . C-2:5:58 A-4:4:12 . .'
                 ),
                 this._pat(1,
-                    'Ab1:1:52 Ab1:1:30 . Ab1:1:52 . Eb1:1:38 . Bb1:1:52 Bb1:1:30 . F-2:1:44 . Bb1:1:28',
-                    'Ab3:2:44 . C-4:2:36 . Eb4:2:48 . D-4:2:40 . C-4:2:42 . Bb3:2:34 . Ab3:2:36 . Bb3:2:40',
-                    'Eb3:3:14 . . . Ab3:3:12 . . . F-3:3:14 . . . Bb3:3:12 . . .',
-                    'Ab1:5:62 A-4:4:14 Ab1:5:38 A-4:4:08 Bb1:5:58 A-4:4:12 . Bb1:5:62 A-4:4:14 Bb1:5:36 A-4:4:08 Bb1:5:48 A-4:4:10 .'
+                    'Ab1:1:58 Ab1:1:42 Ab1:1:30 . Eb1:1:48 Eb1:1:34 . . Bb1:1:56 Bb1:1:40 Bb1:1:28 . F-2:1:46 . . .',
+                    'Ab3:2:48 C-4:2:38 Eb4:2:52 . D-4:2:42 C-4:2:34 . . Bb3:2:46 Ab3:2:32 Bb3:2:40 . C-4:2:36 . . .',
+                    'Eb3:3:18 Ab3:3:12 Eb3:3:10 . Ab3:3:14 Eb3:3:08 . . F-3:3:16 Bb3:3:10 F-3:3:08 . Bb3:3:12 . . .',
+                    'Ab1:5:66 A-4:4:18 Ab1:5:40 . Bb1:5:60 A-4:4:14 . . Bb1:5:64 A-4:4:18 Bb1:5:38 . Bb1:5:52 A-4:4:10 . .'
                 ),
                 this._pat(2,
-                    'C-2:1:60 . C-2:1:38 . Eb2:1:50 . G-1:1:44 . C-2:1:60 . C-2:1:38 . Bb1:1:52 . G-1:1:36',
-                    'C-5:2:52 . Eb5:2:44 . G-5:2:56 . F-5:2:48 . Eb5:2:50 . C-5:2:42 . Bb4:2:44 . C-5:2:48',
-                    'C-4:3:18 . G-3:3:12 . G-3:3:12 C-4:3:18 . Eb4:3:20 . G-3:3:12 C-4:3:16 . Bb3:3:12 . G-3:3:10 .',
-                    'C-2:5:74 A-4:4:18 . A-4:4:10 C-2:5:56 A-4:4:14 A-4:4:08 . C-2:5:70 A-4:4:16 . A-4:4:08 C-2:5:50 A-4:4:10 .'
+                    'C-2:1:70 C-2:1:52 C-2:1:40 Eb2:1:58 G-1:1:50 . C-2:1:66 C-2:1:48 Bb1:1:44 . C-2:1:68 C-2:1:50 G-1:1:46 . C-2:1:60 .',
+                    'C-5:2:60 Eb5:2:48 G-5:2:64 F-5:2:52 Eb5:2:50 . C-5:2:56 Bb4:2:42 C-5:2:54 . Eb5:2:46 G-5:2:58 . C-5:2:50 .',
+                    'C-4:3:24 G-3:3:16 Eb4:3:20 G-3:3:14 C-4:3:22 . Bb3:3:18 G-3:3:12 C-4:3:20 . Eb4:3:16 G-3:3:12 . C-4:3:14 .',
+                    'C-2:5:80 A-4:4:26 C-2:5:50 A-4:4:18 C-2:5:74 A-4:4:22 A-4:4:12 . C-2:5:76 A-4:4:24 C-2:5:48 A-4:4:16 C-2:5:68 A-4:4:18 A-4:4:10 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
@@ -31838,7 +32830,7 @@ var VFTrackerDefaults = {
         );
     },
 
-    /** Planet Select — motif G B D E | D B A G, then sequenced. */
+    /** Planet Select / station hub — motif G B D E | D B A G, then sequenced. */
     menu() {
         return this._track(
             { title: 'Planet Select', planet: 'menu', notes: 'motif G-B-D-E · develop · return' },
@@ -31867,46 +32859,404 @@ var VFTrackerDefaults = {
         );
     },
 
-    /** Boss = planet motif doubled + denser drums (same head DNA). */
-    _bossFor(planetId, bpm) {
-        const id = String(planetId || 'mars').toLowerCase();
-        const base = typeof this[id] === 'function' ? this[id]() : this.mars();
-        const compact = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.toCompact)
-            ? VFTrackerParse.toCompact(base)
-            : base;
-        const patterns = (compact.patterns || []).slice(0, 2).map((p, pi) => {
-            const ch = (p.channels || []).slice();
-            while (ch.length < 4) ch.push('.');
-            // Keep lead motif; thicken drums.
-            const drums = pi === 0
-                ? ch[3]
-                : String(ch[3]).replace(/:4:(\d+)/g, (m, v) => ':4:' + Math.min(28, Number(v) + 4));
-            return this._pat(pi, ch[0], ch[1], ch[2], drums);
-        });
-        // Append a pressure variant: motif up a fifth if parse available, else repeat P0.
-        let pressureLead = patterns[0].channels[1];
-        if (typeof VFTrackerParse !== 'undefined') {
-            pressureLead = VFTrackerParse.transposeChannelString(patterns[0].channels[1], 7);
+    /** Lead-motif pitch names from planet combat P0 (Hauptmelodie DNA). */
+    _motifPitches(planetId) {
+        const id = this.normalizePlanetKey(planetId);
+        let combat;
+        if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id) && typeof this[id] === 'function') {
+            combat = this[id]();
+        } else if (typeof this.forPlanet === 'function') {
+            combat = this.forPlanet(id);
+        } else {
+            combat = this.mars();
         }
-        patterns.push(this._pat(2,
-            patterns[0].channels[0],
-            pressureLead,
-            patterns[0].channels[2],
-            patterns[0].channels[3]
-        ));
+        const lead = (((combat.patterns || [])[0] || {}).channels || [])[1] || '';
+        const pitches = [];
+        String(lead).trim().split(/\s+/).forEach((tok) => {
+            if (!tok || tok === '.') return;
+            const cell = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.parseCell)
+                ? VFTrackerParse.parseCell(tok) : null;
+            if (cell && cell.note && cell.note !== 'OFF') pitches.push(cell.note);
+        });
+        return pitches.length ? pitches : ['A-4', 'C-5', 'E-5', 'D-5'];
+    },
+
+    _rootBass(note) {
+        if (!note || typeof VFTrackerParse === 'undefined') return 'A-2';
+        const midi = VFTrackerParse.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return 'A-2';
+        return VFTrackerParse.midiToNote(midi - 24) || 'A-2';
+    },
+
+    _shiftNote(note, semi) {
+        if (!note || typeof VFTrackerParse === 'undefined') return note;
+        const midi = VFTrackerParse.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return note;
+        return VFTrackerParse.midiToNote(midi + (Number(semi) || 0)) || note;
+    },
+
+    /**
+     * Rebuild role arrangements from planet motif pitches — not a thin combat remix.
+     * map = ambient orbit · victory = call/answer fanfare · lose = descending fade ·
+     * shop = mid-tempo bazaar groove.
+     */
+    _roleFromPlanet(planetId, role) {
+        const id = this.normalizePlanetKey(planetId);
+        const m = this._motifPitches(id);
+        const a = m[0]; const b = m[1] || m[0]; const c = m[2] || m[0];
+        const d = m[3] || m[1] || m[0]; const e = m[4] || m[2] || m[0];
+        const f = m[5] || m[1] || m[0]; const g = m[6] || m[3] || m[0];
+        const h = m[7] || m[0];
+        const root = this._rootBass(a);
+        const fifth = this._shiftNote(root, 7);
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        let patterns;
+        let bpm;
+        let order;
+        if (role === 'map') {
+            // Ambient: held bass, lead only on bar anchors, almost no kit.
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 48), '.', '.', '.', tok(root, 1, 36), '.', '.', '.',
+                        tok(fifth, 1, 42), '.', '.', '.', tok(root, 1, 32), '.', '.', '.'].join(' '),
+                    [tok(a, 2, 36), '.', '.', '.', '.', '.', '.', '.',
+                        tok(c, 2, 30), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', '.', '.', '.', '.', '.', '.',
+                        tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', tok('A-4', 4, 8), '.', '.', '.', '.', '.',
+                        '.', '.', tok('A-4', 4, 6), '.', '.', '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 44), '.', '.', '.', tok(root, 1, 34), '.', '.', '.',
+                        tok(this._shiftNote(root, 5) || fifth, 1, 40), '.', '.', '.', tok(root, 1, 30), '.', '.', '.'].join(' '),
+                    [tok(e, 2, 32), '.', '.', '.', '.', '.', '.', '.',
+                        tok(g, 2, 28), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', '.',
+                        '.', '.', '.', '.', tok(this._shiftNote(a, 12) || a, 3, 8), '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', '.', '.', tok('A-4', 4, 6), '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 96;
+            order = [0, 0, 1, 0, 1, 0, 0, 1];
+        } else if (role === 'victory') {
+            // Fanfare: rising call / answer, dense kick, octave climax.
+            const up = (n) => this._shiftNote(n, 12) || n;
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 64), '.', tok(root, 1, 48), '.', tok(fifth, 1, 56), '.', tok(root, 1, 44), '.',
+                        tok(root, 1, 62), '.', tok(fifth, 1, 50), '.', tok(root, 1, 58), '.', tok(fifth, 1, 40), '.'].join(' '),
+                    [tok(a, 2, 54), tok(b, 2, 46), tok(c, 2, 58), tok(d, 2, 50),
+                        '.', tok(a, 2, 42), '.', '.',
+                        tok(c, 2, 56), tok(d, 2, 48), tok(e, 2, 60), tok(f, 2, 52),
+                        '.', tok(c, 2, 44), '.', '.'].join(' '),
+                    [tok(c, 3, 22), '.', tok(a, 3, 16), '.', tok(e, 3, 20), '.', tok(c, 3, 14), '.',
+                        tok(c, 3, 22), '.', tok(a, 3, 16), '.', tok(e, 3, 20), '.', tok(c, 3, 14), '.'].join(' '),
+                    [tok(root, 5, 72), '.', tok('A-4', 4, 24), '.', tok(root, 5, 58), '.', tok('A-4', 4, 18), '.',
+                        tok(root, 5, 72), '.', tok('A-4', 4, 24), '.', tok(root, 5, 54), tok('A-4', 4, 16), '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 60), '.', tok(root, 1, 52), '.', tok(fifth, 1, 58), '.', tok(this._shiftNote(root, 12) || root, 1, 50), '.',
+                        tok(root, 1, 64), '.', tok(fifth, 1, 54), '.', tok(root, 1, 60), '.', 'OFF', '.'].join(' '),
+                    [tok(up(a), 2, 58), tok(up(b), 2, 50), tok(up(c), 2, 62), tok(up(d), 2, 54),
+                        tok(up(e), 2, 60), tok(up(f), 2, 52), tok(up(g), 2, 56), tok(up(h), 2, 48),
+                        tok(up(c), 2, 64), '.', tok(up(a), 2, 54), '.', tok(up(a), 2, 58), '.', 'OFF', '.'].join(' '),
+                    [tok(up(c), 3, 24), tok(up(a), 3, 16), tok(up(e), 3, 22), tok(up(c), 3, 14),
+                        tok(up(c), 3, 24), tok(up(a), 3, 16), tok(up(e), 3, 22), tok(up(c), 3, 14),
+                        tok(up(a), 3, 26), '.', tok(up(c), 3, 18), '.', tok(up(a), 3, 20), '.', '.', '.'].join(' '),
+                    [tok(root, 5, 76), tok('A-4', 4, 22), tok(root, 5, 50), tok('A-4', 4, 16),
+                        tok(root, 5, 70), tok('A-4', 4, 20), tok(root, 5, 48), tok('A-4', 4, 14),
+                        tok(root, 5, 78), '.', tok('A-4', 4, 26), '.', tok(root, 5, 60), tok('A-4', 4, 18), '.', '.'].join(' ')
+                )
+            ];
+            bpm = 138;
+            order = [0, 0, 1, 0, 1, 0];
+        } else if (role === 'shop') {
+            // Bazaar: mid-tempo swing, sparse kit, motif as trade call.
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 46), '.', tok(root, 1, 28), '.', tok(fifth, 1, 40), '.', tok(root, 1, 24), '.',
+                        tok(root, 1, 44), '.', tok(fifth, 1, 30), '.', tok(root, 1, 36), '.', tok(fifth, 1, 22), '.'].join(' '),
+                    [tok(a, 2, 36), '.', '.', tok(b, 2, 28), '.', tok(c, 2, 34), '.', '.',
+                        tok(d, 2, 32), '.', '.', tok(c, 2, 26), '.', tok(a, 2, 30), '.', '.'].join(' '),
+                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', tok(c, 3, 8), '.', '.', tok(a, 3, 10), '.', '.',
+                        tok(e, 3, 12), '.', tok(c, 3, 8), '.', '.', tok(a, 3, 9), '.', '.'].join(' '),
+                    [tok(root, 5, 42), '.', tok('A-4', 4, 10), '.', tok(root, 5, 28), '.', '.', tok('A-4', 4, 8),
+                        tok(root, 5, 40), '.', tok('A-4', 4, 10), '.', tok(root, 5, 26), '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 42), '.', tok(root, 1, 26), '.', tok(fifth, 1, 38), '.', tok(this._shiftNote(root, 5) || fifth, 1, 24), '.',
+                        tok(root, 1, 44), '.', tok(fifth, 1, 28), '.', tok(root, 1, 34), '.', 'OFF', '.'].join(' '),
+                    [tok(e, 2, 34), '.', tok(f, 2, 26), '.', tok(g, 2, 32), '.', tok(h, 2, 24), '.',
+                        tok(c, 2, 36), '.', tok(a, 2, 28), '.', tok(b, 2, 30), '.', '.', '.'].join(' '),
+                    ['.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', tok(c, 3, 8), '.', '.', tok(a, 3, 9),
+                        '.', tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', tok(a, 3, 8), '.', '.', '.'].join(' '),
+                    ['.', tok(root, 5, 30), '.', tok('A-4', 4, 8), '.', tok(root, 5, 36), '.', tok('A-4', 4, 6),
+                        '.', tok(root, 5, 28), '.', '.', tok('A-4', 4, 8), '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 108;
+            order = [0, 0, 1, 0, 1, 0, 0, 1];
+        } else {
+            // Lose: descending, half-time, hollow kit.
+            const down = (n, s) => this._shiftNote(n, s) || n;
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 44), '.', '.', '.', tok(root, 1, 30), '.', '.', '.',
+                        tok(down(root, -2), 1, 36), '.', '.', '.', tok(down(root, -5), 1, 26), '.', '.', '.'].join(' '),
+                    [tok(a, 2, 34), '.', '.', tok(down(a, -2), 2, 28), '.', '.', tok(down(a, -5), 2, 24), '.',
+                        '.', tok(down(a, -7), 2, 20), '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(down(c, -12), 3, 12), '.', '.', '.', tok(down(a, -12), 3, 8), '.', '.', '.',
+                        tok(down(e, -12), 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(root, 5, 40), '.', '.', tok('A-4', 4, 8), '.', '.', '.', '.',
+                        tok(root, 5, 30), '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(down(root, -5), 1, 38), '.', '.', '.', tok(down(root, -7), 1, 26), '.', '.', '.',
+                        tok(down(root, -12), 1, 32), '.', '.', '.', tok(down(root, -12), 1, 20), '.', 'OFF', '.'].join(' '),
+                    [tok(down(c, -5), 2, 28), '.', '.', '.', tok(down(a, -7), 2, 22), '.', '.', '.',
+                        tok(down(a, -12), 2, 18), '.', '.', '.', '.', '.', 'OFF', '.'].join(' '),
+                    ['.', '.', tok(down(a, -12), 3, 8), '.', '.', '.', '.', '.',
+                        '.', '.', tok(down(e, -12), 3, 6), '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', tok(root, 5, 28), '.', tok('A-4', 4, 6), '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 78;
+            order = [0, 1, 0, 0, 1, 0];
+        }
+        const titles = {
+            map: 'Map · ' + id,
+            victory: 'Victory · ' + id,
+            lose: 'Defeat · ' + id,
+            shop: 'Shop · ' + id
+        };
+        const notes = {
+            map: 'map role = ambient orbit from motif',
+            victory: 'victory role = fanfare from motif',
+            lose: 'lose role = descending fade from motif',
+            shop: 'shop role = bazaar groove from motif'
+        };
         return this._track(
-            { title: id.toUpperCase() + ' Boss', planet: id, notes: 'boss = planet motif × pressure' },
-            bpm || Math.min(156, (compact.bpm || 132) + 8),
+            {
+                title: titles[role] || (id + ' · ' + role),
+                planet: id,
+                role: role,
+                notes: notes[role] || role
+            },
+            bpm,
             patterns,
+            order
+        );
+    },
+
+    /** Galaxy map BGM — per-planet Hauptmelodie, soft arrangement. */
+    map(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'map');
+    },
+
+    /** Victory screen — per-planet Hauptmelodie, lifted. */
+    victory(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'victory');
+    },
+
+    /** Lose screen — per-planet Hauptmelodie, sparse. */
+    lose(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'lose');
+    },
+
+    /** Resolve planet + role → raw track (ingame = combat loop). */
+    forRole(planetId, role) {
+        const r = String(role || 'ingame').toLowerCase();
+        if (r === 'map') return this.map(planetId);
+        if (r === 'victory' || r === 'win') return this.victory(planetId);
+        if (r === 'lose' || r === 'defeat') return this.lose(planetId);
+        if (r === 'shop' || r === 'trade' || r === 'trader') return this.shop(planetId);
+        return this.forPlanet(planetId);
+    },
+
+    /** Victory / docked trader — per-planet bazaar Hauptmelodie. */
+    shop(planetId) {
+        return this._roleFromPlanet(planetId || 'mars', 'shop');
+    },
+
+    /**
+     * Boss Hauptmelodien — own head DNA, not a combat remix.
+     * Heavier kit, darker intervals, pressure P2. Planet colour stays via key/feel.
+     */
+
+    // Mars boss — chromatic menace (Ab→G→A) vs combat's even march.
+    'mars-boss'() {
+        return this._track(
+            { title: 'Dust Siege', planet: 'mars', role: 'boss', notes: 'boss Ab-G-A-E · chromatic threat' },
+            136,
+            [
+                this._pat(0,
+                    'A-1:1:68 . Ab1:1:52 . A-1:1:64 . E-1:1:50 . A-1:1:66 . G-1:1:48 . E-1:1:56 . Ab1:1:42',
+                    'A-4:2:56 Ab4:2:44 G-4:2:52 E-4:2:40 . A-4:2:54 G-4:2:42 Ab4:2:48 E-4:2:36',
+                    'E-3:3:22 . Ab3:3:14 . E-3:3:18 . A-3:3:12 . E-3:3:20 . G-3:3:12 . Ab3:3:16 . E-3:3:10',
+                    'A-1:5:78 A-4:4:24 A-1:5:52 A-4:4:16 A-1:5:72 A-4:4:22 A-4:4:12 . A-1:5:76 A-4:4:24 A-1:5:50 A-4:4:14 A-1:5:68 A-4:4:18 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'F-1:1:62 . F-1:1:46 . Ab1:1:58 . C-2:1:44 . G-1:1:60 . E-1:1:42 . G-1:1:54 . Bb1:1:38',
+                    'F-4:2:50 Ab4:2:38 C-5:2:56 Bb4:2:42 . F-4:2:48 E-4:2:36 G-4:2:44 Bb4:2:34',
+                    'C-3:3:18 . F-3:3:12 . Ab3:3:16 . C-4:3:10 . D-3:3:16 . G-3:3:10 . Bb3:3:14 . D-4:3:08',
+                    'F-1:5:70 A-4:4:20 F-1:5:46 A-4:4:12 G-1:5:68 A-4:4:18 A-4:4:10 . F-1:5:72 A-4:4:20 G-1:5:44 A-4:4:12 G-1:5:64 A-4:4:16 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'A-1:1:74 A-1:1:50 Ab1:1:58 E-1:1:54 A-1:1:72 . G-1:1:60 . E-1:1:48 A-1:1:66 Ab1:1:46 E-1:1:56',
+                    'A-5:2:64 Ab5:2:50 G-5:2:58 E-5:2:46 A-5:2:62 . G-5:2:52 Ab5:2:56 E-5:2:44 A-5:2:60 G-5:2:48',
+                    'A-3:3:26 E-3:3:16 Ab3:3:22 E-3:3:14 A-3:3:24 . G-3:3:18 E-3:3:12 A-3:3:20 Ab3:3:14 E-3:3:10',
+                    'A-1:5:84 A-4:4:28 A-1:5:56 A-4:4:18 A-1:5:78 A-4:4:24 A-4:4:14 A-4:4:08 A-1:5:82 A-4:4:26 A-1:5:54 A-4:4:16 A-1:5:74 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
             [0, 0, 1, 0, 2, 1, 0, 2]
         );
     },
 
-    'mars-boss'() { return this._bossFor('mars', 128); },
-    'jupiter-boss'() { return this._bossFor('jupiter', 120); },
-    'saturn-boss'() { return this._bossFor('saturn', 134); },
-    'neptune-boss'() { return this._bossFor('neptune', 126); },
-    'pluto-boss'() { return this._bossFor('pluto', 142); },
+    // Jupiter boss — crushing on-beat hits vs combat's offbeat syncop.
+    'jupiter-boss'() {
+        return this._track(
+            { title: 'Giant Impact', planet: 'jupiter', role: 'boss', notes: 'boss E-Bb-B-F# · crushing hits' },
+            124,
+            [
+                this._pat(0,
+                    'E-1:1:70 . E-1:1:48 . Bb1:1:62 . B-1:1:50 . E-1:1:68 . F#1:1:44 . B-1:1:58 . Bb1:1:40',
+                    'E-4:2:58 . Bb4:2:46 . B-4:2:60 . F#4:2:48 . E-4:2:54 . D-4:2:40 . B-3:2:46 . Bb3:2:36',
+                    'B-2:3:24 . E-3:3:14 . Bb2:3:18 . B-2:3:12 . F#3:3:20 . B-2:3:12 . E-3:3:16 . Bb2:3:10',
+                    'E-1:5:80 . A-4:4:22 E-1:5:54 . A-4:4:14 E-1:5:74 . A-4:4:20 A-4:4:10 E-1:5:78 . A-4:4:22 E-1:5:50 . A-4:4:14 E-1:5:70 . A-4:4:16'
+                ),
+                this._pat(1,
+                    'C-2:1:64 . G-1:1:46 . C-2:1:58 . Eb2:1:44 . D-2:1:62 . A-1:1:42 . B-1:1:54 . F#1:1:38',
+                    'C-5:2:52 . Eb5:2:40 . G-5:2:56 . F-5:2:44 . D-5:2:50 . C-5:2:38 . B-4:2:44 . A-4:2:34',
+                    'G-3:3:20 . C-4:3:12 . Eb3:3:16 . G-3:3:10 . A-3:3:18 . D-4:3:10 . F#3:3:14 . B-3:3:08',
+                    'C-2:5:72 . A-4:4:18 C-2:5:48 . A-4:4:12 D-2:5:70 . A-4:4:18 A-4:4:08 C-2:5:74 . A-4:4:18 D-2:5:46 . A-4:4:12 D-2:5:66 . A-4:4:14'
+                ),
+                this._pat(2,
+                    'E-1:1:76 E-1:1:52 Bb1:1:60 B-1:1:56 E-1:1:74 . F#1:1:58 . B-1:1:50 E-1:1:70 Bb1:1:48 B-1:1:54',
+                    'E-5:2:66 Bb5:2:52 B-5:2:70 F#5:2:54 E-5:2:62 . D-5:2:50 Bb4:2:56 B-4:2:48 E-5:2:64 F#5:2:52',
+                    'E-3:3:28 B-2:3:16 Bb2:3:22 B-2:3:14 E-3:3:26 . F#3:3:18 B-2:3:12 E-3:3:22 Bb2:3:14 B-2:3:10',
+                    'E-1:5:86 A-4:4:28 E-1:5:58 A-4:4:18 E-1:5:80 A-4:4:24 A-4:4:14 A-4:4:08 E-1:5:84 A-4:4:26 E-1:5:56 A-4:4:16 E-1:5:76 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Saturn boss — broken-ring chase: dotted menace vs combat gallop.
+    'saturn-boss'() {
+        return this._track(
+            { title: 'Ring Breaker', planet: 'saturn', role: 'boss', notes: 'boss D-C#-A-G · dotted chase' },
+            150,
+            [
+                this._pat(0,
+                    'D-1:1:70 . D-1:1:48 C#2:1:56 . A-1:1:62 . D-1:1:68 G-1:1:44 . D-1:1:60 . A-1:1:50 C#2:1:40 .',
+                    'D-4:2:56 . C#5:2:44 A-4:2:58 . G-4:2:48 . D-4:2:52 F-4:2:38 . A-4:2:50 . G-4:2:42 C#4:2:34 .',
+                    'A-2:3:22 . D-3:3:14 C#3:3:18 . A-2:3:16 . G-2:3:12 D-3:3:14 . A-2:3:18 . C#3:3:12 G-2:3:08 .',
+                    'D-1:5:82 A-4:4:26 . A-4:4:14 D-1:5:70 A-4:4:20 . A-4:4:10 D-1:5:78 A-4:4:24 . A-4:4:14 D-1:5:66 A-4:4:18 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'G-1:1:64 . Bb1:1:46 F-1:1:54 . C-2:1:58 . A-1:1:50 E-2:1:44 . G-1:1:60 . Bb1:1:42 F-1:1:36 .',
+                    'G-3:2:50 . Bb3:2:38 D-4:2:54 . C-4:2:44 . A-3:2:46 E-4:2:36 . G-3:2:48 . Bb3:2:34 D-4:2:40 .',
+                    'D-2:3:18 . G-2:3:10 Bb2:3:14 . D-3:3:16 . E-2:3:12 A-2:3:10 . D-2:3:16 . G-2:3:10 Bb2:3:08 .',
+                    'G-1:5:74 A-4:4:22 . A-4:4:12 A-1:5:66 A-4:4:18 . A-4:4:08 G-1:5:72 A-4:4:20 . A-4:4:12 A-1:5:62 A-4:4:16 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'D-1:1:78 D-1:1:54 C#2:1:62 A-1:1:58 D-1:1:76 . G-1:1:64 . A-1:1:52 D-1:1:72 C#2:1:48 A-1:1:56',
+                    'D-5:2:64 C#6:2:50 A-5:2:68 G-5:2:52 D-5:2:60 . F-5:2:54 A-5:2:58 G-5:2:46 D-5:2:62 C#5:2:48',
+                    'D-3:3:28 A-2:3:16 C#3:3:22 A-2:3:14 D-3:3:26 . G-2:3:18 A-2:3:12 D-3:3:22 C#3:3:14 A-2:3:10',
+                    'D-1:5:88 A-4:4:30 D-1:5:60 A-4:4:20 D-1:5:82 A-4:4:26 A-4:4:16 A-4:4:10 D-1:5:86 A-4:4:28 D-1:5:58 A-4:4:18 D-1:5:78 A-4:4:22 A-4:4:14 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Neptune boss — dread pulse under ice: rising minor vs combat half-time space.
+    'neptune-boss'() {
+        return this._track(
+            { title: 'Ice Tyrant', planet: 'neptune', role: 'boss', notes: 'boss B-C-D#-F# · dread rise' },
+            112,
+            [
+                this._pat(0,
+                    'B-1:1:60 . . B-1:1:42 . C-2:1:52 . . D#2:1:46 . . F#1:1:50 . B-1:1:44 . .',
+                    'B-3:2:50 . C-4:2:40 . D#4:2:54 . F#4:2:44 . B-4:2:56 . A-4:2:42 . F#4:2:46 . D#4:2:36',
+                    'F#2:3:16 . . B-2:3:12 . . C-3:3:14 . . D#3:3:18 . . F#2:3:10 . B-2:3:12 .',
+                    'B-1:5:64 . . A-4:4:14 . B-1:5:50 . A-4:4:10 . B-1:5:60 . A-4:4:14 . B-1:5:46 A-4:4:08 . .'
+                ),
+                this._pat(1,
+                    'G-1:1:54 . . A-1:1:38 . Bb1:1:48 . . C-2:1:42 . . D-1:1:46 . G-1:1:40 . .',
+                    'G-3:2:44 . Bb3:2:34 . C-4:2:48 . D-4:2:38 . Eb4:2:50 . D-4:2:36 . C-4:2:40 . Bb3:2:30',
+                    'D-2:3:14 . . G-2:3:10 . . Bb2:3:12 . . C-3:3:16 . . D-2:3:08 . G-2:3:10 .',
+                    'G-1:5:56 . . A-4:4:12 . G-1:5:44 . A-4:4:08 . A-1:5:54 . A-4:4:12 . G-1:5:40 A-4:4:06 . .'
+                ),
+                this._pat(2,
+                    'B-1:1:66 . C-2:1:50 . D#2:1:58 . F#1:1:52 B-1:1:64 . A-1:1:48 . F#1:1:54 . D#2:1:46 B-1:1:58',
+                    'B-4:2:58 C-5:2:46 D#5:2:62 F#5:2:50 B-5:2:66 . A-5:2:52 F#5:2:56 D#5:2:44 B-4:2:54 C-5:2:42',
+                    'B-2:3:22 F#2:3:14 C-3:3:18 D#3:3:12 F#3:3:20 . B-2:3:16 F#2:3:10 B-2:3:18 C-3:3:12 D#2:3:08',
+                    'B-1:5:72 A-4:4:20 . A-4:4:12 B-1:5:58 A-4:4:16 . A-4:4:08 B-1:5:68 A-4:4:18 . A-4:4:12 B-1:5:54 A-4:4:14 A-4:4:08 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 0, 1, 2]
+        );
+    },
+
+    // Pluto boss — siege siren: descending alarm vs combat stab clusters.
+    'pluto-boss'() {
+        return this._track(
+            { title: 'Kuiper Siege', planet: 'pluto', role: 'boss', notes: 'boss C-Bb-Ab-G · descending alarm' },
+            158,
+            [
+                this._pat(0,
+                    'C-1:1:72 C-1:1:52 . Bb1:1:60 . Ab1:1:54 G-1:1:48 . C-1:1:70 C-1:1:50 . Bb1:1:56 . Ab1:1:44 . G-1:1:40',
+                    'C-5:2:60 Bb4:2:48 Ab4:2:54 G-4:2:42 . C-5:2:56 Bb4:2:44 Ab4:2:50 G-4:2:38 C-4:2:46 Bb3:2:34 Ab3:2:40 G-3:2:30',
+                    'G-2:3:24 C-3:3:16 Bb2:3:18 Ab2:3:12 G-2:3:20 . C-3:3:22 Bb2:3:14 Ab2:3:16 G-2:3:10 C-3:3:18 Bb2:3:12 Ab2:3:08',
+                    'C-1:5:84 A-4:4:28 C-1:5:56 A-4:4:18 C-1:5:76 A-4:4:22 A-4:4:12 . C-1:5:82 A-4:4:26 C-1:5:54 A-4:4:16 C-1:5:72 A-4:4:20 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'Ab1:1:66 Ab1:1:46 . Gb1:1:54 . Eb1:1:50 F-1:1:42 . Bb1:1:64 Bb1:1:46 . Ab1:1:52 . Gb1:1:40 . F-1:1:36',
+                    'Ab4:2:54 Gb4:2:42 Eb4:2:48 D-4:2:36 . Bb4:2:52 Ab4:2:40 Gb4:2:46 F-4:2:34 Eb4:2:42 D-4:2:30 C-4:2:36 Bb3:2:28',
+                    'Eb2:3:20 Ab2:3:14 Gb2:3:16 Eb2:3:10 F-2:3:18 . Bb2:3:20 Ab2:3:12 Gb2:3:14 F-2:3:08 Bb2:3:16 Ab2:3:10 Gb2:3:06',
+                    'Ab1:5:76 A-4:4:24 Ab1:5:50 A-4:4:14 Bb1:5:72 A-4:4:20 A-4:4:10 . Ab1:5:78 A-4:4:24 Bb1:5:48 A-4:4:14 Bb1:5:68 A-4:4:18 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'C-1:1:80 C-1:1:58 Bb1:1:66 Ab1:1:54 G-1:1:60 . C-1:1:76 Bb1:1:52 Ab1:1:58 G-1:1:46 C-1:1:72 Bb1:1:50 Ab1:1:56 G-1:1:44',
+                    'C-6:2:68 Bb5:2:54 Ab5:2:60 G-5:2:48 C-6:2:64 . Bb5:2:56 Ab5:2:58 G-5:2:46 C-5:2:54 Bb4:2:42 Ab4:2:48 G-4:2:38',
+                    'C-3:3:30 G-2:3:18 Bb2:3:24 Ab2:3:14 G-2:3:22 C-3:3:28 . Bb2:3:20 Ab2:3:16 G-2:3:12 C-3:3:24 Bb2:3:14 Ab2:3:10',
+                    'C-1:5:90 A-4:4:32 C-1:5:62 A-4:4:22 C-1:5:84 A-4:4:28 A-4:4:16 A-4:4:10 C-1:5:88 A-4:4:30 C-1:5:60 A-4:4:20 C-1:5:80 A-4:4:24 A-4:4:14 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    /**
+     * Fallback boss for unknown / explored slugs: donor planet's boss Hauptmelodie
+     * (keyed remix), never a combat-loop pressure clone.
+     */
+    _bossFor(planetId, bpm) {
+        const id = this.normalizePlanetKey
+            ? this.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase();
+        if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id)) {
+            const key = id + '-boss';
+            if (typeof this[key] === 'function') {
+                const track = this[key]();
+                if (bpm && track) track.bpm = bpm;
+                return track;
+            }
+        }
+        const { primary } = this._donorPair ? this._donorPair(id) : { primary: 'mars' };
+        const key = primary + '-boss';
+        if (typeof this[key] === 'function' && typeof this.remixPlanet === 'function') {
+            // remixPlanet with boss:true pulls handcrafted boss DNA via _handcraftedRaw.
+            const remixed = this.remixPlanet(id, { boss: true });
+            if (bpm && remixed) remixed.bpm = bpm;
+            return remixed;
+        }
+        if (typeof this[key] === 'function') return this[key]();
+        return this['mars-boss']();
+    },
 
     PLANETS: ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'],
 
@@ -31980,6 +33330,102 @@ var VFTrackerDefaults = {
         return VFTrackerParse.transposeChannelString(str, octaves * 12);
     },
 
+    _emptyRow() {
+        return '. . . . . . . . . . . . . . . .';
+    },
+
+    _padRow(str) {
+        const empty = this._emptyRow();
+        if (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.padChannelString) {
+            return VFTrackerParse.padChannelString(str || empty, 16);
+        }
+        return String(str || empty);
+    },
+
+    /**
+     * Stretch a short P0/P1/P2 combat loop into a longer form so the hamster
+     * wheel (order like [0,0,1,0,2,1,0,0]) stops repeating every ~8 bars.
+     * Derives breakdown + drop packs from the same DNA — no new melodies.
+     */
+    _withLongForm(raw, opts) {
+        if (!raw || !raw.patterns || raw.patterns.length < 2) return raw;
+        if (raw.meta && raw.meta.longForm) return raw;
+        if (raw.patterns.length >= 5) return raw;
+
+        const compact = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.toCompact)
+            ? VFTrackerParse.toCompact(raw)
+            : raw;
+        const empty = this._emptyRow();
+        const pats = (compact.patterns || []).map((p, i) => ({
+            id: i,
+            channels: (p.channels || []).slice()
+        }));
+        while (pats.length < 3) {
+            const src = pats[0] || { channels: [empty, empty, empty, empty] };
+            pats.push({ id: pats.length, channels: src.channels.slice() });
+        }
+        const ch = (pi, ci) => this._padRow((pats[pi].channels && pats[pi].channels[ci]) || empty);
+
+        // P3 breakdown — bass stays, lead thinned, arp out, kit half-time.
+        pats.push({
+            id: 3,
+            channels: [
+                ch(0, 0),
+                this._padRow(this._thinChannel(ch(0, 1), 2)),
+                empty,
+                this._padRow(this._thinChannel(ch(0, 3), 2))
+            ]
+        });
+        // P4 drop / rebuild — bass+drums from P1, arp ticks, lead silent.
+        pats.push({
+            id: 4,
+            channels: [
+                ch(1, 0),
+                empty,
+                this._padRow(this._thinChannel(ch(1, 2), 2)),
+                ch(1, 3)
+            ]
+        });
+
+        const boss = !!(opts && opts.boss);
+        // ~24 slots before loop (~3× old 8-bar cycle).
+        const order = boss
+            ? [
+                0, 0, 1, 0,
+                1, 2, 1, 2,
+                0, 3, 4, 3,
+                0, 1, 2, 2,
+                4, 0, 1, 2,
+                0, 2, 1, 3
+            ]
+            : [
+                0, 0, 1, 0,
+                1, 1, 2, 1,
+                0, 3, 1, 3,
+                0, 1, 2, 2,
+                4, 0, 1, 2,
+                0, 1, 0, 3
+            ];
+
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: Object.assign({}, compact.meta || {}, {
+                longForm: true,
+                notes: ((compact.meta && compact.meta.notes) ? compact.meta.notes + ' · ' : '')
+                    + 'long form A/B/C/break/drop'
+            }),
+            bpm: compact.bpm,
+            rowsPerBeat: compact.rowsPerBeat || 1,
+            rowsPerPattern: compact.rowsPerPattern || 16,
+            channels: 4,
+            instruments: (compact.instruments || this._baseInstruments()).map((inst) => Object.assign({}, inst)),
+            patterns: pats,
+            order: order,
+            loop: compact.loop !== false
+        };
+    },
+
     /**
      * Explored planets: one donor motif track, musical key + small BPM nudge.
      * Never splice channels from two songs — that kills motif continuity.
@@ -32019,7 +33465,7 @@ var VFTrackerDefaults = {
         }
 
         const labels = { mars: 'Dust', jupiter: 'Giant', saturn: 'Ring', neptune: 'Ice', pluto: 'Kuiper' };
-        return {
+        const built = {
             format: 'vftrack',
             version: 1,
             meta: {
@@ -32038,6 +33484,8 @@ var VFTrackerDefaults = {
             order: order,
             loop: !intro
         };
+        if (intro) return built;
+        return this._withLongForm(built, { boss: boss });
     },
 
     forPlanet(planetId) {
@@ -32045,26 +33493,44 @@ var VFTrackerDefaults = {
         if (raw === 'intro' || raw.indexOf('intro:') === 0) {
             return this.intro(raw.split(':')[1] || 'mars');
         }
-        if (typeof this[raw] === 'function') return this[raw]();
+        // Named role helpers (map/victory/…) — do not long-form those.
+        if (raw.indexOf('-boss') === -1 && typeof this[raw] === 'function'
+            && (raw === 'menu' || raw === 'map' || raw === 'victory' || raw === 'lose' || raw === 'shop')) {
+            return this[raw]();
+        }
         const id = this.normalizePlanetKey(raw);
         const wantBoss = raw.indexOf('boss') !== -1 || /-(?:boss|b)$/.test(raw);
-        if (this.isHandcraftedPlanet(id)) {
+        let built = null;
+        if (typeof this[raw] === 'function') {
+            built = this[raw]();
+        } else if (this.isHandcraftedPlanet(id)) {
             if (wantBoss) {
                 const key = id + '-boss';
-                if (typeof this[key] === 'function') return this[key]();
-                return this._bossFor(id, 128);
+                built = (typeof this[key] === 'function') ? this[key]() : this._bossFor(id, 128);
+            } else if (typeof this[id] === 'function') {
+                built = this[id]();
             }
-            if (typeof this[id] === 'function') return this[id]();
         }
-        return this.remixPlanet(id, { boss: wantBoss });
+        if (!built) built = this.remixPlanet(id, { boss: wantBoss });
+        // Combat / boss loops get the long form; roles already returned above.
+        return this._withLongForm(built, { boss: wantBoss });
     },
 
     allKeys() {
-        return [
-            'menu', 'intro',
+        const planets = this.PLANETS || ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
+        const keys = [
+            'menu', 'intro', 'map', 'victory', 'lose', 'shop',
             'mars', 'jupiter', 'saturn', 'neptune', 'pluto',
             'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'
         ];
+        planets.forEach((p) => {
+            keys.push('map:' + p);
+            keys.push('victory:' + p);
+            keys.push('lose:' + p);
+            keys.push('shop:' + p);
+            keys.push('ingame:' + p);
+        });
+        return keys;
     }
 };
 
@@ -32073,14 +33539,19 @@ var VFTrackerDefaults = {
 "use strict";
 
 /**
- * Selectable melody / bass Grundthemen for VF Tracker.
- * Theme 0 = keep planet-authored channels. 1+ replace bass/lead/arp with
- * style heads; break layer + mix morph are driven by STYLE AMOUNT (0..1).
+ * Selectable music STYLES for VF Tracker.
+ * Theme 0 = PLANET: play authored Hauptmelodien as written.
+ * Theme 1+ = stylize only: keep the song's notes & rhythm; colour via mix,
+ * light drum blend, break overlay, twin, and preferred BPM.
+ * AMOUNT (0..1) scales how far into that colour — never rebuilds the hook.
  *
  * Indices 0–6 stay stable (renames only). New styles append at the end.
  */
 var VFTrackerThemes = {
     REF_BPM: 174,
+    /** localStorage key for Music Editor bank overrides (dev-only edits). */
+    OVERRIDE_KEY: 'vf_music_theme_banks_v1',
+    _bankOverrides: null,
 
     /** UI / storage order — indices 0–6 must stay stable once shipped. */
     list: [
@@ -32098,18 +33569,19 @@ var VFTrackerThemes = {
     /**
      * Per-style playback hints used by the tracker player / tempo morph.
      * breakSide: 'jungle' | 'dnb' | 'elektro' | 'hybrid' | 'drive' | 'off'
+     * preferredBpm: MUSIC BPM snap target (60..300) shown as a mark on the speed fader.
      */
     _meta: {
-        planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0 },
-        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.42, themeBreak: 0.95 },
-        // Dark minimal techno: heavy 4/4 + sub — ref https://www.youtube.com/watch?v=mv8vJQaUpDU
-        minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.14, themeBreak: 0.92 },
-        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.32, themeBreak: 0.9 },
-        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.26, themeBreak: 0.78 },
-        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.68 },
-        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.14, themeBreak: 0.45 },
-        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.28, themeBreak: 0.92 },
-        nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.18, themeBreak: 0.88 }
+        // preferredBpm = heard tempo when the STYLE is picked (auto-applied).
+        planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0, preferredBpm: 132 },
+        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.28, themeBreak: 0.7, preferredBpm: 160 },
+        minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.08, themeBreak: 0.55, preferredBpm: 128 },
+        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.24, themeBreak: 0.65, preferredBpm: 164 },
+        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.2, themeBreak: 0.5, preferredBpm: 170 },
+        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.18, themeBreak: 0.48, preferredBpm: 172 },
+        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.1, themeBreak: 0.35, preferredBpm: 168 },
+        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.6, preferredBpm: 174 },
+        nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.12, themeBreak: 0.55, preferredBpm: 108 }
     },
 
     count() {
@@ -32139,6 +33611,29 @@ var VFTrackerThemes = {
             ? indexOrId
             : this.idOf(indexOrId);
         return this._meta[id] || this._meta.planet;
+    },
+
+    /** Preferred MUSIC BPM for a style (snap + fader mark). */
+    preferredBpmOf(indexOrId) {
+        const meta = this.metaOf(indexOrId);
+        const bpm = Number(meta && meta.preferredBpm);
+        if (!Number.isFinite(bpm)) return 132;
+        return Math.max(60, Math.min(300, Math.round(bpm)));
+    },
+
+    /**
+     * Style tempo fitted to the playing song's authored BPM.
+     * PLANET → authored. Other styles scale preferredBpm vs REF 132 onto the track.
+     */
+    adaptedBpmOf(indexOrId, authoredBpm) {
+        const authored = Math.max(60, Math.min(300, Number(authoredBpm) || 132));
+        const id = typeof indexOrId === 'string' ? indexOrId : this.idOf(indexOrId);
+        if (!id || id === 'planet') return Math.round(authored);
+        const pref = this.preferredBpmOf(indexOrId);
+        const scaled = authored * (pref / (this.REF_BPM > 0 ? 132 : 132));
+        // Soft clamp toward preferred so extreme songs stay musical.
+        const blended = authored * 0.35 + scaled * 0.65;
+        return Math.max(60, Math.min(300, Math.round(blended)));
     },
 
     /** Three development patterns (P0 state / P1 sequence / P2 climax), 16 rows. */
@@ -32337,18 +33832,95 @@ var VFTrackerThemes = {
         { k: 1 }, { h: 0.5 }, { s: 1, h: 0.35 }, { h: 0.45 }
     ],
 
+    _ensureOverrides() {
+        if (this._bankOverrides) return this._bankOverrides;
+        this._bankOverrides = {};
+        try {
+            const raw = localStorage.getItem(this.OVERRIDE_KEY);
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (data && typeof data === 'object') this._bankOverrides = data;
+            }
+        } catch (e) { /* ignore */ }
+        return this._bankOverrides;
+    },
+
+    /** Active bank for a style id (override → built-in). */
+    bankOf(id) {
+        const key = String(id || '');
+        if (!key || key === 'planet') return null;
+        const ov = this._ensureOverrides();
+        if (ov[key] && Array.isArray(ov[key]) && ov[key].length) return ov[key];
+        return this._banks[key] || null;
+    },
+
+    /** Fallback kit when a STYLE bank has no drums strand yet. */
+    defaultDrums(patternIndex) {
+        const kits = [
+            'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .',
+            'A-2:5:58 . A-4:4:14 . A-2:5:46 . A-4:4:10 G-2:5:58 . A-4:4:14 . G-2:5:44 A-4:4:08 . .',
+            'A-2:5:70 A-4:4:18 . A-4:4:12 A-2:5:54 . A-4:4:14 . A-2:5:66 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+        ];
+        return kits[Math.abs(patternIndex | 0) % kits.length];
+    },
+
+    /** Deep-clone built-in bank (for the Music Editor). */
+    cloneBank(id) {
+        const bank = this._banks[id];
+        if (!bank) return null;
+        return bank.map((p, i) => ({
+            bass: String(p.bass || ''),
+            lead: String(p.lead || ''),
+            arp: String(p.arp || ''),
+            drums: String(p.drums || '') || this.defaultDrums(i)
+        }));
+    },
+
+    getBankOverride(id) {
+        const ov = this._ensureOverrides();
+        return ov[String(id || '')] || null;
+    },
+
+    setBankOverride(id, bank) {
+        const key = String(id || '');
+        if (!key || key === 'planet') return;
+        const ov = this._ensureOverrides();
+        if (!bank) {
+            delete ov[key];
+        } else {
+            ov[key] = bank.map((p) => ({
+                bass: String(p.bass || ''),
+                lead: String(p.lead || ''),
+                arp: String(p.arp || ''),
+                drums: String(p.drums || '')
+            }));
+        }
+        try {
+            localStorage.setItem(this.OVERRIDE_KEY, JSON.stringify(ov));
+        } catch (e) { /* quota */ }
+    },
+
+    clearBankOverrides() {
+        this._bankOverrides = {};
+        try { localStorage.removeItem(this.OVERRIDE_KEY); } catch (e) { /* ignore */ }
+    },
+
     /**
-     * Resolve theme channel cell for patternIndex / row / channel (0 bass,1 lead,2 arp).
-     * Returns null to keep planet-authored cell (theme 0 / unknown).
+     * Raw STYLE bank cell for patternIndex / row / channel
+     * (0 bass, 1 lead, 2 arp, 3 drums). null = no style strand.
      */
     cellAt(themeIndex, patternIndex, rowIndex, channel) {
         const id = this.idOf(themeIndex);
         if (!id || id === 'planet') return null;
-        const bank = this._banks[id];
+        const bank = this.bankOf(id);
         if (!bank || !bank.length) return null;
         const pat = bank[Math.abs(patternIndex | 0) % bank.length];
         if (!pat) return null;
-        const key = channel === 0 ? 'bass' : channel === 1 ? 'lead' : channel === 2 ? 'arp' : null;
+        const key = channel === 0 ? 'bass'
+            : channel === 1 ? 'lead'
+            : channel === 2 ? 'arp'
+            : channel === 3 ? 'drums'
+            : null;
         if (!key || !pat[key]) return null;
         if (typeof VFTrackerParse === 'undefined' || !VFTrackerParse.expandChannelString) return null;
         const padded = VFTrackerParse.padChannelString
@@ -32356,6 +33928,73 @@ var VFTrackerThemes = {
             : pat[key];
         const cells = VFTrackerParse.expandChannelString(padded, 16);
         return cells[rowIndex % 16] || null;
+    },
+
+    /**
+     * Collect pitch notes from an authored pattern channel (melody DNA).
+     * @param {object} pat normalized pattern ({ rows: [[{note,inst,vol},…],…] })
+     * @param {number} channel 0..2
+     */
+    pitchPoolFromPattern(pat, channel) {
+        const pool = [];
+        const rows = (pat && pat.rows) || [];
+        for (let r = 0; r < rows.length; r++) {
+            const cell = rows[r] && rows[r][channel];
+            if (cell && cell.note && cell.note !== 'OFF') pool.push(String(cell.note));
+        }
+        return pool;
+    },
+
+    /**
+     * Light STYLE colour on an authored cell — song stays intact.
+     * Bass / lead / arp: keep note + timing; only nudge velocity.
+     * Drums: blend toward style kit velocity at high AMOUNT (never replace groove).
+     * @param {number} styleAmount 0..1 (AMOUNT fader)
+     * @returns {object|null} cell to trigger, or null for rest
+     */
+    interpretCell(themeIndex, patternIndex, rowIndex, channel, authoredCell, pitchPool, styleAmount) {
+        const mag = Math.max(0, Math.min(1, Number(styleAmount) || 0));
+        if (!(Number(themeIndex) > 0) || mag < 0.03) return authoredCell || null;
+
+        const styleCell = this.cellAt(themeIndex, patternIndex, rowIndex, channel);
+
+        // Drums: keep authored hits; borrow style velocity when both hit.
+        if (channel === 3) {
+            if (!authoredCell || !authoredCell.note || authoredCell.note === 'OFF') {
+                // Only at high AMOUNT, fill a rest with a soft style kit tick.
+                if (mag > 0.7 && styleCell && styleCell.note && styleCell.note !== 'OFF') {
+                    return {
+                        note: styleCell.note,
+                        inst: styleCell.inst || 4,
+                        vol: Math.max(6, Math.min(28, Math.round((styleCell.vol != null ? styleCell.vol : 20) * 0.45)))
+                    };
+                }
+                return authoredCell || null;
+            }
+            if (styleCell && styleCell.note && styleCell.note !== 'OFF' && mag > 0.25) {
+                const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+                const sVol = styleCell.vol != null ? styleCell.vol : aVol;
+                return {
+                    note: authoredCell.note,
+                    inst: authoredCell.inst || styleCell.inst || 5,
+                    vol: Math.max(8, Math.min(56, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
+                };
+            }
+            return authoredCell;
+        }
+
+        // Melodic channels: never move pitches or timing — only gentle velocity tint.
+        if (!authoredCell || !authoredCell.note) return authoredCell || null;
+        if (authoredCell.note === 'OFF') return authoredCell;
+        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') return authoredCell;
+        const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+        const sVol = styleCell.vol != null ? styleCell.vol : aVol;
+        const tint = aVol + (sVol - aVol) * mag * 0.35;
+        return {
+            note: authoredCell.note,
+            inst: authoredCell.inst || 1,
+            vol: Math.max(16, Math.min(56, Math.round(tint)))
+        };
     }
 };
 
@@ -32647,8 +34286,22 @@ var VFTrackerFactionCompose = {
         const style = this.styleOf(faction);
         const baseRaw = VFTrackerDefaults.forPlanet(boss ? (planet + '-boss') : planet);
         const compact = VFTrackerParse.toCompact(baseRaw);
-        compact.bpm = Math.max(70, Math.min(160, Number(compact.bpm) + Math.round(style.bpmDelta * 0.35)));
-        compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+        // Boss: push tempo + darker instrument skin so the chamber can't be
+        // mistaken for the regular stage loop (even when DNA is related).
+        const bpmNudge = boss
+            ? Math.round(style.bpmDelta * 0.35) + 14
+            : Math.round(style.bpmDelta * 0.35);
+        compact.bpm = Math.max(70, Math.min(168, Number(compact.bpm) + bpmNudge));
+        compact.instruments = style.instruments.map((i) => {
+            const inst = Object.assign({}, i);
+            if (boss) {
+                if (inst.filter != null) inst.filter = Math.max(280, Math.round(inst.filter * 0.62));
+                if (inst.wave === 'triangle') inst.wave = 'sawtooth';
+                if (inst.volume != null) inst.volume = Math.min(0.95, Number(inst.volume) * 1.12);
+                if (inst.sustain != null) inst.sustain = Math.min(0.9, Number(inst.sustain) * 1.15);
+            }
+            return inst;
+        });
         compact.meta = {
             title: ((compact.meta && compact.meta.title) || planet) + ' / ' + style.label + (boss ? ' BOSS' : ''),
             author: 'VF Tracker',
@@ -32658,18 +34311,22 @@ var VFTrackerFactionCompose = {
         };
         const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
         const pad = (s) => VFTrackerParse.padChannelString(s, 16);
-        const transpose = Math.max(-2, Math.min(2, Math.round(style.transpose / 2)));
+        const transpose = boss
+            ? Math.max(-5, Math.min(5, Math.round(style.transpose / 2) - 2))
+            : Math.max(-2, Math.min(2, Math.round(style.transpose / 2)));
         compact.patterns = (compact.patterns || []).map((p, pi) => ({
             id: p.id,
             channels: (p.channels || []).map((ch, i) => {
-                // Keep planet drums on A/B; faction drums on chorus/fill only.
-                if (i === 3 && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3)) {
+                // Boss: faction kit on most packs. Stage: planet drums on A/B.
+                const bossKit = boss && drumBank.length && (pi % 5 !== 0);
+                const stageKit = !boss && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3);
+                if (i === 3 && (bossKit || stageKit)) {
                     return pad(drumBank[pi % drumBank.length] || drumBank[0]);
                 }
                 const melodic = transpose
                     ? VFTrackerParse.transposeChannelString(ch, transpose)
                     : ch;
-                if (i === 2 && (pi % 4) === 3) {
+                if (i === 2 && ((boss && (pi % 5) === 3) || (!boss && (pi % 4) === 3))) {
                     return pad(String(melodic).split(/\s+/).map((tok, ti) => (ti % 2 ? '.' : tok)).join(' '));
                 }
                 return pad(melodic);
@@ -32736,17 +34393,67 @@ var VFTrackerFactionCompose = {
         };
     },
 
+    /**
+     * End screens: planet Hauptmelodie (victory/lose role) + faction voice skin.
+     * Faction-only tables remain as fallback when no planet motif is available.
+     */
     _endingTrack(kind, factionId, planetId) {
-        const faction = this.normalizeFaction(factionId) || 'pirate';
-        const style = this.styleOf(faction);
-        const planet = planetId ? String(planetId).toLowerCase().split('-')[0] : '';
+        const faction = this.normalizeFaction(factionId) || '';
+        const style = this.styleOf(faction || 'pirate');
+        const planet = planetId
+            ? ((typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+                ? VFTrackerDefaults.normalizePlanetKey(planetId)
+                : String(planetId).toLowerCase().split('-')[0])
+            : '';
         const win = kind === 'victory';
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+
+        // Prefer per-planet role melody; fall back to legacy faction patterns.
+        let base = null;
+        if (planet && typeof VFTrackerDefaults !== 'undefined') {
+            base = win
+                ? (VFTrackerDefaults.victory && VFTrackerDefaults.victory(planet))
+                : (VFTrackerDefaults.lose && VFTrackerDefaults.lose(planet));
+        }
+        if (base) {
+            const compact = VFTrackerParse.toCompact(base);
+            compact.bpm = Math.max(70, Math.min(160,
+                Number(compact.bpm) + Math.round((style.bpmDelta || 0) * 0.35)));
+            if (faction) {
+                compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+                const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+                const transpose = Math.max(-2, Math.min(2, Math.round((style.transpose || 0) / 2)));
+                compact.patterns = (compact.patterns || []).map((p, pi) => ({
+                    id: p.id,
+                    channels: (p.channels || []).map((ch, i) => {
+                        if (i === 3 && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3)) {
+                            return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                        }
+                        return pad(transpose
+                            ? VFTrackerParse.transposeChannelString(ch, transpose)
+                            : ch);
+                    })
+                }));
+            }
+            compact.meta = Object.assign({}, compact.meta, {
+                title: (win ? 'Victory' : 'Defeat')
+                    + (planet ? ' · ' + planet : '')
+                    + (faction ? ' / ' + style.label : ''),
+                planet: planet,
+                faction: faction || '',
+                role: kind,
+                notes: kind + ' screen · planet melody'
+                    + (faction ? ' · ' + faction + ' skin' : '')
+            });
+            compact.loop = true;
+            return compact;
+        }
+
         const bpm = win
             ? Math.max(90, Math.min(140, 112 + Math.floor(style.bpmDelta / 2)))
             : Math.max(70, Math.min(110, 84 + Math.floor(style.bpmDelta / 3)));
-        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
-        const a = (win ? this._victoryPattern(faction) : this._losePattern(faction)).map(pad);
-        const b = (win ? this._victoryBridge(faction) : this._loseBridge(faction)).map(pad);
+        const a = (win ? this._victoryPattern(faction || 'pirate') : this._losePattern(faction || 'pirate')).map(pad);
+        const b = (win ? this._victoryBridge(faction || 'pirate') : this._loseBridge(faction || 'pirate')).map(pad);
         return {
             format: 'vftrack',
             version: 1,
@@ -32754,8 +34461,9 @@ var VFTrackerFactionCompose = {
                 title: (win ? 'Victory' : 'Defeat') + ' — ' + style.label + (planet ? ' @ ' + planet : ''),
                 author: 'VF Tracker',
                 planet: planet,
-                faction: faction,
-                notes: kind + ' screen'
+                faction: faction || 'pirate',
+                role: kind,
+                notes: kind + ' screen · faction fallback'
             },
             bpm,
             rowsPerBeat: 1,
@@ -33009,7 +34717,35 @@ var VFTrackerFactionCompose = {
                         : a.split('-')[0];
                 }
             }
+            // Bare victory/lose → default planet motif (styles interpret it).
+            if (!planet) planet = 'mars';
             return kind === 'victory' ? this.victory(faction, planet) : this.lose(faction, planet);
+        }
+
+        m = /^map(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1]
+                ? ((VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(m[1])
+                    : m[1].split('-')[0])
+                : 'mars';
+            if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.map) {
+                return VFTrackerDefaults.map(planet);
+            }
+            return null;
+        }
+
+        m = /^ingame(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1]
+                ? ((VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(m[1])
+                    : m[1].split('-')[0])
+                : 'mars';
+            if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.forRole) {
+                return VFTrackerDefaults.forRole(planet, 'ingame');
+            }
+            return null;
         }
 
         m = /^faction:([a-z]+)$/.exec(k);
@@ -33039,7 +34775,10 @@ var VFTrackerFactionCompose = {
 /**
  * Library + playback facade for vftrack soundtracks.
  * Storage: vf_tracker_library_v1 (per-key JSON tracks).
- * Keys include planet, planet:faction, planet-boss:faction, victory[:faction], lose[:faction].
+ * Keys include planet / ingame:planet, map:planet, shop:planet,
+ * victory[:faction][:planet], lose[:faction][:planet], planet:faction,
+ * planet-boss:faction. Hauptmelodien are planet×role; STYLE interprets them
+ * at playback. Scene feel (difficulty / planet tier) nudges tempo + STYLE.
  */
 var VFTrackerManager = class VFTrackerManager {
     constructor() {
@@ -33055,6 +34794,9 @@ var VFTrackerManager = class VFTrackerManager {
         /** Manager-owned mixer state — survives fadeOut/stop player swaps. */
         this._themeIndex = 0;
         this._jungleAmount = 0;
+        /** Scene feel: tempo × user BPM, STYLE amount offset (combat intensity). */
+        this._sceneTempoMul = 1;
+        this._sceneStyleBoost = 0;
         this.loadLibrary();
         /** Typical authored combat BPM — local-audio rate is musicBpm / this. */
         this.referenceBpm = 132;
@@ -33137,6 +34879,48 @@ var VFTrackerManager = class VFTrackerManager {
         if (k === 'menu' || k === 'station' || k === 'hub') {
             return VFTrackerDefaults.menu();
         }
+        if (k === 'map' || k.indexOf('map:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.map ? VFTrackerDefaults.map(planet) : VFTrackerDefaults.menu();
+        }
+        if (k === 'shop' || k.indexOf('shop:') === 0) {
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.shop
+                ? VFTrackerDefaults.shop(planet)
+                : (VFTrackerDefaults.forRole
+                    ? VFTrackerDefaults.forRole(planet, 'shop')
+                    : VFTrackerDefaults.menu());
+        }
+        if (k === 'ingame' || k.indexOf('ingame:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.forRole
+                ? VFTrackerDefaults.forRole(planet, 'ingame')
+                : VFTrackerDefaults.forPlanet(planet);
+        }
+        if (k === 'victory' || k.indexOf('victory:') === 0
+            || k === 'lose' || k.indexOf('lose:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const parts = k.split(':');
+            const kind = parts[0];
+            const planet = parts[1] && !((typeof VFTrackerFactionCompose !== 'undefined'
+                && VFTrackerFactionCompose.normalizeFaction
+                && VFTrackerFactionCompose.normalizeFaction(parts[1])))
+                ? parts[1]
+                : (parts[2] || 'mars');
+            if (kind === 'victory' && VFTrackerDefaults.victory) return VFTrackerDefaults.victory(planet);
+            if (kind === 'lose' && VFTrackerDefaults.lose) return VFTrackerDefaults.lose(planet);
+        }
         if (k === 'intro' || k.indexOf('intro:') === 0) {
             if (typeof VFTrackerFactionCompose !== 'undefined') {
                 const composed = VFTrackerFactionCompose.resolveKey(k);
@@ -33155,7 +34939,7 @@ var VFTrackerManager = class VFTrackerManager {
         // Bare planet id — including explored / ambush / editor slugs.
         if (k.indexOf(':') === -1 && /^[a-z][a-z0-9_]*(-boss)?$/.test(k)
             && k !== 'menu' && k !== 'intro' && k !== 'victory' && k !== 'lose'
-            && k !== 'faction' && k !== 'station' && k !== 'hub') {
+            && k !== 'shop' && k !== 'faction' && k !== 'station' && k !== 'hub') {
             return VFTrackerDefaults.forPlanet(k);
         }
         return null;
@@ -33200,9 +34984,18 @@ var VFTrackerManager = class VFTrackerManager {
         const keys = new Set(VFTrackerDefaults.allKeys());
         keys.add('menu');
         keys.add('intro');
+        keys.add('map');
         keys.add('victory');
         keys.add('lose');
-        ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => keys.add('intro:' + p));
+        keys.add('shop');
+        ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => {
+            keys.add('intro:' + p);
+            keys.add('map:' + p);
+            keys.add('ingame:' + p);
+            keys.add('victory:' + p);
+            keys.add('lose:' + p);
+            keys.add('shop:' + p);
+        });
         if (typeof VFTrackerFactionCompose !== 'undefined') {
             VFTrackerFactionCompose.FACTIONS.forEach((f) => {
                 keys.add('faction:' + f);
@@ -33213,6 +35006,8 @@ var VFTrackerManager = class VFTrackerManager {
                     keys.add(p + ':' + f);
                     keys.add(p + '-boss:' + f);
                     keys.add('intro:' + p + ':' + f);
+                    keys.add('victory:' + f + ':' + p);
+                    keys.add('lose:' + f + ':' + p);
                 });
             });
         }
@@ -33222,7 +35017,12 @@ var VFTrackerManager = class VFTrackerManager {
 
     setVolume(v) {
         this.volume = Math.max(0, Math.min(1, Number(v) || 0));
-        this.player.setVolume(this.volume);
+        if (this.player && this.player.setVolume) this.player.setVolume(this.volume);
+        // Keep the fading-out leg at the same loudness so volume drags mid-
+        // crossfade do not leave one voice blasting while the other ducks.
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setVolume) p.setVolume(this.volume);
+        });
     }
 
     /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-2 user fine-tune multiplier. */
@@ -33263,27 +35063,41 @@ var VFTrackerManager = class VFTrackerManager {
         return v || 'default';
     }
 
+    /** Authored BPM of the active track (fallback: reference 132). */
+    getAuthoredBpm() {
+        const t = this.player && this.player.track;
+        const b = t && Number(t.bpm);
+        if (Number.isFinite(b) && b > 0) return b;
+        return this.referenceBpm || 132;
+    }
+
     getTempoScale() {
         const bpm = this.getPlaybackBpm();
-        const ref = this.referenceBpm || 132;
-        return Math.max(0.5, Math.min(4, bpm / ref));
+        const ref = this.getAuthoredBpm();
+        return Math.max(0.25, Math.min(8, bpm / Math.max(1, ref)));
     }
 
     getPlaybackBpm() {
-        if (Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0) {
-            return this._basePlaybackBpm;
+        // Heard tempo = user MUSIC BPM × scene feel (combat/boss nudge).
+        const base = Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0
+            ? this._basePlaybackBpm
+            : null;
+        if (base != null) {
+            const sceneMul = Number(this._sceneTempoMul);
+            const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
+            return Math.max(60, Math.min(300, Math.round(base * mul)));
         }
         const b = Number(this.player && this.player.playbackBpm);
         if (Number.isFinite(b) && b > 0) return b;
         const s = Number(this.player && this.player.tempoScale);
         const ref = this.referenceBpm || 132;
         if (Number.isFinite(s) && s > 0) return Math.round(ref * s);
-        return Math.round(ref * 3.5);
+        return Math.round(ref);
     }
 
     /** Absolute playback tempo in BPM (game clock + tracker). */
     setPlaybackBpm(bpm) {
-        const b = Math.max(60, Math.min(600, Math.round(Number(bpm) || 120)));
+        const b = Math.max(60, Math.min(300, Math.round(Number(bpm) || 120)));
         this._basePlaybackBpm = b;
         return this._applyPlaybackTempo();
     }
@@ -33296,20 +35110,89 @@ var VFTrackerManager = class VFTrackerManager {
 
     /**
      * Style intensity 0..1 — how far into the selected STYLE
-     * (break layer + mix morph + relative tempo boost on top of MUSIC BPM).
+     * (break layer + mix morph). Tempo stays on the MUSIC BPM slider.
      */
     setJungleAmount(amount) {
         let t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (t < 0.03) t = 0;
         this._jungleAmount = t;
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        return t;
+    }
+
+    /** User STYLE amount + scene intensity boost (combat difficulty / tier). */
+    _effectiveJungleAmount() {
+        const user = Math.max(0, Math.min(1, Number(this._jungleAmount) || 0));
+        const boost = Number(this._sceneStyleBoost) || 0;
+        let t = Math.max(0, Math.min(1, user + boost));
+        if (t < 0.03) t = 0;
+        return t;
+    }
+
+    _pushJungleToPlayers(amount) {
+        const t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (this.player && this.player.setJungleAmount) this.player.setJungleAmount(t);
         else if (this.player) this.player.jungleAmount = t;
         (this._outgoing || []).forEach((p) => {
             if (p && p.setJungleAmount) p.setJungleAmount(t);
             else if (p) p.jungleAmount = t;
         });
+    }
+
+    /**
+     * Adapt heard tempo + STYLE intensity to the active scene.
+     * role: combat|boss|victory|lose|map|shop|menu|intro
+     * difficulty: easy|normal|hard (menu preset)
+     * planetTier: 0..4 (EASY…NIGHTMARE planet curve)
+     */
+    setSceneFeel(opts) {
+        const o = opts || {};
+        const role = String(o.role || 'menu').toLowerCase();
+        const diff = String(o.difficulty || '').toLowerCase();
+        const tierRaw = o.planetTier;
+        const tier = Number.isFinite(Number(tierRaw)) ? Math.max(0, Math.min(4, Number(tierRaw))) : null;
+        let tempoMul = 1;
+        let styleBoost = 0;
+        if (role === 'combat' || role === 'boss' || role === 'ingame') {
+            if (diff === 'easy') { tempoMul = 0.94; styleBoost = -0.08; }
+            else if (diff === 'hard') { tempoMul = 1.07; styleBoost = 0.14; }
+            else { tempoMul = 1; styleBoost = 0; }
+            if (tier != null) {
+                tempoMul *= 0.96 + tier * 0.035;
+                styleBoost += -0.06 + tier * 0.055;
+            }
+            if (role === 'boss') {
+                tempoMul *= 1.05;
+                styleBoost += 0.1;
+            }
+        } else if (role === 'victory') {
+            tempoMul = 1.03;
+            styleBoost = 0.06;
+        } else if (role === 'lose') {
+            tempoMul = 0.84;
+            styleBoost = -0.18;
+        } else if (role === 'shop') {
+            tempoMul = 0.92;
+            styleBoost = -0.1;
+        } else if (role === 'map') {
+            tempoMul = 0.9;
+            styleBoost = -0.12;
+        } else if (role === 'intro') {
+            tempoMul = 1.02;
+            styleBoost = 0.04;
+        } else {
+            tempoMul = 1;
+            styleBoost = 0;
+        }
+        this._sceneTempoMul = Math.max(0.75, Math.min(1.35, tempoMul));
+        this._sceneStyleBoost = Math.max(-0.35, Math.min(0.45, styleBoost));
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
         this._applyPlaybackTempo();
-        return t;
+        return { tempoMul: this._sceneTempoMul, styleBoost: this._sceneStyleBoost };
+    }
+
+    clearSceneFeel() {
+        return this.setSceneFeel({ role: 'menu' });
     }
 
     getThemeIndex() {
@@ -33330,7 +35213,6 @@ var VFTrackerManager = class VFTrackerManager {
             if (p && p.setThemeIndex) p.setThemeIndex(i);
             else if (p) p.themeIndex = i;
         });
-        this._applyPlaybackTempo();
         return i;
     }
 
@@ -33359,48 +35241,59 @@ var VFTrackerManager = class VFTrackerManager {
     }
 
     /**
-     * Effective sequencer BPM = MUSIC BPM × style/theme boost × AMOUNT.
-     * Style never ignores the BPM slider (no fixed 560 target).
+     * MUSIC BPM slider = true heard tempo (beats/minute).
+     * tempoScale = musicBpm / authoredTrackBpm so display == what you hear.
+     * BPM = (beats / seconds) × 60 → rowDuration = 60 / bpm / rowsPerBeat.
      */
     _applyPlaybackTempo() {
-        const base = Number.isFinite(this._basePlaybackBpm)
-            ? this._basePlaybackBpm
-            : this.getPlaybackBpm();
-        const styleMag = Math.max(0, Math.min(1, Math.abs(this.getJungleAmount()) || 0));
-        const themeIdx = this.getThemeIndex();
-        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
-            ? VFTrackerThemes.metaOf(themeIdx)
-            : { tempoBoost: 0 };
-        // Tempo tint scales with AMOUNT only — no forced floor that locks every
-        // section to the same feel when a non-PLANET STYLE is selected.
-        const themeBoost = themeIdx > 0 ? (Number(meta.tempoBoost) || 0) * styleMag : 0;
-        const side = meta.breakSide || 'off';
-        const styleBoost = side === 'jungle' || side === 'hybrid' ? styleMag * 0.35
-            : side === 'dnb' ? styleMag * 0.24
-                : side === 'drive' ? styleMag * 0.16
-                    : side === 'elektro' ? styleMag * 0.12
-                        : 0;
-        const rel = 1 + Math.max(styleBoost, themeBoost);
-        const b = Math.max(60, Math.min(600, Math.round(base * rel)));
-        const ref = this.referenceBpm || 132;
-        const scale = Math.max(0.5, Math.min(4, b / ref));
+        // User slider BPM only — scene mul applied once below (never via getPlaybackBpm).
+        let base = Number.isFinite(this._basePlaybackBpm) ? this._basePlaybackBpm : 0;
+        if (!(base > 0)) {
+            const raw = Number(this.player && this.player.playbackBpm);
+            base = (Number.isFinite(raw) && raw > 0) ? raw : (this.referenceBpm || 132);
+        }
+        const sceneMul = Number(this._sceneTempoMul);
+        const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
+        const b = Math.max(60, Math.min(300, Math.round(base * mul)));
+        const authored = this.getAuthoredBpm();
+        const scale = Math.max(0.25, Math.min(8, b / Math.max(1, authored)));
+        // Local-file rate stays vs reference 132 (files have no per-track BPM).
+        const fileRate = Math.max(0.5, Math.min(4, b / (this.referenceBpm || 132)));
         if (this.player) {
-            this.player.playbackBpm = b;
             this.player.tempoScale = scale;
+            this.player.playbackBpm = b;
+            // Debounce re-anchor while the BPM fader is dragged — every tick
+            // used to cut+retrig all voices and pump the bus loudness.
+            this._queueTempoNotify(this.player);
         }
         (this._outgoing || []).forEach((p) => {
             if (!p) return;
+            const pAuth = (p.track && Number(p.track.bpm) > 0) ? Number(p.track.bpm) : authored;
+            p.tempoScale = Math.max(0.25, Math.min(8, b / Math.max(1, pAuth)));
             p.playbackBpm = b;
-            p.tempoScale = scale;
+            this._queueTempoNotify(p);
         });
         if (this.player && this.player.isPlaying()
             && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
             beatSyncManager.setBpm(b);
         }
         if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
-            localAudioManager.setPlaybackRate(scale);
+            localAudioManager.setPlaybackRate(fileRate);
         }
         return b;
+    }
+
+    /** Coalesce rapid BPM-slider updates into one schedule re-anchor. */
+    _queueTempoNotify(player) {
+        if (!player || !player.notifyTempoChanged) return;
+        if (player._tempoNotifyTimer) {
+            clearTimeout(player._tempoNotifyTimer);
+            player._tempoNotifyTimer = null;
+        }
+        player._tempoNotifyTimer = setTimeout(() => {
+            player._tempoNotifyTimer = null;
+            try { player.notifyTempoChanged(); } catch (e) { /* ignore */ }
+        }, 70);
     }
 
     setTempoScale(scale) {
@@ -33431,30 +35324,45 @@ var VFTrackerManager = class VFTrackerManager {
         const k = String(key || '').toLowerCase();
         if (!k) return 'combat';
         if (k === 'menu' || k === 'station' || k === 'hub') return 'menu';
+        if (k === 'map' || k.indexOf('map:') === 0) return 'map';
+        if (k === 'shop' || k.indexOf('shop:') === 0) return 'shop';
         if (k === 'intro' || k.indexOf('intro:') === 0) return 'intro';
         if (k === 'victory' || k.indexOf('victory:') === 0) return 'victory';
         if (k === 'lose' || k.indexOf('lose:') === 0) return 'lose';
+        if (k === 'ingame' || k.indexOf('ingame:') === 0) return 'combat';
         return 'combat';
+    }
+
+    /** Play galaxy-map BGM for a planet Hauptmelodie. */
+    playMap(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('map:' + id);
+    }
+
+    /** Play trader / shop BGM for a planet Hauptmelodie. */
+    playShop(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('shop:' + id);
     }
 
     _syncPlayerSettings(target) {
         if (!target) return;
         const src = this.player;
         const theme = this.getThemeIndex();
-        const jungle = this.getJungleAmount();
+        const jungle = this._effectiveJungleAmount();
         const tempoScale = (src && src.tempoScale) || this.getTempoScale();
         const playbackBpm = (src && src.playbackBpm) || this.getPlaybackBpm();
         target.tempoScale = tempoScale;
         target.playbackBpm = playbackBpm;
         target.jungleAmount = jungle;
         target.themeIndex = theme;
-        target.channelMixBase = ((src && src.channelMixBase) || [1.1, 0.42, 2.4, 1.25]).slice();
-        target.channelMixJungle = ((src && src.channelMixJungle) || [1.75, 0.06, 0.95, 2.85]).slice();
-        target.channelMixDnb = ((src && src.channelMixDnb) || [2.15, 0.1, 0.75, 1.95]).slice();
-        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.95, 0.08, 0.85, 2.4]).slice();
-        target.channelMixElektro = ((src && src.channelMixElektro) || [2.05, 0.16, 1.05, 1.95]).slice();
-        target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.45, 0.28, 1.65, 1.35]).slice();
-        target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.85, 0.72, 0.95, 2.05]).slice();
+        target.channelMixBase = ((src && src.channelMixBase) || [1.05, 0.55, 1.55, 1.15]).slice();
+        target.channelMixJungle = ((src && src.channelMixJungle) || [1.25, 0.38, 1.05, 1.55]).slice();
+        target.channelMixDnb = ((src && src.channelMixDnb) || [1.45, 0.32, 0.95, 1.4]).slice();
+        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.35, 0.35, 1.0, 1.5]).slice();
+        target.channelMixElektro = ((src && src.channelMixElektro) || [1.4, 0.34, 1.05, 1.35]).slice();
+        target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.15, 0.48, 1.35, 1.1]).slice();
+        target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.3, 0.62, 1.0, 1.35]).slice();
         target.channelMix = ((src && src.channelMix) || target.channelMixBase).slice();
         target.channelUserMix = ((src && src.channelUserMix) || [1, 1, 1, 1]).slice();
         target.channelVoices = ((src && src.channelVoices) || ['default', 'default', 'default', 'default']).slice();
@@ -33469,6 +35377,17 @@ var VFTrackerManager = class VFTrackerManager {
 
     _retireOutgoing(oldPlayer, fadeSec) {
         if (!oldPlayer) return;
+        // Cap concurrent fade-outs at one: a track swap retriggered before the
+        // previous fade finished (rapid slider drags, quick planet hops) used to
+        // stack a second and third still-audible outgoing player on top of the
+        // new one — heard as the music "overlapping"/stumbling. Cut any player
+        // already fading out immediately instead of letting it keep sounding.
+        if (this._outgoing && this._outgoing.length) {
+            this._outgoing.forEach((p) => {
+                try { p.stop(true); } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
         this._outgoing.push(oldPlayer);
         const dur = oldPlayer.fadeOut ? oldPlayer.fadeOut(fadeSec) : 0;
         setTimeout(() => {
@@ -33484,16 +35403,24 @@ var VFTrackerManager = class VFTrackerManager {
         if (!track) return false;
         // Theme / style belong on every song — reassert before keep-or-swap.
         this._reassertMixerSettings();
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        const prevRole = this._trackRole(this.currentKey);
+        const nextRole = this._trackRole(k);
+        const sameRole = prevRole === nextRole;
+        const fp = this._fingerprint(track);
         // Same song already audible (even under a new key) — keep row position.
-        // Never keep across roles (combat↔menu/intro/end): style heads must not
-        // glue hub and in-game into one continuous loop (PLANET-style swaps).
-        if (!(opts && opts.force) && !(opts && opts.onEnded) && this.player.isPlaying()) {
-            const sameRole = this._trackRole(this.currentKey) === this._trackRole(k);
+        // Never keep across roles (combat↔menu/intro/end/shop).
+        // onEnded alone must NOT force a restart: playIntro used to re-crossfade
+        // the same fanfare whenever setStageContext/reevaluate re-armed it.
+        if (!(opts && opts.force) && this.player.isPlaying()) {
             if (sameRole) {
-                const fp = this._fingerprint(track);
                 if ((fp && fp === this._currentFingerprint) || this.currentKey === k) {
                     this.currentKey = k;
                     if (fp) this._currentFingerprint = fp;
+                    if (opts && typeof opts.onEnded === 'function') {
+                        this.player._onEnded = opts.onEnded;
+                        this.player._endedFired = false;
+                    }
                     return true;
                 }
             }
@@ -33510,7 +35437,9 @@ var VFTrackerManager = class VFTrackerManager {
         const hasOutgoing = !!(this._outgoing && this._outgoing.length);
         const doFade = fade > 0 && !(opts && opts.forceHard);
 
-        // Crossfade: outgoing player keeps sounding while the new one fades in.
+        // Distinct tracks always dual-crossfade (incl. same-role planet hops).
+        // Soft in-place restarts cut mid-bar and sounded like a broken switch;
+        // _retireOutgoing caps stacked fades so quick hops stay clean.
         if (wasPlaying && doFade) {
             const incoming = new VFTrackerPlayer();
             this._syncPlayerSettings(incoming);
@@ -33522,7 +35451,7 @@ var VFTrackerManager = class VFTrackerManager {
         }
 
         this.currentKey = k;
-        this._currentFingerprint = this._fingerprint(track);
+        this._currentFingerprint = fp;
         // Always ease in when a fade is requested — covers intro→combat and
         // source handoffs where the previous player already finished.
         const fadeIn = opts && opts.fadeIn != null
@@ -33534,29 +35463,43 @@ var VFTrackerManager = class VFTrackerManager {
             fadeIn: (wasPlaying || hasOutgoing || doFade) ? fadeIn : 0,
             onEnded: opts && opts.onEnded
         });
+        // Track is loaded — finish STYLE + BPM adaptation against this song's
+        // authored BPM (same result as nudging MUSIC BPM / STYLE in AUDIO).
+        this._applyStylePlaybackForTrack();
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.start) {
             const planetHint = (track.meta && track.meta.planet) || k.split(':')[0].split('-')[0];
             beatSyncManager.start(
-                planetHint === 'menu' || planetHint === 'intro' ? 'mars' : planetHint,
-                this.player.bpm || track.bpm
+                planetHint === 'menu' || planetHint === 'intro' || planetHint === 'map'
+                    ? 'mars' : planetHint,
+                this.getPlaybackBpm()
             );
         }
         return true;
     }
 
     /**
-     * Play a one-shot intro, then invoke onEnded (combat loop, etc.).
+     * After a real track load: reassert mixer + adapt MUSIC BPM to STYLE × song
+     * so playback does not stay half-styled until the AUDIO faders move.
      */
-    playIntro(key, opts) {
-        const k = String(key || 'intro');
-        const track = (opts && opts.track) || this.getTrack(k);
-        if (!track) return false;
-        // Force non-loop even if a library override set loop:true.
-        const oneShot = Object.assign({}, VFTrackerParse.toCompact(track), { loop: false });
-        return this.play(k, oneShot, {
-            onEnded: opts && opts.onEnded,
-            fade: opts && opts.fade != null ? opts.fade : this.crossfadeSeconds
-        });
+    _applyStylePlaybackForTrack() {
+        if (typeof volumeControlsManager !== 'undefined'
+            && volumeControlsManager.applyStylePlaybackForTrack) {
+            volumeControlsManager.applyStylePlaybackForTrack();
+            this._pushJungleToPlayers(this._effectiveJungleAmount());
+            this._applyPlaybackTempo();
+            return;
+        }
+        this._reassertMixerSettings();
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        this._applyPlaybackTempo();
+    }
+
+    /**
+     * Intro fanfare retired (was a one-shot before combat). Kept as API stub
+     * so old callers no-op instead of cutting the bus.
+     */
+    playIntro(/* key, opts */) {
+        return false;
     }
 
     playPlanet(planetId) {
@@ -33565,9 +35508,10 @@ var VFTrackerManager = class VFTrackerManager {
     }
 
     playMenu() {
-        // Always restart hub music when entering planet select / station —
-        // same as PLANET (default) style song swaps, even with THEME heads on.
-        return this.play('menu', null, { force: true });
+        // Keep position when hub music is already the same track (faction /
+        // wizard / station remounts call startMenuMusic often). play() still
+        // swaps when the role or fingerprint differs (e.g. combat → menu).
+        return this.play('menu');
     }
 
     /** First library/default key that would actually play from `keys`. */
@@ -33588,7 +35532,25 @@ var VFTrackerManager = class VFTrackerManager {
         const list = Array.isArray(keys) ? keys : [keys];
         const target = this.firstPlayableKey(list);
         if (!target) return null;
-        if (this.currentKey === target && this.player.isPlaying()) return target;
+        if (this.currentKey === target && this.player.isPlaying()) {
+            // Keep playhead, but still push STYLE / scene feel to the live player.
+            this._reassertMixerSettings();
+            this._pushJungleToPlayers(this._effectiveJungleAmount());
+            this._applyPlaybackTempo();
+            return target;
+        }
+        // Same map/combat motif under an alias key — keep playhead.
+        if (this.player.isPlaying() && this._trackRole(this.currentKey) === this._trackRole(target)) {
+            const track = this.getTrack(target);
+            const fp = this._fingerprint(track);
+            if (fp && fp === this._currentFingerprint) {
+                this.currentKey = target;
+                this._reassertMixerSettings();
+                this._pushJungleToPlayers(this._effectiveJungleAmount());
+                this._applyPlaybackTempo();
+                return target;
+            }
+        }
         if (this.play(target)) return target;
         return null;
     }
@@ -33627,6 +35589,27 @@ var VFTrackerManager = class VFTrackerManager {
     isPlaying(key) {
         if (key != null) return this.currentKey === key && this.player.isPlaying();
         return this.player.isPlaying();
+    }
+
+    /**
+     * True while the current player OR a still-fading outgoing leg is audible.
+     * fadeOut() swaps in a blank player — without this, ensureMusicPlaying /
+     * enemy overrides would start a second song on top of the fade.
+     */
+    isAudible() {
+        if (this.player && this.player.isPlaying && this.player.isPlaying()) return true;
+        const out = this._outgoing || [];
+        for (let i = 0; i < out.length; i++) {
+            const p = out[i];
+            if (p && p.isPlaying && p.isPlaying()) return true;
+        }
+        return false;
+    }
+
+    /** Audible playhead for the Music Editor score sheet. */
+    getPlayhead() {
+        if (this.player && this.player.getPlayhead) return this.player.getPlayhead();
+        return { playing: false, orderIndex: 0, rowIndex: 0, pattern: 0, frac: 0, absRow: 0 };
     }
 
     downloadTrack(key, filename) {
@@ -33669,18 +35652,24 @@ extendClass(SoundManager, {
             this._pendingMissionIntro = false;
             this._introPlaying = false;
             this._activeOverrideKey = ambientKey;
+            // Undo victory duck / stale bus level without restarting the loop.
+            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+                vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume ? this.musicBusVolume() : 0.2));
+            }
             return;
         }
         // Always re-bind combat music when a stage boots (don't trust stale keys).
         this._activeOverrideKey = null;
-        // Fresh stage boot → play one-shot intro before the combat loop.
-        this._pendingMissionIntro = true;
+        // No one-shot intro fanfare — that played a short track then hard-cut
+        // into the combat loop (heard as "one song, then another jumps in").
+        // Hub/map → combat crossfades once via play().
+        this._pendingMissionIntro = false;
         this._introPlaying = false;
         this._reevaluateMusic();
         this._ensureCombatMusicPlaying();
     },
 
-    /** True when the vftrack that combat would pick is already audible. */
+    /** True when the preferred track for this stage is already audible. */
     _combatSongAlreadyPlaying(planetId) {
         if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.isPlaying
             || !vfTrackerManager.isPlaying()) {
@@ -33689,18 +35678,15 @@ extendClass(SoundManager, {
         const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
             ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
             : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        // Prefer-only: never treat regular combat as "same song" during boss
+        // (that left the stage loop running through the boss chamber).
         const keys = this.combatTrackKeys
-            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction)
+            ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction, { preferOnly: true })
             : [id];
-        if (keys.indexOf(id) === -1) keys.push(id);
         const target = vfTrackerManager.firstPlayableKey
             ? vfTrackerManager.firstPlayableKey(keys)
             : null;
-        if (target && vfTrackerManager.isPlaying(target)) return true;
-        for (let i = 0; i < keys.length; i++) {
-            if (vfTrackerManager.isPlaying(keys[i])) return true;
-        }
-        return false;
+        return !!(target && vfTrackerManager.isPlaying(target));
     },
 
     introTrackKeys(planetId, factionId) {
@@ -33716,52 +35702,14 @@ extendClass(SoundManager, {
         return keys;
     },
 
-    _startMissionIntroThenCombat(planetId) {
-        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
-            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
-            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
-        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.playIntro) {
-            this._pendingMissionIntro = false;
-            this._introPlaying = false;
-            return false;
-        }
-        if (!this.ensureContext()) return false;
-        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-        if (typeof localAudioManager !== 'undefined') {
-            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
-            else localAudioManager.stop();
-        }
-        this.stopPlanetAmbientNodesOnly && this.stopPlanetAmbientNodesOnly({ keepTracker: true });
-        const keys = this.introTrackKeys(id, this._currentHostileFaction);
-        vfTrackerManager.setEnabled(true);
-        vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
-        let started = false;
-        for (let i = 0; i < keys.length; i++) {
-            const k = keys[i];
-            if (!vfTrackerManager.hasTrack(k)) continue;
-            const ok = vfTrackerManager.playIntro(k, {
-                onEnded: () => {
-                    if (!this._introPlaying) return;
-                    this._introPlaying = false;
-                    this._pendingMissionIntro = false;
-                    // Resume combat / override loop after the fanfare.
-                    this._activeOverrideKey = null;
-                    this.startPlanetAmbient(this._currentPlanetId || id);
-                }
-            });
-            if (ok) {
-                started = true;
-                this._introPlaying = true;
-                this._pendingMissionIntro = false;
-                this.clearPendingMusic && this.clearPendingMusic();
-                break;
-            }
-        }
-        if (!started) {
-            this._pendingMissionIntro = false;
-            this._introPlaying = false;
-        }
-        return started;
+    /**
+     * Mission intro fanfare disabled — it interrupted combat/hub too often.
+     * Stage boot goes straight to the combat loop via startPlanetAmbient.
+     */
+    _startMissionIntroThenCombat(/* planetId */) {
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
+        return false;
     },
 
     _resolveHostileFaction(planetId) {
@@ -33786,8 +35734,10 @@ extendClass(SoundManager, {
         if (key === this._activeEnemyTypesKey) return;
         this._activeEnemyTypesKey = key;
         this._activeEnemyTypes = list;
-        // Only swap when the resolved override identity changes — spawn/despawn
-        // churn of untracked types must not restart the combat loop.
+        // Remember types for the next silent boot, but never yank an already
+        // audible combat/hub song to an enemy/stage override mid-fight —
+        // that was the "track jumps to something else" glitch.
+        if (this._musicActuallyPlaying() && this._activeOverrideKey) return;
         const before = this._activeOverrideKey;
         this._reevaluateMusic();
         if (this._activeOverrideKey === before && this._musicActuallyPlaying()) return;
@@ -33812,32 +35762,47 @@ extendClass(SoundManager, {
         return null;
     },
 
-    /** Candidate vftrack keys for current planet / stage / hostile faction. */
-    combatTrackKeys(planetId, stageId, factionId) {
+    /**
+     * Candidate vftrack keys for current planet / stage / hostile faction.
+     * Boss stages prefer *-boss keys only when `preferOnly` (keep-same checks);
+     * playback may still list soft fallbacks afterward.
+     */
+    combatTrackKeys(planetId, stageId, factionId, opts) {
         const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
             ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
             : String(planetId || 'mars').toLowerCase().split('-')[0];
         const stage = String(stageId || this._currentStageId || '').toLowerCase();
         const boss = stage === 'boss' || stage === 'b';
         const faction = String(factionId || this._currentHostileFaction || '').toLowerCase();
+        const preferOnly = !!(opts && opts.preferOnly);
         const keys = [];
         // Prefer planet×faction (works for explored/ambush ids via motif mapping).
         // Do NOT fall back to bare faction:theme — that made every planet share
         // one loop whenever the planet slug wasn't mars..pluto.
-        if (boss && faction) keys.push(id + '-boss:' + faction);
+        if (boss) {
+            if (faction) keys.push(id + '-boss:' + faction);
+            keys.push(id + '-boss');
+            if (!preferOnly) {
+                // Last-resort only — never used for "already playing" keep.
+                if (faction) keys.push(id + ':' + faction);
+                keys.push(id);
+            }
+            return keys;
+        }
         if (faction) keys.push(id + ':' + faction);
-        if (boss) keys.push(id + '-boss');
         keys.push(id);
         return keys;
     },
 
     _musicActuallyPlaying() {
-        if (this._introPlaying) return true;
-        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()) {
-            return true;
+        // Intro path is retired — never treat a stale pending flag as audible.
+        if (typeof vfTrackerManager !== 'undefined') {
+            if (vfTrackerManager.isAudible && vfTrackerManager.isAudible()) return true;
+            if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying()) return true;
         }
-        if (typeof localAudioManager !== 'undefined' && localAudioManager.el && !localAudioManager.el.paused) {
-            return true;
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.isAudible && localAudioManager.isAudible()) return true;
+            if (localAudioManager.el && !localAudioManager.el.paused) return true;
         }
         if (typeof youtubeSoundtrackManager !== 'undefined'
             && youtubeSoundtrackManager.mode
@@ -33857,13 +35822,9 @@ extendClass(SoundManager, {
 
     _reevaluateMusic() {
         if (!this._musicContextActive) return;
-        // Never interrupt the launch fanfare for enemy/stage override swaps.
-        if (this._introPlaying || this._pendingMissionIntro) {
-            if (this._pendingMissionIntro && this.musicEnabled) {
-                this._startMissionIntroThenCombat(this._currentPlanetId || 'mars');
-            }
-            return;
-        }
+        // Intro fanfare path retired — never re-arm it from enemy/stage churn.
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
         const resolved = this._resolveSoundtrackOverride();
         const overrideKey = resolved ? resolved.key : null;
         const ambientKey = overrideKey || ('ambient:' + (this._currentPlanetId || 'mars')
@@ -34987,6 +36948,7 @@ var PlayerManager = class PlayerManager {
         const usableShield = online ? Math.min(this.shield, maxAbsByEnergy) : 0;
         const savedShield = this.shield;
 
+        let shieldUsed = 0;
         if (hpDamage > 0 && typeof enemyManager !== 'undefined' && enemyManager.applyDefenseToDamage) {
             const target = {
                 armor: this.armor,
@@ -34996,17 +36958,21 @@ var PlayerManager = class PlayerManager {
                 defenseMechanisms: this.defenseMechanisms
             };
             hpDamage = enemyManager.applyDefenseToDamage(target, hpDamage);
-            const used = Math.max(0, usableShield - (target.shield || 0));
-            this.shield = savedShield - used;
-            if (used > 0) {
-                this.energy = Math.max(0, this.energy - used * costPer);
+            shieldUsed = Math.max(0, usableShield - (target.shield || 0));
+            this.shield = savedShield - shieldUsed;
+            if (shieldUsed > 0) {
+                this.energy = Math.max(0, this.energy - shieldUsed * costPer);
             }
         } else if (hpDamage > 0 && usableShield > 0) {
             const absorbed = Math.min(usableShield, hpDamage);
             this.shield = savedShield - absorbed;
             this.energy = Math.max(0, this.energy - absorbed * costPer);
             hpDamage -= absorbed;
+            shieldUsed = absorbed;
         }
+
+        // Hull flash when armor eats damage; shield spark when the barrier soaks it.
+        this.hitSpark = hpDamage > 0 ? 'hull' : (shieldUsed > 0 ? 'shield' : 'hull');
 
         if (typeof chargeSystem !== 'undefined' && chargeSystem.onPlayerHitWhileCharging) {
             chargeSystem.onPlayerHitWhileCharging();
@@ -35247,21 +37213,46 @@ extendClass(PlayerManager, {
             c.width = W * k;
             c.height = H * k;
             const ctx = c.getContext('2d', { willReadFrequently: true });
-            loader.renderShip(ctx, model, ((W - mw * fit) / 2) * k, ((H - mh * fit) / 2) * k, fit * k, null, 0, {});
+            loader.renderShip(ctx, model, ((W - mw * fit) / 2) * k, ((H - mh * fit) / 2) * k, fit * k, null, 0, {
+                showThrusterGlow: false,
+                allowColorMountSprites: true
+            });
             const data = ctx.getImageData(0, 0, c.width, c.height).data;
             const grid = [];
             let solid = 0;
+            let minC = c.width;
+            let maxC = -1;
+            let minR = c.height;
+            let maxR = -1;
             for (let r = 0; r < c.height; r++) {
                 const row = new Array(c.width);
                 for (let q = 0; q < c.width; q++) {
-                    const on = data[(r * c.width + q) * 4 + 3] > 110 ? 1 : 0;
+                    const on = data[(r * c.width + q) * 4 + 3] > 40 ? 1 : 0;
                     row[q] = on;
-                    solid += on;
+                    if (on) {
+                        solid += 1;
+                        if (q < minC) minC = q;
+                        if (q > maxC) maxC = q;
+                        if (r < minR) minR = r;
+                        if (r > maxR) maxR = r;
+                    }
                 }
                 grid.push(row);
             }
             if (solid < 4) { p.collision = null; return; } // art not ready yet
-            p.collision = { sprite: grid, colors: {}, drawW: W, drawH: H, insetL: 0, insetT: 0, insetR: 0, insetB: 0 };
+            const pw = W / c.width;
+            const ph = H / c.height;
+            p.collision = {
+                sprite: grid,
+                colors: {},
+                drawW: W,
+                drawH: H,
+                insetL: maxC >= minC ? minC * pw : 0,
+                insetT: maxR >= minR ? minR * ph : 0,
+                insetR: maxC >= minC ? (c.width - 1 - maxC) * pw : 0,
+                insetB: maxR >= minR ? (c.height - 1 - maxR) * ph : 0,
+                _maskTrust: null
+            };
             this._hitMaskKey = key;
         } catch (e) {
             p.collision = null;
@@ -37654,68 +39645,157 @@ extendClass(EnemyManager, {
         const sprite = model.sprite || null;
         const colors = model.colors || null;
         // Hit mask from the actually rendered ship (voxel segments / PNG crops,
-        // vertical enemy flip) — falls back to the logical sprite grid.
+        // vertical enemy flip) — falls back to the logical sprite grid (also
+        // flipped, so nose/aft match the on-screen enemy orientation).
         const baked = this.bakeEnemyHitMask(model);
-        const maskSprite = baked || sprite;
-        let insetL = 0;
-        let insetT = 0;
-        let insetR = 0;
-        let insetB = 0;
-        if (maskSprite && maskSprite.length && maskSprite[0] && maskSprite[0].length) {
-            const rows = maskSprite.length;
-            const cols = maskSprite[0].length;
-            let minC = cols;
-            let maxC = -1;
-            let minR = rows;
-            let maxR = -1;
-            for (let r = 0; r < rows; r++) {
-                const row = maskSprite[r];
-                if (!row) continue;
-                for (let c = 0; c < cols; c++) {
-                    if (!row[c]) continue;
-                    if (c < minC) minC = c;
-                    if (c > maxC) maxC = c;
-                    if (r < minR) minR = r;
-                    if (r > maxR) maxR = r;
-                }
-            }
-            if (maxC >= minC && maxR >= minR) {
-                const pw = drawW / cols;
-                const ph = drawH / rows;
-                insetL = minC * pw;
-                insetT = minR * ph;
-                insetR = (cols - 1 - maxC) * pw;
-                insetB = (rows - 1 - maxR) * ph;
-            }
-        }
+        const logical = this.enemyLogicalHitMask(model);
+        const maskSprite = baked || logical || sprite;
+        const insets = this.computeEnemyMaskInsets(maskSprite, drawW, drawH);
         return {
             width: Math.max(4, Math.round(drawW)),
             height: Math.max(4, Math.round(drawH)),
             sprite: sprite,
             colors: colors,
+            hitMaskReady: !!baked,
             collision: {
                 sprite: maskSprite,
                 colors: colors,
                 drawW: drawW,
                 drawH: drawH,
-                insetL: insetL,
-                insetT: insetT,
-                insetR: insetR,
-                insetB: insetB
+                insetL: insets.insetL,
+                insetT: insets.insetT,
+                insetR: insets.insetR,
+                insetB: insets.insetB
             }
         };
+    },
+
+    /** Opaque AABB insets for a boolean / indexed mask grid. */
+    computeEnemyMaskInsets(maskSprite, drawW, drawH) {
+        const out = { insetL: 0, insetT: 0, insetR: 0, insetB: 0 };
+        if (!maskSprite || !maskSprite.length || !maskSprite[0] || !maskSprite[0].length) return out;
+        const rows = maskSprite.length;
+        const cols = maskSprite[0].length;
+        let minC = cols;
+        let maxC = -1;
+        let minR = rows;
+        let maxR = -1;
+        for (let r = 0; r < rows; r++) {
+            const row = maskSprite[r];
+            if (!row) continue;
+            for (let c = 0; c < cols; c++) {
+                if (!row[c]) continue;
+                if (c < minC) minC = c;
+                if (c > maxC) maxC = c;
+                if (r < minR) minR = r;
+                if (r > maxR) maxR = r;
+            }
+        }
+        if (maxC < minC || maxR < minR) return out;
+        const pw = drawW / cols;
+        const ph = drawH / rows;
+        out.insetL = minC * pw;
+        out.insetT = minR * ph;
+        out.insetR = (cols - 1 - maxC) * pw;
+        out.insetB = (rows - 1 - maxR) * ph;
+        return out;
+    },
+
+    /**
+     * Authoritative indexed hull as a boolean mask, vertically flipped to match
+     * enemy on-screen orientation (renderShip scale(1,-1)).
+     */
+    enemyLogicalHitMask(model) {
+        const sprite = model && model.sprite;
+        if (!sprite || !sprite.length || !sprite[0] || !sprite[0].length) return null;
+        const rows = sprite.length;
+        const cols = sprite[0].length;
+        const flip = !(model && model.forceEnemyOrientation === false)
+            && (!!(model && model.forceEnemyOrientation)
+                || (model && model.type === 'enemy')
+                || (typeof graphicsManager !== 'undefined'
+                    && graphicsManager.shipAssetLoader
+                    && graphicsManager.shipAssetLoader.isEnemyShip
+                    && graphicsManager.shipAssetLoader.isEnemyShip(model)));
+        const grid = new Array(rows);
+        let solid = 0;
+        for (let r = 0; r < rows; r++) {
+            const src = sprite[flip ? (rows - 1 - r) : r] || [];
+            const row = new Array(cols);
+            for (let c = 0; c < cols; c++) {
+                const on = src[c] ? 1 : 0;
+                row[c] = on;
+                solid += on;
+            }
+            grid[r] = row;
+        }
+        return solid >= 4 ? grid : null;
+    },
+
+    /** Merge two masks (OR). `extra` is nearest-neighbour sampled into `base` size. */
+    unionEnemyHitMasks(base, extra) {
+        if (!base || !base.length) return extra || null;
+        if (!extra || !extra.length || !extra[0] || !extra[0].length) return base;
+        const rows = base.length;
+        const cols = (base[0] && base[0].length) || 0;
+        if (!cols) return base;
+        const er = extra.length;
+        const ec = extra[0].length;
+        for (let r = 0; r < rows; r++) {
+            const row = base[r];
+            if (!row) continue;
+            const sr = Math.min(er - 1, Math.floor((r + 0.5) * er / rows));
+            const src = extra[sr];
+            if (!src) continue;
+            for (let c = 0; c < cols; c++) {
+                if (row[c]) continue;
+                const sc = Math.min(ec - 1, Math.floor((c + 0.5) * ec / cols));
+                if (src[sc]) row[c] = 1;
+            }
+        }
+        return base;
+    },
+
+    /** Expand solid cells by 1 so soft / VOXEL edges stay hittable. */
+    dilateEnemyHitMask(grid) {
+        if (!grid || !grid.length || !grid[0]) return grid;
+        const rows = grid.length;
+        const cols = grid[0].length;
+        const out = new Array(rows);
+        for (let r = 0; r < rows; r++) {
+            const row = new Array(cols);
+            for (let c = 0; c < cols; c++) {
+                let on = 0;
+                for (let dr = -1; dr <= 1 && !on; dr++) {
+                    const rr = r + dr;
+                    if (rr < 0 || rr >= rows) continue;
+                    const src = grid[rr];
+                    if (!src) continue;
+                    for (let dc = -1; dc <= 1; dc++) {
+                        const cc = c + dc;
+                        if (cc < 0 || cc >= cols) continue;
+                        if (src[cc]) { on = 1; break; }
+                    }
+                }
+                row[c] = on;
+            }
+            out[r] = row;
+        }
+        return out;
     },
 
     /**
      * Render the model once offscreen (the same renderShip path the game
      * uses) and turn its alpha into a boolean grid. Cached per visual; not
      * cached while sprites are still loading (empty render).
+     * VOXEL lattice is disabled for the bake — shared combat cells clip the
+     * offscreen canvas and punched holes in enemy hitboxes.
      */
     bakeEnemyHitMask(model) {
         if (!model || typeof document === 'undefined') return null;
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         if (!loader || !loader.isLoaded || !loader.isLoaded() || !loader.renderShip) return null;
-        const key = [model.factionSpriteKey || model.name || model.id, model.width, model.height].join('|');
+        const key = [model.factionSpriteKey || model.name || model.id, model.width, model.height, 'flat1'].join('|');
         this._hitMaskCache = this._hitMaskCache || Object.create(null);
         if (this._hitMaskCache[key]) return this._hitMaskCache[key];
         const k = 3; // sub-pixel resolution of the mask
@@ -37723,29 +39803,44 @@ extendClass(EnemyManager, {
         const mh = Math.max(1, Math.round(model.height || 12));
         const cols = mw * k;
         const rows = mh * k;
+        const prevGlobal = loader.globalVoxelCell;
         try {
+            // 1px lattice for the bake: the shared combat VOXEL cell is larger
+            // than this offscreen canvas step and clips wing / nose pixels.
+            loader.globalVoxelCell = 1;
             const c = document.createElement('canvas');
             c.width = cols;
             c.height = rows;
             const ctx = c.getContext('2d', { willReadFrequently: true });
-            loader.renderShip(ctx, model, 0, 0, k, null, 0, {});
+            loader.renderShip(ctx, model, 0, 0, k, null, 0, {
+                showThrusterGlow: false,
+                allowColorMountSprites: false
+            });
             const data = ctx.getImageData(0, 0, cols, rows).data;
-            const grid = [];
+            let grid = [];
             let solid = 0;
+            // Keep soft hull edges (alpha 40+) so silhouette insets match what
+            // players see; a high cut made hitboxes smaller than the sprite.
             for (let r = 0; r < rows; r++) {
                 const row = new Array(cols);
                 for (let q = 0; q < cols; q++) {
-                    const on = data[(r * cols + q) * 4 + 3] > 110 ? 1 : 0;
+                    const on = data[(r * cols + q) * 4 + 3] > 40 ? 1 : 0;
                     row[q] = on;
                     solid += on;
                 }
                 grid.push(row);
             }
             if (solid < 4) return null; // art not loaded yet — retry next spawn
+            // Never drop authored hull cells the raster missed (letterbox /
+            // sparse sample), then dilate one cell for edge forgiveness.
+            grid = this.unionEnemyHitMasks(grid, this.enemyLogicalHitMask(model));
+            grid = this.dilateEnemyHitMask(grid);
             this._hitMaskCache[key] = grid;
             return grid;
         } catch (e) {
             return null;
+        } finally {
+            loader.globalVoxelCell = prevGlobal;
         }
     },
 
@@ -37776,7 +39871,66 @@ extendClass(EnemyManager, {
         entity.sprite = profile.sprite;
         entity.colors = profile.colors;
         entity.collision = this.scaleEnemyCollision(profile.collision, contentScale);
+        entity._hitMaskReady = !!profile.hitMaskReady;
+        // Keep mask draw size locked to the rounded footprint so pixel tests
+        // and insets share the same box the ship is rendered into.
+        if (entity.collision) {
+            entity.collision.drawW = entity.width;
+            entity.collision.drawH = entity.height;
+            entity.collision._maskTrust = null;
+        }
         return entity;
+    },
+
+    /**
+     * Re-bake hit masks that spawned before ship art was ready (logical
+     * fallback only). Safe to call every frame — no-ops once baked.
+     */
+    refreshPendingEnemyHitMasks() {
+        if (this.enemy && !this.exploding && this.enemy.collision && !this.enemy._hitMaskReady) {
+            const wasBoss = !!this.enemy.isBoss;
+            this.applyEnemyHitProfile(this.enemy, {
+                faction: this.enemy.faction,
+                enemyClass: this.enemy.enemyClass,
+                tier: this.enemy.tier,
+                level: this.enemy.level,
+                type: this.enemy.type || this.currentShipType,
+                hullSeed: this.enemy.hullSeed,
+                drawScale: 1
+            });
+            // applyEnemyHitProfile resets to champion size — restore boss mul
+            // only on the frame the bake finally succeeds.
+            if (wasBoss && this.enemy._hitMaskReady && this.enemy.collision) {
+                const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getBossSizeMul)
+                    ? uiAppearanceManager.getBossSizeMul() : 1.6;
+                const cx = this.enemy.x + this.enemy.width / 2;
+                const cy = this.enemy.y + this.enemy.height / 2;
+                this.enemy.width = Math.max(4, Math.round(this.enemy.width * mul));
+                this.enemy.height = Math.max(4, Math.round(this.enemy.height * mul));
+                this.enemy.x = cx - this.enemy.width / 2;
+                this.enemy.y = cy - this.enemy.height / 2;
+                this.enemy.collision = this.scaleEnemyCollision(this.enemy.collision, mul);
+                this.enemy.collision.drawW = this.enemy.width;
+                this.enemy.collision.drawH = this.enemy.height;
+                this.enemy.collision._maskTrust = null;
+            }
+        }
+        (this.sideEnemies || []).forEach((side) => {
+            if (!side || !side.collision || side._hitMaskReady) return;
+            const role = side.role || 'assault';
+            const sideMul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSideSizeMul)
+                ? uiAppearanceManager.getSideSizeMul() : 1;
+            const scale = (role === 'assault' || role === 'gunner' || role === 'blocker' ? 0.78 : 0.68) * sideMul;
+            this.applyEnemyHitProfile(side, {
+                faction: side.faction,
+                enemyClass: side.enemyClass,
+                tier: side.tier,
+                level: side.level,
+                type: side.type,
+                hullSeed: side.hullSeed,
+                drawScale: scale
+            });
+        });
     },
 
     /** Re-apply footprints after Enemy Size setting changes (live + sides). */
@@ -37803,6 +39957,9 @@ extendClass(EnemyManager, {
                 this.enemy.y = cy - this.enemy.height / 2;
                 if (this.enemy.collision) {
                     this.enemy.collision = this.scaleEnemyCollision(this.enemy.collision, mul);
+                    this.enemy.collision.drawW = this.enemy.width;
+                    this.enemy.collision.drawH = this.enemy.height;
+                    this.enemy.collision._maskTrust = null;
                 }
             }
         }
@@ -37882,7 +40039,14 @@ extendClass(EnemyManager, {
             ? combatEventConfigManager.getAnnounceMs(ev)
             : 1800;
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showEventAnnounce) {
-            levelInfoManager.showEventAnnounce(text, { accent: accent, holdMs: warnMs + 400 });
+            levelInfoManager.showEventAnnounce(text, {
+                accent: accent,
+                holdMs: warnMs + 400,
+                id: ev.id || null,
+                role: ev.role || catalogId,
+                catalogId: catalogId,
+                type: ev.type || null
+            });
         }
         if (typeof profileManager !== 'undefined' && profileManager.discover) {
             profileManager.discover('events', catalogId);
@@ -39067,6 +41231,7 @@ extendClass(EnemyManager, {
         if (!this.exploding) {
             this.championCombatElapsedMs += deltaTime;
             this.evaluateCombatEvents(gameState);
+            if (this.refreshPendingEnemyHitMasks) this.refreshPendingEnemyHitMasks();
         }
 
         // Apply slow motion cheat
@@ -39471,8 +41636,14 @@ extendClass(EnemyManager, {
             maxY: enemyMaxY,
             sprite: hitProfile.sprite,
             colors: hitProfile.colors,
-            collision: this.scaleEnemyCollision(hitProfile.collision, contentScale)
+            collision: this.scaleEnemyCollision(hitProfile.collision, contentScale),
+            _hitMaskReady: !!hitProfile.hitMaskReady
         };
+        if (this.enemy.collision) {
+            this.enemy.collision.drawW = this.enemy.width;
+            this.enemy.collision.drawH = this.enemy.height;
+            this.enemy.collision._maskTrust = null;
+        }
 
         // Faction kit on the hull — bosses swap pattern weapons later.
         if (typeof difficultyConfigManager !== 'undefined' && difficultyConfigManager.getBossWeaponKit && isBossLvl) {
@@ -39751,7 +41922,12 @@ extendClass(EnemyManager, {
         e.width = Math.round(e.width * bossMul);
         e.height = Math.round(e.height * bossMul);
         e.x = cx - e.width / 2;
-        if (e.collision) e.collision = this.scaleEnemyCollision(e.collision, bossMul);
+        if (e.collision) {
+            e.collision = this.scaleEnemyCollision(e.collision, bossMul);
+            e.collision.drawW = e.width;
+            e.collision.drawH = e.height;
+            e.collision._maskTrust = null;
+        }
         const mods = this.currentTierMods();
         // TTK target ~22s boss vs REF laser eDPS (balance-config). Was 0.6.
         this.maxHealth = Math.round(this.maxHealth * mods.boss * 1.45);
@@ -43140,7 +45316,12 @@ extendClass(ObstacleManager, {
         const obstacle = this.obstacles[index];
         if (obstacle && obstacle.isCrate) {
             this.spawnDebris(obstacle);
-            if (typeof pickupManager !== 'undefined' && pickupManager.spawnPowerUp) pickupManager.spawnPowerUp(obstacle);
+            // Shot-detonated BOMB crates set _trapSpent: boom already played,
+            // do not drop a drifting perk that looks like the bomb flying on.
+            if (!obstacle._trapSpent
+                && typeof pickupManager !== 'undefined' && pickupManager.spawnPowerUp) {
+                pickupManager.spawnPowerUp(obstacle);
+            }
             this.obstacles.splice(index, 1);
             return;
         }
@@ -44507,6 +46688,8 @@ extendClass(PickupManager, {
      * disguised chill perk.
      */
     spawnPowerUp(o) {
+        // Already detonated on shot contact — nothing left to drop.
+        if (o && o._trapSpent) return;
         if (o && o.trap === 'bomb') {
             this.trapBlast(o.x + o.width / 2, o.y + o.height / 2);
             return;
@@ -44615,8 +46798,14 @@ extendClass(PickupManager, {
         if (dist > TRAP_BLAST_RADIUS) return;
         const maxHp = playerManager.getMaxHealth ? playerManager.getMaxHealth() : 100;
         const dmg = maxHp * TRAP_BLAST_DAMAGE * (1 - 0.6 * dist / TRAP_BLAST_RADIUS);
-        if (typeof soundManager !== 'undefined' && soundManager.playHurt) soundManager.playHurt();
         if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+        if (typeof collisionManager !== 'undefined' && collisionManager.spawnPlayerHitFx) {
+            collisionManager.spawnPlayerHitFx(x, y);
+        }
+        if (typeof soundManager !== 'undefined') {
+            if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) soundManager.playShieldHit();
+            else if (soundManager.playHurt) soundManager.playHurt();
+        }
     },
 
     /** Active power-up state { left, total } or null. */
@@ -44848,6 +47037,7 @@ var CollisionManager = class CollisionManager {
         run(this.checkBulletSideEnemyCollisions);
         run(this.checkEnemyBulletPlayerCollisions);
         run(this.checkPlayerBulletEnemyBulletCollisions);
+        run(this.checkBomberPlayerCollisions);
         run(this.checkObstaclePlayerCollisions);
         run(this.checkObstacleEnemyCollisions);
         run(this.checkBulletObstacleCollisions);
@@ -44932,11 +47122,16 @@ var CollisionManager = class CollisionManager {
                     if (thick > 0) {
                         const dmg = thick <= 1 ? 3 : 8;
                         this.createDetailedHitEffect(hitX, hy, 'impact');
+                        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
+                        this.spawnPlayerHitFx(hitX, hy);
                         if (typeof soundManager !== 'undefined') {
                             if (soundManager.playWallScrape) soundManager.playWallScrape();
-                            soundManager.playHurt();
+                            if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                                soundManager.playShieldHit();
+                            } else {
+                                soundManager.playHurt();
+                            }
                         }
-                        if (playerManager.takeDamage(dmg) && typeof game !== 'undefined') game.gameOver();
                         // Scraping the wall also chips it so you can grind an escape.
                         if (obstacleManager.damageTerrain) {
                             obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
@@ -45021,27 +47216,22 @@ var CollisionManager = class CollisionManager {
             const sx = side.x + side.width / 2;
             const sy = side.y + side.height / 2;
             const dmg = side.bomberDamage != null ? side.bomberDamage : 18;
-            if (typeof playerManager.takeDamage === 'function') {
-                playerManager.takeDamage(dmg);
+            const playerDefeated = typeof playerManager.takeDamage === 'function'
+                ? playerManager.takeDamage(dmg)
+                : false;
+            this.spawnPlayerHitFx(sx, sy);
+            if (typeof soundManager !== 'undefined') {
+                if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                    soundManager.playShieldHit();
+                } else if (soundManager.playHurt) {
+                    soundManager.playHurt();
+                }
+                if (soundManager.playExplosion) soundManager.playExplosion(1.1);
             }
-            if (typeof soundManager !== 'undefined') soundManager.playHurt();
-            if (typeof graphicsManager !== 'undefined') {
-                graphicsManager.createHitEffect(sx, sy, 6);
-            }
-            const killed = sides[j];
-            sides.splice(j, 1);
-            if (typeof soundManager !== 'undefined') soundManager.playExplosion(1.1);
-            if (enemyManager.notifyKill) {
-                enemyManager.notifyKill({
-                    type: killed.type,
-                    entryId: killed.entryId,
-                    faction: killed.faction,
-                    enemyClass: killed.enemyClass,
-                    cluster: killed.cluster,
-                    champion: false,
-                    x: sx,
-                    y: sy
-                });
+            // Kamikaze boom + kill credit (same pop path as a shot kill).
+            this.destroySideEnemy(sides, j);
+            if (playerDefeated && typeof game !== 'undefined' && game.gameOver) {
+                game.gameOver();
             }
         }
     }
@@ -45138,21 +47328,26 @@ var CollisionManager = class CollisionManager {
             if (obstacleManager.damageTerrain) {
                 obstacleManager.damageTerrain(hy, hitSide, { power: 4, radius: 1, vsMetal: 2 });
             }
-            return thick <= 1 ? 3 : 8;
+            return { dmg: thick <= 1 ? 3 : 8, hx: hitSide ? walls.right : walls.left, hy: hy };
         };
         const sides = enemyManager.getSideEnemies ? enemyManager.getSideEnemies() : [];
         for (let j = sides.length - 1; j >= 0; j--) {
             const e = sides[j];
             if (!e || e.entering || e.fleeing) continue;
-            const dmg = scrape(e);
-            if (!dmg) continue;
-            e.health -= dmg;
+            const hit = scrape(e);
+            if (!hit) continue;
+            e.health -= hit.dmg;
+            e.hitSpark = 'hull';
+            this.spawnEnemyHitFx(hit.hx, hit.hy, e);
             if (e.health <= 0) this.destroySideEnemy(sides, j);
         }
         const champ = enemyManager.getEnemy ? enemyManager.getEnemy() : null;
         if (champ && !(enemyManager.isExploding && enemyManager.isExploding())) {
-            const dmg = scrape(champ);
-            if (dmg) enemyManager.takeDamage(dmg);
+            const hit = scrape(champ);
+            if (hit) {
+                enemyManager.takeDamage(hit.dmg);
+                this.spawnEnemyHitFx(hit.hx, hit.hy, champ);
+            }
         }
     }
 
@@ -45209,30 +47404,44 @@ var CollisionManager = class CollisionManager {
         }
     }
 
-    /** Impact sparks + ring at the shot contact on an enemy hull. */
-    spawnEnemyHitFx(x, y, enemy) {
-        const shieldHit = !!(enemy && enemy.hitSpark === 'shield');
-        const span = enemy ? Math.max(enemy.width || 12, enemy.height || 12) : 14;
-        this.createExplosion(x, y, 'small_pop', {
-            scale: Math.min(1.15, 0.75 + span / 60),
-            width: Math.max(12, span * 0.45),
-            height: Math.max(12, span * 0.45),
-            silent: true
-        });
-        if (typeof graphicsManager === 'undefined') return;
-        const hot = shieldHit ? '#9fdcff' : 'var(--color-explosion)';
-        const core = shieldHit ? '#e8f8ff' : '#ffffff';
-        graphicsManager.createHitEffect(x, y, 16, hot);
-        graphicsManager.createHitEffect(x, y, 10, core);
-        if (graphicsManager.particleSystem && graphicsManager.particleSystem.createHitParticles) {
-            graphicsManager.particleSystem.createHitParticles(x, y, 12, {
-                speed: 2.4,
-                life: 28,
-                size: 2.2,
-                colors: shieldHit ? ['#9fdcff', '#ffffff', '#6ec8e8'] : ['#ffe566', '#ff8844', '#ffffff'],
-                drag: 0.84
+    /**
+     * Compact impact FX at shot contact: shield → energy flecks, hull → scrap chips.
+     * Used for both enemy and player ships.
+     */
+    spawnShipHitFx(x, y, hitSpark) {
+        const shieldHit = hitSpark === 'shield';
+        if (typeof graphicsManager === 'undefined' || !graphicsManager.particleSystem) return;
+        const ps = graphicsManager.particleSystem;
+        if (shieldHit && ps.createShieldHitParticles) {
+            ps.createShieldHitParticles(x, y, 8);
+        } else if (!shieldHit && ps.createScrapHitParticles) {
+            ps.createScrapHitParticles(x, y, 7);
+        } else if (ps.createHitParticles) {
+            ps.createHitParticles(x, y, 7, {
+                speed: shieldHit ? 1.9 : 2.1,
+                life: 13,
+                size: 1.45,
+                fadeOut: true,
+                gravity: shieldHit ? -0.015 : 0.14,
+                colors: shieldHit
+                    ? ['#9fdcff', '#ffffff', '#6ec8e8']
+                    : ['#8a9098', '#c4c8ce', '#5a6068']
             });
         }
+    }
+
+    /** Impact sparks at the shot contact on an enemy hull / shield. */
+    spawnEnemyHitFx(x, y, enemy) {
+        const shieldHit = !!(enemy && enemy.hitSpark === 'shield');
+        this.spawnShipHitFx(x, y, shieldHit ? 'shield' : 'hull');
+    }
+
+    /** Impact sparks when the player ship / shield is hit. */
+    spawnPlayerHitFx(x, y) {
+        const spark = (typeof playerManager !== 'undefined' && playerManager.hitSpark)
+            ? playerManager.hitSpark
+            : 'hull';
+        this.spawnShipHitFx(x, y, spark);
     }
 
     checkEnemyBulletPlayerCollisions(gameState) {
@@ -45263,13 +47472,15 @@ var CollisionManager = class CollisionManager {
 
                 const playerDefeated = playerManager.takeDamage(damage);
 
-                // Create hit particles
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(playerX, playerY, 4);
-                }
-
-                if (typeof soundManager !== 'undefined' && damage > 0) {
-                    soundManager.playHurt();
+                if (damage > 0) {
+                    this.spawnPlayerHitFx(playerX, playerY);
+                    if (typeof soundManager !== 'undefined') {
+                        if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                            soundManager.playShieldHit();
+                        } else {
+                            soundManager.playHurt();
+                        }
+                    }
                 }
 
                 if (playerDefeated) {
@@ -45480,7 +47691,14 @@ extendClass(CollisionManager, {
                     // Indestructible bulwark: ram damage, then it bounces off instead of breaking.
                     if (!this.bounceBulwark(obs, playerX, playerY)) continue;
                     if (playerManager.takeDamage(dmg)) game.gameOver();
-                    if (typeof soundManager !== 'undefined') soundManager.playHurt();
+                    this.spawnPlayerHitFx(playerX, playerY);
+                    if (typeof soundManager !== 'undefined') {
+                        if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                            soundManager.playShieldHit();
+                        } else {
+                            soundManager.playHurt();
+                        }
+                    }
                     break;
                 }
 
@@ -45491,13 +47709,15 @@ extendClass(CollisionManager, {
                 const playerDefeated = playerManager.takeDamage(dmg);
 
                 this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId, obs);
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(playerX, playerY, 10);
-                }
+                this.spawnPlayerHitFx(playerX, playerY);
 
                 if (typeof soundManager !== 'undefined') {
                     soundManager.playExplosion(0.6);
-                    soundManager.playHurt();
+                    if (playerManager.hitSpark === 'shield' && soundManager.playShieldHit) {
+                        soundManager.playShieldHit();
+                    } else {
+                        soundManager.playHurt();
+                    }
                 }
 
                 if (playerDefeated) {
@@ -45530,6 +47750,7 @@ extendClass(CollisionManager, {
                     // Shoving a bulwark into the enemy hurts it; the block itself bounces off.
                     if (!this.bounceBulwark(obs, enemyX, enemyY)) continue;
                     enemyManager.takeDamage(dmg);
+                    this.spawnEnemyHitFx(enemyX, enemyY, enemyManager.getEnemy && enemyManager.getEnemy());
                     if (typeof soundManager !== 'undefined') soundManager.playHit();
                     break;
                 }
@@ -45541,8 +47762,8 @@ extendClass(CollisionManager, {
                 const enemyDefeated = enemyManager.takeDamage(dmg);
 
                 this.createDetailedHitEffect(obstacleX, obstacleY, 'destroy', explosionId, obs);
-                if (typeof graphicsManager !== 'undefined') {
-                    graphicsManager.createHitEffect(enemyX, enemyY, 12);
+                if (!enemyDefeated) {
+                    this.spawnEnemyHitFx(enemyX, enemyY, enemyManager.getEnemy && enemyManager.getEnemy());
                 }
 
                 if (typeof soundManager !== 'undefined') {
@@ -45576,12 +47797,61 @@ extendClass(CollisionManager, {
         return false;
     },
 
+    /**
+     * Shot vs hull: prefer the silhouette mask / opaque insets so empty
+     * footprint padding (wing gaps, letterbox) does not count as a hit.
+     * Broken/sparse masks fall back to padded inset AABB instead of rejecting.
+     */
+    confirmShotHit(shotBounds, hull) {
+        if (!hull || !shotBounds) return true;
+        const spr = this.getCollisionSprite(hull);
+        if (spr && spr.sprite && spr.sprite.length) {
+            try {
+                if (this.spriteOverlapsRect(hull, spr, shotBounds)) return true;
+                if (this.collisionMaskIsTrustworthy(hull, spr)) return false;
+            } catch (e) {
+                // Mask path must never abort the frame's collision pass.
+            }
+        }
+        const tight = this.getCollisionBounds(hull, { x: 0, y: 0, width: 0, height: 0 }, {
+            ignoreInsets: false,
+            insetPad: 1.5
+        });
+        return shotBounds.x < tight.x + tight.width
+            && shotBounds.x + shotBounds.width > tight.x
+            && shotBounds.y < tight.y + tight.height
+            && shotBounds.y + shotBounds.height > tight.y;
+    },
+
+    /** True when the hull mask has enough solid pixels to safely reject misses. */
+    collisionMaskIsTrustworthy(obj, spr) {
+        const info = spr || this.getCollisionSprite(obj);
+        if (!info || !info.sprite || !info.sprite.length) return false;
+        if (obj && obj.collision && obj.collision._maskTrust != null) {
+            return !!obj.collision._maskTrust;
+        }
+        const sprite = info.sprite;
+        let solid = 0;
+        let total = 0;
+        for (let r = 0; r < sprite.length; r += 2) {
+            const row = sprite[r];
+            if (!row || !row.length) continue;
+            for (let c = 0; c < row.length; c += 2) {
+                total += 1;
+                if (row[c]) solid += 1;
+            }
+        }
+        const trust = solid >= 24 && (solid / Math.max(1, total)) >= 0.04;
+        if (obj && obj.collision) obj.collision._maskTrust = trust;
+        return trust;
+    },
+
     isColliding(obj1, obj2) {
         const shot1 = this.isShotEntity(obj1);
         const shot2 = this.isShotEntity(obj2);
         const anyShot = shot1 || shot2;
-        // Shots vs hull: use the full entity footprint the sprite is fitted into.
-        // Tight mask insets were shrinking the AABB below the visible ship.
+        // Broadphase uses the full footprint so silhouette insets cannot drop a
+        // glancing visual hit; confirmShotHit then tests the real hull mask.
         const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1, {
             ignoreInsets: anyShot && !shot1,
             matchVoxelDraw: shot1
@@ -45605,10 +47875,14 @@ extendClass(CollisionManager, {
             if (!sweptHit) return false;
             // Carved rocks: confirm the swept strip still touches remaining pixels
             // (previously skipped entirely → shots tunneled through thin lips).
+            const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
             if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
-                const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
                 if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, swept)) return false;
                 if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, swept)) return false;
+            }
+            if (anyShot) {
+                if (shot1 && shot2) return true;
+                return this.confirmShotHit(shot1 ? swept : b2, shot1 ? obj2 : obj1);
             }
             return true;
         }
@@ -45618,12 +47892,10 @@ extendClass(CollisionManager, {
             if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, b2)) return false;
         }
 
-        // Shots vs hull: AABB is authoritative. Boss / capital pixel masks are
-        // sparse after VOXEL bake and were letting clear overlaps register as misses
-        // (and an exception in the mask path aborted the whole collision pass,
-        // which also killed terrain wall hits in the same frame).
+        // Shots vs hull: refine against silhouette (not empty footprint padding).
         if (anyShot) {
-            return true;
+            if (shot1 && shot2) return true;
+            return this.confirmShotHit(shot1 ? b1 : b2, shot1 ? obj2 : obj1);
         }
 
         const s1 = this.getCollisionSprite(obj1);
@@ -45648,12 +47920,13 @@ extendClass(CollisionManager, {
             return o;
         }
         const ignoreInsets = !!(opts && opts.ignoreInsets);
+        const pad = (opts && opts.insetPad) || 0;
         const c = obj.collision;
-        if (!ignoreInsets && c && (c.insetL || c.insetT || c.insetR || c.insetB)) {
-            const insetL = c.insetL || 0;
-            const insetT = c.insetT || 0;
-            const insetR = c.insetR || 0;
-            const insetB = c.insetB || 0;
+        if (!ignoreInsets && c && (c.insetL || c.insetT || c.insetR || c.insetB || pad)) {
+            const insetL = Math.max(0, (c.insetL || 0) - pad);
+            const insetT = Math.max(0, (c.insetT || 0) - pad);
+            const insetR = Math.max(0, (c.insetR || 0) - pad);
+            const insetB = Math.max(0, (c.insetB || 0) - pad);
             o.x = obj.x + insetL;
             o.y = obj.y + insetT;
             o.width = Math.max(1, obj.width - insetL - insetR);
@@ -46287,6 +48560,9 @@ var ParticleSystem = class ParticleSystem {
         const colorList = opts && Array.isArray(opts.colors) ? opts.colors : null;
         // Per-frame velocity damping (1 = none): bounds how far a burst spreads.
         const drag = opts && opts.drag != null ? Math.max(0.5, Math.min(1, Number(opts.drag))) : 0.88;
+        const gravity = opts && opts.gravity != null ? Number(opts.gravity) : 0.1;
+        const kind = opts && opts.kind ? String(opts.kind) : 'spark';
+        const fadeOut = !!(opts && opts.fadeOut);
         const n = Math.max(0, Math.round(count));
 
         for (let i = 0; i < n; i++) {
@@ -46300,18 +48576,52 @@ var ParticleSystem = class ParticleSystem {
                 color = this.resolveColor(singleColor);
             }
 
+            const size = baseSize * (0.7 + Math.random() * 0.8);
             this.particles.push({
-                x: x,
-                y: y,
+                x: x + (Math.random() - 0.5) * 2,
+                y: y + (Math.random() - 0.5) * 2,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
                 life: life,
                 maxLife: life,
-                size: baseSize * (0.7 + Math.random() * 0.8),
+                size: size,
+                w: kind === 'scrap' ? size * (0.6 + Math.random() * 1.4) : size,
+                h: kind === 'scrap' ? size * (0.4 + Math.random() * 0.9) : size,
                 drag: drag,
+                gravity: gravity,
+                kind: kind,
+                fadeOut: fadeOut,
                 color: color || this.getRandomHitColor()
             });
         }
+    }
+
+    /** Short cyan energy flecks when a shield absorbs a hit. */
+    createShieldHitParticles(x, y, count = 7) {
+        this.createHitParticles(x, y, count, {
+            speed: 1.9,
+            life: 12,
+            size: 1.35,
+            drag: 0.82,
+            gravity: -0.015,
+            kind: 'energy',
+            fadeOut: true,
+            colors: ['#e8f8ff', '#9fdcff', '#6ec8e8', '#ffffff', '#b8ecff']
+        });
+    }
+
+    /** Tiny scrap chips when hull armor takes the hit. */
+    createScrapHitParticles(x, y, count = 6) {
+        this.createHitParticles(x, y, count, {
+            speed: 2.1,
+            life: 14,
+            size: 1.55,
+            drag: 0.86,
+            gravity: 0.14,
+            kind: 'scrap',
+            fadeOut: true,
+            colors: ['#8a9098', '#c4c8ce', '#5a6068', '#a89878', '#d0d4d8', '#6e6460']
+        });
     }
 
     resolveColor(color) {
@@ -46359,7 +48669,8 @@ var ParticleSystem = class ParticleSystem {
                 particle.vy *= particle.drag;
             }
 
-            particle.vy += 0.1;
+            const g = particle.gravity != null ? particle.gravity : 0.1;
+            particle.vy += g;
             particle.vx *= 0.98;
 
             particle.life--;
@@ -46378,7 +48689,10 @@ var ParticleSystem = class ParticleSystem {
         const cv = typeof window !== 'undefined' ? window.combatVoxels : null;
         const cell = cv && cv.cell ? cv.cell() : null;
         for (const particle of this.particles) {
-            const alpha = Math.max(0.4, particle.life / particle.maxLife);
+            const lifeT = particle.life / particle.maxLife;
+            const alpha = particle.fadeOut
+                ? Math.max(0, lifeT)
+                : Math.max(0.4, lifeT);
             // VOXEL: default one lattice cell; fine flecks (size < cell) use half-cell.
             let s;
             let snap = cell;
@@ -46390,21 +48704,36 @@ var ParticleSystem = class ParticleSystem {
                     s = cell;
                 }
             } else {
-                s = Math.max(2, Math.ceil(particle.size));
+                s = Math.max(1, Math.ceil(particle.size));
             }
-            const px = cell ? Math.round((particle.x - s / 2) / snap) * snap : Math.floor(particle.x - s / 2);
-            const py = cell ? Math.round((particle.y - s / 2) / snap) * snap : Math.floor(particle.y - s / 2);
-            if (!cell) {
+            const isScrap = particle.kind === 'scrap';
+            const pw = isScrap
+                ? (cell ? Math.max(snap, Math.round((particle.w || s) / snap) * snap) : Math.max(1, Math.round(particle.w || s)))
+                : s;
+            const ph = isScrap
+                ? (cell ? Math.max(snap, Math.round((particle.h || s) / snap) * snap) : Math.max(1, Math.round(particle.h || s)))
+                : s;
+            const px = cell
+                ? Math.round((particle.x - pw / 2) / snap) * snap
+                : Math.floor(particle.x - pw / 2);
+            const py = cell
+                ? Math.round((particle.y - ph / 2) / snap) * snap
+                : Math.floor(particle.y - ph / 2);
+            if (!cell && particle.kind === 'energy') {
+                ctx.globalAlpha = alpha * 0.45;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(px - 1, py - 1, pw + 2, ph + 2);
+            } else if (!cell && !isScrap) {
                 ctx.globalAlpha = alpha * 0.5;
                 ctx.fillStyle = '#ffffff';
-                ctx.fillRect(px - 1, py - 1, s + 2, s + 2);
+                ctx.fillRect(px - 1, py - 1, pw + 2, ph + 2);
             }
             if (cv && cv.fill) {
-                cv.fill(ctx, px, py, s, s, particle.color, alpha);
+                cv.fill(ctx, px, py, pw, ph, particle.color, alpha);
             } else {
                 ctx.globalAlpha = alpha;
                 ctx.fillStyle = particle.color;
-                ctx.fillRect(px, py, s, s);
+                ctx.fillRect(px, py, pw, ph);
             }
         }
         ctx.restore();
@@ -47788,6 +50117,44 @@ Object.assign(IconSprites, {
         [0,0,8,15,15,15,15,8,0,0,0,0,0,0,0,0],
         [0,0,0,8,8,8,8,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    // Eighth note — legacy MUSIC editor icon (editor is on AUDIO widen now).
+    menuMusic: [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,12,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,8,12,15,12,8,8,15,8,0,0,0],
+        [0,0,0,0,8,15,15,15,15,15,8,15,8,0,0,0],
+        [0,0,0,0,8,15,15,15,15,12,0,8,0,0,0,0],
+        [0,0,0,0,0,12,15,15,12,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,8,8,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
+    // Speaker cone + sound waves — ESC menu AUDIO tab.
+    menuAudio: [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,8,12,8,0,8,15,8,0,0],
+        [0,0,0,0,0,8,12,15,15,0,0,0,8,15,8,0],
+        [0,0,0,8,12,15,15,15,15,8,0,0,0,8,12,0],
+        [0,0,8,15,15,15,15,15,15,15,8,0,0,0,8,0],
+        [0,8,15,15,15,15,15,15,15,15,15,8,0,0,12,0],
+        [0,8,15,15,15,15,15,15,15,15,15,8,0,0,12,0],
+        [0,0,8,15,15,15,15,15,15,15,8,0,0,0,8,0],
+        [0,0,0,8,12,15,15,15,15,8,0,0,0,8,12,0],
+        [0,0,0,0,0,8,12,15,15,0,0,0,8,15,8,0],
+        [0,0,0,0,0,0,0,8,12,8,0,8,15,8,0,0],
+        [0,0,0,0,0,0,0,0,0,0,8,15,8,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,8,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
     ],
     menuRetry: [
@@ -49854,6 +52221,8 @@ var IconLabels = {
     menuSettings: 'SETTINGS',
     menuCredits: 'CREDITS',
     menuAssets: 'ASSETS',
+    menuMusic: 'MUSIC',
+    menuAudio: 'AUDIO',
     menuRetry: 'RETRY',
     menuHome: 'HOME',
     hsStation: 'STATION',
@@ -55687,26 +58056,16 @@ var GraphicsManager = class GraphicsManager {
         } else if (this.shipModels) {
             this.shipModels.renderShip(ctx, enemyModel, x, y, finalScale, colorOverlay, overlayIntensity);
         }
-        // Brief impact flash so hits read even when particles are sparse.
+        // Shield soak: pulse silhouette shell. Hull hits use scrap particles only
+        // (no yellow AABB rim — that read as a solid box on impact).
         const flash = enemy.hitFlashMs || 0;
-        if (flash > 0) {
-            const a = Math.min(0.8, flash / 110);
-            const shieldHit = enemy.hitSpark === 'shield';
-            ctx.save();
-            ctx.globalAlpha = a * (shieldHit ? 0.45 : 0.55);
-            ctx.fillStyle = shieldHit ? '#9fdcff' : '#ffffff';
-            ctx.fillRect(Math.floor(enemy.x), Math.floor(enemy.y), Math.ceil(enemy.width), Math.ceil(enemy.height));
-            ctx.globalAlpha = a;
-            ctx.fillStyle = shieldHit ? '#c8f0ff' : '#ffe566';
-            const ix = Math.floor(enemy.x) + 1;
-            const iy = Math.floor(enemy.y) + 1;
-            const iw = Math.max(1, Math.ceil(enemy.width) - 2);
-            const ih = Math.max(1, Math.ceil(enemy.height) - 2);
-            ctx.fillRect(ix, iy, iw, 2);
-            ctx.fillRect(ix, iy + ih - 2, iw, 2);
-            ctx.fillRect(ix, iy, 2, ih);
-            ctx.fillRect(ix + iw - 2, iy, 2, ih);
-            ctx.restore();
+        if (flash > 0 && !this._shieldSilhouetteBake
+            && enemy.hitSpark === 'shield' && this.drawShieldHull) {
+            const a = Math.min(0.85, flash / 110);
+            this.drawShieldHull(ctx, enemy, Math.min(1.2, a * 1.5), true, null, {
+                thick: 3,
+                pulse: 1.2
+            });
         }
         this.drawEnemyGun(ctx, enemy);
         if (enemy.renegade && this.drawRenegadeBeacon) this.drawRenegadeBeacon(ctx, enemy);
@@ -55897,6 +58256,8 @@ extendClass(GraphicsManager, {
         const gapCells = 1;  // freiraum between hull and shield rim
         const thickCells = Math.max(1, Math.round(((opts && opts.thick) || 2) / 2));
         const pulse = (opts && opts.pulse != null) ? opts.pulse : 1;
+        // Euclidean dilation wraps the silhouette; Chebyshev looked like a padded box.
+        const DIST_MODE = 'eu';
         const maxR = (gapCells + thickCells) * MAX_CELL;
         const ew = Math.max(1, Math.ceil(entity.width));
         const eh = Math.max(1, Math.ceil(entity.height));
@@ -55920,7 +58281,7 @@ extendClass(GraphicsManager, {
         const modelId = ((shipModel && (shipModel.id || shipModel.name)) || 'ship') + factionSig;
         const layoutSig = this.getShieldLayoutSignature(shipModel);
         const cacheKey = modelId + '|' + ew + 'x' + eh + '|g' + gapCells + 't' + thickCells
-            + '|p' + padX + 'x' + padY + '|' + (flip ? 1 : 0) + '|' + layoutSig;
+            + '|p' + padX + 'x' + padY + '|' + (flip ? 1 : 0) + '|' + layoutSig + '|' + DIST_MODE;
 
         let rim = this._shieldHullCache[cacheKey];
         if (!rim) {
@@ -55986,22 +58347,31 @@ extendClass(GraphicsManager, {
             }
             const gapFine = Math.max(1, Math.round(gapCells * sub));
             const R = gapFine + thickCells;
+            const gap2 = gapFine * gapFine;
+            const R2 = R * R;
+            const search = Math.ceil(R);
             for (let r = 0; r < rows; r++) {
                 for (let q = 0; q < cols; q++) {
                     if (occ[r * cols + q]) continue;
-                    let minCheb = R + 1;
-                    for (let dy = -R; dy <= R && minCheb > 1; dy++) {
+                    let minD2 = R2 + 1;
+                    for (let dy = -search; dy <= search; dy++) {
                         const rr = r + dy;
                         if (rr < 0 || rr >= rows) continue;
-                        for (let dx = -R; dx <= R; dx++) {
+                        const dy2 = dy * dy;
+                        for (let dx = -search; dx <= search; dx++) {
                             const qq = q + dx;
                             if (qq < 0 || qq >= cols || !occ[rr * cols + qq]) continue;
-                            const cheb = Math.max(Math.abs(dx), Math.abs(dy));
-                            if (cheb < minCheb) minCheb = cheb;
+                            const d2 = dx * dx + dy2;
+                            if (d2 < minD2) minD2 = d2;
                         }
                     }
-                    // Ring outside the gap band — empty voxels between hull and rim
-                    if (minCheb <= gapFine || minCheb > R) continue;
+                    // Soft energy shell: just outside the hull gap, rounded by Euclidean metric.
+                    if (minD2 <= gap2 || minD2 > R2) continue;
+                    const dist = Math.sqrt(minD2);
+                    const edge = (dist - gapFine) / Math.max(0.001, R - gapFine);
+                    // Peak in the middle of the rim so it reads as a wrap, not a hard box edge.
+                    const a = Math.max(0.35, Math.sin(Math.max(0, Math.min(1, edge)) * Math.PI));
+                    const alpha = Math.round(255 * a);
                     const x0 = Math.max(0, gx0 + q * c);
                     const y0 = Math.max(0, gy0 + r * c);
                     const x1 = Math.min(w, gx0 + (q + 1) * c);
@@ -56012,7 +58382,7 @@ extendClass(GraphicsManager, {
                             od[i] = 255;
                             od[i + 1] = 255;
                             od[i + 2] = 255;
-                            od[i + 3] = 255;
+                            od[i + 3] = Math.max(od[i + 3], alpha);
                         }
                     }
                 }
@@ -66101,6 +68471,19 @@ var RenderManager = class RenderManager {
                     ctx.fillRect(side.x, side.y, side.width, side.height);
                 }
                 ctx.restore();
+                if (side.shieldMax > 0 && side.shield > 0 && graphicsManager.drawShieldHull) {
+                    const threat = this.getShieldThreatProximity(side, { mode: 'enemy' });
+                    if (threat > 0.01) {
+                        const strength = side.shield / side.shieldMax;
+                        graphicsManager.drawShieldHull(
+                            ctx,
+                            side,
+                            threat * (0.45 + 0.55 * strength),
+                            true,
+                            null
+                        );
+                    }
+                }
             });
         }
 
@@ -82335,28 +84718,269 @@ var LevelInfoManager = class LevelInfoManager {
         this.startUpdateLoop();
         this.updateLevelData(this.collectLevelData());
     }
-    /** Tube/sluice levels: vertical progress track to the exit gate, under the LOADOUT card. */
+    /** Seconds before a scheduled contact that the rail may reveal it. */
+    getTransitWarnSec(role) {
+        if (typeof combatEventConfigManager !== 'undefined') {
+            const ms = combatEventConfigManager.getAnnounceMs({ role: role || 'assault' });
+            return Math.max(2.5, Math.min(6, (ms || 1800) / 1000 + 2));
+        }
+        return 4;
+    }
+    /**
+     * Force-reveal a transit contact when combat announces it mid-run.
+     * Matches nearest upcoming role tick, or drops an ad-hoc icon at the ship.
+     */
+    revealTransitEvent(spec) {
+        const el = this.transitMap;
+        if (!el || el.hidden) return;
+        const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
+        if (!(om && om.objective && om.objective.type === 'reachGoal')) return;
+        this._transitForced = this._transitForced || {};
+        const role = String((spec && (spec.role || spec.catalogId)) || 'assault');
+        const id = String((spec && spec.id) || ('force_' + role + '_' + Date.now()));
+        const seconds = Math.max(1, Number(om.objective.seconds) || 1);
+        const elapsedSec = Math.max(0, Number(om.elapsedMs) || 0) / 1000;
+        const events = this.collectTransitEvents(seconds, elapsedSec);
+        let match = null;
+        for (let i = 0; i < events.length; i++) {
+            const ev = events[i];
+            if (ev.known) continue;
+            if (ev.role === role || !match) {
+                match = ev;
+                if (ev.role === role) break;
+            }
+        }
+        if (match) {
+            this._transitForced[match.id] = true;
+        } else {
+            this._transitForced[id] = {
+                id: id,
+                role: role,
+                type: (spec && spec.type) || '',
+                pct: Math.max(2, Math.min(96, this._transitPct || 0)),
+                adHoc: true
+            };
+        }
+        this.updateTransitMap();
+    }
+    /**
+     * Scheduled transit contacts clustered into map ticks.
+     * spawnAt (seconds) → vertical % of the reachGoal run.
+     */
+    collectTransitEvents(seconds, elapsedSec) {
+        const total = Math.max(1, Number(seconds) || 1);
+        const nowSec = Math.max(0, Number(elapsedSec) || 0);
+        const forced = this._transitForced || {};
+        const em = typeof enemyManager !== 'undefined' ? enemyManager : null;
+        const schedule = (em && Array.isArray(em.schedule)) ? em.schedule : [];
+        const raw = [];
+        for (let i = 0; i < schedule.length; i++) {
+            const e = schedule[i];
+            if (!e || e.champion) continue;
+            const t = Number(e.spawnAt);
+            if (!(t >= 0) || t >= 999999) continue;
+            raw.push({
+                id: String(e.id || ('t' + i)),
+                t: t,
+                role: String(e.role || 'assault'),
+                type: String(e.type || ''),
+                spawned: !!e.spawned
+            });
+        }
+        raw.sort((a, b) => a.t - b.t);
+        const clusters = [];
+        const clusterGap = 2.5;
+        for (let i = 0; i < raw.length; i++) {
+            const ev = raw[i];
+            const last = clusters[clusters.length - 1];
+            if (last && (ev.t - last.t) < clusterGap) {
+                last.count += 1;
+                last.spawned = last.spawned && ev.spawned;
+                last.ids.push(ev.id);
+                if (ev.role === 'bomber' || (ev.role === 'gunner' && last.role === 'assault')) {
+                    last.role = ev.role;
+                }
+                if (!last.type && ev.type) last.type = ev.type;
+            } else {
+                clusters.push({
+                    id: ev.id,
+                    ids: [ev.id],
+                    t: ev.t,
+                    role: ev.role,
+                    type: ev.type,
+                    count: 1,
+                    spawned: ev.spawned
+                });
+            }
+        }
+        const out = clusters.map((c) => {
+            let accent = '#c0c0c0';
+            let label = String(c.role || 'EVENT').toUpperCase();
+            if (typeof combatEventConfigManager !== 'undefined') {
+                const cfg = combatEventConfigManager.getConfig(c.role) || {};
+                if (cfg.accent) accent = cfg.accent;
+                if (cfg.shortName) label = cfg.shortName;
+            }
+            if (c.count > 1) label += ' ×' + c.count;
+            const warn = this.getTransitWarnSec(c.role);
+            const forcedHit = !!(forced[c.id] || (c.ids && c.ids.some((id) => forced[id])));
+            const known = forcedHit || nowSec >= (c.t - warn) || !!c.spawned;
+            return {
+                id: c.id,
+                role: c.role,
+                type: c.type,
+                label: label,
+                accent: accent,
+                spawned: c.spawned,
+                known: known,
+                pct: Math.max(2, Math.min(96, Math.round((c.t / total) * 100)))
+            };
+        });
+        Object.keys(forced).forEach((key) => {
+            const f = forced[key];
+            if (!f || !f.adHoc) return;
+            let accent = '#c0c0c0';
+            let label = String(f.role || 'EVENT').toUpperCase();
+            if (typeof combatEventConfigManager !== 'undefined') {
+                const cfg = combatEventConfigManager.getConfig(f.role) || {};
+                if (cfg.accent) accent = cfg.accent;
+                if (cfg.shortName) label = cfg.shortName;
+            }
+            out.push({
+                id: f.id,
+                role: f.role,
+                type: f.type || '',
+                label: label,
+                accent: accent,
+                spawned: false,
+                known: true,
+                adHoc: true,
+                pct: Math.max(2, Math.min(96, Number(f.pct) || 0))
+            });
+        });
+        return out;
+    }
+    /** Tube/sluice levels: progress rail + icons that pop in once a contact is known. */
     updateTransitMap() {
         const el = this.transitMap;
         if (!el) return;
         const om = typeof objectiveManager !== 'undefined' ? objectiveManager : null;
         const isTransit = !!(om && om.objective && om.objective.type === 'reachGoal');
         el.hidden = !isTransit;
-        if (!isTransit) return;
+        if (!isTransit) {
+            this._transitEventSig = '';
+            this._transitIconSig = '';
+            this._transitForced = {};
+            return;
+        }
         const seconds = Math.max(1, Number(om.objective.seconds) || 1);
         const elapsed = Math.max(0, Number(om.elapsedMs) || 0);
+        const elapsedSec = elapsed / 1000;
         const arrived = !!om.goal;
         const pct = (om.completed || om.won || arrived)
             ? 100
             : Math.max(0, Math.min(100, Math.round((elapsed / (seconds * 1000)) * 100)));
+        this._transitPct = pct;
         el.style.setProperty('--vf-transit-pct', pct + '%');
         el.classList.toggle('gi-transit-arrived', arrived);
-        if (!el.firstElementChild) {
+        if (!el.querySelector('.gi-transit-track') || !el.querySelector('.gi-transit-icons')) {
             el.innerHTML = '<div class="gi-transit-track">' +
                 '<div class="gi-transit-gate">GATE</div>' +
                 '<div class="gi-transit-fill"></div>' +
                 '<div class="gi-transit-ship"></div>' +
-                '</div>';
+                '</div>' +
+                '<div class="gi-transit-icons" aria-hidden="true"></div>';
+            this._transitEventSig = '';
+            this._transitIconSig = '';
+        }
+        const track = el.querySelector('.gi-transit-track');
+        const iconRail = el.querySelector('.gi-transit-icons');
+        const events = this.collectTransitEvents(seconds, elapsedSec);
+        const sig = events.map((e) => e.id + '@' + e.pct + ':' + e.role).join('|');
+        if (track && sig !== this._transitEventSig) {
+            this._transitEventSig = sig;
+            Array.from(track.querySelectorAll('.gi-transit-event')).forEach((n) => n.remove());
+            const frag = document.createDocumentFragment();
+            for (let i = 0; i < events.length; i++) {
+                const ev = events[i];
+                if (ev.adHoc) continue;
+                const mark = document.createElement('div');
+                mark.className = 'gi-transit-event';
+                mark.dataset.id = ev.id;
+                mark.dataset.pct = String(ev.pct);
+                mark.style.bottom = ev.pct + '%';
+                mark.style.setProperty('--evt-accent', ev.accent);
+                mark.title = ev.label;
+                frag.appendChild(mark);
+            }
+            track.appendChild(frag);
+        }
+        const knownEvents = events.filter((e) => e.known);
+        const iconSig = knownEvents.map((e) => e.id + '@' + e.pct + ':' + e.role).join('|');
+        if (iconRail && iconSig !== this._transitIconSig) {
+            const prevKnown = this._transitIconSig
+                ? this._transitIconSig.split('|').map((s) => s.split('@')[0])
+                : [];
+            this._transitIconSig = iconSig;
+            const keep = {};
+            Array.from(iconRail.querySelectorAll('.gi-transit-icon')).forEach((n) => {
+                keep[n.dataset.id] = n;
+            });
+            for (let i = 0; i < knownEvents.length; i++) {
+                const ev = knownEvents[i];
+                let node = keep[ev.id];
+                const fresh = !node;
+                if (!node) {
+                    node = document.createElement('div');
+                    node.className = 'gi-transit-icon';
+                    node.dataset.id = ev.id;
+                    node.innerHTML = ev.type
+                        ? this.enemyIconHtml(ev.type, ev.label)
+                        : this.iconHtml('menuEnemies', 14, ev.label);
+                    iconRail.appendChild(node);
+                }
+                node.dataset.pct = String(ev.pct);
+                node.style.bottom = ev.pct + '%';
+                node.style.setProperty('--evt-accent', ev.accent);
+                node.title = ev.label;
+                node.setAttribute('aria-label', ev.label);
+                if (fresh || prevKnown.indexOf(ev.id) === -1) {
+                    node.classList.remove('is-known');
+                    // Retrigger pop-in for newly revealed contacts.
+                    void node.offsetWidth;
+                    node.classList.add('is-known');
+                } else {
+                    node.classList.add('is-known');
+                }
+                delete keep[ev.id];
+            }
+            Object.keys(keep).forEach((id) => {
+                if (keep[id] && keep[id].parentNode) keep[id].parentNode.removeChild(keep[id]);
+            });
+        }
+        const byId = {};
+        for (let i = 0; i < events.length; i++) byId[events[i].id] = events[i];
+        const marks = el.querySelectorAll('.gi-transit-event');
+        for (let i = 0; i < marks.length; i++) {
+            const mark = marks[i];
+            const ev = byId[mark.dataset.id];
+            const mp = Number(mark.dataset.pct) || 0;
+            const known = !!(ev && ev.known);
+            const passed = pct >= mp || !!(ev && ev.spawned);
+            const active = known && !passed && Math.abs(pct - mp) <= 4;
+            mark.classList.toggle('is-known', known);
+            mark.classList.toggle('is-passed', passed);
+            mark.classList.toggle('is-active', active);
+        }
+        const icons = el.querySelectorAll('.gi-transit-icon');
+        for (let i = 0; i < icons.length; i++) {
+            const node = icons[i];
+            const ev = byId[node.dataset.id];
+            const mp = Number(node.dataset.pct) || 0;
+            const passed = pct >= mp || !!(ev && ev.spawned);
+            const active = !passed && Math.abs(pct - mp) <= 4;
+            node.classList.toggle('is-passed', passed);
+            node.classList.toggle('is-active', active && !passed);
         }
         const gateEl = el.querySelector('.gi-transit-gate');
         if (gateEl) {
@@ -83118,6 +85742,15 @@ extendClass(LevelInfoManager, {
                 el.classList.remove('vf-event-announce-pulse');
             }
         }, holdMs);
+        // Transit rail: pop the matching contact icon as soon as the event is announced.
+        if (this.revealTransitEvent) {
+            this.revealTransitEvent({
+                id: opts.id || opts.eventId || null,
+                role: opts.role || opts.catalogId || null,
+                type: opts.type || null,
+                accent: accent
+            });
+        }
     },
 });
 
@@ -83159,6 +85792,43 @@ var MissionStartManager = class MissionStartManager {
         this.sideFrom = [];
         this.sideTo = [];
         this._armed = false;
+        this._introClock = 0;
+    }
+
+    /** Wall-clock countdown/GO — must not depend on the combat RAF (pause / FX remote / park). */
+    _clearIntroClock() {
+        if (this._introClock) {
+            clearTimeout(this._introClock);
+            this._introClock = 0;
+        }
+    }
+
+    _armCountdownClock() {
+        this._clearIntroClock();
+        const tick = () => {
+            this._introClock = 0;
+            if (!this.active || this.phase !== 'countdown') return;
+            this.countdownValue -= 1;
+            if (this.countdownValue > 0) {
+                this.setText(String(this.countdownValue), false);
+                if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
+                    try { soundManager.playShoot(); } catch (e) { /* ignore */ }
+                }
+                this._introClock = setTimeout(tick, 900);
+                return;
+            }
+            this.setPhase('go');
+            this.goTimer = 0;
+            this.setText('GO!', false);
+            if (typeof soundManager !== 'undefined' && soundManager.playExplosion) {
+                try { soundManager.playExplosion(); } catch (e) { /* ignore */ }
+            }
+            this._introClock = setTimeout(() => {
+                this._introClock = 0;
+                if (this.active && this.phase === 'go') this.startFlyIn();
+            }, 620);
+        };
+        this._introClock = setTimeout(tick, 900);
     }
 
     isActive() {
@@ -83174,6 +85844,7 @@ var MissionStartManager = class MissionStartManager {
     }
 
     arm() {
+        this._clearIntroClock();
         this._armed = true;
         this.active = true;
         this.setPhase('awaitFire');
@@ -83427,53 +86098,24 @@ var MissionStartManager = class MissionStartManager {
     onFire() {
         if (!this.active || this.phase !== 'awaitFire') return false;
         this.setPhase('countdown');
-        this._lastTick = 0;
         this.countdownValue = 3;
         this.countdownTimer = 0;
+        this.goTimer = 0;
         this.syncFactionChrome();
         this.setText('3', false);
         if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
             try { soundManager.playShoot(); } catch (e) { /* ignore */ }
         }
+        this._armCountdownClock();
         return true;
     }
 
     update(deltaTime) {
         if (!this.active) return;
 
-        // Countdown / GO run on wall-clock time: the loop caps deltaTime per frame, so a slow frame rate would stretch them.
-        const now = performance.now();
-        const real = this._lastTick ? Math.min(1000, now - this._lastTick) : deltaTime;
-        this._lastTick = now;
-
-        if (this.phase === 'countdown') {
-            this.countdownTimer += Math.max(deltaTime, real);
-            if (this.countdownTimer >= 900) {
-                this.countdownTimer = 0;
-                this.countdownValue -= 1;
-                if (this.countdownValue > 0) {
-                    this.setText(String(this.countdownValue), false);
-                    if (typeof soundManager !== 'undefined' && soundManager.playShoot) {
-                        try { soundManager.playShoot(); } catch (e) { /* ignore */ }
-                    }
-                } else {
-                    this.setPhase('go');
-                    this.goTimer = 0;
-                    this.setText('GO!', false);
-                    if (typeof soundManager !== 'undefined' && soundManager.playExplosion) {
-                        try { soundManager.playExplosion(); } catch (e) { /* ignore */ }
-                    }
-                }
-            }
-            return;
-        }
-
-        if (this.phase === 'go') {
-            this.goTimer += Math.max(deltaTime, real);
-            // Slightly longer GO beat so the burst reads before fly-in.
-            if (this.goTimer >= 620) {
-                this.startFlyIn();
-            }
+        // Countdown / GO advance via _armCountdownClock (setTimeout), so pause / FX remote
+        // / parked combat RAF cannot freeze the "3…2…1…GO" beat.
+        if (this.phase === 'countdown' || this.phase === 'go') {
             return;
         }
 
@@ -83514,6 +86156,7 @@ var MissionStartManager = class MissionStartManager {
     }
 
     startFlyIn() {
+        this._clearIntroClock();
         this.setPhase('preparingFlyIn');
         this.hideOverlay();
         this.prepareFlyIn().catch((err) => {
@@ -83665,6 +86308,7 @@ extendClass(MissionStartManager, {
     },
 
     complete() {
+        if (this._clearIntroClock) this._clearIntroClock();
         this.applyPlayerFlyIn(1);
         // Enemies enter only once the player can fly (see updateEnemyEntry).
         this.enemyInElapsed = 0;
@@ -83691,6 +86335,7 @@ extendClass(MissionStartManager, {
     },
 
     cancel() {
+        if (this._clearIntroClock) this._clearIntroClock();
         this.endEnemyEntry();
         this.active = false;
         this.phase = null;
@@ -85778,6 +88423,9 @@ var GalaxyMapManager = class GalaxyMapManager {
             const v = all[this.galaxyId];
             if (!v || !this.nodeById[v.p] || !this.isUnlocked(v.p)) return;
             this.selectedPlanetId = v.p;
+            // Always clear first: loadMap may have primed selectedPostId from the
+            // ship location; a saved planet-only pick must not keep that post.
+            this.selectedPostId = null;
             this._picked = true;
             if (v.s) {
                 const post = (this.getTradingPosts() || []).find((q) => q.id === v.s);
@@ -85852,6 +88500,9 @@ var GalaxyMapManager = class GalaxyMapManager {
         if (typeof menuStateManager !== 'undefined' && !this._mountEl) {
             menuStateManager.setScreen('galaxyMap');
         }
+        if (typeof soundManager !== 'undefined' && soundManager.startMapMusic) {
+            soundManager.startMapMusic(this.selectedPlanetId || 'mars', { immediate: true });
+        }
     }
     hide() {
         if (this.isVisible) this.saveGalaxyView();
@@ -85911,11 +88562,45 @@ var GalaxyMapManager = class GalaxyMapManager {
         return this._inputActive;
     }
     armInput() {
-        return this.setInputActive(true);
+        const on = this.setInputActive(true);
+        // Map owns the stick: SVG selection frames are the cursor — hide the
+        // HTML gamepad frame so it cannot sit on a leftover tab/button.
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+        return on;
     }
     disarmInput() {
         this.clearCardFocus();
         return this.setInputActive(false);
+    }
+    /**
+     * While the map has stick focus (not the card buttons), suppress the HTML
+     * gamepad HUD frame — the SVG gm-selection-frame already marks the pick.
+     * Uses _fadeOut (not markPointer) so gamepadCursor.active stays armed for
+     * when focus drops into the planet card buttons.
+     */
+    syncGamepadMapCursor() {
+        if (typeof gamepadCursor === 'undefined') return;
+        if (this.isInputActive() && !this.hasCardFocus()) {
+            if (gamepadCursor._fadeOut) gamepadCursor._fadeOut();
+            return;
+        }
+        if (this.hasActionFocus() && this.getActionButtons) {
+            const list = this.getActionButtons();
+            const el = list[this._actionFocus];
+            if (el && gamepadCursor.follow) {
+                gamepadCursor.active = true;
+                gamepadCursor.follow(el);
+            }
+            return;
+        }
+        if (this.hasStageFocus() && this.getStageFocusables) {
+            const list = this.getStageFocusables();
+            const el = list[this._stageFocus];
+            if (el && gamepadCursor.follow) {
+                gamepadCursor.active = true;
+                gamepadCursor.follow(el);
+            }
+        }
     }
     /** Start/confirm buttons of the selected planet card, enabled only. */
     getActionButtons() {
@@ -86004,6 +88689,7 @@ var GalaxyMapManager = class GalaxyMapManager {
     clearCardFocus() {
         this.clearActionFocus();
         this.clearStageFocus();
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
         this.syncHostNavHint();
     }
     /** Drop from the map into the planet card: stages first, else action buttons. */
@@ -87388,7 +90074,7 @@ var GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-var NEB_VERSION = 30;
+var NEB_VERSION = 32;
 var NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 var NEB_PIXEL_BUDGET = 160000;
@@ -87397,7 +90083,7 @@ var NEB_PIXEL_BUDGET = 160000;
 var NEB_SLICE_FINE_MS = 8;
 var NEB_SLICE_COARSE_MS = 12;
 // How steeply nebula density drops with distance from the suns (higher = faster).
-var NEB_SUN_FALLOFF = 1.8;
+var NEB_SUN_FALLOFF = 2.2;
 // Free-floating static vortices in the nebula: one candidate per cell of this size.
 var SWIRL_CELL = 900;
 var swirlHash = (gx, gy) => {
@@ -87835,13 +90521,15 @@ extendClass(GalaxyMapManager, {
             const stDetail = this.getMapDetail();
             const ppt = this.latticeMapPt ? this.latticeMapPt(x, y) : { x: x, y: y };
             const hint = open ? 'DOUBLE-CLICK TO FLY THERE / DOCK' : 'REACH ' + profileManager.getTradingPostUnlockLabel(post) + ' TO UNLOCK';
+            const artScale = (pp * 0.42).toFixed(3);
+            const orbitA0 = post.orbitA == null ? 0 : post.orbitA;
             postsHtml += `
-                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" transform="translate(${ppt.x},${ppt.y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
+                <g class="gm-post-node ${open ? 'open' : 'closed'} ${post.id === this.selectedPostId ? 'selected' : ''}${post.factionStation ? ' is-faction' : ''}${post.faction ? ' is-built' : ''}" data-post="${post.id}" data-a="${orbitA0}" transform="translate(${ppt.x},${ppt.y})"${post.faction ? ` style="--fac:${((typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle && factionShipStyles.getFactionStyle(post.faction)) || {}).accent || 'var(--color-primary)'}"` : ''}>
                     <rect class="gm-post-hit" x="${-half - 2}" y="${-half - 2}" width="${2 * half + 4}" height="${2 * half + 4}"/>
                     <g class="gm-frame-slot" data-frame-r="${half.toFixed(2)}" data-frame-post="1">${this.selectionFrameSvg(half + 4, 7, 2)}</g>
                     <title>${post.name}${post.factionStation ? ' · FACTION STATION' : ' TRADING POST'} · ${hint}</title>
                     ${post.faction ? `<rect class="gm-faction-station-ring" x="${-half - 1}" y="${-half - 1}" width="${2 * half + 2}" height="${2 * half + 2}"/>` : ''}
-                    <g class="gm-post-art" transform="scale(${(pp * 0.42).toFixed(3)})">${this.stationArtImage(post, stDetail, open)}</g>
+                    <g class="gm-post-art" data-s="${artScale}" transform="scale(${artScale})">${this.stationArtImage(post, stDetail, open)}</g>
                 </g>
             `;
         });
@@ -88055,15 +90743,15 @@ extendClass(GalaxyMapManager, {
             const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
                 ? factionShipStyles.getFactionStyle(f.id) : null;
             const c = toRgb(st && st.accent);
-            if (c) layers.push({ rgb: c, cover: 0.3 + (f.share || 0.3) * 0.4, sc: NEB_SCALE * (1 + i * 0.3), off: rnd() * 90, ang: rnd() * Math.PI * 2 });
+            if (c) layers.push({ rgb: c, cover: 0.22 + (f.share || 0.3) * 0.32, sc: NEB_SCALE * (1 + i * 0.3), off: rnd() * 90, ang: rnd() * Math.PI * 2 });
         });
         if (!layers.length) {
             const g = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
                 ? planetConfigManager.getGalaxy(gid) : null;
-            layers.push({ rgb: toRgb(g && g.baseColor) || [122, 60, 255], cover: 0.5, sc: NEB_SCALE, off: rnd() * 90, ang: rnd() * Math.PI * 2 });
+            layers.push({ rgb: toRgb(g && g.baseColor) || [122, 60, 255], cover: 0.38, sc: NEB_SCALE, off: rnd() * 90, ang: rnd() * Math.PI * 2 });
         }
-        // A deep, dim dust layer in the main colour gives the clouds depth.
-        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.4), cover: 0.72, sc: NEB_SCALE * 0.55, off: rnd() * 90, dust: true });
+        // A deep dust layer in the main colour gives depth — keep it tinted, not grey.
+        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.62 + 18), cover: 0.28, sc: NEB_SCALE * 0.55, off: rnd() * 90, dust: true });
         const cxm = W / 2, cym = H / 2;
         const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
         const sstep = (a0, a1, t) => { const k = Math.max(0, Math.min(1, (t - a0) / (a1 - a0))); return k * k * (3 - 2 * k); };
@@ -88281,7 +90969,7 @@ extendClass(GalaxyMapManager, {
                 const freeCloud = Math.max(mix('free') * 0.7, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
                 // Ambient floor so the planet field keeps a veil even between suns.
-                lw.envNear = mix('envBase') * Math.max(sunFade, 0.22);
+                lw.envNear = mix('envBase') * Math.max(sunFade, 0.1);
                 lw.grain = mix('grain');
                 lw.bank = 0.02 + 0.98 * mix('bank');
                 lw.gm = Math.round(mix('gm') * 8) / 8;
@@ -88342,19 +91030,26 @@ extendClass(GalaxyMapManager, {
                         // Self-luminous pockets: a few scattered clouds glow on their own, not tied to a sun.
                         const gm = lw.gm;
                         const lit = Math.max(sl.k, gm * 0.55);
-                        const lift = lerpTone([0, 6, 14, 22], f) + lit * 14 + gm * lerpTone([4, 10, 16, 20], f);
-                        const mulc = lerpTone([1, 1.1, 1.15, 1.1], f);
+                        const lift = lerpTone([0, 4, 10, 16], f) + lit * 18 + gm * lerpTone([6, 12, 18, 24], f);
+                        const mulc = lerpTone([1.05, 1.18, 1.28, 1.2], f);
                         let cr = L.rgb[0] * mulc + lift, cg = L.rgb[1] * mulc + lift, cb = L.rgb[2] * mulc + lift;
+                        // Punch chroma so faction tints stay vivid instead of greying out.
+                        {
+                            const mean = (cr + cg + cb) / 3;
+                            cr = mean + (cr - mean) * 1.35;
+                            cg = mean + (cg - mean) * 1.35;
+                            cb = mean + (cb - mean) * 1.35;
+                        }
                         if (sl.rgb && lit > 0.02) {
-                            const t = Math.min(0.9, sl.k * 1.6);
+                            const t = Math.min(0.75, sl.k * 1.35);
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
-                        // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
-                        const shine = 0.22 + 0.78 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
+                        // Keep a solid colour floor away from suns — no washed-out grey haze.
+                        const shine = 0.48 + 0.52 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.38 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.28 * veil * Math.min(0.78, (L.dust ? lerpTone([0.14, 0.24], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.25 + gm * 0.55) * (1 + wispK * 1.35));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
@@ -88373,11 +91068,11 @@ extendClass(GalaxyMapManager, {
                         const dens = 1 - Math.exp(-A / 0.5);
                         const edge = Math.min(1, Math.max(0, (dens - 0.12 - (1 - billow) * 0.6) * 3.5));
                         const rim = edge * (1 - edge) * 4;
-                        let cov = edge * (0.16 + 0.2 * dens) + 0.14 * rid * rid * rid * dens;
-                        cov = Math.min(0.45, cov + 0.15 * lane * edge);
+                        let cov = edge * (0.12 + 0.16 * dens) + 0.1 * rid * rid * rid * dens;
+                        cov = Math.min(0.32, cov + 0.1 * lane * edge);
                         let cr = R / A, cg = G / A, cb = B / A;
-                        const lift = (1 + 0.7 * rim) * (1 - 0.8 * lane);
-                        const hot = 0.3 * dens * dens * (1 - lane);
+                        const lift = (1 + 0.85 * rim) * (1 - 0.65 * lane);
+                        const hot = 0.38 * dens * dens * (1 - lane);
                         cr = (cr + (255 - cr) * hot) * lift; cg = (cg + (255 - cg) * hot) * lift; cb = (cb + (255 - cb) * hot) * lift;
                         R = cr * cov; G = cg * cov; B = cb * cov; A = cov;
                     }
@@ -88385,7 +91080,7 @@ extendClass(GalaxyMapManager, {
                     // Soft cap: overlapping layers + suns must never wash out to white.
                     if (A > 0) {
                         const mx = Math.max(R, G, B) / A;
-                        if (mx > 170) { const k = 170 / mx; R *= k; G *= k; B *= k; }
+                        if (mx > 210) { const k = 210 / mx; R *= k; G *= k; B *= k; }
                     }
                     if (opaque) {
                         // Fine patch used to write every pixel at alpha 255 over black.
@@ -88951,20 +91646,42 @@ extendClass(GalaxyMapManager, {
         return size * frac;
     },
     postLanesSvg() {
-        if (!this.routePath || typeof profileManager === 'undefined') return '';
+        if (typeof profileManager === 'undefined') return '';
         let out = '';
+        // Straight radial tethers only: routePath detours break when gm-lane-rot
+        // spins the polyline around the planet (free end leaves the station).
+        const W = typeof GM_MAP_W !== 'undefined' ? GM_MAP_W : 640;
+        const H = typeof GM_MAP_H !== 'undefined' ? GM_MAP_H : 320;
+        const pad = typeof GM_MAP_PAD !== 'undefined' ? GM_MAP_PAD : 48;
+        const SX = (W - pad * 2) * 2.0, SY = (H - pad * 2) * 2.0;
         (this.getTradingPosts() || []).forEach((post) => {
             const open = profileManager.isTradingPostUnlocked ? profileManager.isTradingPostUnlocked(post) : true;
             (post.anchors || [post.planetId]).forEach((pid) => {
-                if (!this.nodeById || !this.nodeById[pid]) return;
-                const pts = this.routePath({ kind: 'post', id: post.id }, { kind: 'planet', id: pid });
-                if (!pts || pts.length < 2) return;
-                // Start outside the station icon, end on the planet disc (measured along the curve).
-                const p = this.trimPolyline(pts, 6, this.planetSurfaceRadius(pid) * this.nodeObjScale() * 0.88);
-                const pn = this.nodeById[pid];
-                const cx = (640 / 2 + (pn.x - 0.5) * (640 - 96) * 2.0).toFixed(2);
-                const cy = (320 / 2 + (pn.y - 0.5) * (320 - 96) * 2.0).toFixed(2);
-                out += `<g class="gm-lane-rot" data-post="${post.id}" data-a="${post.orbitA == null ? 0 : post.orbitA}" data-cx="${cx}" data-cy="${cy}">`
+                const pn = this.nodeById && this.nodeById[pid];
+                if (!pn) return;
+                let cx = W / 2 + (pn.x - 0.5) * SX;
+                let cy = H / 2 + (pn.y - 0.5) * SY;
+                let sx = W / 2 + (post.x - 0.5) * SX;
+                let sy = H / 2 + (post.y - 0.5) * SY;
+                if (this.latticeMapPt) {
+                    const pL = this.latticeMapPt(cx, cy);
+                    const sL = this.latticeMapPt(sx, sy);
+                    cx = pL.x; cy = pL.y; sx = sL.x; sy = sL.y;
+                }
+                const dx = sx - cx, dy = sy - cy;
+                const dist = Math.hypot(dx, dy);
+                if (dist < 1) return;
+                const ux = dx / dist, uy = dy / dist;
+                const planetR = this.planetSurfaceRadius(pid) * this.nodeObjScale() * 0.88;
+                // Station art: 18×18 cells centred on 0, scaled by planetPixelSize * 0.42.
+                const pp = (this.planetPixelSize ? this.planetPixelSize(pid) : 2) * this.nodeObjScale();
+                const stationR = Math.max(4, 9 * pp * 0.42 * 0.92);
+                if (dist <= planetR + stationR + 1) return;
+                const p = [
+                    { x: cx + ux * planetR, y: cy + uy * planetR },
+                    { x: sx - ux * stationR, y: sy - uy * stationR }
+                ];
+                out += `<g class="gm-lane-rot" data-post="${post.id}" data-a="${post.orbitA == null ? 0 : post.orbitA}" data-cx="${cx.toFixed(2)}" data-cy="${cy.toFixed(2)}">`
                     + this.pixelLineSvg(p, 'gm-edge gm-post-lane ' + (open ? 'lit' : 'dim'), { dash: [2, 1], traffic: true }) + '</g>';
             });
         });
@@ -91652,10 +94369,14 @@ extendClass(GalaxyMapManager, {
                     else if (e.key === 'ArrowRight') this.focusStage(this._stageFocus + 1);
                     else if (e.key === 'ArrowUp') {
                         this.clearStageFocus();
+                        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
                         this.syncHostNavHint && this.syncHostNavHint();
                     } else if (e.key === 'ArrowDown') {
                         this.clearStageFocus();
-                        if (!this.focusActionButton()) this.syncHostNavHint && this.syncHostNavHint();
+                        if (!this.focusActionButton()) {
+                            this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+                            this.syncHostNavHint && this.syncHostNavHint();
+                        }
                     }
                     return;
                 }
@@ -91666,6 +94387,7 @@ extendClass(GalaxyMapManager, {
                     else if (e.key === 'ArrowUp') {
                         this.clearActionFocus();
                         if (!this.focusStage()) this.clearCardFocus();
+                        else this.syncGamepadMapCursor && this.syncGamepadMapCursor();
                     }
                     return;
                 }
@@ -91743,14 +94465,12 @@ extendClass(GalaxyMapManager, {
      * the other posts sharing an anchor.
      */
     /**
-     * Trading posts at resting coords (no orbit). Arrow nav must stay stable —
-     * orbiting display positions made ←/→ pick different posts every few seconds.
+     * Trading posts at the same coords the map draws (orbit applied).
+     * Gamepad fires one arrow per press (no hold-repeat), so a live orbit
+     * snapshot matches what the player sees without the old mid-hold drift.
      */
     getNavTradingPosts() {
-        if (typeof profileManager === 'undefined' || !profileManager.getTradingPosts) return [];
-        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
-        return (profileManager.getTradingPosts(this.galaxyId) || []).filter((p) => dev
-            || (p.anchors || [p.planetId]).some((id) => this.nodeById && this.nodeById[id] && this.isUnlocked(id)));
+        return this.getTradingPosts ? this.getTradingPosts() : [];
     },
     getArrowTargets() {
         const posts = this.getNavTradingPosts();
@@ -91849,6 +94569,10 @@ extendClass(GalaxyMapManager, {
         // selection first would jump the view, then jump again into the flight.
         const skipCam = this._flight || (opts && opts.noCamera);
         if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+        if (this.isVisible && typeof soundManager !== 'undefined' && soundManager.startMapMusic) {
+            soundManager.startMapMusic(planetId);
+        }
     },
     /**
      * Select a border checkpoint (route from open → shut). The card shows
@@ -91913,7 +94637,19 @@ extendClass(GalaxyMapManager, {
         posts.forEach((p) => {
             byId[p.id] = p;
             const node = svg.querySelector('.gm-post-node[data-post="' + p.id + '"]');
-            if (node) { const q = px(p); node.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')'); }
+            if (!node) return;
+            // Same lattice as the initial render / tether endpoints, or the
+            // station drifts off its lane while orbiting.
+            let q = px(p);
+            if (this.latticeMapPt) q = this.latticeMapPt(q.x, q.y);
+            node.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')');
+            // Match lane rotation: spin station art with orbitA so it stays aligned to the tether.
+            const art = node.querySelector('.gm-post-art');
+            if (art && p.orbitA != null) {
+                const deg = (p.orbitA - Number(node.getAttribute('data-a') || 0)) * 180 / Math.PI;
+                const s = art.getAttribute('data-s') || '1';
+                art.setAttribute('transform', 'rotate(' + deg.toFixed(3) + ') scale(' + s + ')');
+            }
         });
         svg.querySelectorAll('.gm-lane-rot').forEach((g) => {
             const p = byId[g.getAttribute('data-post')];
@@ -91925,7 +94661,8 @@ extendClass(GalaxyMapManager, {
             ? profileManager.getShipLocation(this.galaxyId) : null;
         const ship = svg.querySelector(':scope > .gm-ship-marker');
         if (loc && loc.kind === 'post' && byId[loc.id] && ship) {
-            const q = px(byId[loc.id]);
+            let q = px(byId[loc.id]);
+            if (this.latticeMapPt) q = this.latticeMapPt(q.x, q.y);
             const sq = this.latticeShipPt ? this.latticeShipPt(q.x, q.y) : q;
             ship.setAttribute('transform', 'translate(' + sq.x.toFixed(3) + ',' + sq.y.toFixed(3) + ')');
         }
@@ -91962,6 +94699,7 @@ extendClass(GalaxyMapManager, {
         this.syncConfirmButton();
         const skipCam = this._flight || (opts && opts.noCamera);
         if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;
@@ -93049,12 +95787,24 @@ extendClass(ProfileSelectionManager, {
      */
     renderEmblemAtSize(crestEl, id) {
         if (!crestEl) return;
-        const w = Math.round(crestEl.getBoundingClientRect().width);
-        if (!(w > 0) || (crestEl.dataset.emblemPx === String(w) && crestEl.dataset.emblemFaction === id)) return;
-        const renderW = Math.round(w * ProfileSelectionManager.EMBLEM_OVERSAMPLE);
-        crestEl.innerHTML = this.getFactionEmblemHtml(id, renderW, 1);
+        // Read the last PAINTED faction before stamping the desired one — otherwise a
+        // same-size faction switch (Terran → Kronax) would early-return and keep the old crest.
+        const painted = crestEl.dataset.emblemFaction;
+        const paintedPx = crestEl.dataset.emblemPx;
+        // Always remember the desired faction: if layout width is still 0 (card not
+        // measured yet), ResizeObserver must know what to paint once size arrives.
         crestEl.dataset.emblemFaction = id;
-        crestEl.dataset.emblemPx = String(w);
+        const w = Math.round(crestEl.getBoundingClientRect().width);
+        if (!(w > 0)) return;
+        const empty = !crestEl.querySelector('img');
+        if (!empty && painted === id && paintedPx === String(w)) return;
+        const renderW = Math.round(w * ProfileSelectionManager.EMBLEM_OVERSAMPLE);
+        const html = this.getFactionEmblemHtml(id, renderW, 1);
+        crestEl.innerHTML = html;
+        crestEl.dataset.emblemFaction = id;
+        // Only lock the size when art actually landed — empty HTML must retry later.
+        if (html) crestEl.dataset.emblemPx = String(w);
+        else delete crestEl.dataset.emblemPx;
     },
     /** One shared observer for every .pfc-crest currently on screen; re-renders each at its new size. */
     _watchCrestSize(crestEl) {
@@ -93083,12 +95833,27 @@ extendClass(ProfileSelectionManager, {
         // Backdrop, cables, colours and the dialog content all change in ONE step (inside the cable swap), not in three staggered phases.
         const content = () => {
             if (!this.overlay || this.pendingFaction !== id) { if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' skipped (newer pick)'); return; }                 // a newer pick replaced this one
+            clearTimeout(this._lookContentTimer);
+            this._lookContentTimer = 0;
             const tC = performance.now();
             this.applyFactionContent(id);
             if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' rendered in ' + Math.round(performance.now() - tC) + 'ms');
         };
         if (window.vfLog) window.vfLog('wizard', 'pick ' + id);
         this.applyFactionVars(box, id, content);
+        // If the cable swap never delivers (stuck busy / cancelled mid-flight), fill
+        // empty lore/name panels anyway so a refresh never leaves the card blank.
+        clearTimeout(this._lookContentTimer);
+        this._lookContentTimer = setTimeout(() => {
+            this._lookContentTimer = 0;
+            if (!this.overlay || this.pendingFaction !== id) return;
+            const lore = this.overlay.querySelector('.profile-faction-lore-text');
+            const name = this.overlay.querySelector('.profile-faction-preview-name');
+            if ((lore && !lore.textContent.trim()) || (name && !name.textContent.trim())) {
+                if (window.vfLog) window.vfLog('wizard', 'content failsafe for ' + id);
+                content();
+            }
+        }, 650);
     },
     applyFactionContent(id) {
         // The menu / profile backdrops follow the faction being picked (CSS: html[data-pf]).
@@ -93099,8 +95864,17 @@ extendClass(ProfileSelectionManager, {
         }
         const emblem = this.overlay.querySelector('.profile-faction-preview-emblem');
         if (emblem) { this.renderEmblemAtSize(emblem, id); this._watchCrestSize(emblem); }
+        // Swatches are baked at createUI time — refill any that rendered before icons were ready.
+        this.overlay.querySelectorAll('.profile-faction-swatch').forEach((btn) => {
+            const fid = btn.dataset.faction;
+            const emb = btn.querySelector('.profile-faction-swatch-emblem');
+            if (fid && emb && !emb.querySelector('img')) emb.innerHTML = this.getFactionEmblemHtml(fid, 48);
+        });
         const nameCrest = this.overlay.querySelector('.profile-name-crest');
-        if (nameCrest && nameCrest.dataset.emblemFaction !== id) { nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48); nameCrest.dataset.emblemFaction = id; }
+        if (nameCrest && (nameCrest.dataset.emblemFaction !== id || !nameCrest.querySelector('img'))) {
+            nameCrest.innerHTML = this.getFactionEmblemHtml(id, 48);
+            nameCrest.dataset.emblemFaction = id;
+        }
         const name = this.overlay.querySelector('.profile-faction-preview-name');
         if (name) name.textContent = this.getFactionLabel(id);
         const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
@@ -93133,6 +95907,17 @@ extendClass(ProfileSelectionManager, {
         // Swap the hero planet here too, not the moment the faction is picked —
         // otherwise it changes a beat before the cable-swap-gated content above.
         if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(id);
+        // Crest / swatch art may still be arriving (iconRenderer / layout width): retry a few times.
+        if (emblem && !emblem.querySelector('img')) {
+            clearTimeout(this._emblemRetryTimer);
+            let tries = 0;
+            const retryEmblem = () => {
+                if (!this.overlay || this.pendingFaction !== id) return;
+                this.renderEmblemAtSize(emblem, id);
+                if (!emblem.querySelector('img') && tries++ < 20) this._emblemRetryTimer = setTimeout(retryEmblem, 100);
+            };
+            this._emblemRetryTimer = setTimeout(retryEmblem, 100);
+        }
         // Re-run the swap-in animation on everything that changed with the faction.
         const inStartStep = !!this.overlay.querySelector('.profile-kit-ship');
         if (!inStartStep && this._lastLookFaction && this._lastLookFaction !== id) {
@@ -93332,6 +96117,9 @@ extendClass(ProfileSelectionManager, {
                 factionGui.swap(id, applyBezel);
             } else {
                 // Back on the shown faction: this pick is the newest, so it clears any earlier tint.
+                // Cancel an in-flight swap for another faction — otherwise its late apply would
+                // paint the wrong bezel and skip content (pendingFaction mismatch → blank card).
+                if (typeof factionGui !== 'undefined' && factionGui.cancelPending) factionGui.cancelPending();
                 bz.dataset.pendingFaction = id;
                 applyBezel();
             }
@@ -99671,7 +102459,9 @@ window.componentTree = new ComponentTree();
 // that order is saved in the browser and overrides the lists below.
 // '|' is a cluster divider (a line between tab groups) and can be moved like a tab.
 // Available ids: play, travel, explorations, upgrade, hangar, components,
-// missions, craft, shop, factions, profiles, settings, assets, credits
+// missions, craft, shop, factions, profiles, settings, audio, assets,
+// portraits, credits
+// (Music Editor lives on the bezel AUDIO remote when widened.)
 var MENU_ORDER = {
     main: [
         'station',
@@ -99688,6 +102478,7 @@ var MENU_ORDER = {
     ],
     esc: [
         'settings',
+        'audio',
         'layout',
         'assets',
         'components',
@@ -99741,7 +102532,15 @@ var MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
         const esc = saved.esc.slice();
         // PORTRAITS (dev mode) belongs right before CREDITS, not at the row's end.
         if (known.indexOf('portraits') === -1 && esc.indexOf('credits') !== -1) esc.splice(esc.indexOf('credits'), 0, 'portraits');
-        MENU_ORDER.esc = esc.concat(MENU_ORDER.esc.filter((id) => isNew(id) && esc.indexOf(id) === -1)).filter((id) => id !== 'station');
+        // MUSIC editor moved to the bezel remote — drop stale ESC-menu entries.
+        // AUDIO left SETTINGS: place it right after SETTINGS (or before LAYOUT).
+        if (known.indexOf('audio') === -1) {
+            if (esc.indexOf('settings') !== -1) esc.splice(esc.indexOf('settings') + 1, 0, 'audio');
+            else if (esc.indexOf('layout') !== -1) esc.splice(esc.indexOf('layout'), 0, 'audio');
+            else esc.unshift('audio');
+        }
+        MENU_ORDER.esc = esc.concat(MENU_ORDER.esc.filter((id) => isNew(id) && esc.indexOf(id) === -1))
+            .filter((id) => id !== 'station' && id !== 'music');
     } catch (e) { /* ignore */ }
 })();
 
@@ -99890,6 +102689,12 @@ var HomeStationUI = class HomeStationUI {
         this.overlay = null;
         this._keyHandler = null;
         this._mouseMoveHandler = null;
+        // Bumped on every createUI so deferred soft-mount rAFs no-op after a
+        // rapid Esc menu open/close (stale hangar preview on parked DOM).
+        this._uiGen = 0;
+        // After Esc closes the menu, suppress Esc→open-menu until keyup / cooldown.
+        this._escMenuCoolUntil = 0;
+        this._escMenuCoolKeyUp = null;
         this.onClose = null;
         this.tab = 'station'; // station | upgrade | hangar | components | shop | craft | travel | explorations | play
         this.upgradeSubTab = 'station'; // station | ships | modules
@@ -99923,6 +102728,7 @@ var HomeStationUI = class HomeStationUI {
         this._hangarCardOffsets = {};
         this._hangarCardDragState = null;
         this._hangarPanelResize = null;
+        this._stationColResizeObs = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = true;
         // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.
@@ -101049,6 +103855,10 @@ extendClass(HomeStationUI, {
         }
         this._prevTab = null;
         if (!silent && wasMenu && this.isVisible) {
+            this.disconnectStationColumnResize && this.disconnectStationColumnResize();
+            this._softBodyCache = null;
+            this._softBodyTab = null;
+            this._hsShellReady = false;
             this.createUI();
             this.persistTab(); // closed menu must not reopen on reload
         }
@@ -101828,6 +104638,10 @@ extendClass(HomeStationUI, {
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     createUI() {
+        this._uiGen = (this._uiGen || 0) + 1;
+        // Drop station column RO before any body park/wipe so a 0×0 callback
+        // cannot rewrite grid-template-columns mid-Esc menu toggle.
+        if (this.disconnectStationColumnResize) this.disconnectStationColumnResize();
         // Restore the hangar inventory-panel toggle before the first render/draw, not on
         // DOMContentLoaded (too late: it raced createUI()'s own first call on refresh, so
         // drawHangarBay() fit the ship as if the panel were closed even though it reopened).
@@ -102183,7 +104997,10 @@ extendClass(HomeStationUI, {
     },
 
     _parkSoftBody(bodyEl, leavingTab) {
-        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu' || leavingTab === 'components') return;
+        // Hangar owns a live canvas + ResizeObservers — parking it across Esc
+        // menu toggles left stale rAFs sizing a detached viewport (layout trash).
+        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu'
+            || leavingTab === 'components' || leavingTab === 'hangar') return;
         if (!this._softBodyCache) this._softBodyCache = Object.create(null);
         const frag = document.createDocumentFragment();
         while (bodyEl.firstChild) frag.appendChild(bodyEl.firstChild);
@@ -102219,14 +105036,28 @@ extendClass(HomeStationUI, {
         if (!bodyEl) return false;
 
         const leavingTab = this._softBodyTab || null;
+        // Menu open/close must hard-remount the shell. Soft-parking the station
+        // body kept its column ResizeObserver alive on a detached grid (0×0),
+        // which rewrote grid-template-columns and left cover/panels destroyed
+        // after Esc left the menu.
+        if (leavingTab === 'menu' || this.tab === 'menu') {
+            this.disconnectStationColumnResize();
+            this._softBodyCache = null;
+            this._softBodyTab = null;
+            this._hsShellReady = false;
+            return false;
+        }
         // Fingerprint uses this.tab — compute for the tab we are parking.
-        if (leavingTab && leavingTab !== 'play' && leavingTab !== 'menu' && leavingTab !== 'components') {
+        if (leavingTab && leavingTab !== 'play' && leavingTab !== 'menu'
+            && leavingTab !== 'components' && leavingTab !== 'hangar') {
             const cur = this.tab;
             this.tab = leavingTab;
             this._softBodyParkFp = this._softBodyFingerprint(profile);
             this.tab = cur;
         } else {
             this._softBodyParkFp = '';
+            // Drop any stale hangar park from older builds / mid-session hot reload.
+            if (leavingTab === 'hangar' && this._softBodyCache) delete this._softBodyCache.hangar;
         }
 
         this.unmountMenuTab();
@@ -102449,8 +105280,11 @@ extendClass(HomeStationUI, {
             this.mountTradingPostModal();
         }
         // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
+        // Generation guard: a later createUI (Esc menu mash) invalidates these.
+        const gen = this._uiGen;
         if (soft) {
             requestAnimationFrame(() => {
+                if (gen !== this._uiGen) return;
                 this.restoreNavFocus();
                 if (this._focusExplore) {
                     this.focusExploreItem(this._focusExplore);
@@ -102474,6 +105308,7 @@ extendClass(HomeStationUI, {
             if (soft) {
                 this.bindHangarPartsGrid();
                 requestAnimationFrame(() => {
+                    if (gen !== this._uiGen || this.tab !== 'hangar') return;
                     this.startHangarPreview();
                     this.drawHangarBay();
                     this.bindHangarSlotEvents();
@@ -102503,6 +105338,7 @@ extendClass(HomeStationUI, {
             /* play body has no ship thumbs */
         } else if (soft) {
             requestAnimationFrame(() => {
+                if (gen !== this._uiGen) return;
                 this.scheduleShipThumbs();
                 this.bindShipSelectButtons();
             });
@@ -102514,9 +105350,41 @@ extendClass(HomeStationUI, {
             }
         }
         if (soft) {
-            requestAnimationFrame(() => this.syncTabDrop());
+            requestAnimationFrame(() => {
+                if (gen !== this._uiGen) return;
+                this.syncTabDrop();
+            });
         } else {
             this.syncTabDrop();
+        }
+        this.syncStationMusic();
+    },
+
+    /** Keep hub BGM matched to shop vs map vs menu tabs. */
+    syncStationMusic() {
+        if (typeof soundManager === 'undefined') return;
+        if (this._tpsModalOpen) return;
+        if (typeof inStageShop !== 'undefined' && inStageShop.isOpen) return;
+        if (this.tab === 'shop') {
+            if (soundManager.startShopMusic) {
+                const planet = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                    || 'mars';
+                soundManager.startShopMusic(planet, { resume: 'menu' });
+            }
+            return;
+        }
+        if (this.tab === 'play'
+            && typeof galaxyMapManager !== 'undefined'
+            && galaxyMapManager.isVisible
+            && soundManager.startMapMusic) {
+            soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
+            return;
+        }
+        const ck = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey)
+            ? String(vfTrackerManager.currentKey)
+            : '';
+        if (ck === 'shop' || ck.indexOf('shop:') === 0) {
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
         }
     },
 
@@ -107758,6 +110626,11 @@ extendClass(HomeStationUI, {
         this._tpsFitCellPx = null;
         this._tpsFittingLock = false;
         this.mountTradingPostModal();
+        if (typeof soundManager !== 'undefined' && soundManager.startShopMusic) {
+            const planet = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || 'mars';
+            soundManager.startShopMusic(planet, { resume: 'map' });
+        }
         const msg = 'DOCKED AT ' + post.name + (isNew ? ' · TRADER UNLOCKED AT HOME STATION' : '');
         if (this.showStatusToast) this.showStatusToast(msg);
         else this.statusMsg = msg;
@@ -107769,6 +110642,9 @@ extendClass(HomeStationUI, {
         if (this._shopCategoryBeforeDock) this.shopCategory = this._shopCategoryBeforeDock;
         this._shopCategoryBeforeDock = null;
         this.statusMsg = '';
+        if (typeof soundManager !== 'undefined' && soundManager.stopShopMusic) {
+            soundManager.stopShopMusic();
+        }
     },
 
     closeTradingPostModal() {
@@ -117387,6 +120263,29 @@ extendClass(HomeStationUI, {
         this.focusActiveTab();
         this.syncNavHint && this.syncNavHint();
     },
+    /** True while Esc must not re-open the menu (post-close latch). */
+    isEscMenuCoolActive() {
+        return !!(this._escMenuCoolUntil && performance.now() < this._escMenuCoolUntil);
+    },
+    /**
+     * After Esc closes the menu, block Esc→open-menu until keyup and a short
+     * cooldown so mash/hold cannot soft-toggle the shell into a broken hangar.
+     */
+    armEscMenuCooldown(ms) {
+        const dur = typeof ms === 'number' ? ms : 350;
+        this._escMenuCoolUntil = performance.now() + dur;
+        if (this._escMenuCoolKeyUp) {
+            document.removeEventListener('keyup', this._escMenuCoolKeyUp, true);
+            this._escMenuCoolKeyUp = null;
+        }
+        this._escMenuCoolKeyUp = (ev) => {
+            if (ev.key !== 'Escape' && ev.key !== 'Backspace') return;
+            document.removeEventListener('keyup', this._escMenuCoolKeyUp, true);
+            this._escMenuCoolKeyUp = null;
+            // Keep the time floor so a quick re-press still waits out the cool-down.
+        };
+        document.addEventListener('keyup', this._escMenuCoolKeyUp, true);
+    },
     activateFocused() {
         const list = this.getFocusables();
         const el = list[this.focusIndex];
@@ -117850,13 +120749,14 @@ extendClass(HomeStationUI, {
             }
 
             if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
+                if (e.repeat) {
+                    e.preventDefault();
+                    return;
+                }
                 e.preventDefault();
                 if (typeof startScreenManager !== 'undefined') {
-                    this.statusMsg = startScreenManager.devMode
-                        ? 'DEV MODE OFF'
-                        : 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED';
-                    // toggleDevMode patches station chrome via syncDevModeChrome —
-                    // do not call createUI() again (was a full double rebuild).
+                    // Toast text comes from the post-toggle state inside toggleDevMode,
+                    // so a swallowed double-fire cannot leave an ON label on an OFF mode.
                     startScreenManager.toggleDevMode();
                 }
                 return;
@@ -117869,6 +120769,13 @@ extendClass(HomeStationUI, {
                 return;
             }
             if (e.key === 'Escape' || e.key === 'Backspace') {
+                // Key-repeat while Esc is held re-opens the menu mid soft-remount
+                // and parks/rebuilds hangar DOM until the layout tears.
+                if (e.repeat) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 if (this._resBuyModal) {
                     e.preventDefault();
                     e.stopPropagation();
@@ -117917,13 +120824,25 @@ extendClass(HomeStationUI, {
                     this.focusIndex = 0;
                     this.tab = back;
                     this.persistTab();
+                    // Hard remount: soft park across menu left station grid RO
+                    // writing 0-width column weights (cover/panels destroyed).
+                    this.disconnectStationColumnResize && this.disconnectStationColumnResize();
+                    this._softBodyCache = null;
+                    this._softBodyTab = null;
+                    this._hsShellReady = false;
                     this.createUI();
+                    // Closing the menu: don't let the next Esc (or held repeat)
+                    // bounce straight back into openMainMenuOverlay.
+                    this.armEscMenuCooldown();
                 } else {
                     // Top of the hierarchy: ESC in the area row opens the menu
                     // (its tabs appear as the sub-nav row below the areas).
                     if (this.getFocusedNavRow() !== 'area') {
                         this._navLevel = 'tabs';
                         if (!this.focusNavRow || !this.focusNavRow('area')) this.focusActiveTab();
+                        return;
+                    }
+                    if (this.isEscMenuCooldownActive()) {
                         return;
                     }
                     this._lastGameTab = this.tab;
@@ -118665,12 +121584,22 @@ extendClass(HomeStationUI, {
         return null; // null → leave CSS defaults alone
     },
 
-    bindStationColumnResize() {
+    disconnectStationColumnResize() {
+        if (this._stationColResizeObs) {
+            this._stationColResizeObs.disconnect();
+            this._stationColResizeObs = null;
+        }
         const grid = this.overlay && this.overlay.querySelector('.hs-station-grid');
         if (!grid) return;
-        // Avoid stacking handles across soft remounts.
         grid.querySelectorAll('.hs-col-resize').forEach((h) => h.remove());
         grid.style.removeProperty('grid-template-columns');
+        grid.style.removeProperty('position');
+    },
+
+    bindStationColumnResize() {
+        this.disconnectStationColumnResize();
+        const grid = this.overlay && this.overlay.querySelector('.hs-station-grid');
+        if (!grid) return;
 
         const left = grid.querySelector('.hs-panel-stack') ||
             grid.querySelector('.hs-panel-parts') ||
@@ -118700,6 +121629,10 @@ extendClass(HomeStationUI, {
 
         const normalize = () => {
             if (!cols) return;
+            // Detached / pre-layout grids report 0 width — never rewrite fr weights then
+            // (Esc menu soft-park used to explode columns via offsetWidth||1).
+            const px = grid.offsetWidth;
+            if (!(px > 32) || !grid.isConnected) return;
             const clean = this._sanitizeStationCols(cols);
             if (!clean) {
                 cols = null;
@@ -118709,7 +121642,6 @@ extendClass(HomeStationUI, {
             }
             cols = clean;
             const total = cols[0] + cols[1];
-            const px = grid.offsetWidth || 1;
             const minLeft = Math.max(STATION_COLS_MIN, (STATION_LEFT_MIN_PX / px) * total);
             const minRight = Math.max(STATION_COLS_MIN, (STATION_RIGHT_MIN_PX / px) * total);
             // If mins can't both fit, fall back to CSS defaults instead of exploding ratios.
@@ -118742,7 +121674,9 @@ extendClass(HomeStationUI, {
         grid.appendChild(handle);
 
         const place = () => {
+            if (!grid.isConnected || !(grid.offsetWidth > 0)) return;
             const gRect = grid.getBoundingClientRect();
+            if (!(gRect.width > 0) || !(gRect.height > 0)) return;
             const scaleX = (gRect.width / (grid.clientWidth || grid.offsetWidth || 1)) || 1;
             const scaleY = (gRect.height / (grid.clientHeight || grid.offsetHeight || 1)) || 1;
             const aRect = left.getBoundingClientRect();
@@ -118812,7 +121746,10 @@ extendClass(HomeStationUI, {
             handle.addEventListener('pointercancel', up);
         });
 
-        if (window.ResizeObserver) new ResizeObserver(() => { place(); normalize(); }).observe(grid);
+        if (window.ResizeObserver) {
+            this._stationColResizeObs = new ResizeObserver(() => { place(); normalize(); });
+            this._stationColResizeObs.observe(grid);
+        }
     },
 
     /** Hangar: RESET ANATOMY / SET AS DEFAULT sit on the right of the ship's title row, so the stats row keeps its room. */
@@ -121324,6 +124261,7 @@ var StartScreenManager = class StartScreenManager {
         this.embeddedMenuTabs = [
             { id: 'profiles', label: 'PROFILES', icon: 'menuProfiles' },
             { id: 'settings', label: 'SETTINGS', icon: 'menuSettings' },
+            { id: 'audio', label: 'AUDIO', icon: 'menuAudio' },
             { id: 'layout', label: 'LAYOUT', icon: 'menuSettings' },
             { id: 'portraits', label: 'PORTRAITS', icon: 'menuProfiles' },
             { id: 'credits', label: 'CREDITS', icon: 'menuCredits' }
@@ -121343,7 +124281,7 @@ var StartScreenManager = class StartScreenManager {
                 items: [
                     { id: 'PROFILES', label: 'LOAD', icon: 'menuLoad', desc: 'Continue with an existing pilot' },
                     { id: 'GALAXIES', icon: 'menuPlanets', desc: 'Browse and create galaxies' },
-                    { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display, audio and controls' }
+                    { id: 'SETTINGS', icon: 'menuSettings', desc: 'Display and controls' }
                 ]
             },
             {
@@ -122092,6 +125030,17 @@ extendClass(StartScreenManager, {
     },
 
     toggleDevMode() {
+        // Multiple keydown listeners (start screen, station, profile overlay, combat HUD)
+        // can all see the same Shift+C. Without a same-press lock they cancel each other
+        // (ON toast / OFF state) or flip twice on OS key-repeat.
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now()
+            : Date.now();
+        if (this._devToggleLockAt != null && (now - this._devToggleLockAt) < 200) {
+            return this.devMode;
+        }
+        this._devToggleLockAt = now;
+
         this.devMode = !this.devMode;
         this.saveDevMode();
         this.rebuildVisibleMenu();
@@ -122106,6 +125055,11 @@ extendClass(StartScreenManager, {
         if (this.visible) this.createStartScreenUI();
         // Dev-only tabs + tutorial-locked area nav: patch chrome only (no full rebuild).
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+            if (!homeStationUI.statusMsg) {
+                homeStationUI.statusMsg = this.devMode
+                    ? 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED'
+                    : 'DEV MODE OFF';
+            }
             if (homeStationUI.syncDevModeChrome) {
                 homeStationUI.syncDevModeChrome();
             } else if (homeStationUI.createUI) {
@@ -122125,6 +125079,7 @@ extendClass(StartScreenManager, {
             && profileSelectionManager.createUI) {
             profileSelectionManager.createUI();
         }
+        return this.devMode;
     },
 
     isMenuItemVisible(itemId) {
@@ -122395,11 +125350,17 @@ extendClass(StartScreenManager, {
     },
 
     syncEmbeddedFlags() {
-        this.showSettings = this.embeddedMode && this.embeddedMenuTab === 'settings';
+        this.showSettings = this.embeddedMode && (
+            this.embeddedMenuTab === 'settings'
+            || this.embeddedMenuTab === 'audio'
+            || this.embeddedMenuTab === 'assets'
+        );
         this.showCredits = this.embeddedMode && this.embeddedMenuTab === 'credits';
     },
 
     setEmbeddedMenuTab(tabId) {
+        // MUSIC editor moved to the bezel remote (wave 71U).
+        if (tabId === 'music') tabId = 'audio';
         const ok = this.embeddedMenuTabs.some((t) => t.id === tabId);
         if (!ok) return;
         this.embeddedMenuTab = tabId;
@@ -122417,7 +125378,10 @@ extendClass(StartScreenManager, {
     },
 
     cycleEmbeddedMenuTab(dir) {
-        const ids = this.embeddedMenuTabs.map((t) => t.id).filter((id) => id !== 'portraits' || this.devMode);
+        const ids = this.embeddedMenuTabs.map((t) => t.id).filter((id) => {
+            if (id === 'portraits') return this.devMode || this.embeddedMenuTab === id;
+            return true;
+        });
         const idx = ids.indexOf(this.embeddedMenuTab);
         const next = (idx + dir + ids.length) % ids.length;
         this.setEmbeddedMenuTab(ids[next]);
@@ -122813,7 +125777,8 @@ extendClass(StartScreenManager, {
         const tabs = document.createElement('div');
         tabs.className = 'hs-menu-panel-tabs';
         this.embeddedMenuTabs.forEach((tab) => {
-            if (tab.id === 'portraits' && !this.devMode && this.embeddedMenuTab !== 'portraits') return;
+            if (tab.id === 'portraits'
+                && !this.devMode && this.embeddedMenuTab !== tab.id) return;
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'hs-menu-panel-tab' + (tab.id === this.embeddedMenuTab ? ' active' : '');
@@ -122840,10 +125805,10 @@ extendClass(StartScreenManager, {
         body.className = 'hs-menu-panel-body';
         if (this.embeddedMenuTab === 'profiles') {
             this.fillEmbeddedProfiles(body);
+        } else if (this.embeddedMenuTab === 'audio') {
+            this.createSettingsUI(body, { bare: true, audioOnly: true });
         } else if (this.embeddedMenuTab === 'settings' || this.embeddedMenuTab === 'assets') {
-            this.createSettingsUI(body, { bare: true });
-        } else if (this.embeddedMenuTab === 'assets') {
-            this.fillEmbeddedAssets(body);
+            this.createSettingsUI(body, { bare: true, excludeSound: true });
         } else if (this.embeddedMenuTab === 'layout' && this.fillEmbeddedLayout) {
             this.fillEmbeddedLayout(body);
         } else if (this.embeddedMenuTab === 'portraits' && this.fillEmbeddedPortraits) {
@@ -123486,6 +126451,8 @@ extendClass(StartScreenManager, {
 
     createSettingsUI(content, opts) {
         const bare = !!(opts && opts.bare);
+        const audioOnly = !!(opts && opts.audioOnly);
+        const excludeSound = audioOnly || !!(opts && opts.excludeSound);
         this.ensureEnemyClassSizeSettings();
         this.ensureShotSizeSettings();
         if (typeof VFBgMouseParallax !== 'undefined') {
@@ -123580,20 +126547,25 @@ extendClass(StartScreenManager, {
         right.dataset.cluster = 'audio-game';
 
         // Prefer SHOTS once on first land so the new rows are visible;
-        // otherwise keep the last-opened section.
-        let openSection = 'shots';
-        try {
-            const seen = localStorage.getItem('vf_settings_shots_seen_v1');
-            if (seen) {
-                openSection = localStorage.getItem('vf_settings_open_section') || 'enemies';
-            } else {
-                localStorage.setItem('vf_settings_shots_seen_v1', '1');
-                localStorage.setItem('vf_settings_open_section', 'shots');
-                openSection = 'shots';
-            }
-        } catch (e) { /* optional */ }
+        // otherwise keep the last-opened section. AUDIO opens on SOUND.
+        let openSection = audioOnly ? 'sound' : 'shots';
+        if (!audioOnly) {
+            try {
+                const seen = localStorage.getItem('vf_settings_shots_seen_v1');
+                if (seen) {
+                    openSection = localStorage.getItem('vf_settings_open_section') || 'enemies';
+                    if (excludeSound && openSection === 'sound') openSection = 'enemies';
+                } else {
+                    localStorage.setItem('vf_settings_shots_seen_v1', '1');
+                    localStorage.setItem('vf_settings_open_section', 'shots');
+                    openSection = 'shots';
+                }
+            } catch (e) { /* optional */ }
+        }
 
         const addSection = (parent, sectionId, sectionTitle, predicate) => {
+            if (audioOnly && sectionId !== 'sound') return;
+            if (excludeSound && sectionId === 'sound' && !audioOnly) return;
             const items = this.settingsItems
                 .map((item, index) => ({ item, index }))
                 .filter(({ item }) => predicate(item));
@@ -123649,14 +126621,15 @@ extendClass(StartScreenManager, {
                 && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'pixelSize' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
         addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);
         addSection(bare ? left : middle, 'fx', 'RETRO FX', (item) => item.type === 'uiFx' && !isVoxelItem(item));
-        addSection(right, 'sound', 'SOUND', (item) =>
+        const isSoundItem = (item) =>
             item.type === 'volume' ||
             item.name === 'Sound' ||
             item.name === 'Music' ||
             item.type === 'youtubeUrl' ||
             item.type === 'soundCode' ||
-            item.action === 'startupSound'
-        );
+            item.action === 'startupSound' ||
+            item.action === 'soundtrackEditor';
+        addSection(right, 'sound', 'SOUND', isSoundItem);
         addSection(right, 'game', 'GAME', (item) =>
             item.name === 'Difficulty' || item.action === 'difficultyEditor'
                 || item.action === 'factionCommand'
@@ -123668,18 +126641,24 @@ extendClass(StartScreenManager, {
         addSection(right, 'assets', 'ASSETS', (item) =>
             (item.type === 'action' && item.action !== 'difficultyEditor'
                 && item.action !== 'factionCommand'
-                && item.action !== 'startupSound') || item.type === 'assetStatus'
+                && item.action !== 'startupSound'
+                && item.action !== 'soundtrackEditor') || item.type === 'assetStatus'
         );
 
-        this.attachShipRenderPreview(bare ? left : middle);
+        if (!audioOnly) this.attachShipRenderPreview(bare ? left : middle);
 
-        panel.appendChild(left);
-        if (!bare) {
-            panel.classList.add('settings-panel-3col');
-            panel.appendChild(middle);
+        if (!audioOnly) {
+            panel.appendChild(left);
+            if (!bare) {
+                panel.classList.add('settings-panel-3col');
+                panel.appendChild(middle);
+            }
         }
         panel.appendChild(right);
-        this.buildSettingsMaster(panel);
+        this.buildSettingsMaster(panel, audioOnly ? {
+            defaults: [{ id: 'audio', title: 'AUDIO', sections: ['sound'] }],
+            ephemeral: true
+        } : null);
         content.appendChild(panel);
 
         if (!bare) {
@@ -123718,8 +126697,10 @@ var SETTINGS_NAV_KEY = 'vf_settings_nav_v2';
 var SETTINGS_DEFAULT_CLUSTERS = [
     { id: 'appearance', title: 'APPEARANCE', sections: ['theme', 'look', 'style', 'voxel', 'fx'] },
     { id: 'game', title: 'GAME', sections: ['game', 'enemies', 'shots'] },
-    { id: 'audio', title: 'AUDIO', sections: ['sound'] },
     { id: 'tools', title: 'TOOLS', sections: ['assets'] },
+];
+var SETTINGS_AUDIO_CLUSTERS = [
+    { id: 'audio', title: 'AUDIO', sections: ['sound'] },
 ];
 
 extendClass(StartScreenManager, {
@@ -123904,8 +126885,12 @@ extendClass(StartScreenManager, {
     },
 
     /** Master/detail layout: clustered section list on the left, the open section on the right. */
-    buildSettingsMaster(panel) {
-        if (!panel.querySelector('details.settings-section[data-section="debug"]')) {
+    buildSettingsMaster(panel, opts) {
+        const ephemeral = !!(opts && opts.ephemeral);
+        const defaultClusters = (opts && Array.isArray(opts.defaults) && opts.defaults.length)
+            ? opts.defaults
+            : SETTINGS_DEFAULT_CLUSTERS;
+        if (!panel.querySelector('details.settings-section[data-section="debug"]') && !ephemeral) {
             const debug = document.createElement('details');
             debug.className = 'settings-section';
             debug.dataset.section = 'debug';
@@ -123984,13 +126969,23 @@ extendClass(StartScreenManager, {
         if (!dets.length) return;
         const byId = new Map(dets.map((d) => [d.dataset.section, d]));
         let saved = null;
-        try { saved = JSON.parse(localStorage.getItem(SETTINGS_NAV_KEY) || 'null'); } catch (e) { saved = null; }
-        const layout = (Array.isArray(saved) && saved.length ? saved : SETTINGS_DEFAULT_CLUSTERS)
-            .map((c) => ({ id: String(c.id), title: String(c.title || 'CLUSTER'), sections: (c.sections || []).filter((id) => byId.has(id)) }));
+        if (!ephemeral) {
+            try { saved = JSON.parse(localStorage.getItem(SETTINGS_NAV_KEY) || 'null'); } catch (e) { saved = null; }
+        }
+        const layout = (Array.isArray(saved) && saved.length ? saved : defaultClusters)
+            .map((c) => ({
+                id: String(c.id),
+                title: String(c.title || 'CLUSTER'),
+                // Missing sections (e.g. SOUND after the AUDIO menu split) drop out.
+                sections: (c.sections || []).filter((id) => byId.has(id))
+            }))
+            .filter((c) => c.sections.length);
         const placed = new Set(layout.flatMap((c) => c.sections));
         dets.forEach((d) => {
             if (placed.has(d.dataset.section)) return;
-            const home = SETTINGS_DEFAULT_CLUSTERS.find((c) => c.sections.includes(d.dataset.section));
+            const home = defaultClusters.find((c) => c.sections.includes(d.dataset.section))
+                || SETTINGS_DEFAULT_CLUSTERS.find((c) => c.sections.includes(d.dataset.section))
+                || SETTINGS_AUDIO_CLUSTERS.find((c) => c.sections.includes(d.dataset.section));
             const target = (home && layout.find((c) => c.id === home.id)) || layout[layout.length - 1] || (layout[0] = { id: 'main', title: 'SETTINGS', sections: [] });
             target.sections.push(d.dataset.section);
         });
@@ -124014,6 +127009,7 @@ extendClass(StartScreenManager, {
             root.removeAttribute('data-vf-dragging');
         };
         const save = () => {
+            if (ephemeral) return;
             const out = Array.from(nav.querySelectorAll(':scope > .settings-cluster-block')).map((blk) => ({
                 id: blk.dataset.cluster,
                 title: blk.querySelector('.settings-cluster-title').textContent,
@@ -125703,6 +128699,10 @@ extendClass(StartScreenManager, {
 
     handleKeyDown(event) {
         if (!this.visible) return false;
+        // Held Esc key-repeat must not keep exiting/rebuilding embedded panels.
+        if (event.repeat && (event.key === 'Escape' || event.key === 'Backspace')) {
+            return true;
+        }
         // Embedded in the station: keys belong to the station tab row until
         // the player pressed ENTER/SPACE on the menu tab.
         if (this.embeddedMode && typeof homeStationUI !== 'undefined' &&
@@ -125713,6 +128713,7 @@ extendClass(StartScreenManager, {
         if (!this.showCredits && !this.showLevels && !this.showFontMenu &&
             !(this.showSettings && !this.embeddedMode) &&
             event.shiftKey && (event.key === 'c' || event.key === 'C')) {
+            if (event.repeat) return true;
             event.preventDefault();
             this.toggleDevMode();
             return true;
@@ -126152,6 +129153,19 @@ extendClass(StartScreenManager, {
         if (item.action === 'soundtrackEditor') {
             if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
             return;
+        }
+    },
+
+    /** Dev Music Editor lives on the bezel AUDIO remote when widened. */
+    openMusicEditor() {
+        const vfs = window.vfFitScope && window.vfFitScope.vfs;
+        if (!vfs) return;
+        vfs.fxTab = 'audio';
+        try { localStorage.setItem('vf-fx-tab', 'audio'); } catch (e) { /* ignore */ }
+        if (typeof window.vfFitScope.setFxOpen === 'function') {
+            window.vfFitScope.setFxOpen(true);
+        } else if (typeof window.vfFitScope.fillFxPlate === 'function') {
+            window.vfFitScope.fillFxPlate();
         }
     },
 
@@ -127852,13 +130866,13 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.soundVolume = 0.5;
         this.musicVolume = 0.65;
         /**
-         * Absolute playback tempo (BPM). Default matches the old 3.5× feel
-         * against the typical authored combat BPM (132 → 462).
+         * Heard playback tempo (BPM = beats/minute). Default = authored
+         * combat reference (132) — not the old 3.5× inflated value (462).
          */
         this.referenceBpm = 132;
-        this.musicBpm = 462;
+        this.musicBpm = 132;
         /** @deprecated kept in sync as musicBpm / referenceBpm for older callers */
-        this.musicSpeed = 3.5;
+        this.musicSpeed = 1;
         /** Per-channel music fine-tune: bass / lead / arp / drums (1 = authored level). */
         this.channelVolumes = [1, 1, 1, 1];
         /** Per-channel instrument voice ids (VFTrackerVoices). */
@@ -127867,6 +130881,11 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.jungleAmount = 0;
         /** Style dropdown index — see VFTrackerThemes.list. */
         this.musicTheme = 0;
+        /**
+         * When true, track/role swaps re-adapt MUSIC BPM to STYLE × authored
+         * song (same path as picking a STYLE). Manual BPM fader sets false.
+         */
+        this.bpmFollowsStyle = true;
         this.init();
     }
 
@@ -127883,6 +130902,7 @@ var VolumeControlsManager = class VolumeControlsManager {
             if (!slider) return;
             slider.addEventListener('input', (e) => {
                 this[prop] = Math.max(0, Math.min(1, parseInt(e.target.value, 10) / 100));
+                this.autoUnmuteOnSliderMove();
                 this.updateUI();
                 this.applyVolumes();
                 this.saveVolumes();
@@ -127934,7 +130954,7 @@ var VolumeControlsManager = class VolumeControlsManager {
                 if (bpmSlider.id === 'musicSpeed' && raw <= 400 && bpmSlider.max <= 400) {
                     this.setMusicBpm(Math.round((raw / 100) * this.referenceBpm));
                 } else {
-                    this.setMusicBpm(raw);
+                    this.setMusicBpm(this.snapMusicBpm(raw));
                 }
                 this.updateUI();
             });
@@ -128028,20 +131048,22 @@ var VolumeControlsManager = class VolumeControlsManager {
             syncVoice('musicVoiceDrums', 'musicVoiceDrumsValue', 3);
         }
 
-        const bpm = Math.round(Math.max(60, Math.min(600, Number(this.musicBpm) || 462)));
+        const bpm = Math.round(Math.max(60, Math.min(300, Number(this.musicBpm) || 132)));
         const bpmSlider = document.getElementById('musicBpm');
         if (bpmSlider) {
             bpmSlider.value = bpm;
             const min = Number(bpmSlider.min) || 60;
-            const max = Number(bpmSlider.max) || 600;
+            const max = Number(bpmSlider.max) || 300;
             bpmSlider.style.setProperty('--vol-fill', ((bpm - min) / Math.max(1, max - min) * 100) + '%');
+            this.applyBpmMark(bpmSlider, min, max);
         }
         const bpmValue = document.getElementById('musicBpmValue') || document.getElementById('musicSpeedValue');
-        if (bpmValue) bpmValue.textContent = bpm + ' BPM';
+        if (bpmValue) bpmValue.textContent = this.formatMusicSpeed(bpm);
         // Legacy id still present in some overlays.
         const legacySpeed = document.getElementById('musicSpeed');
         if (legacySpeed && legacySpeed !== bpmSlider) {
             legacySpeed.value = bpm;
+            this.applyBpmMark(legacySpeed, Number(legacySpeed.min) || 60, Number(legacySpeed.max) || 300);
         }
 
         const jungleAmt = Math.max(0, Math.min(1, Number(this.jungleAmount) || 0));
@@ -128118,6 +131140,9 @@ var VolumeControlsManager = class VolumeControlsManager {
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
             vfTrackerManager.setVolume(bus);
         }
+        if (bus > 0 && typeof soundManager !== 'undefined' && soundManager.ensureMusicPlaying) {
+            soundManager.ensureMusicPlaying();
+        }
         this.applyMusicBpm();
         this.applyJungleAmount();
         this.applyMusicTheme();
@@ -128148,6 +131173,11 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.musicTheme = i;
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setThemeIndex) {
             vfTrackerManager.setThemeIndex(i);
+        }
+        // Keep Music Editor STYLE select locked to the left slider.
+        if (typeof musicEditorUI !== 'undefined' && musicEditorUI.syncStyleFromVolume
+            && !musicEditorUI._syncingStyle) {
+            musicEditorUI.syncStyleFromVolume({ reload: true });
         }
     }
 
@@ -128195,7 +131225,7 @@ var VolumeControlsManager = class VolumeControlsManager {
     }
 
     applyMusicBpm() {
-        const bpm = Math.max(60, Math.min(600, Math.round(Number(this.musicBpm) || 462)));
+        const bpm = Math.max(60, Math.min(300, Math.round(Number(this.musicBpm) || 132)));
         this.musicBpm = bpm;
         this.musicSpeed = bpm / this.referenceBpm;
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setPlaybackBpm) {
@@ -128225,6 +131255,7 @@ var VolumeControlsManager = class VolumeControlsManager {
             localStorage.setItem('vf_musicStyleAmount', '1');
             localStorage.setItem('vf_musicTheme', String(this.musicTheme));
             localStorage.setItem('vf_musicStyleSchema', '3');
+            localStorage.setItem('vf_musicBpmFollowsStyle', this.bpmFollowsStyle === false ? '0' : '1');
             localStorage.setItem('vf_channelVolumes', JSON.stringify(this.channelVolumes || [1, 1, 1, 1]));
             localStorage.setItem('vf_channelVoices', JSON.stringify(this.channelVoices || ['default', 'default', 'default', 'default']));
             localStorage.setItem('vf_volumeSchema', '2');
@@ -128278,16 +131309,18 @@ var VolumeControlsManager = class VolumeControlsManager {
                 this.musicTheme = th;
             }
 
-            // Prefer absolute BPM; migrate old ×-speed once.
-            if (bpmDefaultMark !== '462') {
+            // MUSIC BPM = true heard tempo. Migrate off old 3.5× default (462).
+            if (bpmDefaultMark !== '132') {
+                let next = 132;
                 if (savedBpm != null && Number.isFinite(parseFloat(savedBpm))) {
-                    this.musicBpm = parseFloat(savedBpm);
+                    next = parseFloat(savedBpm);
                 } else if (savedSpeed != null && Number.isFinite(parseFloat(savedSpeed))) {
-                    this.musicBpm = parseFloat(savedSpeed) * this.referenceBpm;
-                } else {
-                    this.musicBpm = 462;
+                    next = parseFloat(savedSpeed) * this.referenceBpm;
                 }
-                localStorage.setItem('vf_musicBpmDefault', '462');
+                // 462 was the inflated 3.5× default, not real BPM.
+                if (Math.round(next) === 462) next = 132;
+                this.musicBpm = next;
+                localStorage.setItem('vf_musicBpmDefault', '132');
                 localStorage.setItem('vf_musicBpm', String(Math.round(this.musicBpm)));
             } else if (savedBpm !== null) {
                 this.musicBpm = parseFloat(savedBpm);
@@ -128298,7 +131331,7 @@ var VolumeControlsManager = class VolumeControlsManager {
             if (!Number.isFinite(this.masterVolume)) this.masterVolume = 0.75;
             if (!Number.isFinite(this.soundVolume)) this.soundVolume = 0.5;
             if (!Number.isFinite(this.musicVolume)) this.musicVolume = 0.65;
-            if (!Number.isFinite(this.musicBpm)) this.musicBpm = 462;
+            if (!Number.isFinite(this.musicBpm)) this.musicBpm = 132;
 
             if (savedChannels) {
                 try {
@@ -128321,7 +131354,7 @@ var VolumeControlsManager = class VolumeControlsManager {
             this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
             this.soundVolume = Math.max(0, Math.min(1, this.soundVolume));
             this.musicVolume = Math.max(0, Math.min(1, this.musicVolume));
-            this.musicBpm = Math.max(60, Math.min(600, Math.round(this.musicBpm)));
+            this.musicBpm = Math.max(60, Math.min(300, Math.round(this.musicBpm)));
             this.musicSpeed = this.musicBpm / this.referenceBpm;
             this.jungleAmount = Math.max(0, Math.min(1, Number.isFinite(this.jungleAmount) ? Math.abs(this.jungleAmount) : 0));
             if (this.jungleAmount < 0.03) this.jungleAmount = 0;
@@ -128330,14 +131363,22 @@ var VolumeControlsManager = class VolumeControlsManager {
                 : 8;
             this.musicTheme = Math.max(0, Math.min(themeMax, Number.isFinite(this.musicTheme) ? this.musicTheme : 0));
 
-            // Old schema used ~10%/5%/20% plus a hidden ×8 music bus — migrate up once.
-            if (schema !== '2'
-                && this.masterVolume <= 0.15
-                && this.soundVolume <= 0.12
-                && this.musicVolume <= 0.3) {
-                this.masterVolume = 0.75;
-                this.soundVolume = 0.5;
-                this.musicVolume = 0.65;
+            // Missing key → follow STYLE (legacy saves never recorded overrides).
+            const savedFollow = localStorage.getItem('vf_musicBpmFollowsStyle');
+            this.bpmFollowsStyle = savedFollow !== '0';
+
+            // Old schema used exactly 10%/5%/20% plus a hidden ×8 music bus.
+            // Migrate that one authored default up once — never treat intentional
+            // quiet levels (or mute) as "legacy" or refresh would blast volume again.
+            if (schema !== '2') {
+                const near = (a, b) => Math.abs(a - b) < 0.001;
+                if (near(this.masterVolume, 0.1)
+                    && near(this.soundVolume, 0.05)
+                    && near(this.musicVolume, 0.2)) {
+                    this.masterVolume = 0.75;
+                    this.soundVolume = 0.5;
+                    this.musicVolume = 0.65;
+                }
                 this.saveVolumes();
             }
         } catch (e) {
@@ -128350,11 +131391,86 @@ var VolumeControlsManager = class VolumeControlsManager {
     getMusicVolume() { return this.musicVolume; }
     getMusicBpm() { return this.musicBpm; }
     getMusicSpeed() { return this.musicBpm / this.referenceBpm; }
+
+    /** Preferred MUSIC BPM for the active STYLE (fader mark + snap). */
+    getPreferredMusicBpm(themeIndex) {
+        const idx = themeIndex != null ? themeIndex : this.musicTheme;
+        const authored = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.getAuthoredBpm)
+            ? vfTrackerManager.getAuthoredBpm()
+            : 132;
+        if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.adaptedBpmOf) {
+            return VFTrackerThemes.adaptedBpmOf(idx, authored);
+        }
+        if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.preferredBpmOf) {
+            return VFTrackerThemes.preferredBpmOf(idx);
+        }
+        return Math.round(authored || 132);
+    }
+
+    /** Snap radius around a style preferred BPM (absolute BPM units). */
+    getMusicBpmSnapRadius() { return 18; }
+
+    /** If near the active style preferred BPM, snap to it. */
+    snapMusicBpm(bpm) {
+        const raw = Math.max(60, Math.min(300, Math.round(Number(bpm) || 120)));
+        const pref = this.getPreferredMusicBpm();
+        const radius = this.getMusicBpmSnapRadius();
+        if (Math.abs(raw - pref) <= radius) return pref;
+        return raw;
+    }
+
+    /** Paint preferred-BPM mark CSS vars on a range input. */
+    applyBpmMark(slider, min, max) {
+        if (!slider || !slider.style || !slider.style.setProperty) return;
+        const lo = Number.isFinite(Number(min)) ? Number(min) : 60;
+        const hi = Number.isFinite(Number(max)) ? Number(max) : 300;
+        const span = Math.max(1, hi - lo);
+        const pref = this.getPreferredMusicBpm();
+        const pct = ((pref - lo) / span) * 100;
+        slider.style.setProperty('--bpm-mark', Math.max(0, Math.min(100, pct)).toFixed(2) + '%');
+        slider.classList.add('has-bpm-mark');
+        slider.setAttribute('data-bpm-mark', String(pref));
+    }
+
+    /** UI readout: heard MUSIC BPM (beats/minute). */
+    formatMusicSpeed(bpm) {
+        const b = Math.max(60, Math.min(300, Math.round(Number(bpm) || this.musicBpm || 132)));
+        return b + ' BPM';
+    }
     getJungleAmount() { return this.jungleAmount; }
     getMusicTheme() { return this.musicTheme; }
 
+    /**
+     * Dragging a VOL/SND/MUS slider above 0 is the player asking for that
+     * channel to be audible — undo a stale soundEnabled/musicEnabled=false
+     * left over from an earlier mute, or the slider alone would stay silent.
+     * Only called from the explicit setters below (real user action) — never
+     * from applyVolumes()/boot, or a persisted mute would be undone on every
+     * page load just because the sliders themselves sit above 0.
+     */
+    autoUnmuteOnSliderMove() {
+        if (typeof soundManager === 'undefined') return;
+        const wantSound = this.masterVolume > 0 && this.soundVolume > 0;
+        const wantMusic = this.masterVolume > 0 && this.musicVolume > 0;
+        if (wantSound && !soundManager.soundEnabled && soundManager.setSoundEnabled) {
+            soundManager.setSoundEnabled(true);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.soundEnabled = true;
+                if (settingsManager.saveMuteState) settingsManager.saveMuteState('vf_soundEnabled', true);
+            }
+        }
+        if (wantMusic && !soundManager.musicEnabled && soundManager.setMusicEnabled) {
+            soundManager.setMusicEnabled(true);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.musicEnabled = true;
+                if (settingsManager.saveMuteState) settingsManager.saveMuteState('vf_musicEnabled', true);
+            }
+        }
+    }
+
     setMasterVolume(volume) {
         this.masterVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -128362,6 +131478,7 @@ var VolumeControlsManager = class VolumeControlsManager {
 
     setSoundVolume(volume) {
         this.soundVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -128369,16 +131486,53 @@ var VolumeControlsManager = class VolumeControlsManager {
 
     setMusicVolume(volume) {
         this.musicVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
 
     setMusicBpm(bpm) {
-        this.musicBpm = Math.max(60, Math.min(600, Math.round(Number(bpm) || 120)));
+        this.musicBpm = this.snapMusicBpm(bpm);
         this.musicSpeed = this.musicBpm / this.referenceBpm;
+        // User (or snap) owns absolute tempo until STYLE is picked again.
+        this.bpmFollowsStyle = false;
         this.applyMusicBpm();
         this.saveVolumes();
+    }
+
+    /**
+     * Finish STYLE + BPM adaptation for the track now loaded in the tracker.
+     * Called after every real song swap so planet/map/combat don't start
+     * "half styled" until the AUDIO faders are touched.
+     */
+    applyStylePlaybackForTrack() {
+        const theme = Math.max(0, Math.round(Number(this.musicTheme) || 0));
+        let dirty = false;
+        // Armed non-PLANET STYLE with STRENGTH at 0 → same mild colour as
+        // setMusicTheme when switching away from PLANET.
+        if (theme > 0 && this.jungleAmount < 0.03) {
+            this.jungleAmount = 0.4;
+            dirty = true;
+        }
+        this.applyJungleAmount();
+        this.applyMusicTheme();
+        if (this.bpmFollowsStyle !== false) {
+            const pref = this.getPreferredMusicBpm(theme);
+            if (Number.isFinite(pref) && pref > 0) {
+                const next = Math.max(60, Math.min(300, Math.round(pref)));
+                if (next !== Math.round(Number(this.musicBpm) || 0)) {
+                    this.musicBpm = next;
+                    this.musicSpeed = this.musicBpm / this.referenceBpm;
+                    dirty = true;
+                }
+            }
+        }
+        this.applyMusicBpm();
+        if (dirty) {
+            this.updateUI();
+            this.saveVolumes();
+        }
     }
 
     setMusicSpeed(speed) {
@@ -128400,12 +131554,23 @@ var VolumeControlsManager = class VolumeControlsManager {
         const next = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
         const prev = this.musicTheme;
         this.musicTheme = next;
-        // Picking a non-PLANET style with AMOUNT at 0 → audible default.
+        // Mild STYLE colour when switching from PLANET with AMOUNT at 0.
         if (next > 0 && prev !== next && this.jungleAmount < 0.03) {
-            this.jungleAmount = 0.65;
+            this.jungleAmount = 0.4;
             this.applyJungleAmount();
         }
         this.applyMusicTheme();
+        // Adapt heard tempo to STYLE × current song (keeps map/victory musical).
+        if (prev !== next) {
+            this.bpmFollowsStyle = true;
+            const pref = this.getPreferredMusicBpm(next);
+            if (Number.isFinite(pref) && pref > 0) {
+                this.musicBpm = Math.max(60, Math.min(300, Math.round(pref)));
+                this.musicSpeed = this.musicBpm / this.referenceBpm;
+                this.applyMusicBpm();
+                this.updateUI();
+            }
+        }
         this.saveVolumes();
     }
 
@@ -128413,10 +131578,11 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.masterVolume = 0.75;
         this.soundVolume = 0.5;
         this.musicVolume = 0.65;
-        this.musicBpm = 462;
-        this.musicSpeed = 3.5;
+        this.musicBpm = 132;
+        this.musicSpeed = 1;
         this.jungleAmount = 0;
         this.musicTheme = 0;
+        this.bpmFollowsStyle = true;
         this.channelVolumes = [1, 1, 1, 1];
         this.channelVoices = ['default', 'default', 'default', 'default'];
         if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = 1.4;
@@ -131672,9 +134838,10 @@ HeroPlanetBackdrop.LEFT_OFFSET = 0.55;
 /* --- js/ui/profile-selection/launch-cutscene.js --- */
 "use strict";
 
-// Full-screen launch cutscene after new-pilot creation. Style follows the
-// chosen story path (hunt / escort / raid / salvage / …) so each story feels
-// different before the home-station handoff. SKIP-able after a short arm delay.
+// Launch cutscene after new-pilot creation, clamped to the bezel screen opening
+// (--fr-open-*). Style follows the chosen story path (hunt / escort / raid /
+// salvage / …) so each story feels different before the home-station handoff.
+// SKIP-able after a short arm delay.
 var LaunchCutsceneManager = class LaunchCutsceneManager {
     constructor() {
         this.active = false;
@@ -131788,7 +134955,9 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         skipBtn.textContent = 'SKIP ▶';
         skipBtn.addEventListener('click', () => this.skip());
         overlay.appendChild(skipBtn);
-        document.documentElement.appendChild(overlay);
+        // Body (not <html>): stay in the same stacking tree as #vf-bezel so the
+        // hull band covers the rim; CSS clamps us to --fr-open-*.
+        document.body.appendChild(overlay);
         this.overlay = overlay;
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
@@ -131811,9 +134980,11 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
     }
 
     _syncSize() {
-        if (!this.canvas) return;
-        const w = window.innerWidth;
-        const h = window.innerHeight;
+        if (!this.canvas || !this.overlay) return;
+        // Match the screen-opening box (not the full viewport).
+        const box = this.overlay.getBoundingClientRect();
+        const w = Math.max(1, Math.round(box.width));
+        const h = Math.max(1, Math.round(box.height));
         const dpr = window.devicePixelRatio || 1;
         this.canvas.width = Math.round(w * dpr);
         this.canvas.height = Math.round(h * dpr);
@@ -133342,6 +136513,7 @@ var hudLayoutEditor = (function () {
     function bindGlobalToggle() {
         window.addEventListener('keydown', function (e) {
             if (!e.shiftKey || (e.key !== 'c' && e.key !== 'C')) return;
+            if (e.repeat) return;
             if (typeof startScreenManager === 'undefined' || startScreenManager.visible) return;
             // The home station (js/ui/home-station/bind-controls-toggle-part2.js) has its own,
             // entirely separate `document` keydown listener for Shift+C, and it keeps handling the
@@ -133353,6 +136525,9 @@ var hudLayoutEditor = (function () {
             // cancelled each other out, so devMode net stayed unchanged while the station's own
             // toast still reported "DEV MODE ON" — a clean double-fire, not a dev-mode bug.
             if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) return;
+            // Profile overlay (js/core/input-handler/core.js) already toggles Shift+C itself;
+            // firing again here flipped the mode straight back off.
+            if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA') return;
             e.preventDefault();
@@ -134054,6 +137229,18 @@ var GamepadManager = class GamepadManager {
             b: false
         };
         this._wasCombat = false;
+        // Linux DEs reset idle on keyboard/pointer only — gamepad HID is ignored.
+        // Browser Wake Lock is best-effort; the local dev server also exposes
+        // /__user-activity (D-Bus SimulateUserActivity) which truly resets idle.
+        this._wakeLock = null;
+        this._wakeWanted = false;
+        this._wakeBusy = false;
+        this._wakeNextTry = 0;
+        this._wakeVideo = null;
+        this._wakeVideoOn = false;
+        this._lastActivityPoke = 0;
+        this._activityPokeOk = null;
+        this._bindDisplayWake();
     }
 
     start() {
@@ -134064,6 +137251,189 @@ var GamepadManager = class GamepadManager {
             requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
+    }
+
+    _bindDisplayWake() {
+        if (typeof document === 'undefined') return;
+        const self = this;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && self._wakeWanted) {
+                self._wakeNextTry = 0;
+                self._acquireDisplayWake();
+            } else if (document.visibilityState !== 'visible') {
+                self._releaseDisplayWake(true);
+            }
+        });
+        // Gamepad presses are NOT trusted activation — re-arm on real gestures
+        // so Chromium/Firefox can actually take the system idle inhibitor.
+        const arm = () => {
+            if (!self._wakeWanted) return;
+            self._wakeNextTry = 0;
+            self._acquireDisplayWake();
+        };
+        ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((ev) => {
+            document.addEventListener(ev, arm, true);
+        });
+    }
+
+    _setWakeWanted(wanted) {
+        wanted = !!wanted;
+        if (this._wakeWanted === wanted) {
+            if (wanted) this._acquireDisplayWake();
+            return;
+        }
+        this._wakeWanted = wanted;
+        if (wanted) this._acquireDisplayWake();
+        else this._releaseDisplayWake(false);
+    }
+
+    _acquireDisplayWake() {
+        if (!this._wakeWanted) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        this._acquireWakeLock();
+        this._startWakeVideo();
+        this._pokeSystemActivity();
+    }
+
+    /**
+     * Ask the local GLXEE dev server to reset the Linux screensaver/idle timer.
+     * No-ops on static hosts (itch.io, python -m http.server) where the route
+     * is missing — Wake Lock remains the only option there.
+     */
+    _pokeSystemActivity() {
+        if (typeof fetch !== 'function') return;
+        if (this._activityPokeOk === false) return;
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() : Date.now();
+        // Dim timeouts can be ~60s; poke often enough and on first arm.
+        if (this._lastActivityPoke && (now - this._lastActivityPoke) < 20000) return;
+        this._lastActivityPoke = now;
+        const self = this;
+        try {
+            fetch('/__user-activity', { cache: 'no-store', keepalive: true })
+                .then((res) => {
+                    if (!res || !res.ok) {
+                        self._activityPokeOk = false;
+                        return;
+                    }
+                    self._activityPokeOk = true;
+                })
+                .catch(() => { self._activityPokeOk = false; });
+        } catch (e) {
+            this._activityPokeOk = false;
+        }
+    }
+
+    _releaseDisplayWake(keepWanted) {
+        if (!keepWanted) this._wakeWanted = false;
+        this._releaseWakeLock();
+        this._stopWakeVideo();
+    }
+
+    _acquireWakeLock() {
+        if (this._wakeBusy || this._wakeLock) return;
+        if (typeof navigator === 'undefined' || !navigator.wakeLock || !navigator.wakeLock.request) {
+            return;
+        }
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() : Date.now();
+        if (now < this._wakeNextTry) return;
+        this._wakeBusy = true;
+        const self = this;
+        navigator.wakeLock.request('screen').then((lock) => {
+            self._wakeBusy = false;
+            if (!self._wakeWanted
+                || (typeof document !== 'undefined'
+                    && document.visibilityState !== 'visible')) {
+                try { lock.release(); } catch (e) { /* ignore */ }
+                return;
+            }
+            self._wakeLock = lock;
+            lock.addEventListener('release', () => {
+                if (self._wakeLock === lock) self._wakeLock = null;
+                if (self._wakeWanted
+                    && typeof document !== 'undefined'
+                    && document.visibilityState === 'visible') {
+                    self._wakeNextTry = 0;
+                    self._acquireWakeLock();
+                }
+            });
+        }).catch(() => {
+            self._wakeBusy = false;
+            // No activation yet / API blocked — video fallback still runs;
+            // retry wake lock after the next trusted gesture or shortly.
+            self._wakeNextTry = now + 2500;
+        });
+    }
+
+    _releaseWakeLock() {
+        const lock = this._wakeLock;
+        this._wakeLock = null;
+        if (!lock) return;
+        try { lock.release(); } catch (e) { /* ignore */ }
+    }
+
+    /**
+     * 1×1 canvas captureStream → muted <video>. Gives Linux compositors a
+     * playing-media signal when Screen Wake Lock alone does not inhibit DPMS.
+     */
+    _ensureWakeVideo() {
+        if (this._wakeVideo) return this._wakeVideo;
+        if (typeof document === 'undefined') return null;
+        let stream = null;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 1, 1);
+            }
+            if (typeof canvas.captureStream === 'function') {
+                stream = canvas.captureStream(1);
+            }
+        } catch (e) {
+            stream = null;
+        }
+        if (!stream) return null;
+        const v = document.createElement('video');
+        v.setAttribute('playsinline', '');
+        v.setAttribute('muted', '');
+        v.setAttribute('aria-hidden', 'true');
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.tabIndex = -1;
+        v.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;'
+            + 'pointer-events:none;bottom:0;left:0;z-index:-1;';
+        try {
+            v.srcObject = stream;
+        } catch (e) {
+            return null;
+        }
+        document.documentElement.appendChild(v);
+        this._wakeVideo = v;
+        this._wakeCanvasStream = stream;
+        return v;
+    }
+
+    _startWakeVideo() {
+        const v = this._ensureWakeVideo();
+        if (!v) return;
+        if (!v.paused && this._wakeVideoOn) return;
+        this._wakeVideoOn = true;
+        const play = v.play();
+        if (play && play.catch) {
+            play.catch(() => { this._wakeVideoOn = false; });
+        }
+    }
+
+    _stopWakeVideo() {
+        this._wakeVideoOn = false;
+        const v = this._wakeVideo;
+        if (!v) return;
+        try { v.pause(); } catch (e) { /* ignore */ }
     }
 
     isButtonPressed(gamepad, index) {
@@ -134116,9 +137486,13 @@ var GamepadManager = class GamepadManager {
             if (pads[i] && pads[i].connected) { gamepad = pads[i]; break; }
         }
         if (!gamepad) {
+            this._setWakeWanted(false);
             this.resetCombatKeys();
             return;
         }
+        // Connected pad + visible tab ⇒ inhibit system display sleep (Linux
+        // idle ignores Gamepad API; Wake Lock + silent video cover Chromium/DE).
+        this._setWakeWanted(true);
         // "FIRE TO START" lives inside the combat surface (isCombatMode()
         // is already true there) but wants a discrete confirm press like a
         // menu, not held-key combat state, so it's special-cased here.
@@ -134279,7 +137653,15 @@ extendClass(GamepadManager, {
         const st = this._menuState[name];
         if (pressed && !st.active) {
             st.active = true;
-            if (typeof gamepadCursor !== 'undefined') gamepadCursor.markGamepad();
+            // Map stick focus: keep the HTML HUD frame off so markGamepad
+            // cannot latch onto a leftover .nav-focused tab/button.
+            const mapStick = typeof galaxyMapManager !== 'undefined'
+                && galaxyMapManager.isInputActive && galaxyMapManager.isInputActive()
+                && (!galaxyMapManager.hasCardFocus || !galaxyMapManager.hasCardFocus());
+            if (typeof gamepadCursor !== 'undefined') {
+                if (mapStick && gamepadCursor._fadeOut) gamepadCursor._fadeOut();
+                else gamepadCursor.markGamepad();
+            }
             this.dispatchKey('keydown', key);
         } else if (!pressed && st.active) {
             st.active = false;
@@ -134746,6 +138128,16 @@ var InStageShop = class InStageShop {
             && game.gameState.pauseGame) {
             game.gameState.pauseGame();
         }
+        if (typeof soundManager !== 'undefined' && soundManager.startShopMusic) {
+            const planet = (typeof soundManager._endMusicPlanet !== 'undefined'
+                && soundManager._endMusicPlanet)
+                || soundManager._currentPlanetId
+                || (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || 'mars';
+            soundManager.startShopMusic(planet, {
+                resume: this.fromVictory ? 'victory' : 'menu'
+            });
+        }
         this.renderDom();
     }
 
@@ -134774,6 +138166,9 @@ var InStageShop = class InStageShop {
         if (el) el.remove();
         const wasVictory = this.fromVictory;
         this.fromVictory = false;
+        if (typeof soundManager !== 'undefined' && soundManager.stopShopMusic) {
+            soundManager.stopShopMusic();
+        }
         if (!wasVictory
             && typeof game !== 'undefined'
             && game.gameState
@@ -137393,6 +140788,16 @@ extendClass(HomeStationUI, {
     };
 
     GamepadCursor.prototype._resolveTarget = function () {
+        // Galaxy map stick focus uses SVG selection frames, not this HUD frame.
+        try {
+            if (typeof galaxyMapManager !== 'undefined'
+                && galaxyMapManager.isInputActive
+                && galaxyMapManager.isInputActive()
+                && (!galaxyMapManager.hasCardFocus || !galaxyMapManager.hasCardFocus())) {
+                this.target = null;
+                return null;
+            }
+        } catch (e) { /* ignore */ }
         if (this.target && document.body.contains(this.target)
             && (this.target.classList.contains('nav-focused')
                 || this.target.classList.contains('selected'))) {

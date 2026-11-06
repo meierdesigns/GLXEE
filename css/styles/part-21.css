@@ -545,24 +545,24 @@ html body .galaxy-map-panel-select .gm-detail .stat-row {
 .profile-faction-tabpanel.active { display: block; }
 .profile-selection-name-mode .profile-faction-tabcard .profile-faction-fact { height: auto; border: 0; background: none; padding: 0; clip-path: none; }
 
-/* --- Profiles: smaller type, solid backing behind every pilot row. */
+/* --- Profiles: readable type inside the glass host (no extra zoom). */
 html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item {
     background: color-mix(in srgb, var(--color-primary) 8%, #05060a);
     gap: 16px !important;
-    padding: 10px 14px !important;
+    padding: 12px 16px !important;
 }
 html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item.selected {
     background: color-mix(in srgb, var(--color-primary) 20%, #05060a);
 }
 html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item .profile-list-emblem { margin-right: 0 !important; }
-html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item .profile-list-name { font-size: 15px !important; letter-spacing: 1px; padding-left: 0 !important; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-item .profile-list-name { font-size: 20px !important; letter-spacing: 1px; padding-left: 0 !important; }
 html body .profile-selection-floating:not(.profile-selection-name-mode) .profile-list-badge { font-size: var(--font-small); }
-html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-hero-name { font-size: 18px; letter-spacing: 2px; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-hero-name { font-size: 24px; letter-spacing: 2px; }
 html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-hero-faction,
 html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-block-title,
 html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-res-value,
-html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-ship { font-size: var(--font-text); }
-html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-tile-value { font-size: 15px; }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-ship { font-size: var(--font-h2); }
+html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-tile-value { font-size: 18px; }
 html body .profile-selection-floating:not(.profile-selection-name-mode) .pd-tile-cap { font-size: var(--font-small); }
 
 /* Name step: input text large enough to read. */

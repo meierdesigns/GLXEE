@@ -8,6 +8,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -16,6 +17,51 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 BOOT_ID = str(time.time_ns() // 1000000)
 VFBOOT = "vfboot"  # cookie name; set per port in __main__
+_activity_lock = threading.Lock()
+_activity_last = 0.0
+
+
+def poke_linux_user_activity():
+    """Reset the DE idle timer the same way a real mouse/key event would.
+
+    Browser Screen Wake Lock often fails to inhibit Linux power-saving when only
+    a gamepad is used (joysticks are ignored by many idle monitors). The local
+    dev server can call the session screensaver D-Bus API directly.
+    """
+    global _activity_last
+    now = time.monotonic()
+    with _activity_lock:
+        if now - _activity_last < 4.0:
+            return True
+        _activity_last = now
+    commands = (
+        [
+            "dbus-send", "--session", "--type=method_call",
+            "--dest=org.freedesktop.ScreenSaver",
+            "/org/freedesktop/ScreenSaver",
+            "org.freedesktop.ScreenSaver.SimulateUserActivity",
+        ],
+        [
+            "gdbus", "call", "--session",
+            "--dest", "org.freedesktop.ScreenSaver",
+            "--object-path", "/org/freedesktop/ScreenSaver",
+            "--method", "org.freedesktop.ScreenSaver.SimulateUserActivity",
+        ],
+        [
+            "busctl", "--user", "call",
+            "org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver",
+            "org.freedesktop.ScreenSaver", "SimulateUserActivity",
+        ],
+        ["xdg-screensaver", "reset"],
+    )
+    for cmd in commands:
+        try:
+            result = subprocess.run(cmd, timeout=1.5, capture_output=True, check=False)
+            if result.returncode == 0:
+                return True
+        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+            continue
+    return False
 
 # Compressible MIME types (binary formats stay untouched).
 COMPRESSIBLE = {
@@ -102,6 +148,20 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
             body = ('{"boot":"%s"}' % BOOT_ID).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if write_body:
+                self.wfile.write(body)
+            return
+        # Gamepad play: browser APIs cannot reset Linux DE idle; poke screensaver.
+        if path == "/__user-activity":
+            host = self.client_address[0] if self.client_address else ""
+            local = host in ("127.0.0.1", "::1", "localhost")
+            ok = poke_linux_user_activity() if local else False
+            body = ('{"ok":%s}' % ("true" if ok else "false")).encode()
+            self.send_response(200 if local else 403)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             if write_body:
@@ -415,7 +475,7 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         if path.startswith("/__bundle/"):
             pass  # send_bundle set its own (immutable) headers
-        elif path in ("/", "/index.html", "/__boot", "/__cache-clear"):
+        elif path in ("/", "/index.html", "/__boot", "/__cache-clear", "/__user-activity"):
             self.send_header("Cache-Control", "no-store")
         elif self.stamp_matches(path, query):
             self.send_header("Cache-Control", "public, max-age=31536000, immutable")

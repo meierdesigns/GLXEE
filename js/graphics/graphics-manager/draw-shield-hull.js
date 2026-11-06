@@ -26,6 +26,8 @@ extendClass(GraphicsManager, {
         const gapCells = 1;  // freiraum between hull and shield rim
         const thickCells = Math.max(1, Math.round(((opts && opts.thick) || 2) / 2));
         const pulse = (opts && opts.pulse != null) ? opts.pulse : 1;
+        // Euclidean dilation wraps the silhouette; Chebyshev looked like a padded box.
+        const DIST_MODE = 'eu';
         const maxR = (gapCells + thickCells) * MAX_CELL;
         const ew = Math.max(1, Math.ceil(entity.width));
         const eh = Math.max(1, Math.ceil(entity.height));
@@ -49,7 +51,7 @@ extendClass(GraphicsManager, {
         const modelId = ((shipModel && (shipModel.id || shipModel.name)) || 'ship') + factionSig;
         const layoutSig = this.getShieldLayoutSignature(shipModel);
         const cacheKey = modelId + '|' + ew + 'x' + eh + '|g' + gapCells + 't' + thickCells
-            + '|p' + padX + 'x' + padY + '|' + (flip ? 1 : 0) + '|' + layoutSig;
+            + '|p' + padX + 'x' + padY + '|' + (flip ? 1 : 0) + '|' + layoutSig + '|' + DIST_MODE;
 
         let rim = this._shieldHullCache[cacheKey];
         if (!rim) {
@@ -115,22 +117,31 @@ extendClass(GraphicsManager, {
             }
             const gapFine = Math.max(1, Math.round(gapCells * sub));
             const R = gapFine + thickCells;
+            const gap2 = gapFine * gapFine;
+            const R2 = R * R;
+            const search = Math.ceil(R);
             for (let r = 0; r < rows; r++) {
                 for (let q = 0; q < cols; q++) {
                     if (occ[r * cols + q]) continue;
-                    let minCheb = R + 1;
-                    for (let dy = -R; dy <= R && minCheb > 1; dy++) {
+                    let minD2 = R2 + 1;
+                    for (let dy = -search; dy <= search; dy++) {
                         const rr = r + dy;
                         if (rr < 0 || rr >= rows) continue;
-                        for (let dx = -R; dx <= R; dx++) {
+                        const dy2 = dy * dy;
+                        for (let dx = -search; dx <= search; dx++) {
                             const qq = q + dx;
                             if (qq < 0 || qq >= cols || !occ[rr * cols + qq]) continue;
-                            const cheb = Math.max(Math.abs(dx), Math.abs(dy));
-                            if (cheb < minCheb) minCheb = cheb;
+                            const d2 = dx * dx + dy2;
+                            if (d2 < minD2) minD2 = d2;
                         }
                     }
-                    // Ring outside the gap band — empty voxels between hull and rim
-                    if (minCheb <= gapFine || minCheb > R) continue;
+                    // Soft energy shell: just outside the hull gap, rounded by Euclidean metric.
+                    if (minD2 <= gap2 || minD2 > R2) continue;
+                    const dist = Math.sqrt(minD2);
+                    const edge = (dist - gapFine) / Math.max(0.001, R - gapFine);
+                    // Peak in the middle of the rim so it reads as a wrap, not a hard box edge.
+                    const a = Math.max(0.35, Math.sin(Math.max(0, Math.min(1, edge)) * Math.PI));
+                    const alpha = Math.round(255 * a);
                     const x0 = Math.max(0, gx0 + q * c);
                     const y0 = Math.max(0, gy0 + r * c);
                     const x1 = Math.min(w, gx0 + (q + 1) * c);
@@ -141,7 +152,7 @@ extendClass(GraphicsManager, {
                             od[i] = 255;
                             od[i + 1] = 255;
                             od[i + 2] = 255;
-                            od[i + 3] = 255;
+                            od[i + 3] = Math.max(od[i + 3], alpha);
                         }
                     }
                 }

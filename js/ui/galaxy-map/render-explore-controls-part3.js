@@ -61,15 +61,15 @@ extendClass(GalaxyMapManager, {
             const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
                 ? factionShipStyles.getFactionStyle(f.id) : null;
             const c = toRgb(st && st.accent);
-            if (c) layers.push({ rgb: c, cover: 0.3 + (f.share || 0.3) * 0.4, sc: NEB_SCALE * (1 + i * 0.3), off: rnd() * 90, ang: rnd() * Math.PI * 2 });
+            if (c) layers.push({ rgb: c, cover: 0.22 + (f.share || 0.3) * 0.32, sc: NEB_SCALE * (1 + i * 0.3), off: rnd() * 90, ang: rnd() * Math.PI * 2 });
         });
         if (!layers.length) {
             const g = typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
                 ? planetConfigManager.getGalaxy(gid) : null;
-            layers.push({ rgb: toRgb(g && g.baseColor) || [122, 60, 255], cover: 0.5, sc: NEB_SCALE, off: rnd() * 90, ang: rnd() * Math.PI * 2 });
+            layers.push({ rgb: toRgb(g && g.baseColor) || [122, 60, 255], cover: 0.38, sc: NEB_SCALE, off: rnd() * 90, ang: rnd() * Math.PI * 2 });
         }
-        // A deep, dim dust layer in the main colour gives the clouds depth.
-        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.4), cover: 0.72, sc: NEB_SCALE * 0.55, off: rnd() * 90, dust: true });
+        // A deep dust layer in the main colour gives depth — keep it tinted, not grey.
+        layers.unshift({ rgb: layers[0].rgb.map((v) => v * 0.62 + 18), cover: 0.28, sc: NEB_SCALE * 0.55, off: rnd() * 90, dust: true });
         const cxm = W / 2, cym = H / 2;
         const bayer = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
         const sstep = (a0, a1, t) => { const k = Math.max(0, Math.min(1, (t - a0) / (a1 - a0))); return k * k * (3 - 2 * k); };
@@ -287,7 +287,7 @@ extendClass(GalaxyMapManager, {
                 const freeCloud = Math.max(mix('free') * 0.7, lw.wisp);
                 const sunFade = suns.length ? Math.max(Math.min(1, Math.pow(sl.k, NEB_SUN_FALLOFF) * 2.2), freeCloud) : 1;
                 // Ambient floor so the planet field keeps a veil even between suns.
-                lw.envNear = mix('envBase') * Math.max(sunFade, 0.22);
+                lw.envNear = mix('envBase') * Math.max(sunFade, 0.1);
                 lw.grain = mix('grain');
                 lw.bank = 0.02 + 0.98 * mix('bank');
                 lw.gm = Math.round(mix('gm') * 8) / 8;
@@ -348,19 +348,26 @@ extendClass(GalaxyMapManager, {
                         // Self-luminous pockets: a few scattered clouds glow on their own, not tied to a sun.
                         const gm = lw.gm;
                         const lit = Math.max(sl.k, gm * 0.55);
-                        const lift = lerpTone([0, 6, 14, 22], f) + lit * 14 + gm * lerpTone([4, 10, 16, 20], f);
-                        const mulc = lerpTone([1, 1.1, 1.15, 1.1], f);
+                        const lift = lerpTone([0, 4, 10, 16], f) + lit * 18 + gm * lerpTone([6, 12, 18, 24], f);
+                        const mulc = lerpTone([1.05, 1.18, 1.28, 1.2], f);
                         let cr = L.rgb[0] * mulc + lift, cg = L.rgb[1] * mulc + lift, cb = L.rgb[2] * mulc + lift;
+                        // Punch chroma so faction tints stay vivid instead of greying out.
+                        {
+                            const mean = (cr + cg + cb) / 3;
+                            cr = mean + (cr - mean) * 1.35;
+                            cg = mean + (cg - mean) * 1.35;
+                            cb = mean + (cb - mean) * 1.35;
+                        }
                         if (sl.rgb && lit > 0.02) {
-                            const t = Math.min(0.9, sl.k * 1.6);
+                            const t = Math.min(0.75, sl.k * 1.35);
                             cr += (sl.rgb[0] - cr) * t; cg += (sl.rgb[1] - cg) * t; cb += (sl.rgb[2] - cb) * t;
                         }
-                        // Far from every sun the cloud is dim; only self-luminous pockets keep their glow.
-                        const shine = 0.22 + 0.78 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
+                        // Keep a solid colour floor away from suns — no washed-out grey haze.
+                        const shine = 0.48 + 0.52 * Math.round(Math.min(1, Math.max(sl.k * 1.8, gm)) * 10) / 10;
                         cr *= shine; cg *= shine; cb *= shine;
                         // Translucent veils: alpha swells and thins across the cloud, so stars shine through the thin parts.
                         const veil = lw.veil[li];
-                        const a = 0.38 * veil * Math.min(0.85, (L.dust ? lerpTone([0.18, 0.28], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.4 + gm * 0.6) * (1 + wispK * 1.6));
+                        const a = 0.28 * veil * Math.min(0.78, (L.dust ? lerpTone([0.14, 0.24], Math.min(1, f * 3)) : lerpTone(toneAlpha, f) * Math.min(1, f * 6)) * (1 + lit * 1.25 + gm * 0.55) * (1 + wispK * 1.35));
                         // Porter-Duff "over".
                         R = cr * a + R * (1 - a); G = cg * a + G * (1 - a); B = cb * a + B * (1 - a);
                         A = a + A * (1 - a);
@@ -379,11 +386,11 @@ extendClass(GalaxyMapManager, {
                         const dens = 1 - Math.exp(-A / 0.5);
                         const edge = Math.min(1, Math.max(0, (dens - 0.12 - (1 - billow) * 0.6) * 3.5));
                         const rim = edge * (1 - edge) * 4;
-                        let cov = edge * (0.16 + 0.2 * dens) + 0.14 * rid * rid * rid * dens;
-                        cov = Math.min(0.45, cov + 0.15 * lane * edge);
+                        let cov = edge * (0.12 + 0.16 * dens) + 0.1 * rid * rid * rid * dens;
+                        cov = Math.min(0.32, cov + 0.1 * lane * edge);
                         let cr = R / A, cg = G / A, cb = B / A;
-                        const lift = (1 + 0.7 * rim) * (1 - 0.8 * lane);
-                        const hot = 0.3 * dens * dens * (1 - lane);
+                        const lift = (1 + 0.85 * rim) * (1 - 0.65 * lane);
+                        const hot = 0.38 * dens * dens * (1 - lane);
                         cr = (cr + (255 - cr) * hot) * lift; cg = (cg + (255 - cg) * hot) * lift; cb = (cb + (255 - cb) * hot) * lift;
                         R = cr * cov; G = cg * cov; B = cb * cov; A = cov;
                     }
@@ -391,7 +398,7 @@ extendClass(GalaxyMapManager, {
                     // Soft cap: overlapping layers + suns must never wash out to white.
                     if (A > 0) {
                         const mx = Math.max(R, G, B) / A;
-                        if (mx > 170) { const k = 170 / mx; R *= k; G *= k; B *= k; }
+                        if (mx > 210) { const k = 210 / mx; R *= k; G *= k; B *= k; }
                     }
                     if (opaque) {
                         // Fine patch used to write every pixel at alpha 255 over black.

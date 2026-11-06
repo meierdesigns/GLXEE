@@ -73,6 +73,9 @@ class GalaxyMapManager {
             const v = all[this.galaxyId];
             if (!v || !this.nodeById[v.p] || !this.isUnlocked(v.p)) return;
             this.selectedPlanetId = v.p;
+            // Always clear first: loadMap may have primed selectedPostId from the
+            // ship location; a saved planet-only pick must not keep that post.
+            this.selectedPostId = null;
             this._picked = true;
             if (v.s) {
                 const post = (this.getTradingPosts() || []).find((q) => q.id === v.s);
@@ -147,6 +150,9 @@ class GalaxyMapManager {
         if (typeof menuStateManager !== 'undefined' && !this._mountEl) {
             menuStateManager.setScreen('galaxyMap');
         }
+        if (typeof soundManager !== 'undefined' && soundManager.startMapMusic) {
+            soundManager.startMapMusic(this.selectedPlanetId || 'mars', { immediate: true });
+        }
     }
     hide() {
         if (this.isVisible) this.saveGalaxyView();
@@ -206,11 +212,45 @@ class GalaxyMapManager {
         return this._inputActive;
     }
     armInput() {
-        return this.setInputActive(true);
+        const on = this.setInputActive(true);
+        // Map owns the stick: SVG selection frames are the cursor — hide the
+        // HTML gamepad frame so it cannot sit on a leftover tab/button.
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+        return on;
     }
     disarmInput() {
         this.clearCardFocus();
         return this.setInputActive(false);
+    }
+    /**
+     * While the map has stick focus (not the card buttons), suppress the HTML
+     * gamepad HUD frame — the SVG gm-selection-frame already marks the pick.
+     * Uses _fadeOut (not markPointer) so gamepadCursor.active stays armed for
+     * when focus drops into the planet card buttons.
+     */
+    syncGamepadMapCursor() {
+        if (typeof gamepadCursor === 'undefined') return;
+        if (this.isInputActive() && !this.hasCardFocus()) {
+            if (gamepadCursor._fadeOut) gamepadCursor._fadeOut();
+            return;
+        }
+        if (this.hasActionFocus() && this.getActionButtons) {
+            const list = this.getActionButtons();
+            const el = list[this._actionFocus];
+            if (el && gamepadCursor.follow) {
+                gamepadCursor.active = true;
+                gamepadCursor.follow(el);
+            }
+            return;
+        }
+        if (this.hasStageFocus() && this.getStageFocusables) {
+            const list = this.getStageFocusables();
+            const el = list[this._stageFocus];
+            if (el && gamepadCursor.follow) {
+                gamepadCursor.active = true;
+                gamepadCursor.follow(el);
+            }
+        }
     }
     /** Start/confirm buttons of the selected planet card, enabled only. */
     getActionButtons() {
@@ -299,6 +339,7 @@ class GalaxyMapManager {
     clearCardFocus() {
         this.clearActionFocus();
         this.clearStageFocus();
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
         this.syncHostNavHint();
     }
     /** Drop from the map into the planet card: stages first, else action buttons. */

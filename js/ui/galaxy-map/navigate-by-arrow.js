@@ -9,14 +9,12 @@ extendClass(GalaxyMapManager, {
      * the other posts sharing an anchor.
      */
     /**
-     * Trading posts at resting coords (no orbit). Arrow nav must stay stable —
-     * orbiting display positions made ←/→ pick different posts every few seconds.
+     * Trading posts at the same coords the map draws (orbit applied).
+     * Gamepad fires one arrow per press (no hold-repeat), so a live orbit
+     * snapshot matches what the player sees without the old mid-hold drift.
      */
     getNavTradingPosts() {
-        if (typeof profileManager === 'undefined' || !profileManager.getTradingPosts) return [];
-        const dev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
-        return (profileManager.getTradingPosts(this.galaxyId) || []).filter((p) => dev
-            || (p.anchors || [p.planetId]).some((id) => this.nodeById && this.nodeById[id] && this.isUnlocked(id)));
+        return this.getTradingPosts ? this.getTradingPosts() : [];
     },
     getArrowTargets() {
         const posts = this.getNavTradingPosts();
@@ -115,6 +113,10 @@ extendClass(GalaxyMapManager, {
         // selection first would jump the view, then jump again into the flight.
         const skipCam = this._flight || (opts && opts.noCamera);
         if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+        if (this.isVisible && typeof soundManager !== 'undefined' && soundManager.startMapMusic) {
+            soundManager.startMapMusic(planetId);
+        }
     },
     /**
      * Select a border checkpoint (route from open → shut). The card shows
@@ -179,7 +181,19 @@ extendClass(GalaxyMapManager, {
         posts.forEach((p) => {
             byId[p.id] = p;
             const node = svg.querySelector('.gm-post-node[data-post="' + p.id + '"]');
-            if (node) { const q = px(p); node.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')'); }
+            if (!node) return;
+            // Same lattice as the initial render / tether endpoints, or the
+            // station drifts off its lane while orbiting.
+            let q = px(p);
+            if (this.latticeMapPt) q = this.latticeMapPt(q.x, q.y);
+            node.setAttribute('transform', 'translate(' + q.x.toFixed(2) + ',' + q.y.toFixed(2) + ')');
+            // Match lane rotation: spin station art with orbitA so it stays aligned to the tether.
+            const art = node.querySelector('.gm-post-art');
+            if (art && p.orbitA != null) {
+                const deg = (p.orbitA - Number(node.getAttribute('data-a') || 0)) * 180 / Math.PI;
+                const s = art.getAttribute('data-s') || '1';
+                art.setAttribute('transform', 'rotate(' + deg.toFixed(3) + ') scale(' + s + ')');
+            }
         });
         svg.querySelectorAll('.gm-lane-rot').forEach((g) => {
             const p = byId[g.getAttribute('data-post')];
@@ -191,7 +205,8 @@ extendClass(GalaxyMapManager, {
             ? profileManager.getShipLocation(this.galaxyId) : null;
         const ship = svg.querySelector(':scope > .gm-ship-marker');
         if (loc && loc.kind === 'post' && byId[loc.id] && ship) {
-            const q = px(byId[loc.id]);
+            let q = px(byId[loc.id]);
+            if (this.latticeMapPt) q = this.latticeMapPt(q.x, q.y);
             const sq = this.latticeShipPt ? this.latticeShipPt(q.x, q.y) : q;
             ship.setAttribute('transform', 'translate(' + sq.x.toFixed(3) + ',' + sq.y.toFixed(3) + ')');
         }
@@ -228,6 +243,7 @@ extendClass(GalaxyMapManager, {
         this.syncConfirmButton();
         const skipCam = this._flight || (opts && opts.noCamera);
         if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
+        this.syncGamepadMapCursor && this.syncGamepadMapCursor();
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;

@@ -471,6 +471,19 @@ class RenderManager {
                     ctx.fillRect(side.x, side.y, side.width, side.height);
                 }
                 ctx.restore();
+                if (side.shieldMax > 0 && side.shield > 0 && graphicsManager.drawShieldHull) {
+                    const threat = this.getShieldThreatProximity(side, { mode: 'enemy' });
+                    if (threat > 0.01) {
+                        const strength = side.shield / side.shieldMax;
+                        graphicsManager.drawShieldHull(
+                            ctx,
+                            side,
+                            threat * (0.45 + 0.55 * strength),
+                            true,
+                            null
+                        );
+                    }
+                }
             });
         }
 

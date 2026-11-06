@@ -90,6 +90,17 @@ extendClass(StartScreenManager, {
     },
 
     toggleDevMode() {
+        // Multiple keydown listeners (start screen, station, profile overlay, combat HUD)
+        // can all see the same Shift+C. Without a same-press lock they cancel each other
+        // (ON toast / OFF state) or flip twice on OS key-repeat.
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now()
+            : Date.now();
+        if (this._devToggleLockAt != null && (now - this._devToggleLockAt) < 200) {
+            return this.devMode;
+        }
+        this._devToggleLockAt = now;
+
         this.devMode = !this.devMode;
         this.saveDevMode();
         this.rebuildVisibleMenu();
@@ -104,6 +115,11 @@ extendClass(StartScreenManager, {
         if (this.visible) this.createStartScreenUI();
         // Dev-only tabs + tutorial-locked area nav: patch chrome only (no full rebuild).
         if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) {
+            if (!homeStationUI.statusMsg) {
+                homeStationUI.statusMsg = this.devMode
+                    ? 'DEV MODE ON — NAV + COMPONENTS + LAYOUT UNLOCKED'
+                    : 'DEV MODE OFF';
+            }
             if (homeStationUI.syncDevModeChrome) {
                 homeStationUI.syncDevModeChrome();
             } else if (homeStationUI.createUI) {
@@ -123,6 +139,7 @@ extendClass(StartScreenManager, {
             && profileSelectionManager.createUI) {
             profileSelectionManager.createUI();
         }
+        return this.devMode;
     },
 
     isMenuItemVisible(itemId) {

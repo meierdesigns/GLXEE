@@ -5,8 +5,10 @@ extendClass(SoundManager, {
     playGameOver() {
         this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
         this._endMusicFaction = this._currentHostileFaction || null;
+        // Stop combat reevaluation so defeat motif is not yanked back to stage BGM.
+        if (this.clearMusicContext) this.clearMusicContext();
         this.clearActiveTimeouts();
-        this.stopPlanetAmbientNodesOnly();
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         this.ambientPlanetId = null;
         this.createBeep(300, 0.3, 'sine', 0.9);
         this.schedule(() => this.createBeep(250, 0.3, 'sine', 0.85), 300);
@@ -18,15 +20,43 @@ extendClass(SoundManager, {
     playVictory() {
         this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
         this._endMusicFaction = this._currentHostileFaction || null;
+        // Keep combat loop rolling through the victory screen. Swapping to the
+        // victory fanfare (then back on next stage) felt like the old intro
+        // fanfare every clear. Beeps still celebrate; music stays on the bus.
         this.clearActiveTimeouts();
-        this.stopPlanetAmbientNodesOnly();
-        this.ambientPlanetId = null;
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true, keepLocal: true });
         this.createBeep(500, 0.2, 'sine', 0.85);
         this.schedule(() => this.createBeep(600, 0.2, 'sine', 0.85), 200);
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        this.schedule(() => this.startEndMusic('victory'), 900);
+        // Soft duck only — no track swap.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
+            const bus = this.musicBusVolume ? this.musicBusVolume() : 0.2;
+            vfTrackerManager.setVolume(Math.max(0.05, bus * 0.55));
+        }
+    },
+
+    /** Menu difficulty + planet tier for scene-feel (tempo / STYLE intensity). */
+    _musicSceneOpts(role) {
+        const difficulty = (typeof difficultyConfigManager !== 'undefined'
+            && difficultyConfigManager.current)
+            ? String(difficultyConfigManager.current).toLowerCase()
+            : 'normal';
+        let planetTier = null;
+        if (typeof game !== 'undefined' && game.currentLevel
+            && game.currentLevel.planetTier != null) {
+            planetTier = Number(game.currentLevel.planetTier);
+        } else if (typeof levelManager !== 'undefined' && levelManager.currentLevel
+            && levelManager.currentLevel.planetTier != null) {
+            planetTier = Number(levelManager.currentLevel.planetTier);
+        }
+        return { role: role || 'menu', difficulty, planetTier };
+    },
+
+    _applyMusicScene(role) {
+        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.setSceneFeel) return;
+        vfTrackerManager.setSceneFeel(this._musicSceneOpts(role));
     },
 
     /** Looping victory / lose vftrack, biased by hostile faction (+ optional planet). */
@@ -37,17 +67,84 @@ extendClass(SoundManager, {
         if (!this.ensureContext()) return;
         const faction = String(this._endMusicFaction || this._currentHostileFaction || '').toLowerCase();
         const planet = String(this._endMusicPlanet || this._currentPlanetId || '').toLowerCase().split('-')[0];
+        // Prefer planet Hauptmelodie; faction only skins instruments when both known.
         const keys = [];
         if (planet && faction) keys.push(mode + ':' + faction + ':' + planet);
-        if (faction) keys.push(mode + ':' + faction);
         if (planet) keys.push(mode + ':' + planet);
+        if (faction) keys.push(mode + ':' + faction);
         keys.push(mode);
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
         if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
         if (typeof vfTrackerManager === 'undefined') return;
+        this._applyMusicScene(mode);
         vfTrackerManager.setVolume(this.musicBusVolume());
         vfTrackerManager.setEnabled(true);
         if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
+    },
+
+    /**
+     * Trader / victory-shop / home-shop BGM — planet bazaar motif.
+     * Pass `{ resume: 'victory'|'map'|'menu' }` so close can restore.
+     */
+    startShopMusic(planetId, opts) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId
+                || this._endMusicPlanet
+                || this._currentPlanetId
+                || (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const key = 'shop:' + id;
+        this._shopMusicResume = (opts && opts.resume) || this._shopMusicResume || 'menu';
+        this.notePendingMusic('shop', key);
+        if (!this.musicEnabled) return;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined'
+            && localAudioManager.currentKey
+            && localAudioManager.currentKey !== key) {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager === 'undefined') return;
+        this._applyMusicScene('shop');
+        vfTrackerManager.setVolume(this.musicBusVolume());
+        vfTrackerManager.setEnabled(true);
+        const keys = [key, 'shop', 'menu'];
+        if (vfTrackerManager.playFirst && vfTrackerManager.playFirst(keys)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playShop && vfTrackerManager.playShop(id)) {
+            this.clearPendingMusic();
+            return;
+        }
+        this.clearPendingMusic();
+    },
+
+    /** Leave shop bus — restore victory / map / menu depending on how shop opened. */
+    stopShopMusic() {
+        const resume = this._shopMusicResume || 'menu';
+        this._shopMusicResume = null;
+        if (!this.musicEnabled) return;
+        if (resume === 'victory') {
+            this.startEndMusic('victory');
+            return;
+        }
+        if (resume === 'map' && this.startMapMusic) {
+            const id = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                || this._currentPlanetId
+                || 'mars';
+            this.startMapMusic(id, { immediate: true });
+            return;
+        }
+        if (this.startMenuMusic) this.startMenuMusic();
     },
 
     playPowerUp() {
@@ -67,14 +164,9 @@ extendClass(SoundManager, {
         this.notePendingMusic('planet', id);
         this.markAudioUnlocked && this.markAudioUnlocked();
 
-        // Mission boot: coded intro fanfare, then this method again for combat.
-        if (this._pendingMissionIntro && this.musicEnabled && !this._introPlaying) {
-            if (this._startMissionIntroThenCombat && this._startMissionIntroThenCombat(id)) {
-                return;
-            }
-        }
-        // Intro already owning the bus — don't clobber it with combat yet.
-        if (this._introPlaying) return;
+        // Intro fanfare retired — never divert combat boot through playIntro.
+        this._pendingMissionIntro = false;
+        this._introPlaying = false;
 
         if (!this._currentHostileFaction && this._resolveHostileFaction) {
             this._currentHostileFaction = this._resolveHostileFaction(id);
@@ -84,20 +176,21 @@ extendClass(SoundManager, {
             : [id];
         if (combatKeys.indexOf(id) === -1) combatKeys.push(id);
 
-        // Same song already going — check BEFORE stop, or we always restart.
+        // Same preferred song already going — check BEFORE stop.
+        // Prefer-only: boss must not keep a regular combat key that happens
+        // to sit later in the fallback list.
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying) {
+            const preferKeys = this.combatTrackKeys
+                ? this.combatTrackKeys(id, this._currentStageId, this._currentHostileFaction, { preferOnly: true })
+                : combatKeys;
             const keepKey = typeof vfTrackerManager.firstPlayableKey === 'function'
-                ? vfTrackerManager.firstPlayableKey(combatKeys)
+                ? vfTrackerManager.firstPlayableKey(preferKeys)
                 : null;
             if (keepKey && vfTrackerManager.isPlaying(keepKey)) {
+                // Restore full bus (victory duck left volume at ~55%).
+                vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
                 this.clearPendingMusic();
                 return;
-            }
-            for (let i = 0; i < combatKeys.length; i++) {
-                if (vfTrackerManager.isPlaying(combatKeys[i])) {
-                    this.clearPendingMusic();
-                    return;
-                }
             }
         }
         if (typeof youtubeSoundtrackManager !== 'undefined'
@@ -161,6 +254,9 @@ extendClass(SoundManager, {
             }
             vfTrackerManager.setEnabled(true);
             vfTrackerManager.setVolume(Math.max(0.05, this.musicBusVolume()));
+            const stage = String(this._currentStageId || '').toLowerCase();
+            const boss = stage === 'boss' || stage === 'b';
+            this._applyMusicScene(boss ? 'boss' : 'combat');
             const played = vfTrackerManager.playFirst(combatKeys);
             if (played) {
                 this.clearPendingMusic();
@@ -262,7 +358,90 @@ extendClass(SoundManager, {
         this.startPlanetAmbient(planetId);
     },
 
+    /**
+     * Galaxy map BGM — per-planet Hauptmelodie (map role), interpreted by STYLE.
+     * Debounced so arrow-hopping planets does not thrash the tracker bus.
+     * Pass `{ immediate: true }` on map open so the first cue is not delayed.
+     */
+    startMapMusic(planetId, opts) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || this._currentPlanetId || 'mars')
+            : String(planetId || this._currentPlanetId || 'mars').toLowerCase().split('-')[0];
+        const key = 'map:' + id;
+        this._pendingMapMusicId = id;
+        this.notePendingMusic('map', key);
+        if (!this.musicEnabled) return;
+        // Already on this map motif — keep playhead (no restart).
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (opts && opts.immediate) {
+            if (this._mapMusicTimer) {
+                try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+                this._mapMusicTimer = null;
+            }
+            this._applyMapMusic(id);
+            return;
+        }
+        if (this._mapMusicTimer) {
+            try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+        }
+        this._mapMusicTimer = setTimeout(() => {
+            this._mapMusicTimer = null;
+            if (this._pendingMapMusicId !== id) return;
+            this._applyMapMusic(id);
+        }, 280);
+    },
+
+    _applyMapMusic(planetId) {
+        const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const key = 'map:' + id;
+        if (!this.musicEnabled) return;
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined'
+            && localAudioManager.currentKey
+            && localAudioManager.currentKey !== key) {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager === 'undefined') return;
+        this._applyMusicScene('map');
+        vfTrackerManager.setVolume(this.musicBusVolume());
+        vfTrackerManager.setEnabled(true);
+        if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        const keys = [key, 'map', 'menu'];
+        if (vfTrackerManager.playFirst && vfTrackerManager.playFirst(keys)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playMap && vfTrackerManager.playMap(id)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playMenu) vfTrackerManager.playMenu();
+        this.clearPendingMusic();
+    },
+
     startMenuMusic() {
+        // Embedded / open galaxy map owns the hub bus — don't yank it back to menu.
+        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible
+            && this.startMapMusic) {
+            this.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
+            return;
+        }
+        if (this._mapMusicTimer) {
+            try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+            this._mapMusicTimer = null;
+        }
         this.notePendingMusic('menu', 'menu');
         if (!this.musicEnabled) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
@@ -273,9 +452,36 @@ extendClass(SoundManager, {
         // Keep tracker for combat→menu crossfade; only kill the soft drone bus.
         this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         this.ambientPlanetId = null;
+        // Already on hub / map motif — keep going instead of restarting.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying()) {
+            const ck = String(vfTrackerManager.currentKey || '');
+            if (ck === 'menu' || ck === 'station' || ck === 'hub' || ck.indexOf('map:') === 0) {
+                vfTrackerManager.setVolume(this.musicBusVolume());
+                this.clearPendingMusic();
+                return;
+            }
+        }
 
         const menuTrack = (typeof soundtrackConfigManager !== 'undefined')
             ? soundtrackConfigManager.getMenuTrack() : null;
+        // Same hub song already going (faction/wizard remount, station reopen) —
+        // keep row position instead of restarting from the top.
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying('menu')
+            && !(menuTrack && soundtrackConfigManager.hasTrack(menuTrack)
+                && (menuTrack.localAudioData || menuTrack.youtubeUrl))) {
+            vfTrackerManager.setVolume(this.musicBusVolume());
+            this.clearPendingMusic();
+            return;
+        }
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.isPlaying
+            && localAudioManager.isPlaying('menu')
+            && menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
+            localAudioManager.setVolume(this.musicBusVolume());
+            this.clearPendingMusic();
+            return;
+        }
         if (menuTrack && soundtrackConfigManager.hasTrack(menuTrack) && menuTrack.localAudioData) {
             if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
             if (typeof vfTrackerManager !== 'undefined') {
@@ -298,7 +504,8 @@ extendClass(SoundManager, {
             if (!this.ensureContext()) return;
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.setVolume(this.musicBusVolume());
-                if (vfTrackerManager.play('menu', menuTrack.trackerData, { force: true })) {
+                // No force: play() keeps position when the same menu track is already audible.
+                if (vfTrackerManager.play('menu', menuTrack.trackerData)) {
                     this.clearPendingMusic();
                 }
             }
@@ -334,6 +541,7 @@ extendClass(SoundManager, {
 
         if (!this.ensureContext()) return;
         if (typeof vfTrackerManager !== 'undefined') {
+            this._applyMusicScene('menu');
             vfTrackerManager.setVolume(this.musicBusVolume());
             if (vfTrackerManager.playMenu()) this.clearPendingMusic();
         }
@@ -422,9 +630,21 @@ extendClass(SoundManager, {
             if (typeof vfTrackerManager !== 'undefined') {
                 vfTrackerManager.stop();
             }
-        } else if (this._musicContextActive) {
-            this._activeOverrideKey = null;
-            this._reevaluateMusic();
+        } else {
+            this.ensureMusicPlaying();
+        }
+    },
+
+    /** Start (or resume) music for the current context if it isn't already audible. */
+    ensureMusicPlaying() {
+        if (!this.musicEnabled) return;
+        // Include fading-out legs — volume drags must not spawn a second song.
+        if (this._musicActuallyPlaying && this._musicActuallyPlaying()) return;
+        if (this._musicContextActive) {
+            // Keep the current override slot; only fill silence.
+            this._ensureCombatMusicPlaying
+                ? this._ensureCombatMusicPlaying()
+                : this._reevaluateMusic();
         } else if (this.ambientPlanetId) {
             this.startPlanetAmbient(this.ambientPlanetId);
         } else {

@@ -18,6 +18,7 @@ extendClass(EnemyManager, {
         if (!this.exploding) {
             this.championCombatElapsedMs += deltaTime;
             this.evaluateCombatEvents(gameState);
+            if (this.refreshPendingEnemyHitMasks) this.refreshPendingEnemyHitMasks();
         }
 
         // Apply slow motion cheat

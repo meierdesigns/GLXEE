@@ -93,6 +93,10 @@ extendClass(HomeStationUI, {
         }
         this._prevTab = null;
         if (!silent && wasMenu && this.isVisible) {
+            this.disconnectStationColumnResize && this.disconnectStationColumnResize();
+            this._softBodyCache = null;
+            this._softBodyTab = null;
+            this._hsShellReady = false;
             this.createUI();
             this.persistTab(); // closed menu must not reopen on reload
         }

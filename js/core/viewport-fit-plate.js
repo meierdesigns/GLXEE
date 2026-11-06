@@ -3,9 +3,62 @@
 // viewport-fit part 2b: the FX plate builders (split from viewport-fit-part2.js; shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {});
-    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
+    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
     const { restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps } = NS; // from viewport-fit-part2.js (hoisted functions)
-    Object.assign(NS, { fillFxPlate }); // function (hoisted)
+    Object.assign(NS, { fillFxPlate, mountFxMusicEditor, fxDevModeOn, fxWantAudioMusicSplit, fxWantMusicEditor }); // function (hoisted)
+
+    function fxDevModeOn() {
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    }
+    /** DevMode AUDIO always hosts the Music Editor (narrow = stacked, wide = side-by-side). */
+    function fxWantMusicEditor() {
+        return fxDevModeOn() && vfs.fxTab === 'audio';
+    }
+    /** Wide enough for AUDIO settings | Music Editor side-by-side (else stacked). */
+    function fxWantAudioMusicSplit() {
+        if (!fxWantMusicEditor()) return false;
+        const plate = document.getElementById('vf-fx');
+        const w = vfs.fxGeomW || (plate && plate.offsetWidth) || 0;
+        return w >= (FX_AUDIO_SPLIT_MIN_W || 560);
+    }
+    function mountFxMusicEditor() {
+        const host = document.getElementById('vf-fx-music-editor');
+        if (!host) return;
+        const mount = function (ui) {
+            if (ui && ui.mount) ui.mount(host, { compact: true });
+            else {
+                host.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div>'
+                    + '<p class="vf-fx-row">Local-dev only (`js/ui/dev/` — not uploaded).</p>';
+            }
+        };
+        if (typeof musicEditorUI !== 'undefined') {
+            // mount() itself no-ops to a style sync when the editor is already live.
+            mount(musicEditorUI);
+            return;
+        }
+        if (vfs._musicEditorLoading) {
+            host.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div><p class="vf-fx-row">Loading…</p>';
+            return;
+        }
+        vfs._musicEditorLoading = true;
+        host.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div><p class="vf-fx-row">Loading…</p>';
+        const s = document.createElement('script');
+        s.src = 'js/ui/dev/music-editor.js?v=' + Date.now();
+        s.onload = function () {
+            vfs._musicEditorLoading = false;
+            const h = document.getElementById('vf-fx-music-editor');
+            if (h) mount(typeof musicEditorUI !== 'undefined' ? musicEditorUI : null);
+        };
+        s.onerror = function () {
+            vfs._musicEditorLoading = false;
+            const h = document.getElementById('vf-fx-music-editor');
+            if (h) {
+                h.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div>'
+                    + '<p class="vf-fx-row">Local-dev only (`js/ui/dev/` — not uploaded).</p>';
+            }
+        };
+        document.head.appendChild(s);
+    }
 
     function fxSeg(items, current, attr, wrap) {
         return '<span class="vf-fx-seg' + (wrap ? ' vf-fx-wrap' : '') + '">' + items.map(function (it) {
@@ -56,49 +109,94 @@
         else if (/MaxActive/.test(key)) id = 'limit';
         return '<svg class="vf-fx-ico" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" shape-rendering="crispEdges" aria-hidden="true">' + DF_ICONS[id] + '</svg>';
     }
-    function fxSlider(label, key, min, max, step, value, unit, displayValue) {
+    function fxSlider(label, key, min, max, step, value, unit, displayValue, markValue) {
         if (key.indexOf('df:') === 0 || key.indexOf('ss:') === 0) label = dfIcon(key) + '<em>' + label + '</em>';
         const shown = displayValue == null ? value : displayValue;
-        return '<label class="vf-fx-row"><span>' + label + '</span><input type="range" min="' + min + '" max="' + max + '" step="' + step +
-            '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '" style="--look-fill:' + ((value - min) / (max - min) * 100) + '%"><output>' +
+        const span = Math.max(1, max - min);
+        let markStyle = '';
+        let markClass = '';
+        let markAttr = '';
+        if (markValue != null && Number.isFinite(Number(markValue))) {
+            const mv = Math.max(min, Math.min(max, Number(markValue)));
+            const markPct = ((mv - min) / span * 100).toFixed(2);
+            markStyle = ';--bpm-mark:' + markPct + '%';
+            markClass = ' has-bpm-mark';
+            markAttr = ' data-bpm-mark="' + Math.round(mv) + '"';
+        }
+        return '<label class="vf-fx-row"><span>' + label + '</span><input type="range"' +
+            (markClass ? ' class="' + markClass.trim() + '"' : '') +
+            ' min="' + min + '" max="' + max + '" step="' + step +
+            '" value="' + value + '" data-sl="' + key + '" data-unit="' + (unit || '') + '"' + markAttr +
+            ' style="--look-fill:' + ((value - min) / span * 100) + '%' + markStyle + '"><output>' +
             (key.indexOf('fx:') === 0 && +value === 0 ? 'OFF' : shown + (unit || '')) + '</output></label>';
     }
     function fxToggle(label, key, on) {
         return '<div class="vf-fx-row"><span>' + label + '</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], on, 'tg-' + key.replace(':', '-')) + '</div>';
     }
-    /** Voice dropdown + channel volume slider (BASS / LEAD / ARP / DRUMS). */
+    /** Voice dropdown + option slider + channel volume (BASS / LEAD / ARP / DRUMS). */
     function fxVoiceSelect(label, ch, current, volPct) {
         const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
             ? VFTrackerVoices.optionsFor(ch)
             : [{ id: 'default', label: 'DEFAULT' }];
         const cur = String(current || 'default');
+        let idx = 0;
+        for (let i = 0; i < opts.length; i++) if (opts[i].id === cur) { idx = i; break; }
+        const max = Math.max(0, opts.length - 1);
         const keys = ['bass', 'lead', 'arp', 'drums'];
         const pct = Math.max(0, Math.min(200, Math.round(Number(volPct) || 100)));
+        const ids = opts.map(function (o) { return o.id; }).join('|');
+        const labels = opts.map(function (o) { return o.label; }).join('|');
         const html = opts.map(function (o) {
             return '<option value="' + o.id + '"' + (o.id === cur ? ' selected' : '') + '>' + o.label + '</option>';
         }).join('');
+        // Order: label | volume | dropdown | style pick (dropdown left of style fader).
         return '<label class="vf-fx-row vf-fx-voice-row"><span>' + label + '</span>' +
-            '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
             '<input type="range" class="vf-fx-voice-vol" min="0" max="200" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
-            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%">' +
+            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%" aria-label="' + label + ' volume">' +
+            '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
+            '<input type="range" class="vf-fx-voice-pick" min="0" max="' + max + '" step="1" value="' + idx +
+            '" data-voice-ch="' + ch + '" data-voice-ids="' + ids + '" data-voice-labels="' + labels +
+            '" style="--look-fill:' + (idx / Math.max(1, max) * 100) + '%" title="' + label + ' voice slider" aria-label="' + label + ' voice">' +
             '<output>' + pct + '%</output></label>';
     }
-    /** Music STYLE dropdown + AMOUNT slider on one row (same layout as MUSIC VOICES). */
+    /** Collapsed AUDIO sections { key: true }, loaded once from localStorage. */
+    function fxAudioCollapsedMap() {
+        if (!vfs._fxAudioCollapsed) {
+            let map = {};
+            try {
+                const raw = JSON.parse(localStorage.getItem('vf_fx_audio_collapsed') || '{}');
+                if (raw && typeof raw === 'object' && !Array.isArray(raw)) map = raw;
+            } catch (err) { /* ignore */ }
+            vfs._fxAudioCollapsed = map;
+        }
+        return vfs._fxAudioCollapsed;
+    }
+    /** Collapsible AUDIO block: clickable title + body (VOLUME / VOICES / PLAYBACK / TOGGLES). */
+    function fxAudioSection(key, label, bodyHtml) {
+        const c = !!fxAudioCollapsedMap()[key];
+        return '<section class="vf-fx-sec' + (c ? ' is-collapsed' : '') + '" data-fx-sec="' + key + '">' +
+            '<button type="button" class="vf-fx-title" data-fx-sec-toggle="' + key + '" aria-expanded="' + (!c) + '">' +
+            '<span class="vf-fx-sec-label">' + label + '</span>' +
+            '<i class="vf-fx-title-rule" aria-hidden="true"></i>' +
+            '<span class="vf-fx-sec-caret" aria-hidden="true">' + (c ? '▼' : '▲') + '</span></button>' +
+            '<div class="vf-fx-sec-body"' + (c ? ' hidden' : '') + '>' + bodyHtml + '</div></section>';
+    }
+    /** Music STYLE index slider + STRENGTH (amount) on the row below. */
     function fxStyleSelect(currentIdx, junglePct, jungleLabel) {
         const list = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.list)
             ? VFTrackerThemes.list
             : [{ id: 'planet', label: 'PLANET' }];
-        const cur = Math.max(0, Math.min(list.length - 1, Math.round(Number(currentIdx) || 0)));
+        const max = Math.max(0, list.length - 1);
+        const cur = Math.max(0, Math.min(max, Math.round(Number(currentIdx) || 0)));
         const pct = Math.max(0, Math.min(100, Math.round(Number(junglePct) || 0)));
-        const shown = jungleLabel == null ? (pct === 0 ? 'OFF' : pct + '%') : jungleLabel;
-        const html = list.map(function (o, i) {
-            return '<option value="' + i + '"' + (i === cur ? ' selected' : '') + '>' + o.label + '</option>';
-        }).join('');
-        return '<label class="vf-fx-row vf-fx-voice-row"><span>STYLE</span>' +
-            '<select class="vf-fx-voice vf-fx-style" data-au-style="1" title="Music style">' + html + '</select>' +
-            '<input type="range" min="0" max="100" step="1" value="' + pct + '" data-sl="au:jungle"' +
-            ' data-unit="" style="--look-fill:' + pct + '%">' +
-            '<output>' + shown + '</output></label>';
+        const styleName = (list[cur] && list[cur].label) || 'PLANET';
+        const strengthLabel = jungleLabel == null ? (pct === 0 ? 'OFF' : pct + '%') : jungleLabel;
+        const fill = max > 0 ? (cur / max * 100) : 0;
+        return '<label class="vf-fx-row vf-fx-style-pick-row"><span>STYLE</span>' +
+            '<input type="range" class="vf-fx-voice-pick" min="0" max="' + max + '" step="1" value="' + cur +
+            '" data-sl="au:theme" data-unit="" style="--look-fill:' + fill + '%" title="Music style" aria-label="Music style">' +
+            '<output>' + styleName + '</output></label>' +
+            fxSlider('STRENGTH', 'au:jungle', 0, 100, 1, pct, '', strengthLabel);
     }
     // Fleet colours (hull / edge / accent / engine of the faction's ships): HUE continuous,
     // SAT / LIGHT in three steps. Slider moves are unsaved drafts shown live; SAVE keeps them.
@@ -128,16 +226,26 @@
         const ui = getUi();
         const plate = buildFxPlate();
         if (!ui) return;
+        vfs._fxFilling = true;
+        try {
         vfs.fxScrollLock = true;
+        const devOn = fxDevModeOn();
+        if (vfs.fxTab === 'music') vfs.fxTab = 'audio'; // stale saved tab → AUDIO
         let h = '<div class="vf-fx-head"><span>' + (FX_TABS.filter(function (t) { return t[0] === vfs.fxTab; })[0] || ['', ''])[1] + '</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
             '<div class="vf-fx-tabs">' + FX_CLUSTERS.map(function (c, ci) {
-                const keys = c[1].map(function (id) {
+                const ids = c[1];
+                if (!ids.length) return '';
+                const keys = ids.map(function (id) {
                     const t = FX_TABS.filter(function (x) { return x[0] === id; })[0];
                     const html = '<button type="button" data-fx-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
                     return html;
                 }).join('');
-                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + c[1].length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
-            }).join('') + '</div><div class="vf-fx-body">';
+                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + ids.length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
+            }).join('') + '</div>';
+        const wantEditor = fxWantMusicEditor();
+        const wantSplit = wantEditor && fxWantAudioMusicSplit();
+        vfs.fxAudioWide = wantSplit;
+        h += '<div class="vf-fx-body' + (wantEditor ? ' is-audio-split' + (wantSplit ? '' : ' is-audio-stack') : '') + '">';
         if (vfs.fxTab === 'fx') {
             h += '<div class="vf-fx-row"><span>AREA</span>' + fxStepper([['SCREEN', 'INSIDE'], ['FRAME', 'OUTSIDE'], ['ALL', 'BOTH']], ui.fxArea, 'fx-area') + '</div>';
             [['glow', 'GLOW'], ['scanlines', 'SCANLINES'], ['crt', 'CRT'], ['chroma', 'CHROMA'], ['vignette', 'VIGNETTE'], ['noise', 'NOISE'], ['flicker', 'FLICKER'], ['bloom', 'BLOOM'], ['bloomSpread', 'B. SPREAD'], ['bloomThreshold', 'B. CUTOFF'], ['hdr', 'HDR']].forEach(function (r) {
@@ -350,12 +458,12 @@
             const sm = (typeof soundManager !== 'undefined') ? soundManager : null;
             const settings = (typeof game !== 'undefined' && game && game.settingsManager) ? game.settingsManager.settings
                 : (typeof settingsManager !== 'undefined' && settingsManager ? settingsManager.settings : null);
-            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 10;
-            const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 5;
-            const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 20;
+            const masterPct = vol ? Math.round(vol.getMasterVolume() * 100) : 75;
+            const soundPct = vol ? Math.round(vol.getSoundVolume() * 100) : 50;
+            const musicPct = vol ? Math.round(vol.getMusicVolume() * 100) : 65;
             const musicBpm = vol && vol.getMusicBpm
                 ? Math.round(vol.getMusicBpm())
-                : (vol && vol.getMusicSpeed ? Math.round(vol.getMusicSpeed() * 132) : 462);
+                : (vol && vol.getMusicSpeed ? Math.round(vol.getMusicSpeed() * 132) : 132);
             const jungleAmt = vol && vol.getJungleAmount ? Number(vol.getJungleAmount()) : 0;
             const junglePct = Math.round(Math.max(0, Math.min(1, Math.abs(jungleAmt) || 0)) * 100);
             const jungleLabel = junglePct === 0 ? 'OFF' : junglePct + '%';
@@ -377,23 +485,46 @@
                 : 1.4;
             const soundOn = settings ? !!settings.soundEnabled : (sm ? !!sm.getSoundEnabled() : true);
             const musicOn = settings ? !!settings.musicEnabled : (sm ? !!sm.getMusicEnabled() : true);
-            h += '<div class="vf-fx-title">VOLUME</div>' +
+            const audioHtml = fxAudioSection('volume', 'VOLUME',
                 fxSlider('MASTER', 'au:master', 0, 100, 1, masterPct, '%') +
                 fxSlider('SOUNDS', 'au:sound', 0, 100, 1, soundPct, '%') +
-                fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%') +
-                '<div class="vf-fx-title">MUSIC VOICES</div>' +
+                fxSlider('MUSIC', 'au:music', 0, 100, 1, musicPct, '%')) +
+                fxAudioSection('voices', 'MUSIC VOICES',
                 fxVoiceSelect('BASS', 0, voiceOf(0), chVolOf(0)) +
                 fxVoiceSelect('LEAD', 1, voiceOf(1), chVolOf(1)) +
                 fxVoiceSelect('ARP', 2, voiceOf(2), chVolOf(2)) +
-                fxVoiceSelect('DRUMS', 3, voiceOf(3), chVolOf(3)) +
-                '<div class="vf-fx-title">MUSIC PLAYBACK</div>' +
-                fxSlider('MUSIC BPM', 'au:bpm', 60, 600, 1, musicBpm, ' BPM') +
+                fxVoiceSelect('DRUMS', 3, voiceOf(3), chVolOf(3))) +
+                fxAudioSection('playback', 'MUSIC PLAYBACK',
+                fxSlider('MUSIC BPM', 'au:bpm', 60, 300, 1, musicBpm, '',
+                    (vol && vol.formatMusicSpeed)
+                        ? vol.formatMusicSpeed(musicBpm)
+                        : (Math.round(musicBpm) + ' BPM'),
+                    (vol && vol.getPreferredMusicBpm)
+                        ? vol.getPreferredMusicBpm(themeIdx)
+                        : ((typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.preferredBpmOf)
+                            ? VFTrackerThemes.preferredBpmOf(themeIdx) : 132)) +
                 fxStyleSelect(themeIdx, junglePct, jungleLabel) +
-                fxSlider('CROSSFADE', 'au:xfade', 0.2, 3, 0.05, xfade, 's') +
-                '<div class="vf-fx-title">TOGGLES</div>' +
+                fxSlider('CROSSFADE', 'au:xfade', 0.2, 3, 0.05, xfade, 's')) +
+                fxAudioSection('toggles', 'TOGGLES',
                 '<div class="vf-fx-row"><span>SOUND FX</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], soundOn ? 'ON' : 'OFF', 'au-sound') + '</div>' +
                 '<div class="vf-fx-row"><span>MUSIC</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], musicOn ? 'ON' : 'OFF', 'au-music') + '</div>' +
-                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-au-reset="1">RESET AUDIO</button></div>';
+                '<div class="vf-fx-row"><button type="button" class="vf-fx-reset" data-au-reset="1">RESET AUDIO</button></div>');
+            if (wantEditor) {
+                let paneCollapsed = false;
+                try { paneCollapsed = localStorage.getItem('vf_fx_audio_settings_collapsed') === '1'; } catch (err) { /* ignore */ }
+                vfs._fxAudioSettingsCollapsed = paneCollapsed;
+                h += '<div class="vf-fx-audio-split' + (paneCollapsed ? ' is-settings-collapsed' : '')
+                    + (wantSplit ? '' : ' is-stacked') + '">'
+                    + '<div class="vf-fx-audio-settings">' + audioHtml + '</div>'
+                    + '<div class="vf-fx-audio-resize" role="button" tabindex="0" aria-expanded="' + (!paneCollapsed) + '"'
+                    + ' title="' + (paneCollapsed
+                        ? 'Click to show audio settings'
+                        : (wantSplit ? 'Drag to resize · click to collapse' : 'Click to collapse settings')) + '"></div>'
+                    + '<div class="vf-fx-music-host" id="vf-fx-music-editor"></div>'
+                    + '</div>';
+            } else {
+                h += audioHtml;
+            }
         }
         h += '</div>';
         plate.innerHTML = h;
@@ -410,6 +541,11 @@
                 up.style.width = down.style.width = b.offsetWidth + 'px';
                 up.style.top = b.offsetTop + 'px';
                 down.style.top = (b.offsetTop + b.offsetHeight - 22) + 'px';
+                if (b.classList.contains('is-audio-split')) {
+                    up.hidden = true;
+                    down.hidden = true;
+                    return;
+                }
                 up.hidden = !(b.scrollTop > 2);
                 down.hidden = !(b.scrollTop + b.clientHeight < b.scrollHeight - 2);
             };
@@ -422,5 +558,10 @@
             vfs.fxMoreSync = sync;
         })();
         applyFxGeom();
+        mountFxMusicEditor();
+        if (typeof NS.bindFxAudioSplitResize === 'function') NS.bindFxAudioSplitResize();
+        } finally {
+            vfs._fxFilling = false;
+        }
     }
 })(window.vfFitScope || (window.vfFitScope = {}));

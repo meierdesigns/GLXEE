@@ -19,6 +19,18 @@ class GamepadManager {
             b: false
         };
         this._wasCombat = false;
+        // Linux DEs reset idle on keyboard/pointer only — gamepad HID is ignored.
+        // Browser Wake Lock is best-effort; the local dev server also exposes
+        // /__user-activity (D-Bus SimulateUserActivity) which truly resets idle.
+        this._wakeLock = null;
+        this._wakeWanted = false;
+        this._wakeBusy = false;
+        this._wakeNextTry = 0;
+        this._wakeVideo = null;
+        this._wakeVideoOn = false;
+        this._lastActivityPoke = 0;
+        this._activityPokeOk = null;
+        this._bindDisplayWake();
     }
 
     start() {
@@ -29,6 +41,189 @@ class GamepadManager {
             requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
+    }
+
+    _bindDisplayWake() {
+        if (typeof document === 'undefined') return;
+        const self = this;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && self._wakeWanted) {
+                self._wakeNextTry = 0;
+                self._acquireDisplayWake();
+            } else if (document.visibilityState !== 'visible') {
+                self._releaseDisplayWake(true);
+            }
+        });
+        // Gamepad presses are NOT trusted activation — re-arm on real gestures
+        // so Chromium/Firefox can actually take the system idle inhibitor.
+        const arm = () => {
+            if (!self._wakeWanted) return;
+            self._wakeNextTry = 0;
+            self._acquireDisplayWake();
+        };
+        ['pointerdown', 'keydown', 'touchstart', 'click'].forEach((ev) => {
+            document.addEventListener(ev, arm, true);
+        });
+    }
+
+    _setWakeWanted(wanted) {
+        wanted = !!wanted;
+        if (this._wakeWanted === wanted) {
+            if (wanted) this._acquireDisplayWake();
+            return;
+        }
+        this._wakeWanted = wanted;
+        if (wanted) this._acquireDisplayWake();
+        else this._releaseDisplayWake(false);
+    }
+
+    _acquireDisplayWake() {
+        if (!this._wakeWanted) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        this._acquireWakeLock();
+        this._startWakeVideo();
+        this._pokeSystemActivity();
+    }
+
+    /**
+     * Ask the local GLXEE dev server to reset the Linux screensaver/idle timer.
+     * No-ops on static hosts (itch.io, python -m http.server) where the route
+     * is missing — Wake Lock remains the only option there.
+     */
+    _pokeSystemActivity() {
+        if (typeof fetch !== 'function') return;
+        if (this._activityPokeOk === false) return;
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() : Date.now();
+        // Dim timeouts can be ~60s; poke often enough and on first arm.
+        if (this._lastActivityPoke && (now - this._lastActivityPoke) < 20000) return;
+        this._lastActivityPoke = now;
+        const self = this;
+        try {
+            fetch('/__user-activity', { cache: 'no-store', keepalive: true })
+                .then((res) => {
+                    if (!res || !res.ok) {
+                        self._activityPokeOk = false;
+                        return;
+                    }
+                    self._activityPokeOk = true;
+                })
+                .catch(() => { self._activityPokeOk = false; });
+        } catch (e) {
+            this._activityPokeOk = false;
+        }
+    }
+
+    _releaseDisplayWake(keepWanted) {
+        if (!keepWanted) this._wakeWanted = false;
+        this._releaseWakeLock();
+        this._stopWakeVideo();
+    }
+
+    _acquireWakeLock() {
+        if (this._wakeBusy || this._wakeLock) return;
+        if (typeof navigator === 'undefined' || !navigator.wakeLock || !navigator.wakeLock.request) {
+            return;
+        }
+        const now = (typeof performance !== 'undefined' && performance.now)
+            ? performance.now() : Date.now();
+        if (now < this._wakeNextTry) return;
+        this._wakeBusy = true;
+        const self = this;
+        navigator.wakeLock.request('screen').then((lock) => {
+            self._wakeBusy = false;
+            if (!self._wakeWanted
+                || (typeof document !== 'undefined'
+                    && document.visibilityState !== 'visible')) {
+                try { lock.release(); } catch (e) { /* ignore */ }
+                return;
+            }
+            self._wakeLock = lock;
+            lock.addEventListener('release', () => {
+                if (self._wakeLock === lock) self._wakeLock = null;
+                if (self._wakeWanted
+                    && typeof document !== 'undefined'
+                    && document.visibilityState === 'visible') {
+                    self._wakeNextTry = 0;
+                    self._acquireWakeLock();
+                }
+            });
+        }).catch(() => {
+            self._wakeBusy = false;
+            // No activation yet / API blocked — video fallback still runs;
+            // retry wake lock after the next trusted gesture or shortly.
+            self._wakeNextTry = now + 2500;
+        });
+    }
+
+    _releaseWakeLock() {
+        const lock = this._wakeLock;
+        this._wakeLock = null;
+        if (!lock) return;
+        try { lock.release(); } catch (e) { /* ignore */ }
+    }
+
+    /**
+     * 1×1 canvas captureStream → muted <video>. Gives Linux compositors a
+     * playing-media signal when Screen Wake Lock alone does not inhibit DPMS.
+     */
+    _ensureWakeVideo() {
+        if (this._wakeVideo) return this._wakeVideo;
+        if (typeof document === 'undefined') return null;
+        let stream = null;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1;
+            canvas.height = 1;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, 1, 1);
+            }
+            if (typeof canvas.captureStream === 'function') {
+                stream = canvas.captureStream(1);
+            }
+        } catch (e) {
+            stream = null;
+        }
+        if (!stream) return null;
+        const v = document.createElement('video');
+        v.setAttribute('playsinline', '');
+        v.setAttribute('muted', '');
+        v.setAttribute('aria-hidden', 'true');
+        v.muted = true;
+        v.defaultMuted = true;
+        v.playsInline = true;
+        v.tabIndex = -1;
+        v.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;'
+            + 'pointer-events:none;bottom:0;left:0;z-index:-1;';
+        try {
+            v.srcObject = stream;
+        } catch (e) {
+            return null;
+        }
+        document.documentElement.appendChild(v);
+        this._wakeVideo = v;
+        this._wakeCanvasStream = stream;
+        return v;
+    }
+
+    _startWakeVideo() {
+        const v = this._ensureWakeVideo();
+        if (!v) return;
+        if (!v.paused && this._wakeVideoOn) return;
+        this._wakeVideoOn = true;
+        const play = v.play();
+        if (play && play.catch) {
+            play.catch(() => { this._wakeVideoOn = false; });
+        }
+    }
+
+    _stopWakeVideo() {
+        this._wakeVideoOn = false;
+        const v = this._wakeVideo;
+        if (!v) return;
+        try { v.pause(); } catch (e) { /* ignore */ }
     }
 
     isButtonPressed(gamepad, index) {
@@ -81,9 +276,13 @@ class GamepadManager {
             if (pads[i] && pads[i].connected) { gamepad = pads[i]; break; }
         }
         if (!gamepad) {
+            this._setWakeWanted(false);
             this.resetCombatKeys();
             return;
         }
+        // Connected pad + visible tab ⇒ inhibit system display sleep (Linux
+        // idle ignores Gamepad API; Wake Lock + silent video cover Chromium/DE).
+        this._setWakeWanted(true);
         // "FIRE TO START" lives inside the combat surface (isCombatMode()
         // is already true there) but wants a discrete confirm press like a
         // menu, not held-key combat state, so it's special-cased here.

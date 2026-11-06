@@ -7,13 +7,13 @@ class VolumeControlsManager {
         this.soundVolume = 0.5;
         this.musicVolume = 0.65;
         /**
-         * Absolute playback tempo (BPM). Default matches the old 3.5× feel
-         * against the typical authored combat BPM (132 → 462).
+         * Heard playback tempo (BPM = beats/minute). Default = authored
+         * combat reference (132) — not the old 3.5× inflated value (462).
          */
         this.referenceBpm = 132;
-        this.musicBpm = 462;
+        this.musicBpm = 132;
         /** @deprecated kept in sync as musicBpm / referenceBpm for older callers */
-        this.musicSpeed = 3.5;
+        this.musicSpeed = 1;
         /** Per-channel music fine-tune: bass / lead / arp / drums (1 = authored level). */
         this.channelVolumes = [1, 1, 1, 1];
         /** Per-channel instrument voice ids (VFTrackerVoices). */
@@ -22,6 +22,11 @@ class VolumeControlsManager {
         this.jungleAmount = 0;
         /** Style dropdown index — see VFTrackerThemes.list. */
         this.musicTheme = 0;
+        /**
+         * When true, track/role swaps re-adapt MUSIC BPM to STYLE × authored
+         * song (same path as picking a STYLE). Manual BPM fader sets false.
+         */
+        this.bpmFollowsStyle = true;
         this.init();
     }
 
@@ -38,6 +43,7 @@ class VolumeControlsManager {
             if (!slider) return;
             slider.addEventListener('input', (e) => {
                 this[prop] = Math.max(0, Math.min(1, parseInt(e.target.value, 10) / 100));
+                this.autoUnmuteOnSliderMove();
                 this.updateUI();
                 this.applyVolumes();
                 this.saveVolumes();
@@ -89,7 +95,7 @@ class VolumeControlsManager {
                 if (bpmSlider.id === 'musicSpeed' && raw <= 400 && bpmSlider.max <= 400) {
                     this.setMusicBpm(Math.round((raw / 100) * this.referenceBpm));
                 } else {
-                    this.setMusicBpm(raw);
+                    this.setMusicBpm(this.snapMusicBpm(raw));
                 }
                 this.updateUI();
             });
@@ -183,20 +189,22 @@ class VolumeControlsManager {
             syncVoice('musicVoiceDrums', 'musicVoiceDrumsValue', 3);
         }
 
-        const bpm = Math.round(Math.max(60, Math.min(600, Number(this.musicBpm) || 462)));
+        const bpm = Math.round(Math.max(60, Math.min(300, Number(this.musicBpm) || 132)));
         const bpmSlider = document.getElementById('musicBpm');
         if (bpmSlider) {
             bpmSlider.value = bpm;
             const min = Number(bpmSlider.min) || 60;
-            const max = Number(bpmSlider.max) || 600;
+            const max = Number(bpmSlider.max) || 300;
             bpmSlider.style.setProperty('--vol-fill', ((bpm - min) / Math.max(1, max - min) * 100) + '%');
+            this.applyBpmMark(bpmSlider, min, max);
         }
         const bpmValue = document.getElementById('musicBpmValue') || document.getElementById('musicSpeedValue');
-        if (bpmValue) bpmValue.textContent = bpm + ' BPM';
+        if (bpmValue) bpmValue.textContent = this.formatMusicSpeed(bpm);
         // Legacy id still present in some overlays.
         const legacySpeed = document.getElementById('musicSpeed');
         if (legacySpeed && legacySpeed !== bpmSlider) {
             legacySpeed.value = bpm;
+            this.applyBpmMark(legacySpeed, Number(legacySpeed.min) || 60, Number(legacySpeed.max) || 300);
         }
 
         const jungleAmt = Math.max(0, Math.min(1, Number(this.jungleAmount) || 0));
@@ -273,6 +281,9 @@ class VolumeControlsManager {
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
             vfTrackerManager.setVolume(bus);
         }
+        if (bus > 0 && typeof soundManager !== 'undefined' && soundManager.ensureMusicPlaying) {
+            soundManager.ensureMusicPlaying();
+        }
         this.applyMusicBpm();
         this.applyJungleAmount();
         this.applyMusicTheme();
@@ -303,6 +314,11 @@ class VolumeControlsManager {
         this.musicTheme = i;
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setThemeIndex) {
             vfTrackerManager.setThemeIndex(i);
+        }
+        // Keep Music Editor STYLE select locked to the left slider.
+        if (typeof musicEditorUI !== 'undefined' && musicEditorUI.syncStyleFromVolume
+            && !musicEditorUI._syncingStyle) {
+            musicEditorUI.syncStyleFromVolume({ reload: true });
         }
     }
 
@@ -350,7 +366,7 @@ class VolumeControlsManager {
     }
 
     applyMusicBpm() {
-        const bpm = Math.max(60, Math.min(600, Math.round(Number(this.musicBpm) || 462)));
+        const bpm = Math.max(60, Math.min(300, Math.round(Number(this.musicBpm) || 132)));
         this.musicBpm = bpm;
         this.musicSpeed = bpm / this.referenceBpm;
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setPlaybackBpm) {
@@ -380,6 +396,7 @@ class VolumeControlsManager {
             localStorage.setItem('vf_musicStyleAmount', '1');
             localStorage.setItem('vf_musicTheme', String(this.musicTheme));
             localStorage.setItem('vf_musicStyleSchema', '3');
+            localStorage.setItem('vf_musicBpmFollowsStyle', this.bpmFollowsStyle === false ? '0' : '1');
             localStorage.setItem('vf_channelVolumes', JSON.stringify(this.channelVolumes || [1, 1, 1, 1]));
             localStorage.setItem('vf_channelVoices', JSON.stringify(this.channelVoices || ['default', 'default', 'default', 'default']));
             localStorage.setItem('vf_volumeSchema', '2');
@@ -433,16 +450,18 @@ class VolumeControlsManager {
                 this.musicTheme = th;
             }
 
-            // Prefer absolute BPM; migrate old ×-speed once.
-            if (bpmDefaultMark !== '462') {
+            // MUSIC BPM = true heard tempo. Migrate off old 3.5× default (462).
+            if (bpmDefaultMark !== '132') {
+                let next = 132;
                 if (savedBpm != null && Number.isFinite(parseFloat(savedBpm))) {
-                    this.musicBpm = parseFloat(savedBpm);
+                    next = parseFloat(savedBpm);
                 } else if (savedSpeed != null && Number.isFinite(parseFloat(savedSpeed))) {
-                    this.musicBpm = parseFloat(savedSpeed) * this.referenceBpm;
-                } else {
-                    this.musicBpm = 462;
+                    next = parseFloat(savedSpeed) * this.referenceBpm;
                 }
-                localStorage.setItem('vf_musicBpmDefault', '462');
+                // 462 was the inflated 3.5× default, not real BPM.
+                if (Math.round(next) === 462) next = 132;
+                this.musicBpm = next;
+                localStorage.setItem('vf_musicBpmDefault', '132');
                 localStorage.setItem('vf_musicBpm', String(Math.round(this.musicBpm)));
             } else if (savedBpm !== null) {
                 this.musicBpm = parseFloat(savedBpm);
@@ -453,7 +472,7 @@ class VolumeControlsManager {
             if (!Number.isFinite(this.masterVolume)) this.masterVolume = 0.75;
             if (!Number.isFinite(this.soundVolume)) this.soundVolume = 0.5;
             if (!Number.isFinite(this.musicVolume)) this.musicVolume = 0.65;
-            if (!Number.isFinite(this.musicBpm)) this.musicBpm = 462;
+            if (!Number.isFinite(this.musicBpm)) this.musicBpm = 132;
 
             if (savedChannels) {
                 try {
@@ -476,7 +495,7 @@ class VolumeControlsManager {
             this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
             this.soundVolume = Math.max(0, Math.min(1, this.soundVolume));
             this.musicVolume = Math.max(0, Math.min(1, this.musicVolume));
-            this.musicBpm = Math.max(60, Math.min(600, Math.round(this.musicBpm)));
+            this.musicBpm = Math.max(60, Math.min(300, Math.round(this.musicBpm)));
             this.musicSpeed = this.musicBpm / this.referenceBpm;
             this.jungleAmount = Math.max(0, Math.min(1, Number.isFinite(this.jungleAmount) ? Math.abs(this.jungleAmount) : 0));
             if (this.jungleAmount < 0.03) this.jungleAmount = 0;
@@ -485,14 +504,22 @@ class VolumeControlsManager {
                 : 8;
             this.musicTheme = Math.max(0, Math.min(themeMax, Number.isFinite(this.musicTheme) ? this.musicTheme : 0));
 
-            // Old schema used ~10%/5%/20% plus a hidden ×8 music bus — migrate up once.
-            if (schema !== '2'
-                && this.masterVolume <= 0.15
-                && this.soundVolume <= 0.12
-                && this.musicVolume <= 0.3) {
-                this.masterVolume = 0.75;
-                this.soundVolume = 0.5;
-                this.musicVolume = 0.65;
+            // Missing key → follow STYLE (legacy saves never recorded overrides).
+            const savedFollow = localStorage.getItem('vf_musicBpmFollowsStyle');
+            this.bpmFollowsStyle = savedFollow !== '0';
+
+            // Old schema used exactly 10%/5%/20% plus a hidden ×8 music bus.
+            // Migrate that one authored default up once — never treat intentional
+            // quiet levels (or mute) as "legacy" or refresh would blast volume again.
+            if (schema !== '2') {
+                const near = (a, b) => Math.abs(a - b) < 0.001;
+                if (near(this.masterVolume, 0.1)
+                    && near(this.soundVolume, 0.05)
+                    && near(this.musicVolume, 0.2)) {
+                    this.masterVolume = 0.75;
+                    this.soundVolume = 0.5;
+                    this.musicVolume = 0.65;
+                }
                 this.saveVolumes();
             }
         } catch (e) {
@@ -505,11 +532,86 @@ class VolumeControlsManager {
     getMusicVolume() { return this.musicVolume; }
     getMusicBpm() { return this.musicBpm; }
     getMusicSpeed() { return this.musicBpm / this.referenceBpm; }
+
+    /** Preferred MUSIC BPM for the active STYLE (fader mark + snap). */
+    getPreferredMusicBpm(themeIndex) {
+        const idx = themeIndex != null ? themeIndex : this.musicTheme;
+        const authored = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.getAuthoredBpm)
+            ? vfTrackerManager.getAuthoredBpm()
+            : 132;
+        if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.adaptedBpmOf) {
+            return VFTrackerThemes.adaptedBpmOf(idx, authored);
+        }
+        if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.preferredBpmOf) {
+            return VFTrackerThemes.preferredBpmOf(idx);
+        }
+        return Math.round(authored || 132);
+    }
+
+    /** Snap radius around a style preferred BPM (absolute BPM units). */
+    getMusicBpmSnapRadius() { return 18; }
+
+    /** If near the active style preferred BPM, snap to it. */
+    snapMusicBpm(bpm) {
+        const raw = Math.max(60, Math.min(300, Math.round(Number(bpm) || 120)));
+        const pref = this.getPreferredMusicBpm();
+        const radius = this.getMusicBpmSnapRadius();
+        if (Math.abs(raw - pref) <= radius) return pref;
+        return raw;
+    }
+
+    /** Paint preferred-BPM mark CSS vars on a range input. */
+    applyBpmMark(slider, min, max) {
+        if (!slider || !slider.style || !slider.style.setProperty) return;
+        const lo = Number.isFinite(Number(min)) ? Number(min) : 60;
+        const hi = Number.isFinite(Number(max)) ? Number(max) : 300;
+        const span = Math.max(1, hi - lo);
+        const pref = this.getPreferredMusicBpm();
+        const pct = ((pref - lo) / span) * 100;
+        slider.style.setProperty('--bpm-mark', Math.max(0, Math.min(100, pct)).toFixed(2) + '%');
+        slider.classList.add('has-bpm-mark');
+        slider.setAttribute('data-bpm-mark', String(pref));
+    }
+
+    /** UI readout: heard MUSIC BPM (beats/minute). */
+    formatMusicSpeed(bpm) {
+        const b = Math.max(60, Math.min(300, Math.round(Number(bpm) || this.musicBpm || 132)));
+        return b + ' BPM';
+    }
     getJungleAmount() { return this.jungleAmount; }
     getMusicTheme() { return this.musicTheme; }
 
+    /**
+     * Dragging a VOL/SND/MUS slider above 0 is the player asking for that
+     * channel to be audible — undo a stale soundEnabled/musicEnabled=false
+     * left over from an earlier mute, or the slider alone would stay silent.
+     * Only called from the explicit setters below (real user action) — never
+     * from applyVolumes()/boot, or a persisted mute would be undone on every
+     * page load just because the sliders themselves sit above 0.
+     */
+    autoUnmuteOnSliderMove() {
+        if (typeof soundManager === 'undefined') return;
+        const wantSound = this.masterVolume > 0 && this.soundVolume > 0;
+        const wantMusic = this.masterVolume > 0 && this.musicVolume > 0;
+        if (wantSound && !soundManager.soundEnabled && soundManager.setSoundEnabled) {
+            soundManager.setSoundEnabled(true);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.soundEnabled = true;
+                if (settingsManager.saveMuteState) settingsManager.saveMuteState('vf_soundEnabled', true);
+            }
+        }
+        if (wantMusic && !soundManager.musicEnabled && soundManager.setMusicEnabled) {
+            soundManager.setMusicEnabled(true);
+            if (typeof settingsManager !== 'undefined') {
+                settingsManager.settings.musicEnabled = true;
+                if (settingsManager.saveMuteState) settingsManager.saveMuteState('vf_musicEnabled', true);
+            }
+        }
+    }
+
     setMasterVolume(volume) {
         this.masterVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -517,6 +619,7 @@ class VolumeControlsManager {
 
     setSoundVolume(volume) {
         this.soundVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -524,16 +627,53 @@ class VolumeControlsManager {
 
     setMusicVolume(volume) {
         this.musicVolume = Math.max(0, Math.min(1, Number(volume) || 0));
+        this.autoUnmuteOnSliderMove();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
     }
 
     setMusicBpm(bpm) {
-        this.musicBpm = Math.max(60, Math.min(600, Math.round(Number(bpm) || 120)));
+        this.musicBpm = this.snapMusicBpm(bpm);
         this.musicSpeed = this.musicBpm / this.referenceBpm;
+        // User (or snap) owns absolute tempo until STYLE is picked again.
+        this.bpmFollowsStyle = false;
         this.applyMusicBpm();
         this.saveVolumes();
+    }
+
+    /**
+     * Finish STYLE + BPM adaptation for the track now loaded in the tracker.
+     * Called after every real song swap so planet/map/combat don't start
+     * "half styled" until the AUDIO faders are touched.
+     */
+    applyStylePlaybackForTrack() {
+        const theme = Math.max(0, Math.round(Number(this.musicTheme) || 0));
+        let dirty = false;
+        // Armed non-PLANET STYLE with STRENGTH at 0 → same mild colour as
+        // setMusicTheme when switching away from PLANET.
+        if (theme > 0 && this.jungleAmount < 0.03) {
+            this.jungleAmount = 0.4;
+            dirty = true;
+        }
+        this.applyJungleAmount();
+        this.applyMusicTheme();
+        if (this.bpmFollowsStyle !== false) {
+            const pref = this.getPreferredMusicBpm(theme);
+            if (Number.isFinite(pref) && pref > 0) {
+                const next = Math.max(60, Math.min(300, Math.round(pref)));
+                if (next !== Math.round(Number(this.musicBpm) || 0)) {
+                    this.musicBpm = next;
+                    this.musicSpeed = this.musicBpm / this.referenceBpm;
+                    dirty = true;
+                }
+            }
+        }
+        this.applyMusicBpm();
+        if (dirty) {
+            this.updateUI();
+            this.saveVolumes();
+        }
     }
 
     setMusicSpeed(speed) {
@@ -555,12 +695,23 @@ class VolumeControlsManager {
         const next = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
         const prev = this.musicTheme;
         this.musicTheme = next;
-        // Picking a non-PLANET style with AMOUNT at 0 → audible default.
+        // Mild STYLE colour when switching from PLANET with AMOUNT at 0.
         if (next > 0 && prev !== next && this.jungleAmount < 0.03) {
-            this.jungleAmount = 0.65;
+            this.jungleAmount = 0.4;
             this.applyJungleAmount();
         }
         this.applyMusicTheme();
+        // Adapt heard tempo to STYLE × current song (keeps map/victory musical).
+        if (prev !== next) {
+            this.bpmFollowsStyle = true;
+            const pref = this.getPreferredMusicBpm(next);
+            if (Number.isFinite(pref) && pref > 0) {
+                this.musicBpm = Math.max(60, Math.min(300, Math.round(pref)));
+                this.musicSpeed = this.musicBpm / this.referenceBpm;
+                this.applyMusicBpm();
+                this.updateUI();
+            }
+        }
         this.saveVolumes();
     }
 
@@ -568,10 +719,11 @@ class VolumeControlsManager {
         this.masterVolume = 0.75;
         this.soundVolume = 0.5;
         this.musicVolume = 0.65;
-        this.musicBpm = 462;
-        this.musicSpeed = 3.5;
+        this.musicBpm = 132;
+        this.musicSpeed = 1;
         this.jungleAmount = 0;
         this.musicTheme = 0;
+        this.bpmFollowsStyle = true;
         this.channelVolumes = [1, 1, 1, 1];
         this.channelVoices = ['default', 'default', 'default', 'default'];
         if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = 1.4;

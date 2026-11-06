@@ -3,6 +3,10 @@
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     createUI() {
+        this._uiGen = (this._uiGen || 0) + 1;
+        // Drop station column RO before any body park/wipe so a 0×0 callback
+        // cannot rewrite grid-template-columns mid-Esc menu toggle.
+        if (this.disconnectStationColumnResize) this.disconnectStationColumnResize();
         // Restore the hangar inventory-panel toggle before the first render/draw, not on
         // DOMContentLoaded (too late: it raced createUI()'s own first call on refresh, so
         // drawHangarBay() fit the ship as if the panel were closed even though it reopened).
@@ -358,7 +362,10 @@ extendClass(HomeStationUI, {
     },
 
     _parkSoftBody(bodyEl, leavingTab) {
-        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu' || leavingTab === 'components') return;
+        // Hangar owns a live canvas + ResizeObservers — parking it across Esc
+        // menu toggles left stale rAFs sizing a detached viewport (layout trash).
+        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu'
+            || leavingTab === 'components' || leavingTab === 'hangar') return;
         if (!this._softBodyCache) this._softBodyCache = Object.create(null);
         const frag = document.createDocumentFragment();
         while (bodyEl.firstChild) frag.appendChild(bodyEl.firstChild);
@@ -394,14 +401,28 @@ extendClass(HomeStationUI, {
         if (!bodyEl) return false;
 
         const leavingTab = this._softBodyTab || null;
+        // Menu open/close must hard-remount the shell. Soft-parking the station
+        // body kept its column ResizeObserver alive on a detached grid (0×0),
+        // which rewrote grid-template-columns and left cover/panels destroyed
+        // after Esc left the menu.
+        if (leavingTab === 'menu' || this.tab === 'menu') {
+            this.disconnectStationColumnResize();
+            this._softBodyCache = null;
+            this._softBodyTab = null;
+            this._hsShellReady = false;
+            return false;
+        }
         // Fingerprint uses this.tab — compute for the tab we are parking.
-        if (leavingTab && leavingTab !== 'play' && leavingTab !== 'menu' && leavingTab !== 'components') {
+        if (leavingTab && leavingTab !== 'play' && leavingTab !== 'menu'
+            && leavingTab !== 'components' && leavingTab !== 'hangar') {
             const cur = this.tab;
             this.tab = leavingTab;
             this._softBodyParkFp = this._softBodyFingerprint(profile);
             this.tab = cur;
         } else {
             this._softBodyParkFp = '';
+            // Drop any stale hangar park from older builds / mid-session hot reload.
+            if (leavingTab === 'hangar' && this._softBodyCache) delete this._softBodyCache.hangar;
         }
 
         this.unmountMenuTab();
@@ -624,8 +645,11 @@ extendClass(HomeStationUI, {
             this.mountTradingPostModal();
         }
         // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
+        // Generation guard: a later createUI (Esc menu mash) invalidates these.
+        const gen = this._uiGen;
         if (soft) {
             requestAnimationFrame(() => {
+                if (gen !== this._uiGen) return;
                 this.restoreNavFocus();
                 if (this._focusExplore) {
                     this.focusExploreItem(this._focusExplore);
@@ -649,6 +673,7 @@ extendClass(HomeStationUI, {
             if (soft) {
                 this.bindHangarPartsGrid();
                 requestAnimationFrame(() => {
+                    if (gen !== this._uiGen || this.tab !== 'hangar') return;
                     this.startHangarPreview();
                     this.drawHangarBay();
                     this.bindHangarSlotEvents();
@@ -678,6 +703,7 @@ extendClass(HomeStationUI, {
             /* play body has no ship thumbs */
         } else if (soft) {
             requestAnimationFrame(() => {
+                if (gen !== this._uiGen) return;
                 this.scheduleShipThumbs();
                 this.bindShipSelectButtons();
             });
@@ -689,9 +715,41 @@ extendClass(HomeStationUI, {
             }
         }
         if (soft) {
-            requestAnimationFrame(() => this.syncTabDrop());
+            requestAnimationFrame(() => {
+                if (gen !== this._uiGen) return;
+                this.syncTabDrop();
+            });
         } else {
             this.syncTabDrop();
+        }
+        this.syncStationMusic();
+    },
+
+    /** Keep hub BGM matched to shop vs map vs menu tabs. */
+    syncStationMusic() {
+        if (typeof soundManager === 'undefined') return;
+        if (this._tpsModalOpen) return;
+        if (typeof inStageShop !== 'undefined' && inStageShop.isOpen) return;
+        if (this.tab === 'shop') {
+            if (soundManager.startShopMusic) {
+                const planet = (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                    || 'mars';
+                soundManager.startShopMusic(planet, { resume: 'menu' });
+            }
+            return;
+        }
+        if (this.tab === 'play'
+            && typeof galaxyMapManager !== 'undefined'
+            && galaxyMapManager.isVisible
+            && soundManager.startMapMusic) {
+            soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
+            return;
+        }
+        const ck = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey)
+            ? String(vfTrackerManager.currentKey)
+            : '';
+        if (ck === 'shop' || ck.indexOf('shop:') === 0) {
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
         }
     },
 

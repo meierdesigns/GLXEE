@@ -44,7 +44,7 @@ move galaxies, and jump again before the lane goes quiet.
 
 <div align="center">
 
-<img src="assets/ui/readme-shot-combat-68a.png" alt="GLXEE combat on Mars — canyon run with enemy hero card" width="960" />
+<img src="assets/ui/readme-shot-combat-71o.png" alt="GLXEE combat on Mars — canyon run with enemy hero card" width="960" />
 
 <br/>
 
@@ -631,14 +631,14 @@ station shell, factions, travel).
 
 | New pilot — faction | New pilot — portrait |
 |:---:|:---:|
-| <img src="assets/ui/readme-shot-faction-pick-68a.png" alt="New pilot faction step" width="460" /> | <img src="assets/ui/readme-shot-pilot-68a.png" alt="Create your pilot portrait grid" width="460" /> |
+| <img src="assets/ui/readme-shot-faction-pick-71o.png" alt="New pilot faction step" width="460" /> | <img src="assets/ui/readme-shot-pilot-68a.png" alt="Create your pilot portrait grid" width="460" /> |
 | Mission start | Launch hatch |
 | <img src="assets/ui/readme-shot-mission-68a.png" alt="Mission start with galaxy route and planet card" width="460" /> | <img src="assets/ui/readme-shot-launch-hatch-68a.png" alt="Station launch hatch countdown" width="460" /> |
 | Home Station | Galaxy travel |
 |:---:|:---:|
 | <img src="assets/ui/readme-shot-station-65c.png" alt="Home Station storage" width="460" /> | <img src="assets/ui/readme-shot-galaxy-65c.png" alt="Galaxy travel map" width="460" /> |
 | Upgrade tree | Combat focus |
-| <img src="assets/ui/readme-shot-upgrade-65c.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus-65c.png" alt="Mars combat focus crop" width="460" /> |
+| <img src="assets/ui/readme-shot-upgrade-65c.png" alt="Station upgrade tree" width="460" /> | <img src="assets/ui/readme-shot-combat-focus-71o.png" alt="Mars combat focus crop" width="460" /> |
 | Factions (hi-res emblems) | Emblem strip |
 | <img src="assets/ui/readme-shot-factions-65c.png" alt="Factions relations with hi-res emblems" width="460" /> | <img src="assets/ui/readme-strip-emblems-65c.png" alt="Hand-shaded faction emblems @4x" width="460" /> |
 
@@ -989,6 +989,7 @@ be reviewed or reverted independently.
 | 71L | Release 1.14.4 | GitHub README audio/STYLE docs + local `.claude/GLXEE-V1.14.4.zip` runtime archive |
 | 71M | Mute volume trio | Bezel mute dropdown shows VOL + SND + MUS sliders (master / sounds / music) |
 | 71N | Release 1.14.5 | GitHub push + `.claude/GLXEE-V1.14.5.zip` with mute volume trio |
+| 71O | README media refresh | New cinematic `readme-banner.png`; live `-71o` combat / faction-command shots |
 
 The wave commit convention is:
 

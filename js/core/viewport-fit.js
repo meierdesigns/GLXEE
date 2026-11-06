@@ -192,38 +192,65 @@
         return el;
     }
 
-    // Master-volume dropdown plate, unfolding under the mute key in the bezel strip.
-    // Same "child of <html>" trick as #vf-res: fixed pixel size outside the scaled stage.
+    // Volume dropdown under the mute key: MASTER + SOUNDS + MUSIC (child of <html>).
     function ensureVolPlate() {
         let el = document.getElementById('vf-vol');
         if (el) return el;
-        el = document.createElement('label');
+        el = document.createElement('div');
         el.id = 'vf-vol';
         el.className = 'vf-bezel-vol';
         el.style.display = 'none';
-        el.innerHTML = '<span>VOL</span>' +
-            '<input type="range" id="vfVolSlider" min="0" max="100" step="1" aria-label="Master volume">' +
-            '<output id="vfVolValue"></output>';
+        const row = function (id, key, label, aria) {
+            return '<label class="vf-bezel-vol-row">' +
+                '<span>' + label + '</span>' +
+                '<input type="range" id="' + id + '" min="0" max="100" step="1" data-vol="' + key + '" aria-label="' + aria + '">' +
+                '<output></output></label>';
+        };
+        el.innerHTML =
+            row('vfVolSlider', 'master', 'VOL', 'Master volume') +
+            row('vfSoundSlider', 'sound', 'SND', 'Sounds volume') +
+            row('vfMusicSlider', 'music', 'MUS', 'Music volume');
         document.documentElement.appendChild(el);
-        const input = el.querySelector('input');
-        const out = el.querySelector('output');
         const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
-        const fill = function (pct) { input.style.setProperty('--look-fill', pct + '%'); };
-        const sync = function () {
-            const pct = Math.round((mgr ? mgr.getMasterVolume() : 0.75) * 100);
+        const readPct = function (key) {
+            if (!mgr) {
+                return key === 'master' ? 75 : key === 'sound' ? 50 : 65;
+            }
+            if (key === 'master') return Math.round(mgr.getMasterVolume() * 100);
+            if (key === 'sound') return Math.round(mgr.getSoundVolume() * 100);
+            return Math.round(mgr.getMusicVolume() * 100);
+        };
+        const applyPct = function (key, pct) {
+            if (!mgr) return;
+            const v = Math.max(0, Math.min(100, pct)) / 100;
+            if (key === 'master') mgr.setMasterVolume(v);
+            else if (key === 'sound') mgr.setSoundVolume(v);
+            else if (key === 'music') mgr.setMusicVolume(v);
+        };
+        const syncRow = function (input) {
+            const key = input.getAttribute('data-vol');
+            const pct = readPct(key);
             input.value = String(pct);
-            fill(pct);
-            out.textContent = pct + '%';
+            input.style.setProperty('--look-fill', pct + '%');
+            const out = input.nextElementSibling;
+            if (out) out.textContent = pct + '%';
+        };
+        const sync = function () {
+            el.querySelectorAll('input[data-vol]').forEach(syncRow);
         };
         sync();
-        input.addEventListener('input', function () {
-            const pct = parseInt(input.value, 10) || 0;
-            fill(pct);
-            out.textContent = pct + '%';
-            if (mgr) mgr.setMasterVolume(pct / 100);
-        });
-        ['keydown', 'keyup'].forEach(function (t) {
-            input.addEventListener(t, function (e) { e.stopPropagation(); });
+        el.querySelectorAll('input[data-vol]').forEach(function (input) {
+            input.addEventListener('input', function () {
+                const key = input.getAttribute('data-vol');
+                const pct = parseInt(input.value, 10) || 0;
+                input.style.setProperty('--look-fill', pct + '%');
+                const out = input.nextElementSibling;
+                if (out) out.textContent = pct + '%';
+                applyPct(key, pct);
+            });
+            ['keydown', 'keyup'].forEach(function (t) {
+                input.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
         });
         el.addEventListener('vf-vol-sync', sync);
         return el;

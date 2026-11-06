@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.4 · TRACKER LIVE · STYLE MIX ONLINE                   │
+│  BUILD           1.14.5 · TRACKER LIVE · STYLE MIX ONLINE                   │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -701,9 +701,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.4** ships live STYLE mixing (JUNGLE / DNB / MINIMAL / NIGHTRUN …),
-channel voices, BPM, and crossfades on top of tracker BGM, env SFX, bezel glass,
-salvage, and the victory trader.
+Build **1.14.5** ships live STYLE mixing (JUNGLE / DNB / MINIMAL / NIGHTRUN …),
+channel voices, BPM, crossfades, and a mute-key VOL / SND / MUS dropdown — on top
+of tracker BGM, env SFX, bezel glass, salvage, and the victory trader.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -987,6 +987,8 @@ be reviewed or reverted independently.
 | 71J | Gamepad shoulder fire | LB/RB/LT/RT map to A/S/D/Space; L3 boost; R3 shot-type cycle; analog trigger press |
 | 71K | Corridor stage perf | Cache wall silhouettes, split floor/wall lattice rebuilds, cheaper fog noise + stepped fills |
 | 71L | Release 1.14.4 | GitHub README audio/STYLE docs + local `.claude/GLXEE-V1.14.4.zip` runtime archive |
+| 71M | Mute volume trio | Bezel mute dropdown shows VOL + SND + MUS sliders (master / sounds / music) |
+| 71N | Release 1.14.5 | GitHub push + `.claude/GLXEE-V1.14.5.zip` with mute volume trio |
 
 The wave commit convention is:
 
@@ -1036,5 +1038,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.4** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.5** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

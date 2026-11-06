@@ -383,7 +383,7 @@
         const plate = ensureVolPlate();
         const btn = document.querySelector('.vf-bezel-tools [data-tool="mute"]');
         if (!plate) return;
-        plate.style.display = vfs.volOpen && btn ? 'inline-flex' : 'none';
+        plate.style.display = vfs.volOpen && btn ? 'flex' : 'none';
         if (!vfs.volOpen || !btn) return;
         plate.dispatchEvent(new Event('vf-vol-sync'));
         const r = btn.getBoundingClientRect();

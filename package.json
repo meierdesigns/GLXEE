@@ -1,7 +1,7 @@
 {
   "name": "glxee",
-  "version": "1.14.7",
-  "description": "GLXEE — Game Boy–shell space shooter. Five doctrines. Living galaxies. Next jump.",
+  "version": "1.14.8",
+  "description": "GLXEE \u2014 Game Boy\u2013shell space shooter. Five doctrines. Living galaxies. Next jump.",
   "main": "index.html",
   "scripts": {
     "start": "python3 tools/dev-server.py ${PORT:-3000}",

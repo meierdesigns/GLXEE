@@ -258,9 +258,7 @@ extendClass(HomeStationUI, {
             // its cropped visible box — a 2-unit wing frame made one short
             // drag slam straight into the scale clamp.
             frameWidth: Math.max(1, (rawSegment && rawSegment.width) || hit.width || h.core.width || 1),
-            frameHeight: Math.max(1, (rawSegment && rawSegment.height) || hit.height || h.core.height || 1),
-            // A rotated wing resizes along its own axes, not the screen's.
-            rotation: (this.hangarSegmentRotation(rawSegmentId, h.model, h.scale) || { angle: 0 }).angle
+            frameHeight: Math.max(1, (rawSegment && rawSegment.height) || hit.height || h.core.height || 1)
         };
         this._hangarSelectedModule = null;
         this._hangarWingDragState = h.drag;
@@ -350,7 +348,7 @@ extendClass(HomeStationUI, {
         if (!this._hangarLiveDrawRaf) {
             this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                 this._hangarLiveDrawRaf = 0;
-                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
             });
         }
     },
@@ -379,7 +377,7 @@ extendClass(HomeStationUI, {
             if (!this._hangarLiveDrawRaf) {
                 this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                     this._hangarLiveDrawRaf = 0;
-                    if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                    if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
                 });
             }
             return;
@@ -403,7 +401,7 @@ extendClass(HomeStationUI, {
             if (!this._hangarLiveDrawRaf) {
                 this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                     this._hangarLiveDrawRaf = 0;
-                    if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                    if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
                 });
             }
             return;
@@ -449,11 +447,9 @@ extendClass(HomeStationUI, {
         } else if (h.drag.segment === 'wing') {
             const edge = h.drag.edge;
             if (edge) {
-                // Project the drag into the wing's rotated frame first.
-                const a = -(h.drag.rotation || 0);
-                const ldx = dx * Math.cos(a) - dy * Math.sin(a);
-                const ldy = dx * Math.sin(a) + dy * Math.cos(a);
-                const outward = h.drag.side === 'left' ? -ldx : ldx;
+                // Axis-aligned resize: screen X/Y map straight to width/height
+                // (scale frame is an unrotated rectangle).
+                const outward = h.drag.side === 'left' ? -dx : dx;
                 // Corner edges (e.g. "top-left") contain both an X and a Y
                 // token, so both axes resize together from one drag.
                 const hasX = edge.indexOf('left') !== -1 || edge.indexOf('right') !== -1;
@@ -466,7 +462,7 @@ extendClass(HomeStationUI, {
                     this.hangarShipId,
                     'wing',
                     h.drag.startScaleX + (hasX ? outward : 0) / Math.max(1, h.drag.frameWidth),
-                    h.drag.startScaleY + (hasY ? heightSign * ldy : 0) / Math.max(1, h.drag.frameHeight)
+                    h.drag.startScaleY + (hasY ? heightSign * dy : 0) / Math.max(1, h.drag.frameHeight)
                 );
             } else {
                 const outward = h.drag.side === 'left' ? -dx : dx;
@@ -504,7 +500,7 @@ extendClass(HomeStationUI, {
         if (!this._hangarLiveDrawRaf) {
             this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                 this._hangarLiveDrawRaf = 0;
-                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
             });
         }
     },

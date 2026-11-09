@@ -322,21 +322,27 @@ class UiTooltipManager {
                     } else {
                     const chips = (() => {
                         // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" (rate optional) -> the same stat icons as the hangar rows.
+                        // 4th slot: 'up' | 'down' | null vs currently equipped gun on the ship.
                         const sm = line.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?$/);
                         if (sm) {
-                            return [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], sm[3] ? ['shotRapid', sm[3], '#ffa04a'] : null].filter(Boolean);
+                            const delta = this._weaponStatDeltas(anchor, sm);
+                            return [
+                                ['statDamage', sm[1], '#ff6a4a', delta[0]],
+                                ['statSpeed', sm[2], '#4ad8ff', delta[1]],
+                                sm[3] ? ['shotRapid', sm[3], '#ffa04a', delta[2]] : null
+                            ].filter(Boolean);
                         }
                         // Weapon fire mode "MODE AUTO" / "MODE CHARGE".
                         const mm = line.match(/^MODE (AUTO|CHARGE)$/);
                         if (mm) {
-                            return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a']];
+                            return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a', null]];
                         }
                         // Ability/defense/energy "TYPE · TIER n" (tier optional) -> type + tier icons.
                         // Single keyword only — never match meta lines (EQUIPPED, MOVE TO …).
                         const tm = line.match(/^(PASSIVE|ACTIVE|TOGGLE|CHANNEL|INSTANT|AURA|BUFF|SHIELD|DRIVE|SYSTEM)(?: · TIER (\d+))?$/);
                         if (tm) {
-                            const out = [['statAbilities', tm[1], '#c08cff']];
-                            if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a']);
+                            const out = [['statAbilities', tm[1], '#c08cff', null]];
+                            if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a', null]);
                             return out;
                         }
                         // Ability stat-mod line(s), e.g. "+0.3 SPEED" or "+1 DAMAGE · +2 ARMOR"
@@ -347,17 +353,25 @@ class UiTooltipManager {
                         const statCol = { SPEED: '#4ad8ff', DAMAGE: '#ff6a4a', ARMOR: '#5ce1ff', 'FIRE RATE': '#ffa04a' };
                         const statParts = line.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
                         if (statParts.length && statParts.every(Boolean)) {
-                            return statParts.map((pm) => [statIcon[pm[2]], pm[1] + ' ' + pm[2], statCol[pm[2]]]);
+                            return statParts.map((pm) => {
+                                const n = Number(pm[1]);
+                                const d = Number.isFinite(n) ? (n < 0 ? 'down' : (n > 0 ? 'up' : null)) : null;
+                                return [statIcon[pm[2]], pm[1] + ' ' + pm[2], statCol[pm[2]], d];
+                            });
                         }
                         return null;
                     })();
                     if (chips && ir) {
                         row.className = 'ui-tooltip-stats';
                         row.style.cssText = 'display:flex;gap:' + (compact ? '8px' : '14px') + ';align-items:center;flex-wrap:nowrap';
-                        chips.forEach(([key, val, col]) => {
+                        chips.forEach(([key, val, col, delta]) => {
                             const s = document.createElement('span');
+                            s.className = 'ui-tooltip-stat' + (delta === 'down' ? ' is-bad' : (delta === 'up' ? ' is-good' : ''));
                             s.style.cssText = 'display:inline-flex;gap:4px;align-items:center;white-space:nowrap';
-                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
+                            const mark = delta === 'down' ? '<span class="hs-stat-worse">▼</span>'
+                                : (delta === 'up' ? '<span class="hs-stat-better">▲</span>' : '');
+                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                                + '<b class="hs-stat-num">' + val + '</b>' + mark;
                             row.appendChild(s);
                         });
                     } else {
@@ -422,12 +436,37 @@ class UiTooltipManager {
             place(sl, r.top + r.height / 2 - th / 2, 'side-right');
             return;
         }
-        // Bay inventory: tuck beside the hovered cell (near the cursor), not the whole panel edge.
-        const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
+        // Ship-row equipment dots sit packed in one line — opening above/below
+        // would cover the neighbouring dots, so open beside the row instead.
+        if (anchor.classList.contains('hs-ship-slot-dot')) {
+            const row = anchor.closest('.hs-ship-slot-dots') || anchor;
+            const b = row.getBoundingClientRect();
+            let sl = b.right + gap;
+            if (sl + tw > window.innerWidth - pad) sl = b.left - tw - gap;
+            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
+            return;
+        }
+        // Bay inventory + ship-row storage: open beside the cell so the tip never
+        // covers the hovered item (below+clamp used to slide back over it) and
+        // never covers the equipment-slot dots sitting just above the grid.
+        const invPanel = !anchor.closest('[data-tip-side]') && (
+            anchor.closest('.hs-bay-inv')
+            || anchor.closest('.hs-ship-storage-row .hs-storage-cell')
+            || (anchor.classList.contains('hs-storage-cell') && !!anchor.closest('.hs-storage-grid'))
+        );
         if (invPanel) {
             let sl = r.right + gap;
             if (sl + tw > window.innerWidth - pad) sl = Math.max(pad, r.left - tw - gap);
-            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
+            // Vertically centre on the cell, but keep the tip from sliding back
+            // over the cell when clampBox hits the viewport edge.
+            let st = r.top + r.height / 2 - th / 2;
+            const tipBottom = st + th;
+            if (st < r.bottom && tipBottom > r.top) {
+                // Would overlap the cell: prefer below, else above, else side-only clamp.
+                if (r.bottom + gap + th <= window.innerHeight - pad) st = r.bottom + gap;
+                else if (r.top - gap - th >= pad) st = r.top - th - gap;
+            }
+            place(sl, st, 'side-right');
             return;
         }
         const leftBar = anchor.closest('.hs-hangar-list, [data-tip-side="right"]');
@@ -459,7 +498,62 @@ class UiTooltipManager {
             top = r.top - th - gap;
             tip.classList.remove('below');
         }
+        // Final guard: if clamp would drag the tip back over the anchor, open
+        // beside it instead so the hovered item stays visible.
+        const rawTop = top;
+        const clamped = this.clampBox(left, top, tw, th, pad);
+        if (clamped.top < r.bottom && clamped.top + th > r.top
+            && clamped.left < r.right && clamped.left + tw > r.left) {
+            let sl = r.right + gap;
+            if (sl + tw > window.innerWidth - pad) sl = Math.max(pad, r.left - tw - gap);
+            tip.classList.remove('below');
+            place(sl, rawTop, 'side-right');
+            return;
+        }
         place(left, top, null);
+    }
+
+    /** Equipped weapon id to compare a storage/shop tip against, or null. */
+    _weaponCompareId(anchor) {
+        if (!anchor || typeof anchor.getAttribute !== 'function') return null;
+        if (anchor.getAttribute('data-part-kind') !== 'weapon') return null;
+        const partId = anchor.getAttribute('data-part-id');
+        if (!partId || anchor.classList.contains('is-equipped')) return null;
+        let shipId = anchor.getAttribute('data-drag-ship') || anchor.getAttribute('data-ship') || '';
+        if (!shipId && typeof profileManager !== 'undefined' && profileManager.getActiveProfile) {
+            const p = profileManager.getActiveProfile();
+            shipId = (p && p.activeShipId) || '';
+        }
+        if (!shipId && typeof homeStationUI !== 'undefined' && homeStationUI.hangarShipId) {
+            shipId = homeStationUI.hangarShipId;
+        }
+        if (!shipId || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getLoadout) return null;
+        const L = shipLoadoutManager.getLoadout(shipId);
+        const mounted = (L && (L.weaponSlots || L.weapons)) || [];
+        const compareId = mounted.find((w) => w) || null;
+        if (!compareId || compareId === partId) return null;
+        return compareId;
+    }
+
+    /** Per-stat 'up'/'down'/null for a tip DMG line vs the equipped gun. */
+    _weaponStatDeltas(anchor, sm) {
+        const out = [null, null, null];
+        const compareId = this._weaponCompareId(anchor);
+        if (!compareId || typeof weaponConfigManager === 'undefined' || !weaponConfigManager.getWeapon) return out;
+        const c = weaponConfigManager.getWeapon(compareId);
+        if (!c) return out;
+        const mine = [Number(sm[1]), Number(sm[2]), sm[3] ? parseFloat(sm[3]) : NaN];
+        const theirs = [
+            Number(c.damage) || 0,
+            Number(c.speed) || 0,
+            c.cooldown ? (1000 / c.cooldown) : 0
+        ];
+        for (let i = 0; i < 3; i++) {
+            if (!Number.isFinite(mine[i])) continue;
+            if (mine[i] < theirs[i]) out[i] = 'down';
+            else if (mine[i] > theirs[i]) out[i] = 'up';
+        }
+        return out;
     }
 
     hide() {

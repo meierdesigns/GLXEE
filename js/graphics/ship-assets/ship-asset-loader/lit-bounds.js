@@ -260,52 +260,146 @@ extendClass(ShipAssetLoader, {
         return out;
     },
 
+    /**
+     * Hull-facing side of a turned wing: the full near edge and its two
+     * corner cells. Those corners are exactly the connection's wing-end
+     * corners — the wing edge IS the joint end.
+     */
     wingBridgeEnd(seg, shipModel, scale, hullEdgeX, hullY) {
         const lit = this.wingLitCells(seg, shipModel, scale);
+        if (!lit || !lit.pts || !lit.pts.length) return null;
         const loadout = shipModel && shipModel.layout && shipModel.layout.loadout;
-        const resW = Math.max(1, Math.round(seg.width / lit.cell));
         const left = seg.id === 'wingLeft';
         const deg = Math.max(-180, Math.min(180, Number(loadout && loadout.wingRotation) || 0));
         const a = deg * Math.PI / 180 * (left ? -1 : 1);
-        const cos = Math.cos(a), sin = Math.sin(a);
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
         const pivot = this.wingAttachPoint(seg, shipModel, scale);
+        // Into-wing direction and root tangent (+t = aft).
+        const dirX = (left ? -1 : 1) * cos;
+        const dirY = (left ? -1 : 1) * sin;
+        let tX = left ? dirY : -dirY;
+        let tY = left ? -dirX : dirX;
+        if (tY < 0) { tX = -tX; tY = -tY; }
         const cells = [];
-        let sx = 0, sy = 0;
+        let sx = 0;
+        let sy = 0;
         lit.pts.forEach((q) => {
-            const dx = q[0] - pivot.x, dy = q[1] - pivot.y;
-            const x = pivot.x + dx * cos - dy * sin, y = pivot.y + dx * sin + dy * cos;
-            cells.push([x, y]);
-            sx += x; sy += y;
+            const dx = q[0] - pivot.x;
+            const dy = q[1] - pivot.y;
+            const p = [pivot.x + dx * cos - dy * sin, pivot.y + dx * sin + dy * cos];
+            cells.push(p);
+            sx += p[0];
+            sy += p[1];
         });
-        if (!cells.length) return null;
-        // Nearest to the hull edge horizontally; the bridge height breaks ties.
-        const score = (p) => Math.abs(p[0] - hullEdgeX) + 0.2 * Math.abs(p[1] - hullY);
-        let best = Infinity;
-        cells.forEach((p) => { const v = score(p); if (v < best) best = v; });
-        const near = cells.filter((p) => score(p) <= best + lit.cell * 1.6);
-        let ex = 0, ey = 0;
+        // Full hull-facing face: every cell within ~1.5 voxels of the
+        // closest-to-hull depth (no Y bias — that only took a local patch
+        // and missed the real edge corners).
+        // left wing: larger x = closer to hull; right: smaller x = closer.
+        let best = -Infinity;
+        cells.forEach((p) => {
+            const v = left ? p[0] : -p[0];
+            if (v > best) best = v;
+        });
+        const near = cells.filter((p) => {
+            const v = left ? p[0] : -p[0];
+            return v >= best - lit.cell * 1.5;
+        });
+        if (!near.length) return null;
+        let ex = 0;
+        let ey = 0;
         near.forEach((p) => { ex += p[0]; ey += p[1]; });
-        ex /= near.length; ey /= near.length;
-        // Pushed a little into the wing, toward its middle, so the wing's own outline closes the seam.
-        const mx = sx / cells.length, my = sy / cells.length;
-        const len = Math.max(0.0001, Math.hypot(mx - ex, my - ey));
-        const push = lit.cell * 1.2;
-        return { x: ex + (mx - ex) / len * push, y: ey + (my - ey) / len * push };
+        ex /= near.length;
+        ey /= near.length;
+        // Prefer the bridge height when several cells share an extreme, so
+        // the edge we pick still faces the strut.
+        const prefer = (p) => -0.01 * Math.abs(p[1] - (hullY || ey));
+        let noseP = near[0];
+        let aftP = near[0];
+        let noseT = Infinity;
+        let aftT = -Infinity;
+        near.forEach((p) => {
+            const t = (p[0] - ex) * tX + (p[1] - ey) * tY + prefer(p);
+            const raw = (p[0] - ex) * tX + (p[1] - ey) * tY;
+            if (raw < noseT || (raw === noseT && prefer(p) > prefer(noseP))) {
+                noseT = raw; noseP = p;
+            }
+            if (raw > aftT || (raw === aftT && prefer(p) > prefer(aftP))) {
+                aftT = raw; aftP = p;
+            }
+        });
+        // Corners stay on the wing edge (no inward push). Only the centre
+        // steps half a cell into the wing so the outline closes the seam.
+        const mx = sx / cells.length;
+        const my = sy / cells.length;
+        const midLen = Math.max(0.0001, Math.hypot(mx - ex, my - ey));
+        const push = lit.cell * 0.6;
+        return {
+            x: ex + (mx - ex) / midLen * push,
+            y: ey + (my - ey) / midLen * push,
+            topX: noseP[0], topY: noseP[1],
+            botX: aftP[0], botY: aftP[1],
+            tX: tX, tY: tY
+        };
     },
 
     /**
-     * Where the hull connection meets a wing, in layout units. The wing art is
-     * rotated about its frame centre, so the root edge swings with it — the
-     * bridge has to follow or it ends in empty space beside a tilted wing.
+     * Lit cells on a wing's hull-facing root column (unrotated), plus their
+     * centroid and vertical span. The bridge and rotation pivot use this so
+     * the joint sits on the real root middle — not the bbox centre, which
+     * drifts on swept / tapered wings and left the strut looking offset.
+     */
+    wingRootAttach(seg, shipModel, scale) {
+        const vis = this.wingVisibleRect(seg, shipModel, scale);
+        const fallback = {
+            x: seg.id === 'wingLeft' ? vis.x + vis.width : vis.x,
+            y: vis.y + vis.height * 0.5,
+            y0: vis.y,
+            y1: vis.y + vis.height,
+            height: vis.height
+        };
+        const lit = this.wingLitCells(seg, shipModel, scale);
+        if (!lit || !lit.pts || !lit.pts.length) return fallback;
+        const left = seg.id === 'wingLeft';
+        let edge = left ? -Infinity : Infinity;
+        lit.pts.forEach((p) => {
+            if (left ? p[0] > edge : p[0] < edge) edge = p[0];
+        });
+        const root = lit.pts.filter((p) => Math.abs(p[0] - edge) <= lit.cell * 1.25);
+        if (!root.length) return fallback;
+        let sx = 0;
+        let sy = 0;
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        root.forEach((p) => {
+            sx += p[0];
+            sy += p[1];
+            if (p[1] < y0) y0 = p[1];
+            if (p[1] > y1) y1 = p[1];
+        });
+        return {
+            x: sx / root.length,
+            y: sy / root.length,
+            y0,
+            y1,
+            height: Math.max(lit.cell, y1 - y0)
+        };
+    },
+
+    /**
+     * Where the hull connection meets a wing, in layout units. Also the
+     * rotation pivot — kept on the root-edge centroid so a turned wing's
+     * root stays under the bridge. Y is averaged with the opposite wing so
+     * left/right stay level even when lit bounds differ by a voxel.
      */
     wingAttachPoint(seg, shipModel, scale) {
-        const vis = this.wingVisibleRect(seg, shipModel, scale);
-        // This point is also the rotation pivot, so it stays put at any wing
-        // angle and the bridge never has to chase a swinging root.
-        return {
-            x: seg.id === 'wingLeft' ? vis.x + vis.width : vis.x,
-            y: vis.y + vis.height * 0.5
-        };
+        const root = this.wingRootAttach(seg, shipModel, scale);
+        const segs = (shipModel && shipModel.layout && shipModel.layout.segments) || [];
+        const other = segs.find((s) => s.id === (seg.id === 'wingLeft' ? 'wingRight' : 'wingLeft'));
+        const y = other
+            ? (root.y + this.wingRootAttach(other, shipModel, scale).y) * 0.5
+            : root.y;
+        return { x: root.x, y: y };
     },
 
     applyWingCrop(grid, seg, crop) {
@@ -388,10 +482,13 @@ extendClass(ShipAssetLoader, {
         // factionShipStyles.styleStrength exaggerates (or flattens) the bend.
         const k = this.factionStyleStrength();
         const p = this.baseFactionRowProfile(silhouette, t, seedIndex);
-        // Keep a solid fuselage floor. With styleStrength 2 the old 0.18 clamp
-        // pinched scrap/modular cores into an H / waist so terrain read as
-        // "holes" through the hull (durchsichtig).
-        const minW = seedIndex === 4 ? 0.72 : 0.55;
+        // Keep a solid fuselage floor. styleStrength 2 used to pinch modular /
+        // circuit / scrap cores into an upside-down H so hangar areas read as
+        // waists instead of the faction's hull family.
+        const brick = silhouette === 'modular' || silhouette === 'circuit';
+        const minW = seedIndex === 4
+            ? (brick ? 0.9 : 0.72)
+            : (brick ? 0.82 : 0.55);
         return {
             widthMul: Math.max(minW, Math.min(1.25, 1 + (p.widthMul - 1) * k)),
             offsetMul: p.offsetMul * Math.min(k, 1)
@@ -406,10 +503,11 @@ extendClass(ShipAssetLoader, {
     baseFactionRowProfile(silhouette, t, seedIndex) {
         const tt = Math.max(0, Math.min(1, t));
         if (silhouette === 'modular') {
-            // Few, deep terraces — a blocky stepped tower, widest at the base.
+            // Brick plate terraces on a solid fuselage — shallow steps, not a
+            // 0.5→1.0 tower that styleStrength 2 turned into an H-waist.
             const steps = 3;
             const q = Math.round(tt * steps) / steps;
-            return { widthMul: 0.5 + q * 0.5, offsetMul: 0 };
+            return { widthMul: 0.9 + q * 0.1, offsetMul: 0 };
         }
         if (silhouette === 'spikes') {
             // Wedge with one or two big swept barbs — a blade, not a comb.
@@ -420,8 +518,9 @@ extendClass(ShipAssetLoader, {
             return { widthMul: wedge * (0.8 + saw * 0.35), offsetMul: 0 };
         }
         if (silhouette === 'rings') {
-            // Strong convex belly pinched hard at both ends — a hollow pod.
-            return { widthMul: 0.3 + 0.82 * Math.sin(tt * Math.PI), offsetMul: 0 };
+            // Pod belly — ends stay wide enough that styleStrength 2 cannot
+            // erase them into an H between the wings and the aft.
+            return { widthMul: 0.55 + 0.5 * Math.sin(tt * Math.PI), offsetMul: 0 };
         }
         if (silhouette === 'scrap') {
             // Welded salvage: big irregular steps (patches stay lopsided), body centred on the axis.
@@ -439,10 +538,9 @@ extendClass(ShipAssetLoader, {
             return { widthMul: floor + chunk * span, offsetMul: 0 };
         }
         if (silhouette === 'circuit') {
-            // Rigid slab with deep rectangular notches cut at fixed intervals —
-            // machined, symmetric, nothing organic about the outline.
-            // One machined notch band per part, not a comb of them.
-            const notch = tt > 0.42 && tt < 0.58 ? 0.72 : 1;
+            // Rigid slab with one shallow machined notch — deep notches at
+            // styleStrength 2 read as an H-waist through the forge block.
+            const notch = tt > 0.42 && tt < 0.58 ? 0.88 : 1;
             return { widthMul: notch, offsetMul: 0 };
         }
         return { widthMul: 1, offsetMul: 0 };

@@ -652,10 +652,12 @@ html body .profile-selection-name-mode .profile-start-main .profile-start-label 
     }
 }
 @media (min-width: 1101px) and (max-width: 1650px) {
-    /* Same card size as the nav cards (part-18 makes PLAY wider; here it matches them). */
+    /* Same card size as the nav cards (part-18 makes PLAY wider; here it matches them).
+       flex-shrink:0 so LAUNCH never collapses when the area row is crowded. */
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
-        flex: 0 1 clamp(88px, calc(8.25 * var(--sv-w)), 132px) !important;
+        flex: 0 0 clamp(88px, calc(8.25 * var(--sv-w)), 132px) !important;
         width: clamp(88px, calc(8.25 * var(--sv-w)), 132px) !important;
+        min-width: 88px !important;
     }
 }
 html body .profile-start-main .profile-loadout > .pl-wrap { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -936,9 +938,11 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     letter-spacing: 2px; white-space: nowrap; cursor: pointer;
 }
 .hs-bay-invtoggle:hover { background: var(--color-primary); color: #05060a; }
-/* Panel sized to the shared storage grid (not a forced 8×48 sidebar). */
+/* Panel sized to the shared storage grid's width, but stretched to the full
+   height of the bay stage — was height:auto, leaving dead space below a grid
+   shorter than the stage (and no room to show the STATION section below SHIP). */
 .hs-bay-inv {
-    position: absolute; top: 0; left: 0; right: auto; bottom: auto; z-index: 4;
+    position: absolute; top: 0; left: 0; right: auto; bottom: 0; z-index: 4;
     display: flex; flex-direction: column; align-items: stretch;
     width: max-content; max-width: calc(100% - 12px);
     box-sizing: border-box; padding: 8px; overflow: auto;
@@ -946,7 +950,17 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     border-right: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     --cs: 56px;
 }
-.hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 8px; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 0; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.hs-bay-inv-group-label {
+    flex: 0 0 auto;
+    font-size: 11px;
+    letter-spacing: 2px;
+    opacity: 0.7;
+    margin: 0 -8px 4px;
+    padding: 10px 8px 0;
+    background: #0a0912;
+}
+.hs-bay-inv-group-label:first-of-type { margin-top: 0; }
 .hs-bay-inv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
 .hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }
@@ -959,7 +973,7 @@ html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: 0 0 0 2px #050
 html body .hs-hangar-bay-stage .hs-bay-zoom { top: 52px; right: auto; left: 10px; }
 html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: 10px; left: 10px; right: auto; }
 /* Inventory filter: icon buttons; active = filled with the kind colour, dark icon. */
-html body .hs-bay-inv .hs-bay-inv-filter { appearance: none; display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; background: #05060a; border: 1px solid color-mix(in srgb, var(--fc) 45%, #05060a); opacity: .5; filter: brightness(.7) saturate(.8); transition: opacity .12s, filter .12s; }
+html body .hs-bay-inv .hs-bay-inv-filter { appearance: none; display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; background: #05060a; border: 1px solid color-mix(in srgb, var(--fc) 45%, #05060a); transition: background .12s, border-color .12s, box-shadow .12s; }
 .hs-bay-inv-filter img {
     width: 16px !important;
     height: 16px !important;
@@ -971,8 +985,8 @@ html body .hs-bay-inv .hs-bay-inv-filter { appearance: none; display: inline-gri
 .hs-bay-inv-filter .is-on { display: none; }
 .hs-bay-inv-filter.is-active .is-off { display: block; }
 .hs-bay-inv-filter.is-active .is-on { display: none; }
-.hs-bay-inv-filter:hover:not(.is-active) { opacity: .8; filter: none; }
-html body .hs-bay-inv .hs-bay-inv-filter.is-active { opacity: 1; filter: brightness(1.15); border-color: color-mix(in srgb, var(--fc) 80%, #05060a); box-shadow: 0 0 6px color-mix(in srgb, var(--fc) 45%, transparent); }
+.hs-bay-inv-filter:hover:not(.is-active) { background: color-mix(in srgb, var(--fc) 10%, #05060a); }
+html body .hs-bay-inv .hs-bay-inv-filter.is-active { background: color-mix(in srgb, var(--fc) 22%, #05060a); border-color: color-mix(in srgb, var(--fc) 80%, #05060a); box-shadow: 0 0 6px color-mix(in srgb, var(--fc) 45%, transparent); }
 /* Same renderer as station/ship storage: kill the slot-picker pick-grid tile bg /
    4px gap / padding; keep .hs-storage-grid accent gap-lines (same weight as the frame). */
 html body .hs-bay-inv.hs-slot-picker .hs-storage-grid.hs-pick-grid {
@@ -1001,8 +1015,16 @@ html body .hs-bay-inv .hs-pick-cell.is-anim-equip { animation: hs-item-equip .5s
 html body .hs-bay-inv .hs-pick-cell.is-anim-unequip { animation: hs-item-unequip .4s ease-out; }
 html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 40%; background: linear-gradient(transparent, color-mix(in srgb, var(--pk-c) 70%, #fff), transparent); opacity: .7; pointer-events: none; animation: hs-item-sweep .5s ease-out; }
 @media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-anim-equip, html body .hs-bay-inv .hs-pick-cell.is-anim-unequip, html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { animation: none; } }
-/* Inventory on the left: covers the bay's left-hand GUI (zoom etc.); only the INVENTORY toggle stays on top to close it. */
-html body .hs-hangar-bay-stage .hs-bay-inv { left: 0; right: auto; top: 50px; z-index: 8; }
+/* Inventory on the left: covers the bay's left-hand GUI (zoom etc.); only the INVENTORY toggle stays on top to close it.
+   top:0 (not 50px) so its own background fills in behind the toggle button too — the
+   content is pushed clear of the button with padding-top instead, so no gap shows the
+   stage floor through. */
+html body .hs-hangar-bay-stage .hs-bay-inv { left: 0; right: auto; top: 0; padding-top: 50px; z-index: 8; }
+/* The sticky top:-8px / negative-margin trick (normal .hs-bay-inv-bar) assumes an 8px
+   parent padding-top; here it's 50px, so that trick overlaps the bar over the SHIP
+   label and the grid's first row instead of sitting flush above them. Simpler fix for
+   this context: no sticky, flow normally below the 50px padding. */
+html body .hs-hangar-bay-stage .hs-bay-inv .hs-bay-inv-bar { position: static; margin: 0 -8px 8px; }
 html body .hs-hangar-bay-stage .hs-bay-invtoggle { z-index: 9; }
 /* Installed items animate while hovered: pulsing frame, gentle bob, slow light sweep. */
 @keyframes hs-item-hover-ring { 0%, 100% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 10px 2px var(--pk-c); } }

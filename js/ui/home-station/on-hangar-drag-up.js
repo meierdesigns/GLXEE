@@ -124,7 +124,9 @@ extendClass(HomeStationUI, {
         }
         // Keep the side dropdown open while an individual module moves.
         // Still refresh canvas + pink pins without rebuilding the hangar DOM.
+        // Anatomy modal: never createUI — that remounts the floating dialog.
         if (movingModule && !clickedModule) this.drawHangarBay();
+        else if (this._anatomyModalShipId) this.drawHangarBay();
         else this.createUI();
 
         // Show component details in sidebar AFTER createUI(). With the ship
@@ -133,12 +135,14 @@ extendClass(HomeStationUI, {
         if (moduleToSelect) {
             // Tree shown: jump to the slot there. Otherwise nothing extra —
             // the separate component details panel is not used for slots.
-            if (!this._hangarLeftCollapsed && this.focusTreeSlot(moduleToSelect.kind, moduleToSelect.index)) return;
+            if (this.hangarSidebarOpen()) this.focusTreeSlot(moduleToSelect.kind, moduleToSelect.index);
+            if (this.panHangarToSelection) this.panHangarToSelection();
+            return;
         }
         // With the ship sidebar open, its tree already holds every setting:
         // open the matching section there instead of a second panel on top
         // of the bay.
-        if (!this._hangarLeftCollapsed && (floatingSpine || floatingConnection || floatingArea)) {
+        if (this.hangarSidebarOpen() && (floatingSpine || floatingConnection || floatingArea)) {
             let nodeId;
             if (floatingSpine) {
                 this._hangarSelectedConnection = floatingSpine;
@@ -154,14 +158,18 @@ extendClass(HomeStationUI, {
                 nodeId = `hs-tree-area-${merged ? 'wings' : floatingArea}`;
             }
             this.focusTreeSection(nodeId);
+            if (this.panHangarToSelection) this.panHangarToSelection();
             return;
         }
         if (floatingSpine) {
             this.showFloatingSpineConnectionStyle(floatingSpine === 'spineBack' ? 'back' : 'front', floatingSpine);
+            if (this.panHangarToSelection) this.panHangarToSelection();
         } else if (floatingConnection) {
             this.showFloatingConnectionStyle(floatingConnection);
+            if (this.panHangarToSelection) this.panHangarToSelection();
         } else if (floatingArea) {
             this.showFloatingAreaStyle(floatingArea);
+            if (this.panHangarToSelection) this.panHangarToSelection();
         }
     },
 
@@ -260,7 +268,7 @@ extendClass(HomeStationUI, {
             const done = Math.abs(goal - cur) / goal < 0.004;
             if (done) next = goal;
             this._hangarBayZoom = next;
-            if (!this.isVisible || this.tab !== 'hangar') {
+            if (!this.isVisible || !this.hangarBayActive()) {
                 this._hangarZoomAnimating = false;
                 return;
             }

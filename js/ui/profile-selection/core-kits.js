@@ -6,11 +6,15 @@ extendClass(ProfileSelectionManager, {
     kitDefs() {
         // Each hull role also hands out its own free hull-area level, so the four profiles differ in the ship they build.
         const roleAreas = { player_scrap: { back: 1 }, player_interceptor: { wing: 1 }, player_heavy: { center: 1 }, player_assault: { front: 1 } };
-        // Hull areas a start profile's ship is built without (nose = front, aft = back, wings = wing).
-        const roleOff = { player_scrap: ['wing'], player_interceptor: ['back'], player_heavy: ['front'], player_assault: [] };
-        // Hulls built without a nose carry their gun in the core: a pair left / right of the axis ('split') or one on the axis ('single').
-        const roleCore = { player_heavy: 'split' };
-        const K = (id, label, text, icon, ship, bonus) => ({ id, label, text, icon, ship, off: roleOff[ship] || [], coreGun: roleCore[ship] || null, bonus: Object.assign({ areas: roleAreas[ship] || {} }, bonus || {}) });
+        // Hull areas a start profile is built without — same map as shipLoadoutManager.getShipRoleOffAreas.
+        const roleOff = (ship) => (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getShipRoleOffAreas
+            ? shipLoadoutManager.getShipRoleOffAreas(ship)
+            : ({ player_scrap: ['wing'], player_interceptor: ['back'], player_heavy: ['front'], player_assault: [] }[ship] || []));
+        // Hulls built without a nose carry their gun in the core.
+        const roleCore = (ship) => (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getShipRoleCoreGun
+            ? shipLoadoutManager.getShipRoleCoreGun(ship)
+            : ({ player_heavy: 'split' }[ship] || null));
+        const K = (id, label, text, icon, ship, bonus) => ({ id, label, text, icon, ship, off: roleOff(ship), coreGun: roleCore(ship), bonus: Object.assign({ areas: roleAreas[ship] || {} }, bonus || {}) });
         // Faction doctrine, added on top of every profile of the faction: cargo shape, an extra hull area level and a stash.
         const DOCTRINE = {
             terran: { credits: 60, second: { player_assault: 'railgun', player_interceptor: 'laser_twin' } },                                                               // fleet command: money, balanced hold

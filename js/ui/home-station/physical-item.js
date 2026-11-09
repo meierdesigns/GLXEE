@@ -325,13 +325,19 @@ physicalItem.bayInventoryHtml = function (ui) {
     const filter = ui._bayInvFilter || 'all';
     const cs = (ui.STORAGE_CELL_PX | 0) || 56;
     const gridHtml = ui.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
+    // Station storage too — its cells already carry data-move-to-ship (render-parts-list.js),
+    // so a click/drag here moves the part straight onto this ship without a tab switch.
+    const stationGridHtml = ui.renderStationStorage(profile, { extraGridClass: 'hs-pick-grid' });
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
     // Native 16×16 sprite grid — size ≥24 triggers Scale2x and looks mushy in these tiny filter buttons.
     const ico = (key, col) => (ir ? String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]
         .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
     return `<div class="hs-slot-picker hs-bay-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div>` +
-        `</div>${gridHtml}</div>`;
+        `</div>` +
+        `<div class="hs-bay-inv-group-label">SHIP</div>${gridHtml}` +
+        `<div class="hs-bay-inv-group-label">STATION</div>${stationGridHtml}` +
+        `</div>`;
 };
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-bay-inv]');

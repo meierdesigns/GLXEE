@@ -25,49 +25,42 @@ extendClass(ShipAssetLoader, {
             ctx.fillStyle = wingPalette[2];
             segs.filter((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight').forEach((wing) => {
                 const isLeft = wing.id === 'wingLeft';
-                const centerEdge = x + (isLeft ? centerSeg.x : centerSeg.x + centerSeg.width) * scale;
-                // The bridge spans to the cropped, rotated wing root.
-                const vis = this.wingVisibleRect(wing, shipModel, scale);
-                const attach = this.wingAttachPoint(wing, shipModel, scale);
-                const wingEdge = x + attach.x * scale;
-                const connectionY = Math.max(-1, Math.min(1,
-                    Number(layout.loadout && layout.loadout.wingConnectionY) || 0
-                ));
-                const connectionWidth = Math.max(0.02, Math.min(0.5,
-                    Number(layout.loadout && layout.loadout.wingConnectionWidth) || 0.1
-                ));
-                const centerY = y + (
-                    centerSeg.y + centerSeg.height * (0.5 + connectionY * 0.5)
-                ) * scale;
-                const wingY = y + attach.y * scale;
-                const wingPix = this.wingBridgeEnd(wing, shipModel, scale, isLeft ? centerSeg.x : centerSeg.x + centerSeg.width,
-                    centerSeg.y + centerSeg.height * (0.5 + connectionY * 0.5));
+                const geo = this.wingBridgeGeometry(wing, centerSeg, shipModel, scale);
+                const centerEdge = x + geo.x0 * scale;
+                const wingEdge = x + geo.attach.x * scale;
                 const style = layout.loadout && layout.loadout.wingConnectionStyle || 'strut';
                 if (!this.wingConnectionVisible(layout, isLeft, centerEdge, wingEdge, scale)) return;
                 // Bridges use the ship-wide voxel size like every hull part.
                 const voxelSize = this.hullPartResolution(
                     1, 1, Number(layout.loadout && layout.loadout.voxelScale) || 0.5, scale
                 ).cell;
-                // Tuck both ends two voxels under the parts they join, so the
-                // parts' own outlines close the seam instead of a gap or a
-                // stray end cap of the joint showing.
-                const rootOverlap = voxelSize * 2;
-                // The hull flank often tapers inward (faction silhouettes),
-                // so reach a fifth of the body in to stay under it.
-                const hullOverlap = Math.max(rootOverlap, centerSeg.width * scale * 0.36);
-                const bridgeStart = isLeft ? centerEdge + hullOverlap : centerEdge - hullOverlap;
-                const bridgeEnd = isLeft ? wingEdge - rootOverlap : wingEdge + rootOverlap;
-                const sides = this.wingJointSides(layout.loadout);
-                // Strength alone sets the outer extents; styles fill them.
-                const hullUnit = centerSeg.height * scale;
-                const wingUnit = vis.height * scale * 1.2;
-                const up0 = Math.max(1, hullUnit * sides.up0);
-                const down0 = Math.max(1, hullUnit * sides.down0);
-                const up1 = Math.max(1, wingUnit * sides.up1);
-                const down1 = Math.max(1, wingUnit * sides.down1);
+                // Layout units only — never divide a canvas-x pixel by scale
+                // (that used to double the origin and shoot the strut past the tip).
+                const rootOverlap = (voxelSize * 2) / scale;
+                const hullOverlap = Math.max(rootOverlap, centerSeg.width * 0.36);
+                let x0 = isLeft ? geo.x0 + hullOverlap : geo.x0 - hullOverlap;
+                let x1 = geo.x1;
+                if (isLeft) {
+                    if (x1 > x0) x1 = x0;
+                } else if (x1 < x0) {
+                    x1 = x0;
+                }
+                const bridgeStartPx = x + x0 * scale;
+                const pxGeo = {
+                    x0: x0,
+                    y0: geo.y0,
+                    x1: x1,
+                    y1: geo.y1,
+                    nX: geo.nX, nY: geo.nY,
+                    e0: geo.e0, e1: geo.e1,
+                    attach: geo.attach
+                };
+                const up0 = Math.max(1, geo.up0 * scale);
+                const down0 = Math.max(1, geo.down0 * scale);
+                const up1 = Math.max(1, geo.up1 * scale);
+                const down1 = Math.max(1, geo.down1 * scale);
                 const centerHalf = Math.max(2, (up0 + down0) / 2);
                 const wingHalf = Math.max(2, (up1 + down1) / 2);
-                // Silhouette along the bridge: 0 = hull root, 1 = wing root.
                 const shapeProfile = (t) => {
                     const pinch = Math.abs(t * 2 - 1);
                     if (style === 'plate') return 1;
@@ -75,9 +68,6 @@ extendClass(ShipAssetLoader, {
                     if (style === 'double') return 0.9 + 0.1 * pinch;
                     return 0.75 + 0.25 * pinch;
                 };
-                // Bridge voxels are collected on the ship lattice first, then
-                // outlined and plated like every other hull part, so the
-                // joint reads in the faction style instead of a flat fill.
                 const ox = Math.round(x);
                 const oy = Math.round(y);
                 const cells = new Map();
@@ -85,51 +75,23 @@ extendClass(ShipAssetLoader, {
                     const key = col + ',' + row;
                     if (!cells.has(key) || val === 3) cells.set(key, val);
                 };
-                // Wing-side frame turned with the wing: struts offset from the
-                // joint's centre land on the tilted root, not on a fixed row.
-                const wingDeg = Math.max(-180, Math.min(180,
-                    Number(layout.loadout && layout.loadout.wingRotation) || 0));
-                const ang = wingDeg * Math.PI / 180 * (isLeft ? -1 : 1);
-                const dirX = (isLeft ? -1 : 1) * Math.cos(ang);
-                const dirY = (isLeft ? -1 : 1) * Math.sin(ang);
-                // Normal pointing "down" in the wing's frame for both sides.
-                const nX = isLeft ? dirY : -dirY;
-                const nY = isLeft ? -dirX : dirX;
-                // Bridge end slid along the (turned) wing root; the wing's
-                // attach point stays its rotation pivot.
-                const endShift = Math.max(-1, Math.min(1,
-                    Number(layout.loadout && layout.loadout.wingConnectionYEnd) || 0)) * vis.height * scale * 0.5;
-                // One continuous polygon per strut: the hull end is a vertical
-                // edge tucked into the body, the wing end is the wing root
-                // line turned with the wing and pushed a few voxels into it.
-                // Rasterising that single shape onto the ship lattice keeps
-                // the joint in one piece at any wing angle — building it
-                // column by column plus a separately turned collar split it
-                // into visible chunks.
-                const wingDepth = voxelSize * 3;
-                const drawBridge = (fromY, wingOffset, upA, downA, upB, downB) => {
-                    // A wing swung past 90 degrees points back at the hull: its root faces away, so the bridge meets the side that
-                    // faces the core instead (the far end of the wing along its own direction). Blends in between 90 and 120.
-                    let bx = wingEdge + nX * (wingOffset + endShift) + dirX * wingDepth;
-                    let by = wingY + nY * (wingOffset + endShift) + dirY * wingDepth;
-                    // Meet the wing's real pixels: the lit cells nearest the hull edge, not its geometric root.
-                    if (wingPix) {
-                        bx = x + wingPix.x * scale + nX * (wingOffset + endShift);
-                        by = y + wingPix.y * scale + nY * (wingOffset + endShift);
-                    }
-                    const ax = bridgeStart;
-                    // Hull end: slid along the body's side toward the wing's pivot height, so a turned wing is met by a
-                    // short, nearly straight strut on the side of the hull instead of a long diagonal one.
-                    const slide = Math.max(-centerSeg.height * scale * 0.32, Math.min(centerSeg.height * scale * 0.32, (by - fromY) * 0.7));
-                    const ay = fromY + slide;
-                    // Hull end: vertical edge. Wing end: along the turned root.
-                    const aTop = [ax, ay - upA];
-                    const aBot = [ax, ay + downA];
-                    let bTop = [bx - nX * upB, by - nY * upB];
-                    let bBot = [bx + nX * downB, by + nY * downB];
-                    // Swung past 90 degrees the root line flips: join the top to the top and the bottom to the bottom,
-                    // otherwise the two edges of the bridge cross over.
-                    if (bTop[1] > bBot[1]) { const t = bTop; bTop = bBot; bBot = t; }
+                // One continuous polygon per strut. Corners are paired so the
+                // long sides never cross, even when the root is past 90°.
+                const drawBridge = (hullYOffset, wingOffset, upA, downA, upB, downB) => {
+                    const shifted = Object.assign({}, pxGeo, {
+                        y0: pxGeo.y0 + (Number(hullYOffset) || 0) / scale
+                    });
+                    const c = this.wingBridgeCorners(
+                        shifted, upA / scale, downA / scale, upB / scale, downB / scale, wingOffset / scale
+                    );
+                    const aTop = [x + c.aTop[0] * scale, y + c.aTop[1] * scale];
+                    const aBot = [x + c.aBot[0] * scale, y + c.aBot[1] * scale];
+                    const bTop = [x + c.bTop[0] * scale, y + c.bTop[1] * scale];
+                    const bBot = [x + c.bBot[0] * scale, y + c.bBot[1] * scale];
+                    const ax = x + c.ax * scale;
+                    const ay = y + c.ay * scale;
+                    const bx = x + c.bx * scale;
+                    const by = y + c.by * scale;
                     const pinch = shapeProfile(0.5);
                     const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
                     const mc = mid([ax, ay], [bx, by]);
@@ -138,19 +100,15 @@ extendClass(ShipAssetLoader, {
                     this.markPolygonCells(poly, ox, oy, voxelSize, (col, row) => mark(col, row, 2));
                 };
                 if (style === 'double') {
-                    // Each strut sits on its own side, so the upper one follows
-                    // the "up" extents and the lower one the "down" extents.
-                    // Two struts inside the same outer extents: each is 35 %
-                    // of its side and sits flush with that side's edge.
+                    // Each strut sits on its own side of the outer extents.
                     const sa = (v) => Math.max(voxelSize * 1.5, v * 0.35);
-                    drawBridge(centerY - up0 + sa(up0), -(up1 - sa(up1)), sa(up0), sa(up0), sa(up1), sa(up1));
-                    drawBridge(centerY + down0 - sa(down0), down1 - sa(down1), sa(down0), sa(down0), sa(down1), sa(down1));
+                    drawBridge(-(up0 - sa(up0)), -(up1 - sa(up1)), sa(up0), sa(up0), sa(up1), sa(up1));
+                    drawBridge(down0 - sa(down0), down1 - sa(down1), sa(down0), sa(down0), sa(down1), sa(down1));
                 } else {
                     const m = (v) => Math.max(voxelSize * 1.5, v);
-                    drawBridge(centerY, 0, m(up0), m(down0), m(up1), m(down1));
+                    drawBridge(0, 0, m(up0), m(down0), m(up1), m(down1));
                 }
                 if (style === 'hinge') {
-                    // Hinge caps are accent-coloured voxel blocks.
                     const cap = (cx, cy, half) => {
                         const col0 = Math.round((cx - x) / voxelSize) - 1;
                         const rows = Math.max(1, Math.round(half * 2 / voxelSize));
@@ -160,8 +118,8 @@ extendClass(ShipAssetLoader, {
                             mark(col0 + 1, row0 + r, 3);
                         }
                     };
-                    cap(bridgeStart, centerY, centerHalf);
-                    cap(bridgeEnd + nX * endShift, wingY + nY * endShift, wingHalf);
+                    cap(bridgeStartPx, y + geo.y0 * scale, centerHalf);
+                    cap(x + x1 * scale, y + geo.y1 * scale, wingHalf);
                 }
                 this.drawJointCells(ctx, cells, wingPalette, ox, oy, voxelSize, factionStyle, isLeft ? 0 : 1, 'x', [{
                     x: x + centerSeg.x * scale,

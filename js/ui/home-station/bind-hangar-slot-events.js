@@ -23,41 +23,7 @@ extendClass(HomeStationUI, {
             });
         }
 
-        // The mirrored half of a split pair (also ones added live while
-        // dragging): pan to it and act like the main marker. Delegated once.
-        if (this._mirrorPinClickRoot !== this.overlay) {
-            this._mirrorPinClickRoot = this.overlay;
-            // Grabbing the mirror half of an empty split slot drags the slot
-            // from the mirror's spot (the main marker runs the drag).
-            this.overlay.addEventListener('pointerdown', (e) => {
-                const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
-                const slot = m && m.closest('.hs-hangar-slot.is-empty');
-                const main = slot && slot.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
-                if (!main || e.button !== 0) return;
-                e.preventDefault();
-                e.stopPropagation();
-                this._hangarMirrorGrab = true;
-                try {
-                    main.dispatchEvent(new PointerEvent('pointerdown', {
-                        clientX: e.clientX, clientY: e.clientY, button: 0, buttons: 1,
-                        pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true,
-                        bubbles: true, cancelable: true
-                    }));
-                } finally {
-                    this._hangarMirrorGrab = false;
-                }
-            });
-            this.overlay.addEventListener('click', (e) => {
-                const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
-                if (!m) return;
-                e.preventDefault();
-                e.stopPropagation();
-                const main = m.closest('.hs-hangar-slot').querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
-                if (!main) return;
-                this._hsPanTarget = m;
-                main.click();
-            });
-        }
+        this.ensureHangarMirrorPinGrab();
         this.overlay.querySelectorAll('[data-hangar-slot-toggle]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 if (btn._hsJustDragged) {
@@ -70,17 +36,18 @@ extendClass(HomeStationUI, {
                 e.stopPropagation();
                 const kind = btn.getAttribute('data-hangar-slot-toggle');
                 const index = Number(btn.getAttribute('data-slot-index') || 0);
-                // A slot placed on the ship is already in view: no re-centring.
+                const panTarget = this._hsPanTarget;
                 this._hsPanTarget = null;
                 // Sidebar open: go to the slot's container in the tree; the
                 // slot stays selected instead of toggling open/closed.
-                if (!this._hangarLeftCollapsed && this.focusTreeSlot(kind, index)) {
+                if (this.hangarSidebarOpen() && this.focusTreeSlot(kind, index)) {
                     this._hangarOpenSlot = { kind: kind, index: index };
                     this.overlay.querySelectorAll('.hs-hangar-slot').forEach((el) => {
                         el.classList.toggle('is-open', el.getAttribute('data-slot-kind') === kind
                             && Number(el.getAttribute('data-slot-index')) === index);
                     });
                     this.updateHangarSlotLinks();
+                    if (this.panHangarToSlot) this.panHangarToSlot(kind, index, panTarget);
                     return;
                 }
                 const same = this._hangarOpenSlot
@@ -94,6 +61,8 @@ extendClass(HomeStationUI, {
                     el.classList.toggle('is-open', open);
                 });
                 this.updateHangarSlotLinks();
+                // Pan to the opened slot; keep zoom as-is. Closing skips pan.
+                if (!same && this.panHangarToSlot) this.panHangarToSlot(kind, index, panTarget);
                 // No separate details panel on slot clicks: the slot's own
                 // card (and the tree, when shown) hold its settings.
             });
@@ -172,54 +141,56 @@ extendClass(HomeStationUI, {
                 this._hangarBayResizeObs = null;
             }
             this._hangarBayResizeObs = new ResizeObserver(() => {
-                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
             });
             this._hangarBayResizeObs.observe(stage);
         }
 
-        // Redraw bay after layout settles (stage may start at 0 height).
-        // The very first drawHangarBay() call ran before layout had settled, so it
-        // cached a fit/pan computed off a stale size; drawHangarBay's own "sameView"
-        // dead-band (+/-12%) then treats the now-correct size as unchanged and never
-        // recomputes the pan, leaving the ship off-centre until something (e.g. the
-        // inventory toggle) clears _hangarFit. Clear it here once layout is stable so
-        // this frame does a real refit instead of being absorbed by the dead-band.
-        requestAnimationFrame(() => {
-            this.drawHangarBay();
-            requestAnimationFrame(() => {
-                this._hangarFit = null;
-                this.drawHangarBay();
-            });
-        });
-        // Ship art (faction sprites) can still be arriving on the first frames: redraw a few times so the
-        // ship appears on its own instead of waiting for a hover. Only the first settle pass (below) forces
-        // a real refit; later redraws keep drawHangarBay's sameView dead-band so a manual zoom/pan the
-        // player made in the meantime isn't wiped, and the ship doesn't visibly jump on each late redraw.
-        let bayFitSettled = false;
-        const redraw = () => {
-            if (!this.isVisible || this.tab !== 'hangar') return;
-            if (!bayFitSettled) this._hangarFit = null;
-            this.drawHangarBay();
-        };
-        // Keep the bay canvas hidden until the second draw, so the grey placeholder core never flashes.
-        const bayCanvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
-        // Only on a fresh open of the hangar; a re-render while working (clicking an area) must not blank the bay.
-        // NOTE: create-ui.js calls drawHangarBay() (which stamps _hangarBayStamp = now) immediately
-        // before bindHangarSlotEvents() runs, so comparing against _hangarBayStamp here always measured
-        // ~0ms and "fresh" was always false — the canvas was never actually hidden on a real fresh open,
-        // so the unsettled first paint was visible and the 200ms settle pass then visibly snapped/jumped
-        // to the correct pan/zoom. Track "already settled once" on the overlay itself instead: it starts
-        // unset on every freshly built overlay (page load / hangar first opened) and is set once the first
-        // settle pass has revealed the canvas, so later re-renders on the same overlay never hide it again.
+        // Redraw bay after layout settles (stage may start at 0 height) — but only forcing a
+        // real refit (clearing _hangarFit) on a genuinely fresh hangar open. This whole block
+        // used to run unconditionally on every bindHangarSlotEvents call, which fires on every
+        // re-render (e.g. equipping a part, toggling an area) — so any manual zoom/pan got
+        // thrown away by the very next click, not just on first opening the bay.
+        // Track "already settled once" on the overlay itself: it starts unset on every freshly
+        // built overlay (page load / hangar first opened) and is set once the first settle pass
+        // has revealed the canvas, so later re-renders on the same overlay never hide it again.
         const fresh = !!this.overlay && !this.overlay._hangarBaySettled;
-        if (bayCanvas && fresh) bayCanvas.style.visibility = 'hidden';
-        const reveal = () => {
-            if (bayCanvas) bayCanvas.style.visibility = '';
-            if (this.overlay) this.overlay._hangarBaySettled = true;
-        };
-        setTimeout(() => { redraw(); bayFitSettled = true; reveal(); }, 200);
-        setTimeout(reveal, 700);   // safety: never stay hidden
-        [600, 1500].forEach((ms) => setTimeout(redraw, ms));
+        const bayCanvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
+        if (fresh) {
+            // The very first drawHangarBay() call ran before layout had settled, so it cached a
+            // fit/pan computed off a stale size; drawHangarBay's own "sameView" dead-band
+            // (+/-12%) then treats the now-correct size as unchanged and never recomputes the
+            // pan, leaving the ship off-centre until something clears _hangarFit.
+            requestAnimationFrame(() => {
+                this.drawHangarBay();
+                requestAnimationFrame(() => {
+                    this._hangarFit = null;
+                    this.drawHangarBay();
+                });
+            });
+            // Ship art (faction sprites) can still be arriving on the first frames: redraw a few
+            // times so the ship appears on its own instead of waiting for a hover. Only the first
+            // settle pass forces a real refit; later redraws keep drawHangarBay's sameView
+            // dead-band so a manual zoom/pan the player made in the meantime isn't wiped.
+            let bayFitSettled = false;
+            const redraw = () => {
+                if (!this.isVisible || this.tab !== 'hangar') return;
+                if (!bayFitSettled) this._hangarFit = null;
+                this.drawHangarBay();
+            };
+            // Keep the bay canvas hidden until the second draw, so the grey placeholder core never flashes.
+            if (bayCanvas) bayCanvas.style.visibility = 'hidden';
+            const reveal = () => {
+                if (bayCanvas) bayCanvas.style.visibility = '';
+                if (this.overlay) this.overlay._hangarBaySettled = true;
+            };
+            setTimeout(() => { redraw(); bayFitSettled = true; reveal(); }, 200);
+            setTimeout(reveal, 700);   // safety: never stay hidden
+            [600, 1500].forEach((ms) => setTimeout(redraw, ms));
+        } else {
+            // Re-render while working: just redraw with the existing fit/pan, don't reset it.
+            requestAnimationFrame(() => this.drawHangarBay());
+        }
         // Click (or Enter) on a slot in the SLOTS list opens the part picker.
         if (this.overlay && !this.overlay._slotPickBound) {
             this.overlay._slotPickBound = true;
@@ -234,7 +205,7 @@ extendClass(HomeStationUI, {
         }
         if (!this._hangarPacksBound) {
             this._hangarPacksBound = true;
-            document.addEventListener('vf-faction-packs-ready', () => { if (this.isVisible && this.tab === 'hangar') this.drawHangarBay(); });
+            document.addEventListener('vf-faction-packs-ready', () => { if (this.isVisible && this.hangarBayActive()) this.drawHangarBay(); });
         }
     },
 
@@ -370,15 +341,44 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * The .hs-hangar-slot-pin buttons sit on top of the hangar-bay canvas
-     * (pointer-events: auto, so they can be clicked to open the loadout
-     * dropdown) and therefore intercept every pointerdown on a module icon
-     * before the canvas's own moduleHit/drag code ever sees it — dragging a
-     * module was effectively impossible. This gives each pin its own
-     * pointer-drag: a plain click still opens the dropdown, but a real drag
-     * moves the module, using the same ox/oy/scale/model cached by
-     * drawHangarBay() so both systems agree on where the module actually is.
+     * Mirror half of a split slot → primary pin (drag + click). Shared by the
+     * hangar tab and the anatomy modal; delegated once per overlay.
      */
+    ensureHangarMirrorPinGrab() {
+        if (!this.overlay || this._mirrorPinClickRoot === this.overlay) return;
+        this._mirrorPinClickRoot = this.overlay;
+        this.overlay.addEventListener('pointerdown', (e) => {
+            const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
+            const slot = m && m.closest('.hs-hangar-slot');
+            if (!slot || (!slot.classList.contains('is-empty')
+                && slot.getAttribute('data-slot-kind') !== 'weapon')) return;
+            const main = slot.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+            if (!main || e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this._hangarMirrorGrab = true;
+            try {
+                main.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: e.clientX, clientY: e.clientY, button: 0, buttons: 1,
+                    pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true,
+                    bubbles: true, cancelable: true
+                }));
+            } finally {
+                this._hangarMirrorGrab = false;
+            }
+        });
+        this.overlay.addEventListener('click', (e) => {
+            const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
+            if (!m) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const main = m.closest('.hs-hangar-slot').querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+            if (!main) return;
+            this._hsPanTarget = m;
+            main.click();
+        });
+    },
+
     /**
      * A module's stored x offset is measured from its area's centre, so 0 is
      * exactly centred. Pull the drag onto it within a fixed screen-pixel

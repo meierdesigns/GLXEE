@@ -70,10 +70,18 @@ extendClass(HomeStationUI, {
 
         const mw = Math.max(8, model.width || 20);
         const mh = Math.max(8, model.height || 16);
+        // Anatomy modal has no side-rail slot cards — use tighter gutters and a
+        // higher max scale so wings stay readable instead of thin dark lines.
+        const anatomy = !!this._anatomyModalShipId;
+        const maxFit = anatomy ? 18 : 10;
         // Leave side gutters for slot cards; ship stays centered and clickable
         // (smaller gutters → a bigger default zoom; the wheel still zooms out)
-        const padX = Math.max(48, Math.floor(w * 0.12));
-        const padY = Math.max(20, Math.floor(h * 0.06));
+        const padX = anatomy
+            ? Math.max(24, Math.floor(w * 0.04))
+            : Math.max(48, Math.floor(w * 0.12));
+        const padY = anatomy
+            ? Math.max(16, Math.floor(h * 0.04))
+            : Math.max(20, Math.floor(h * 0.06));
         // Fit the reference hull, not this layout, so moving areas never
         // rescales the ship (it grows/shrinks in place instead).
         const refW = typeof PLAYER_REF_W !== 'undefined' ? PLAYER_REF_W : 36;
@@ -81,15 +89,18 @@ extendClass(HomeStationUI, {
         const fitScale = Math.max(2, Math.min(
             Math.floor((w - padX * 2) / refW),
             Math.floor((h - padY * 2) / refH),
-            10
+            maxFit
         ));
         // The fit scale is sticky per ship and bay size: editing a part
         // grows or shrinks the bounding box, and re-fitting on every change
         // popped the whole ship to a new size.
-        // Inventory open on the left: the ship is fitted and centred in the part of the bay that stays visible.
-        const invPx = this._bayInv ? Math.min(428, Math.floor(w * 0.6)) : 0;
+        // Inventory open on the left: the ship is fitted and centred in the part of the bay
+        // that stays visible. The anatomy modal has no inventory panel at all (and no
+        // toggle to open one) — _bayInv is a persisted global flag left over from a
+        // previous HANGAR tab visit, so it must not skew this view's centring.
+        const invPx = (this._bayInv && !anatomy) ? Math.min(428, Math.floor(w * 0.6)) : 0;
         const wv = w - invPx, cxView = invPx + wv / 2;
-        const fitKey = shipId + '|' + w + '|' + h + '|' + invPx;
+        const fitKey = shipId + '|' + w + '|' + h + '|' + invPx + (anatomy ? '|a' : '');
         // The view (zoom / pan) only starts fresh for another ship or a clearly different bay size. A rebuild of the
         // hangar UI (clicking an area, releasing a drag) lays the canvas out at slightly different sizes first, and
         // re-fitting on each of those threw the user's zoom and pan away.
@@ -104,15 +115,21 @@ extendClass(HomeStationUI, {
             this._hangarFit = { key: fitKey, scale: fitScale, ship: shipId, w: w, h: h };
             const vis = this.measureHangarShipVisible(model, fitScale);
             if (vis) {
-                const padTop = Math.max(110, Math.floor(h * 0.22));
-                const padBottom = Math.max(40, Math.floor(h * 0.15));
-                const padSide = Math.max(40, Math.floor(wv * 0.24));
+                const padTop = anatomy
+                    ? Math.max(36, Math.floor(h * 0.08))
+                    : Math.max(110, Math.floor(h * 0.22));
+                const padBottom = anatomy
+                    ? Math.max(28, Math.floor(h * 0.08))
+                    : Math.max(40, Math.floor(h * 0.15));
+                const padSide = anatomy
+                    ? Math.max(24, Math.floor(wv * 0.06))
+                    : Math.max(40, Math.floor(wv * 0.24));
                 const bw = vis.w / fitScale;
                 const bh = vis.h / fitScale;
                 const s = Math.max(2, Math.min(
                     Math.floor((wv - padSide * 2) / bw),
                     Math.floor((h - padTop - padBottom) / bh),
-                    10
+                    maxFit
                 ));
                 this._hangarFit.scale = s;
                 const ox0 = Math.floor((w - mw * s) / 2);
@@ -131,8 +148,12 @@ extendClass(HomeStationUI, {
             this._hangarRecenter = false;
             const vis = this.measureHangarShipVisible(model, baseScale);
             if (vis) {
-                const padTop = Math.max(110, Math.floor(h * 0.22));
-                const padBottom = Math.max(40, Math.floor(h * 0.15));
+                const padTop = anatomy
+                    ? Math.max(36, Math.floor(h * 0.08))
+                    : Math.max(110, Math.floor(h * 0.22));
+                const padBottom = anatomy
+                    ? Math.max(28, Math.floor(h * 0.08))
+                    : Math.max(40, Math.floor(h * 0.15));
                 const z = Math.max(0.12, Math.min(4, this._hangarBayZoom || 1));
                 const s = baseScale * z;
                 const cx = (vis.x + vis.w / 2) / baseScale * s;

@@ -624,6 +624,48 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 .hs-hangar-weapon-stat[data-stat="armor"]     { color: #7aa8ff; }
 .hs-hangar-weapon-stat[data-stat="energy"]    { color: #ffd24a; }
 .hs-hangar-weapon-stat.is-bad { color: var(--color-danger, #ff4d4d); }
+.hs-hangar-weapon-stat.is-good { color: #6dff8a; }
+/* Downgrade / upgrade vs equipped: number itself lights up, not only the row. */
+.hs-hangar-weapon-stat.is-bad .hs-stat-num {
+    color: #ff6a5d;
+    text-shadow: 0 0 0 1px #05060a, 0 0 8px color-mix(in srgb, #ff4d4d 70%, transparent);
+    font-weight: 700;
+}
+.hs-hangar-weapon-stat.is-good .hs-stat-num {
+    color: #6dff8a;
+    text-shadow: 0 0 0 1px #05060a, 0 0 8px color-mix(in srgb, #6dff8a 70%, transparent);
+    font-weight: 700;
+}
+.hs-hangar-weapon-stat .hs-stat-worse {
+    margin-left: 3px;
+    color: #ff6a5d;
+    font-size: 0.85em;
+}
+.hs-hangar-weapon-stat .hs-stat-better {
+    margin-left: 3px;
+    color: #6dff8a;
+    font-size: 0.85em;
+}
+/* Compact tooltips: same up/down punch on compared weapon numbers. */
+.ui-tooltip-stat.is-bad .hs-stat-num {
+    color: #ff6a5d;
+    text-shadow: 0 0 6px color-mix(in srgb, #ff4d4d 70%, transparent);
+    font-weight: 700;
+}
+.ui-tooltip-stat.is-good .hs-stat-num {
+    color: #6dff8a;
+    text-shadow: 0 0 6px color-mix(in srgb, #6dff8a 70%, transparent);
+    font-weight: 700;
+}
+.ui-tooltip-stat .hs-stat-worse { margin-left: 2px; color: #ff6a5d; font-size: 0.85em; }
+.ui-tooltip-stat .hs-stat-better { margin-left: 2px; color: #6dff8a; font-size: 0.85em; }
+.hs-equip-compare-stats { display: block; margin-top: 6px; }
+.hs-line-desc {
+    display: block;
+    margin-top: 2px;
+    opacity: 0.75;
+    font-size: var(--font-text);
+}
 /* Stat raised by the ship class / faction: bright, glowing, boxed, ▲ marker. */
 .hs-hangar-weapon-stat.is-boosted {
     color: #fff3c4;

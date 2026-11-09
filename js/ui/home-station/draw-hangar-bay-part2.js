@@ -152,8 +152,21 @@ extendClass(HomeStationUI, {
             const side = slotEl.getAttribute('data-slot-side') === 'left' ? 'left' : 'right';
             const startX = (side === 'left' ? cardRect.right : cardRect.left) - layerRect.left;
             const startY = (cardRect.top + cardRect.height / 2) - layerRect.top;
-            const endX = (pinRect.left + pinRect.width / 2) - layerRect.left;
-            const endY = (pinRect.top + pinRect.height / 2) - layerRect.top;
+            const pinCx = (pinRect.left + pinRect.width / 2) - layerRect.left;
+            const pinCy = (pinRect.top + pinRect.height / 2) - layerRect.top;
+            // Stop at the pin's nearest edge, not its centre — several cards can share one
+            // pin, and lines converging dead-centre behind the move handle read as a messy
+            // knot instead of each one visibly pointing at the mount. Ray from the pin
+            // centre out towards the card, clipped where it exits the pin's box.
+            const halfW = pinRect.width / 2;
+            const halfH = pinRect.height / 2;
+            const dx = startX - pinCx;
+            const dy = startY - pinCy;
+            const sx = dx !== 0 ? halfW / Math.abs(dx) : Infinity;
+            const sy = dy !== 0 ? halfH / Math.abs(dy) : Infinity;
+            const s = Math.min(sx, sy, 1);
+            const endX = pinCx + dx * s;
+            const endY = pinCy + dy * s;
             const d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
             const key = kind + ':' + index;
             seen.add(key);

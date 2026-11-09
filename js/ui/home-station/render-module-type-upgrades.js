@@ -449,18 +449,17 @@ extendClass(HomeStationUI, {
     /** One ship row; the thumb canvas is filled later by drawAreaThumbs(). */
     renderShipTableRow(id, thumbClass, note, actionHtml) {
         const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : {};
-        const cls = this.shipClassLabel(this.shipModelClass(id, cfg));
         const val = (v) => (v != null ? v : '—');
         // tip: a multi-line per-part breakdown (e.g. each weapon's own damage) shown as a proper
         // hover tooltip instead of the plain native `title`, for stats that sum several equipped
         // parts into one number — so hovering the total explains what it's made of.
-        const stat = (icon, label, v, col, tip) => {
+        const stat = (icon, label, v, col, tip, key) => {
             const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
             const img = ir && ir.imgHtml ? ir.imgHtml(icon, 14, 'hs-pixel hs-pixel-12', col, false) : this.iconHtml(icon, 14, 'hs-pixel hs-pixel-12', false);
             const tipAttrs = tip
                 ? `data-ui-tip-instant data-ui-tip-head="${label}" data-ui-tip="${String(tip).replace(/"/g, '&quot;')}"`
                 : `title="${label}"`;
-            return `<span class="hs-ship-stat" style="--stat:${col}" ${tipAttrs}><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
+            return `<span class="hs-ship-stat" data-stat="${key || label.toLowerCase()}" style="--stat:${col}" ${tipAttrs}><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
         };
         // HP/Armor/Speed/Damage: live, not the static hull config — getMergedModel() runs the
         // same base-hull → frame-hull-bonus → equipped-ability-stat-mod → weapon-upgrade-bonus
@@ -493,36 +492,172 @@ extendClass(HomeStationUI, {
         // equipped defense modules (massive/heavy armor plating) — both are "how much less
         // damage gets through", so a defense part now actually moves this number too.
         const liveArmor = (Number(merged.armor) || 0) + (Number(merged.damageReduction) || 0);
-        const tipText = [['TIER', cfg.tier], ['HP', merged.maxHealth], ['ARMOR', liveArmor], ['DAMAGE', liveDamage], ['SPEED', merged.speed], ['ENERGY', merged.maxEnergy]]
+        const tier = Math.max(0, Math.round(Number(cfg.tier) || 0));
+        const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+        const tierStarIco = ir && ir.imgHtml
+            ? ir.imgHtml('navStar', 14, 'hs-pixel hs-pixel-12', '#ffe14a', false)
+            : '★';
+        const tierStarsHtml = tier > 0
+            ? (' <span class="hs-ship-tier-stars">' + Array.from({ length: tier }, () =>
+                `<span class="hs-ship-tier-star">${tierStarIco}</span>`).join('') + '</span>')
+            : '';
+        const tipText = [['TIER', tier], ['HP', merged.maxHealth], ['ARMOR', liveArmor], ['DAMAGE', liveDamage], ['SPEED', merged.speed], ['ENERGY', merged.maxEnergy]]
             .map((x) => x[0] + ' ' + val(x[1])).join(' · ')
             + (merged.shieldMax ? ' · SHIELD ' + merged.shieldMax : '');
-        const statsHtml = `<div class="hs-ship-stats">` +
-            stat('navStar', 'Tier', cfg.tier, '#ffe14a') +
-            stat('statHealth', 'Health', merged.maxHealth, '#5cff7a') +
-            stat('statArmor', 'Armor', liveArmor, '#5ce1ff') +
-            stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip) +
-            stat('statSpeed', 'Speed', merged.speed, '#c58bff') +
-            stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a') +
-            `</div>`;
-        return `<tr>` +
-            `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
-            (thumbClass === 'hs-ship-thumb-bp'
-                ? `<span class="hs-ship-thumb-type">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>`
-                : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 32, 'hs-pixel', false)}</span>` +
-                  `<canvas width="56" height="44" data-area-thumb="${id}|"></canvas>`) +
+        // Tier lives as stars after the name — no separate star+value column.
+        // Name → one column per stat, with that stat's equipment slots directly
+        // underneath (Armor→defense, Damage→weapons, Speed→ability, Energy→energy;
+        // Health has hull only, so an empty spacer keeps the row height even).
+        const thumbInner = (thumbClass === 'hs-ship-thumb-bp'
+            ? `<span class="hs-ship-thumb-type">${this.iconHtml('hsShip', 48, 'hs-pixel')}</span>`
+            : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 48, 'hs-pixel', false)}</span>` +
+              `<canvas width="140" height="110" data-area-thumb="${id}|"></canvas>`) +
+            (actionHtml != null ? `<span class="hs-ship-thumb-action">${actionHtml}</span>` : '');
+        return `<tr class="hs-ship-id-row">` +
+            `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}" data-open-anatomy-modal="${id}" data-ui-tip="EDIT ANATOMY" role="button" tabindex="0">` +
+            thumbInner +
             `</span></td>` +
             `<td class="hs-ship-table-name" data-ui-tip="${tipText}">` +
-            statsHtml +
-            `<strong>${this.shipName(id)}</strong>` +
-            // Skip the class line when it would just repeat the ship's own name in full
-            // (e.g. an "Assault" hull simply named "Assault") — nothing new to show twice.
-            (this.shipName(id).trim().toUpperCase() === cls.trim().toUpperCase() && !note
-                ? ''
-                : `<span>${cls}${note ? ' · ' + note : ''}</span>`) +
+            `<strong>${this.shipName(id)}${tierStarsHtml}</strong>` +
+            (() => {
+                const modelClass = (typeof this.shipModelClass === 'function') ? this.shipModelClass(id, cfg) : null;
+                const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+                const caps = (slm && slm.getSlotCaps) ? slm.getSlotCaps(id, modelClass) : {};
+                const loadout = (slm && slm.getLoadout) ? slm.getLoadout(id) : {};
+                // Size level (0 S, 1 M, 2 L) sizes the dot itself and is spelled out in
+                // the tooltip head, same S/M/L the hangar slot-upgrade menu uses.
+                const SIZE_LABEL = ['S', 'M', 'L'];
+                const BUCKET_OF = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' };
+                const dot = (kind, label, filledId, split, sizeLevel) => {
+                    // Full item tooltip (name, description, stats, type/tier) — not just
+                    // the bare name — same detail level the storage-grid cells show.
+                    const tip = filledId
+                        ? String(this.hangarModuleTip(kind, filledId) || this.hangarModuleLabel(filledId)).replace(/"/g, '&quot;')
+                        : (split
+                            ? ('EMPTY SPLIT ' + label + ' SLOT · L/R PAIR')
+                            : ('EMPTY ' + label + ' SLOT'));
+                    const lv = Math.max(0, Math.min(2, Number(sizeLevel) || 0));
+                    const sizeTag = SIZE_LABEL[lv];
+                    // Hidden physical-item casing, same art the storage grid uses — invisible on
+                    // the dot itself (0×0), but ui-tooltip.js picks up its .hs-item-body
+                    // background-image to show the actual item icon in the tooltip head.
+                    let icon = '';
+                    if (filledId && this._storageItemMeta && typeof physicalItem !== 'undefined') {
+                        const meta = this._storageItemMeta(BUCKET_OF[kind] || 'weapons', filledId);
+                        icon = physicalItem.wrap(meta.kind, meta.physId, 48, 48, meta.color, '');
+                    }
+                    return `<span class="hs-ship-slot-dot hs-ship-slot-dot-size-${lv}${filledId ? ' is-filled' : ''}${split ? ' is-split' : ''}" data-slot-kind="${kind}" data-slot-size="${sizeTag}"` +
+                        (filledId ? ` data-module-id="${filledId}"` : '') +
+                        ` data-ui-tip-instant data-ui-tip-head="${label} · ${sizeTag}" data-ui-tip="${tip}">${icon}</span>`;
+                };
+                // Weapons are positional (weaponSlots[i] === null means that exact slot is
+                // empty); the other categories have no slot index, so the first N equipped
+                // ids fill the first N dots and the rest render empty.
+                const padDots = (kind, label, ids, count, isSplit) => {
+                    const list = ids || [];
+                    const out = [];
+                    for (let i = 0; i < (count || 0); i++) {
+                        const split = isSplit && isSplit(i);
+                        let sizeLevel = (slm && slm.getSlotSizeLevel) ? slm.getSlotSizeLevel(id, kind, i) : 1;
+                        // A split mount's own slot level is stored as S (it's a pair of
+                        // half-size sockets) but displays as its full M/L mount size —
+                        // same bump shipLoadoutManager.partFitsSlot applies for fit checks.
+                        if (split) sizeLevel = Math.max(sizeLevel, 1);
+                        out.push(dot(kind, label, list[i] || null, split, sizeLevel));
+                    }
+                    return out;
+                };
+                // loadout.weaponSlots only lists slots currently in use — pad it out to every
+                // mount the ship actually has (weaponMountSlots(caps.weapons)) so unused mounts
+                // show up as empty dots too, not just the ones already touched.
+                const weaponMounts = (slm && slm.weaponMountSlots) ? slm.weaponMountSlots(caps.weapons) : (loadout.weaponSlots || []).length;
+                // A split weapon mount is a mirrored pair (wing/split guns) sharing one
+                // dot — mark it so the CSS can draw a vertical divider through it.
+                const isSplitWeapon = (i) => (slm && slm.isSplitSlot) ? slm.isSplitSlot(id, 'weapon', i) : false;
+                const weaponDots = padDots('weapon', 'WEAPON', loadout.weaponSlots, Math.max(weaponMounts, (loadout.weaponSlots || []).length), isSplitWeapon);
+                const defenseDots = padDots('defense', 'SHIELD', loadout.defenses, caps.defenses);
+                const abilityDots = padDots('ability', 'ABILITY', loadout.abilities, caps.abilities);
+                const energyDots = padDots('energy', 'ENERGY', loadout.energy, caps.energy);
+                // One column = one stat + its matching slot kind under it. Multiple mounts
+                // of the same kind share that column (side by side), so a second gun never
+                // pushes Energy's bar under Speed.
+                const col = (key, statHtml, dots) => {
+                    const dotsHtml = (dots && dots.length)
+                        ? `<span class="hs-ship-slot-dots">${dots.join('')}</span>`
+                        : `<span class="hs-ship-slot-dots is-empty" aria-hidden="true"></span>`;
+                    return `<div class="hs-ship-meta-col" data-stat-col="${key}">${statHtml}${dotsHtml}</div>`;
+                };
+                return `<div class="hs-ship-meta">` +
+                    col('health', stat('statHealth', 'Health', merged.maxHealth, '#5cff7a', null, 'health'), []) +
+                    col('armor', stat('statArmor', 'Armor', liveArmor, '#5ce1ff', null, 'armor'), defenseDots) +
+                    col('damage', stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip, 'damage'), weaponDots) +
+                    col('speed', stat('statSpeed', 'Speed', merged.speed, '#c58bff', null, 'speed'), abilityDots) +
+                    col('energy', stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a', null, 'energy'), energyDots) +
+                    (note ? `<span class="hs-ship-meta-note">${note}</span>` : '') +
+                    `</div>`;
+            })() +
             `</td>` +
-            (actionHtml != null
-                ? `<td class="hs-ship-table-action">${actionHtml}</td>`
-                : '') +
             `</tr>`;
+    },
+
+    /** Hovering a ship row's slot dot highlights the same module's icon wherever
+     * else it's shown on screen (parts list / hangar grid), matched by the id
+     * both sides already carry (data-module-id here, data-part-id there). */
+    bindShipSlotDotHoverHighlight() {
+        if (!this.overlay) return;
+        // Bound once on the overlay root (stable for the UI's whole lifetime), not on
+        // the ship table itself — that table is torn down and rebuilt on every tab
+        // switch/refresh, so a listener attached to it (even re-attached per render)
+        // can race a cached/soft re-render that skips the rebind step and silently
+        // leave hovering dead with no console error.
+        if (this.overlay.dataset.slotDotHoverBound === '1') return;
+        this.overlay.dataset.slotDotHoverBound = '1';
+        const clearHighlight = () => {
+            this.overlay.querySelectorAll('.is-slot-hover-highlight').forEach((el) => el.classList.remove('is-slot-hover-highlight'));
+        };
+        const escId = (id) => (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(id) : id;
+        this.overlay.addEventListener('pointerover', (e) => {
+            const dot = e.target && e.target.closest ? e.target.closest('.hs-ship-slot-dot[data-module-id]') : null;
+            if (dot) {
+                const id = dot.getAttribute('data-module-id');
+                clearHighlight();
+                if (this.clearShipStatCompareMarks) this.clearShipStatCompareMarks();
+                dot.classList.add('is-slot-hover-highlight');
+                this.overlay.querySelectorAll(`[data-part-id="${escId(id)}"]`).forEach((el) => el.classList.add('is-slot-hover-highlight'));
+                return;
+            }
+            // Reverse direction: hovering an assigned item (storage grid / parts
+            // list) pulses the matching slot dot(s) on the ship row.
+            const item = e.target && e.target.closest ? e.target.closest('[data-part-id]') : null;
+            if (!item) return;
+            const id = item.getAttribute('data-part-id');
+            clearHighlight();
+            if (this.clearShipStatCompareMarks) this.clearShipStatCompareMarks();
+            item.classList.add('is-slot-hover-highlight');
+            this.overlay.querySelectorAll(`.hs-ship-slot-dot[data-module-id="${escId(id)}"]`).forEach((el) => el.classList.add('is-slot-hover-highlight'));
+            // Storage weapon hover: punch ship damage green/red vs the mounted gun.
+            if (item.getAttribute('data-part-kind') === 'weapon' && this.markShipStatCompareForWeapon) {
+                const shipId = item.getAttribute('data-drag-ship')
+                    || item.getAttribute('data-ship')
+                    || (typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+                        ? ((profileManager.getActiveProfile() || {}).activeShipId || '') : '');
+                if (shipId) this.markShipStatCompareForWeapon(shipId, id);
+            }
+        });
+        this.overlay.addEventListener('pointerout', (e) => {
+            const source = (e.target && e.target.closest) ? e.target.closest('.hs-ship-slot-dot[data-module-id], [data-part-id]') : null;
+            if (!source) return;
+            const related = (e.relatedTarget && e.relatedTarget.closest) ? e.relatedTarget.closest('.hs-ship-slot-dot[data-module-id], [data-part-id]') : null;
+            if (related === source) return;
+            clearHighlight();
+            if (this.clearShipStatCompareMarks) this.clearShipStatCompareMarks();
+            // Keep equipment-tab selection marks if a part stays selected.
+            if (this.markShipStatsWorseForSelected && this.expandedEquipItem) {
+                const p = typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+                    ? profileManager.getActiveProfile() : null;
+                const shipId = (p && p.activeShipId) || '';
+                if (shipId) this.markShipStatsWorseForSelected(shipId);
+            }
+        });
     },
 });

@@ -352,14 +352,23 @@ extendClass(ShipAssetLoader, {
 
     /** Resolve the faction color/silhouette style for a player hull, or null when not applicable. */
     resolvePlayerFactionStyle(shipModel) {
-        if (!this.isPlayerHullModel(shipModel)) return null;
+        // Hangar / anatomy previews must still get the pilot's faction silhouette
+        // even when modelClass is missing briefly — otherwise every area falls
+        // back to modular and reads as an upside-down H.
+        if (shipModel && shipModel.forceEnemyOrientation) return null;
+        if (!this.isPlayerHullModel(shipModel) && !(shipModel && (shipModel.type === 'player' || shipModel.modular))) {
+            return null;
+        }
         if (typeof factionShipStyles === 'undefined' || !factionShipStyles.getFactionStyle) return null;
-        let faction = shipModel.faction;
+        let faction = shipModel && shipModel.faction;
         if (!faction && typeof profileManager !== 'undefined' && profileManager.hasActiveProfile()) {
             faction = profileManager.getActiveProfile().faction;
         }
         if (!faction && typeof factionManager !== 'undefined' && factionManager.getAllegiance) {
             faction = factionManager.getAllegiance();
+        }
+        if (!faction && typeof factionShipStyles.resolveActiveFaction === 'function') {
+            faction = factionShipStyles.resolveActiveFaction();
         }
         if (!faction) faction = 'terran';
         return factionShipStyles.getFactionStyle(faction);

@@ -147,7 +147,7 @@ extendClass(HomeStationUI, {
         if (!id || !model || !model.layout) return null;
         // Same rule as the marker: only while its panel or the sidebar is open.
         const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
-            || !this._hangarLeftCollapsed;
+            || this.hangarSidebarOpen();
         if (!panelOpen) return null;
         return this.hangarJointBand(model, scale, id);
     },
@@ -177,29 +177,28 @@ extendClass(HomeStationUI, {
         }
         const path = this.hangarConnectionPaths(model, scale).find((p) => p.id === id);
         if (!path) return null;
-        const loadout = model.layout.loadout || {};
-        const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
-        const left = id === 'wingLeft';
-        // Same frame renderHullSegments uses for the wing-side edge.
-        const ang = deg * Math.PI / 180 * (left ? -1 : 1);
-        const dirX = (left ? -1 : 1) * Math.cos(ang);
-        const dirY = (left ? -1 : 1) * Math.sin(ang);
-        const n1 = left ? [dirY, -dirX] : [-dirY, dirX];
+        // Normals + optional silhouette corners from wingBridgeGeometry.
         return {
             id, kind: 'wing',
             x0: path.x0, y0: path.y0, x1: path.x1, y1: path.y1,
             half0: path.half0, half1: path.half1,
             up0: path.up0, down0: path.down0, up1: path.up1, down1: path.down1,
-            n0: [0, 1], n1
+            n0: path.n0 || [0, 1], n1: path.n1 || [0, 1],
+            e0Override: path.e0 || null,
+            e1Override: path.e1 || null
         };
     },
     /** The joint's four corners and the midpoints of its two long sides. */
     hangarJointCorners(band) {
-        // side "-1" = up / left of the edge, "+1" = down / right.
+        // side "-1" = nose / up, "+1" = aft / down — same mapping the renderer uses.
         const s0 = [band.x0 - band.n0[0] * band.up0, band.y0 - band.n0[1] * band.up0];
         const s1 = [band.x0 + band.n0[0] * band.down0, band.y0 + band.n0[1] * band.down0];
-        const e0 = [band.x1 - band.n1[0] * band.up1, band.y1 - band.n1[1] * band.up1];
-        const e1 = [band.x1 + band.n1[0] * band.down1, band.y1 + band.n1[1] * band.down1];
+        // Prefer the wing's nearest-edge corners so the marker hugs the same
+        // side the voxels meet.
+        const e0 = band.e0Override
+            || [band.x1 - band.n1[0] * band.up1, band.y1 - band.n1[1] * band.up1];
+        const e1 = band.e1Override
+            || [band.x1 + band.n1[0] * band.down1, band.y1 + band.n1[1] * band.down1];
         const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
         return { s0, s1, e0, e1, side0: mid(s0, e0), side1: mid(s1, e1) };
     },
@@ -266,7 +265,7 @@ extendClass(HomeStationUI, {
      */
     hangarRotatableWings() {
         const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
-            || !this._hangarLeftCollapsed;
+            || this.hangarSidebarOpen();
         const selected = panelOpen ? this._hangarSelectedArea : null;
         const wings = new Set();
         if (selected === 'wingLeft' || selected === 'wingRight') wings.add(selected);
@@ -276,41 +275,33 @@ extendClass(HomeStationUI, {
         return [...wings];
     },
     /**
-     * Rotation knob position in layout units: the middle of the wing's
-     * outer edge, swung with the wing around its root pivot, then pushed a
-     * fixed screen distance further out.
+     * Rotation knob position in layout units: fixed on the outer left/right
+     * of the upright scale frame (AABB). Tracks wing size, but never swings
+     * with wingRotation — left stays left, right stays right. Stem Y follows
+     * the attach pivot (real rotation axis), not the AABB mid — swept wings
+     * leave empty bbox space that drifts the mid off the axis.
      */
     hangarWingRotateHandle(wingId, model, scale) {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         const seg = model && model.layout && (model.layout.segments || []).find((s) => s.id === wingId);
         if (!seg || !loader || !loader.wingVisibleRect) return null;
-        const vis = loader.wingVisibleRect(seg, model, scale);
-        const pivot = loader.wingAttachPoint(seg, model, scale);
+        const frame = this.hangarSegmentFrame
+            ? this.hangarSegmentFrame(seg, model, scale)
+            : loader.wingVisibleRect(seg, model, scale);
+        if (!frame) return null;
+        const pivot = loader.wingAttachPoint
+            ? loader.wingAttachPoint(seg, model, scale)
+            : { x: frame.x + frame.width * 0.5, y: frame.y + frame.height * 0.5 };
         const left = wingId === 'wingLeft';
-        const tipX = left ? vis.x : vis.x + vis.width;
-        const tipY = vis.y + vis.height * 0.5;
-        const rot = this.hangarSegmentRotation(wingId, model, scale);
-        const angle = rot ? rot.angle : 0;
-        const dx = tipX - pivot.x;
-        const dy = tipY - pivot.y;
-        const x = pivot.x + dx * Math.cos(angle) - dy * Math.sin(angle);
-        const y = pivot.y + dx * Math.sin(angle) + dy * Math.cos(angle);
-        const len = Math.max(0.0001, Math.hypot(x - pivot.x, y - pivot.y));
-        // Far enough out that the (large) knob clears the wing tip.
+        const tipX = left ? frame.x : frame.x + frame.width;
+        const tipY = Math.max(frame.y, Math.min(frame.y + frame.height, pivot.y));
         const push = 28 / Math.max(1, scale);
-        // Always on the outer side of the ship: a wing swung inward must not put the knob over the hull.
         const outward = left ? -1 : 1;
-        let kx = x + (x - pivot.x) / len * push;
-        let ky = y + (y - pivot.y) / len * push;
-        if ((kx - pivot.x) * outward < vis.width * 0.5) {
-            kx = pivot.x + outward * (vis.width * 0.5 + push);
-            ky = y;
-        }
         return {
-            x: kx,
-            y: ky,
-            tipX: x,
-            tipY: y,
+            x: tipX + outward * push,
+            y: tipY,
+            tipX: tipX,
+            tipY: tipY,
             pivot
         };
     },

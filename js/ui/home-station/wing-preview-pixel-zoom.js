@@ -128,20 +128,59 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * A wing's editable frame is the part its cropped art actually covers, so
-     * the selection box and drag zones sit on the visible wing rather than
-     * around empty space the crop left behind.
+     * A wing's editable frame is the axis-aligned box around the art that is
+     * actually on screen: start from the cropped visible rect, then if the
+     * wing is rotated take the AABB of its lit cells after rotation so the
+     * upright scale rectangle fits the silhouette (not the empty corners of
+     * the unrotated rect, which pad swept wings off-axis).
      */
     hangarSegmentFrame(seg, model, scale) {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         if (!loader || !loader.wingVisibleRect) return seg;
-        return loader.wingVisibleRect(seg, model, scale);
+        const vis = loader.wingVisibleRect(seg, model, scale);
+        if (!vis || (seg.id !== 'wingLeft' && seg.id !== 'wingRight')) return vis || seg;
+        const rot = this.hangarSegmentRotation(seg.id, model, scale);
+        if (!rot || !rot.angle) return vis;
+        const cos = Math.cos(rot.angle);
+        const sin = Math.sin(rot.angle);
+        const px = rot.pivot.x;
+        const py = rot.pivot.y;
+        const lit = loader.wingLitCells && loader.wingLitCells(seg, model, scale);
+        const half = lit && lit.cell ? lit.cell * 0.5 : 0;
+        const pts = (lit && lit.pts && lit.pts.length)
+            ? lit.pts
+            : [
+                [vis.x, vis.y],
+                [vis.x + vis.width, vis.y],
+                [vis.x, vis.y + vis.height],
+                [vis.x + vis.width, vis.y + vis.height]
+            ];
+        let x0 = Infinity;
+        let y0 = Infinity;
+        let x1 = -Infinity;
+        let y1 = -Infinity;
+        pts.forEach(([x, y]) => {
+            const dx = x - px;
+            const dy = y - py;
+            const rx = px + dx * cos - dy * sin;
+            const ry = py + dx * sin + dy * cos;
+            if (rx - half < x0) x0 = rx - half;
+            if (rx + half > x1) x1 = rx + half;
+            if (ry - half < y0) y0 = ry - half;
+            if (ry + half > y1) y1 = ry + half;
+        });
+        return {
+            id: seg.id,
+            x: x0,
+            y: y0,
+            width: Math.max(0.5, x1 - x0),
+            height: Math.max(0.5, y1 - y0)
+        };
     },
 
     /**
-     * Rotation a wing's frame and hit area share with its art: same angle and
-     * same root pivot renderProceduralWing uses, so the selection box tilts
-     * with the wing instead of staying axis-aligned beside it.
+     * Wing art rotation (root pivot + angle). Used by the rotate knob and
+     * procedural wing draw — not by the scale frame, which stays axis-aligned.
      */
     hangarSegmentRotation(segId, model, scale) {
         if (segId !== 'wingLeft' && segId !== 'wingRight') return null;
@@ -158,18 +197,12 @@ extendClass(HomeStationUI, {
         };
     },
 
-    /** Map a layout point into a segment's own (possibly rotated) space. */
+    /**
+     * Scale/hit points stay in unrotated layout space so resize grips are
+     * always upright rectangles, matching the drawn scale frame.
+     */
     hangarSegmentLocalPoint(pt, segId, model, scale) {
-        const rot = this.hangarSegmentRotation(segId, model, scale);
-        if (!rot) return pt;
-        const cos = Math.cos(-rot.angle);
-        const sin = Math.sin(-rot.angle);
-        const dx = pt.lx - rot.pivot.x;
-        const dy = pt.ly - rot.pivot.y;
-        return {
-            lx: rot.pivot.x + dx * cos - dy * sin,
-            ly: rot.pivot.y + dx * sin + dy * cos
-        };
+        return pt;
     },
 
     /**
@@ -182,62 +215,39 @@ extendClass(HomeStationUI, {
         const center = segments.find((seg) => seg.id === 'center');
         if (!center) return [];
         const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
-        const connectionY = Number(loadout.wingConnectionY) || 0;
         const connectionWidth = Number(loadout.wingConnectionWidth) || 0.1;
         const endWidth = Number(loadout.wingConnectionWidthEnd) || connectionWidth;
-        const style = loadout.wingConnectionStyle || 'strut';
         const loader = graphicsManager.shipAssetLoader;
+        if (!loader || !loader.wingBridgeGeometry) return [];
         return segments
             .filter((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight')
             .filter((seg) => {
-                // Same visibility rule as the renderer: no bridge, no hit.
-                const isLeft = seg.id === 'wingLeft';
-                const attach = loader.wingAttachPoint(seg, model, scale);
-                const edge = isLeft ? center.x : center.x + center.width;
+                const geo = loader.wingBridgeGeometry(seg, center, model, scale);
                 return loader.wingConnectionVisible(
-                    model.layout, isLeft, edge * scale, attach.x * scale, scale
+                    model.layout, geo.left, geo.x0 * scale, geo.attach.x * scale, scale
                 );
             })
             .map((seg) => {
-                const left = seg.id === 'wingLeft';
-                const attach = graphicsManager.shipAssetLoader.wingAttachPoint(seg, model, scale);
-                // Same wing-end shift as renderHullSegments (along the turned root).
-                const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
-                const ang = deg * Math.PI / 180 * (left ? -1 : 1);
-                const dX = (left ? -1 : 1) * Math.cos(ang);
-                const dY = (left ? -1 : 1) * Math.sin(ang);
-                const nX = left ? dY : -dY;
-                const nY = left ? -dX : dX;
-                const endShift = Math.max(-1, Math.min(1, Number(loadout.wingConnectionYEnd) || 0))
-                    * loader.wingVisibleRect(seg, model, scale).height * 0.5;
-                const hullEdgeX = left ? center.x : center.x + center.width;
-                const hullYc = center.y + center.height * (0.5 + connectionY * 0.5);
-                const pixEnd = loader.wingBridgeEnd(seg, model, scale, hullEdgeX, hullYc);
-                const endY = pixEnd ? pixEnd.y + nY * endShift : attach.y + nY * endShift;
+                // Same trapezoid the renderer draws — one geometry source, so
+                // the hit band and the voxels cannot drift apart.
+                const geo = loader.wingBridgeGeometry(seg, center, model, scale);
                 return {
                     id: seg.id,
-                    left: left,
-                    x0: left ? center.x : center.x + center.width,
-                    // Hull end slid toward the wing pivot height, like the renderer (hull-segment-parts.js).
-                    y0: center.y + center.height * (0.5 + connectionY * 0.5) + Math.max(-center.height * 0.32, Math.min(center.height * 0.32, (endY - (center.y + center.height * (0.5 + connectionY * 0.5))) * 0.7)),
-                    // The bridge meets the wing's real pixels (see wingBridgeEnd), shifted along the turned root like the renderer.
-                    x1: pixEnd ? pixEnd.x + nX * endShift : attach.x + nX * endShift,
-                    y1: endY,
-                    // Outer extents exactly as renderHullSegments draws them:
-                    // plate widens the band, double splits it into two
-                    // struts whose outer edges reach further out.
-                    ...(() => {
-                        const sides = loader.wingJointSides(model.layout.loadout);
-                        // Same rule as the renderer: style never changes the
-                        // outer extents, only strength does.
-                        const hullUnit = center.height;
-                        const wingUnit = loader.wingVisibleRect(seg, model, scale).height * 1.2;
-                        const up0 = Math.max(1, hullUnit * sides.up0);
-                        const down0 = Math.max(1, hullUnit * sides.down0);
-                        const up1 = Math.max(1, wingUnit * sides.up1);
-                        const down1 = Math.max(1, wingUnit * sides.down1);
-                        return { up0, down0, up1, down1, half0: (up0 + down0) / 2, half1: (up1 + down1) / 2 };
-                    })(),
+                    left: geo.left,
+                    x0: geo.x0,
+                    y0: geo.y0,
+                    x1: geo.x1,
+                    y1: geo.y1,
+                    n0: geo.n0,
+                    n1: geo.n1,
+                    e0: geo.e0,
+                    e1: geo.e1,
+                    up0: geo.up0,
+                    down0: geo.down0,
+                    up1: geo.up1,
+                    down1: geo.down1,
+                    half0: geo.half0,
+                    half1: geo.half1,
                     half: Math.max(4, center.height * Math.max(connectionWidth, endWidth))
                 };
             });

@@ -627,6 +627,73 @@
     opacity: 1;
 }
 
+/* --- Hangar left sidebar: ship picker dropdown, sits above the SLOTS/PARTS toggle
+   (ship picking used to be its own sidebar tab; now it's just which ship is "open"). */
+.hs-hangar-ship-dropdown-row {
+    padding: 8px 10px 0;
+}
+.hs-hangar-ship-dropdown {
+    position: relative;
+}
+.hs-hangar-ship-dropdown-btn {
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    font: inherit;
+    letter-spacing: 0.08em;
+    background: color-mix(in srgb, var(--color-primary) 14%, #05060a);
+    color: var(--color-text, #fff);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    cursor: pointer;
+}
+.hs-hangar-ship-dropdown-btn:hover,
+.hs-hangar-ship-dropdown.is-open .hs-hangar-ship-dropdown-btn {
+    border-color: var(--color-primary);
+}
+.hs-hangar-ship-dropdown-arrow {
+    flex: 0 0 auto;
+    transition: transform 0.1s ease;
+}
+.hs-hangar-ship-dropdown.is-open .hs-hangar-ship-dropdown-arrow {
+    transform: rotate(180deg);
+}
+.hs-hangar-ship-dropdown-list {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 6;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #0a0912;
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    border-top: none;
+}
+.hs-hangar-ship-dropdown.is-open .hs-hangar-ship-dropdown-list {
+    display: block;
+}
+.hs-hangar-ship-dropdown-item {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    padding: 8px 10px;
+    font: inherit;
+    letter-spacing: 0.08em;
+    background: transparent;
+    color: var(--color-text, #fff);
+    border: 0;
+    cursor: pointer;
+}
+.hs-hangar-ship-dropdown-item:hover,
+.hs-hangar-ship-dropdown-item.is-active {
+    background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
 /* --- Hangar left sidebar: AREAS / PARTS toggle + parts grid. */
 .hs-hangar-view-toggle {
     display: inline-flex;
@@ -814,6 +881,11 @@ html body .hs-bay-inv .hs-pick-cell.is-dragging {
 body.hs-part-grabbing,
 body.hs-part-grabbing * {
     cursor: grabbing !important;
+}
+/* Dragging onto a full destination (station bay over capacity): lock/block cursor. */
+body.hs-part-grabbing.hs-drop-blocked,
+body.hs-part-grabbing.hs-drop-blocked * {
+    cursor: not-allowed !important;
 }
 .hs-hangar-slot.is-drop-target .hs-hangar-slot-pin {
     opacity: 1 !important;

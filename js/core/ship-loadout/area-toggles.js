@@ -11,9 +11,48 @@
 //               wing weapon moves into a free nose slot
 const TOGGLEABLE_AREAS = ['front', 'wing', 'back'];
 
+/**
+ * Per-hull anatomy signature: which areas the stock profile is built without.
+ * Matches starter-kit roleOff — scrap has no wings, interceptor no aft,
+ * heavy no nose (core gun), assault keeps the full frame.
+ */
+const SHIP_ROLE_OFF_AREAS = {
+    player_scrap: ['wing'],
+    player: ['wing'],
+    player_interceptor: ['back'],
+    player_kronax_raider: ['back'],
+    player_heavy: ['front'],
+    player_assault: []
+};
+
+const SHIP_ROLE_CORE_GUN = {
+    player_heavy: 'split'
+};
+
 extendClass(ShipLoadoutManager, {
     getToggleableAreas() {
         return TOGGLEABLE_AREAS.slice();
+    },
+
+    /** Area ids this hull profile is built without (nose / aft / wings). */
+    getShipRoleOffAreas(shipId) {
+        const id = String(shipId || '');
+        const off = SHIP_ROLE_OFF_AREAS[id];
+        return off ? off.slice() : [];
+    },
+
+    /** disabledAreas object for a hull's stock anatomy signature. */
+    getShipRoleDisabledAreas(shipId) {
+        const out = { front: false, back: false, wing: false };
+        this.getShipRoleOffAreas(shipId).forEach((a) => {
+            if (TOGGLEABLE_AREAS.indexOf(a) !== -1) out[a] = true;
+        });
+        return out;
+    },
+
+    /** Heavy (and similar) profiles mount the starter gun in the core. */
+    getShipRoleCoreGun(shipId) {
+        return SHIP_ROLE_CORE_GUN[String(shipId || '')] || null;
     },
 
     isAreaEnabled(shipId, areaId) {

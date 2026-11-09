@@ -105,17 +105,22 @@ extendClass(ShipLoadoutManager, {
 
         // --- Base segment geometry (layout units inside core) ---
         const segGap = Math.max(0, Number(this.segmentGap) || 0);
-        const wingGap = Math.max(0, Number(this.wingGap) || 0);
+        // Voidborn (and any focus.wingGap faction) float the wings off the hull.
+        let wingGap = Math.max(0, Number(this.wingGap) || 0);
+        if (faction && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionFocus) {
+            const focus = factionShipStyles.getFactionFocus(faction);
+            if (focus && focus.wingGap) {
+                wingGap = Math.max(wingGap, Math.max(1, Math.round(coreWidth * 0.08)));
+            }
+        }
         const segmentScale = this.applyFactionAnatomy(this.normalizeSegmentScale(L.segmentScale), faction);
         const segmentOffset = this.normalizeSegmentOffset(L.segmentOffset);
         const moduleOffset = this.normalizeModuleOffset(L.moduleOffset);
-        // Without a custom anatomy the hull uses spaceship proportions: a
-        // long tapered nose, a compact aft and broad wings. The sprite UV
-        // bands are tuned for cropping art and made a stubby nose cap, a
-        // tall block body and pencil-thin wings when used as hull sizes.
-        const hullBands = L.segmentUv
-            ? { front: uv.front.h, back: uv.back.h, wing: uv.wing.h }
-            : { front: 0.32, back: 0.2, wing: 0.62 };
+        // Sprite UV bands crop source art only — never use them as hull sizes.
+        // Doing so made a stubby nose, tall block body and pencil wings that
+        // read as an upside-down H instead of the faction's anatomy.
+        // Faction shape still arrives via applyFactionAnatomy on segmentScale.
+        const hullBands = { front: 0.32, back: 0.2, wing: 0.62 };
         let frontH = Math.max(2, Math.round(coreHeight * hullBands.front));
         let backH = Math.max(2, Math.round(coreHeight * hullBands.back));
         let centerH = Math.max(2, coreHeight - frontH - backH);
@@ -199,9 +204,11 @@ extendClass(ShipLoadoutManager, {
         );
         // Wings are always independent geometry, even when no wing module is
         // installed. This lets the player move both mirrored wings inward.
+        // Always use ship proportions (never UV crop widths) so wings stay
+        // broad enough to read as the faction's planform, not pencil stubs.
         wingSpan = Math.max(
             edgeMs + 1,
-            expandWing || Math.round(coreWidth * (L.segmentUv ? 0.24 : 0.42)),
+            expandWing || Math.round(coreWidth * 0.42),
             Math.min(3, Math.max(1, wingNeed)) * edgeMs
         );
         wingSpan = Math.max(2, Math.round(wingSpan * segmentScale.wing.x));
@@ -254,13 +261,12 @@ extendClass(ShipLoadoutManager, {
             frontY - wingTravel,
             Math.min(
                 Math.max(frontY, hullBottom - wingH) + wingTravel,
-                Math.floor(baseFrontH + segGap + (baseCenterH - wingH) * (L.segmentUv ? 0.5 : 0.8) + wingShiftY)
+                Math.floor(baseFrontH + segGap + (baseCenterH - wingH) * 0.8 + wingShiftY)
             )
         );
         // Default anatomy seats the wing roots on the fuselage flank instead
         // of the wider core edge, which left a gap only a thin strut crossed.
-        const wingShiftX = Math.round(coreWidth * L.wingOffsetX)
-            - (L.segmentUv ? 0 : scaledCenterX);
+        const wingShiftX = Math.round(coreWidth * L.wingOffsetX) - scaledCenterX;
 
         return {
             coreWidth, coreHeight, L, ms, gap, evenSize, edgeMs, centerMs, hullMid, parts,

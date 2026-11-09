@@ -2,6 +2,11 @@
 
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
+    /** True if segments AB and CD cross (proper intersection test, not just bounding boxes). */
+    segmentsCross(a, b, c, d) {
+        const ccw = (p, q, r) => (r[1] - p[1]) * (q[0] - p[0]) > (q[1] - p[1]) * (r[0] - p[0]);
+        return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+    },
     /**
      * Focus marker for a hull-to-wing connection: the bridge band itself,
      * since it is too thin to read as "selected" from a bounding box.
@@ -18,10 +23,10 @@ extendClass(HomeStationUI, {
         ctx.fillStyle = accent;
         ctx.beginPath();
         if (k) {
-            // Wing end corners ordered top / bottom so the outline never crosses when the wing swings past 90 degrees.
-            const eTop = k.e0[1] <= k.e1[1] ? k.e0 : k.e1;
-            const eBot = eTop === k.e0 ? k.e1 : k.e0;
-            [k.s0, eTop, eBot, k.s1].forEach((p, i) => {
+            // hangarJointCorners already resolves e0/e1 into the non-crossing pairing
+            // with s0/s1 (it has to, since the handles and side midpoints read through
+            // it too) — just draw the quad in that order.
+            [k.s0, k.e0, k.e1, k.s1].forEach((p, i) => {
                 const [x, y] = pt(p);
                 if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
             });
@@ -129,7 +134,7 @@ extendClass(HomeStationUI, {
         if (!this._hangarAnimTimer) {
             this._hangarAnimTimer = setTimeout(() => {
                 this._hangarAnimTimer = 0;
-                if (this.isVisible && this.tab === 'hangar' && !this._hangarLiveDrawRaf) this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive() && !this._hangarLiveDrawRaf) this.drawHangarBay();
             }, 125);
         }
         return step;
@@ -201,17 +206,21 @@ extendClass(HomeStationUI, {
         // rebuild drops the panel and must not leave a stale highlight.
         // The open sidebar tree counts as the panel for the selection.
         const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
-            || !this._hangarLeftCollapsed;
+            || this.hangarSidebarOpen();
         const selectedConnection = panelOpen ? this._hangarSelectedConnection : null;
         const selectedArea = panelOpen ? this._hangarSelectedArea : null;
         if (!canvas || !model || (!hoverState && !selectedModule && !selectedConnection && !selectedArea
             && !this.hangarRotatableWings().length)) return;
         // With nothing hovered, the part whose panel is open stays marked.
+        // Keep wingLeft/wingRight specific so only the selected wing is framed
+        // (mapping both to 'wing' drew two boxes and offset the visual axis).
         const hover = hoverState || (selectedArea
             ? {
-                segment: selectedArea === 'wingLeft' || selectedArea === 'wingRight' ? 'wing' : selectedArea,
+                segment: selectedArea,
                 edge: null,
-                selectedOnly: true
+                selectedOnly: true,
+                side: selectedArea === 'wingLeft' ? 'left'
+                    : (selectedArea === 'wingRight' ? 'right' : null)
             }
             : { segment: null, edge: null });
         const ctx = canvas.getContext('2d');
@@ -240,13 +249,20 @@ extendClass(HomeStationUI, {
             ctx.save();
             ctx.strokeStyle = accent;
             ctx.lineWidth = 2;
-            // Animated only while hovered, so an idle hangar doesn't redraw.
+            // Axis stem: from the attach pivot through the frame tip to the knob,
+            // so the rotation axis reads as centred on the root, not the AABB mid.
             if (hot) this.hangarMarchingDash(ctx); else ctx.setLineDash([4, 4]);
             ctx.beginPath();
-            ctx.moveTo(Math.round(ox + knob.tipX * scale), Math.round(oy + knob.tipY * scale));
+            ctx.moveTo(Math.round(ox + knob.pivot.x * scale), Math.round(oy + knob.pivot.y * scale));
+            ctx.lineTo(Math.round(ox + knob.tipX * scale), Math.round(oy + knob.tipY * scale));
             ctx.lineTo(Math.round(kx), Math.round(ky));
             ctx.stroke();
             ctx.setLineDash([]);
+            // Pivot mark on the real rotation axis.
+            const pvx = Math.round(ox + knob.pivot.x * scale);
+            const pvy = Math.round(oy + knob.pivot.y * scale);
+            ctx.fillStyle = accent;
+            ctx.fillRect(pvx - 2, pvy - 2, 4, 4);
             // Big pixel octagon knob (square with stepped, notched corners).
             const c = this.hangarHandleColors(accent);
             const R = 14 + (hot && (this.hangarAnimStep() % 2) ? 2 : 0);
@@ -293,23 +309,12 @@ extendClass(HomeStationUI, {
         }).map((seg) => this.hangarSegmentFrame(seg, model, scale));
         if (!selected.length && !selectedModule) return;
         ctx.save();
-        // A rotated wing's frame turns with it, around the same root pivot.
-        const withRotation = (seg, draw) => {
-            const rot = this.hangarSegmentRotation(seg.id, model, scale);
-            if (!rot) return draw();
-            ctx.save();
-            const px = ox + rot.pivot.x * scale;
-            const py = oy + rot.pivot.y * scale;
-            ctx.translate(px, py);
-            ctx.rotate(rot.angle);
-            ctx.translate(-px, -py);
-            draw();
-            ctx.restore();
-        };
-        // No fill: the area is outlined only, so its slots stay readable.
+        // Scale frame is always an axis-aligned rectangle — wing art may
+        // rotate, but resize grips stay upright so left/right/top/bottom
+        // keep their meaning.
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
-        selected.forEach((seg) => withRotation(seg, () => {
+        selected.forEach((seg) => {
             const left = Math.round(ox + seg.x * scale);
             const top = Math.round(oy + seg.y * scale);
             const right = Math.round(ox + (seg.x + seg.width) * scale);
@@ -327,8 +332,11 @@ extendClass(HomeStationUI, {
             // Edge under the pointer — or being dragged — lights up solid
             // along its whole length, with a grip block in its middle.
             const drag = this._hangarWingDragState;
-            const activeEdge = (drag && drag.edge && (drag.segment === hover.segment
-                || (hover.segment === 'wing' && drag.segment === 'wing'))) ? drag.edge : hover.edge;
+            const sameWing = (hover.segment === 'wing' || hover.segment === 'wingLeft'
+                || hover.segment === 'wingRight')
+                && drag.segment === 'wing';
+            const activeEdge = (drag && drag.edge && (drag.segment === hover.segment || sameWing))
+                ? drag.edge : hover.edge;
             if (activeEdge) {
                 const has = (k) => activeEdge.indexOf(k) !== -1;
                 ctx.save();
@@ -373,7 +381,7 @@ extendClass(HomeStationUI, {
                 const r = Math.max(3, Math.min(7, corner * 0.5));
                 this.drawHangarPixelHandle(ctx, cx, cy, Math.max(10, r * 2), Math.max(10, r * 2), true, accent);
             }
-        }));
+        });
         if (selectedModule && model.layout.modules) {
             const mod = model.layout.modules.find((item) =>
                 item.kind === selectedModule.kind && item.id === selectedModule.id

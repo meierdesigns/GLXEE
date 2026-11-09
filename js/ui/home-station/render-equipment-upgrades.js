@@ -82,6 +82,24 @@ extendClass(HomeStationUI, {
             actionHtml += `<button class="action-button hs-line-action" data-move-to-station="${bucket}:${id}" data-ship="${shipId}">TO STATION</button>`;
         }
         const where = equipped ? 'EQUIPPED' : (onStation ? 'STATION' : 'SHIP');
+        // Compare selected weapon to what's currently mounted so weaker stats
+        // light up (is-bad) — same signal as hangar ability hover.
+        let statsHtml = '';
+        if (bucket === 'weapons' && this.hangarWeaponStatsHtml) {
+            let compareId = null;
+            if (!equipped && typeof shipLoadoutManager !== 'undefined') {
+                const L = shipLoadoutManager.getLoadout(shipId);
+                const mounted = (L && (L.weaponSlots || L.weapons)) || [];
+                compareId = mounted.find((w) => w) || null;
+            }
+            statsHtml = this.hangarWeaponStatsHtml(defId, compareId);
+        } else if (bucket === 'abilities' && this.hangarAbilityStatsHtml) {
+            statsHtml = this.hangarAbilityStatsHtml(defId);
+        } else if (bucket === 'energy' && this.hangarEnergyStatsHtml) {
+            statsHtml = this.hangarEnergyStatsHtml(defId);
+        }
+        const tip = this.hangarModuleTip ? this.hangarModuleTip(kind, defId) : '';
+        const desc = tip ? String(tip).split('\n')[1] : '';
         return wrap(
             `<div class="hs-line hs-shop-line hs-equip-line is-expanded">` +
             `<span class="hs-line-name">` +
@@ -89,6 +107,8 @@ extendClass(HomeStationUI, {
             `<span class="hs-line-text">` +
             `<strong>${meta.label}</strong>` +
             `<span class="hs-line-meta">L${level}/${maxLevel} · ${where}</span>` +
+            (desc ? `<span class="hs-line-desc">${String(desc).replace(/</g, '&lt;')}</span>` : '') +
+            (statsHtml ? `<span class="hs-equip-compare-stats">${statsHtml}</span>` : '') +
             `</span></span>` +
             `<span class="hs-line-actions">${actionHtml}</span>` +
             `</div>` +
@@ -118,6 +138,11 @@ extendClass(HomeStationUI, {
 
         const selected = this.renderSelectedEquipItem(profile, shipId);
 
+        // After paint: if the selected part is a weaker swap, light up ship-card damage.
+        requestAnimationFrame(() => {
+            if (this.markShipStatsWorseForSelected) this.markShipStatsWorseForSelected(shipId);
+        });
+
         return `<div class="hs-equip-ship">` +
             shipPicker +
             `<div class="hs-equip-cols">` +
@@ -134,5 +159,48 @@ extendClass(HomeStationUI, {
             selected +
             `</div>` +
             `</div>`;
+    },
+
+    /** Clear up/down marks on ship-card stat chips. */
+    clearShipStatCompareMarks() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('.hs-ship-stat.is-worse, .hs-ship-stat.is-better').forEach((el) => {
+            el.classList.remove('is-worse', 'is-better');
+        });
+    },
+
+    /** Mark ship-card damage when a weapon would upgrade/downgrade vs the mounted gun. */
+    markShipStatCompareForWeapon(shipId, defId) {
+        if (!this.overlay || !shipId || !defId || typeof weaponConfigManager === 'undefined') return;
+        if (this._itemIsEquippedOnShip && this._itemIsEquippedOnShip(shipId, 'weapons', defId)) return;
+        const L = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager.getLoadout(shipId) : null;
+        const mounted = (L && (L.weaponSlots || L.weapons)) || [];
+        const compareId = mounted.find((w) => w) || null;
+        if (!compareId || compareId === defId) return;
+        const w = weaponConfigManager.getWeapon(defId);
+        const c = weaponConfigManager.getWeapon(compareId);
+        if (!w || !c) return;
+        const mine = Number(w.damage) || 0;
+        const theirs = Number(c.damage) || 0;
+        if (mine === theirs) return;
+        const el = this.overlay.querySelector(
+            `.hs-ship-table-name .hs-ship-stat[data-stat="damage"]`
+        );
+        if (!el) return;
+        el.classList.add(mine < theirs ? 'is-worse' : 'is-better');
+    },
+
+    /** Highlight ship-card numbers for the selected storage part (equipment tab). */
+    markShipStatsWorseForSelected(shipId) {
+        this.clearShipStatCompareMarks();
+        const key = this.expandedEquipItem;
+        if (!key || key.indexOf(':') < 0) return;
+        const sep = key.indexOf(':');
+        const bucket = key.slice(0, sep);
+        const rawId = key.slice(sep + 1);
+        if (bucket !== 'weapons') return;
+        const defId = (typeof profileManager !== 'undefined' && profileManager.parsePartInstanceId)
+            ? (profileManager.parsePartInstanceId(rawId).defId || rawId) : rawId;
+        this.markShipStatCompareForWeapon(shipId, defId);
     },
 });

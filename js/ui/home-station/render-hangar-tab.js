@@ -45,13 +45,18 @@ extendClass(HomeStationUI, {
                     : null));
         const frameMaxed = frameLevel >= frameMax;
 
-        // Ships view: a plain picker.
-        const shipPicker = owned.map((id) => {
-            const selected = id === profile.activeShipId ? ' ★' : '';
-            return `<button type="button" class="hs-hangar-ship hs-hangar-ship-pick${id === shipId ? ' active' : ''}" data-hangar-ship="${id}">` +
-                `<canvas class="hs-area-thumb is-ship" width="72" height="48" data-area-thumb="${id}|"></canvas>` +
-                `<span>${this.shipName(id)}${selected}</span></button>`;
-        }).join('');
+        // Ship picker: a dropdown above the SLOTS/PARTS sidebar instead of its own tab —
+        // one ship is "open" at a time, so a whole tab for picking it cost more space
+        // than the choice itself needs. A custom button+list, not a native <select>: a
+        // native popup can't be themed (looked out of place against the pixel UI) and its
+        // close interferes with the overlay's own click handling.
+        const shipLabel = (id) => `${this.shipName(id)}${id === profile.activeShipId ? ' ★' : ''}`;
+        const shipDropdown = `<div class="hs-hangar-ship-dropdown${this._hangarShipDropdownOpen ? ' is-open' : ''}" data-hangar-ship-dropdown>` +
+            `<button type="button" class="hs-hangar-ship-dropdown-btn" data-hangar-ship-dropdown-toggle aria-haspopup="listbox" aria-expanded="${!!this._hangarShipDropdownOpen}">` +
+            `<span>${shipLabel(shipId)}</span><span class="hs-hangar-ship-dropdown-arrow" aria-hidden="true">▾</span></button>` +
+            `<div class="hs-hangar-ship-dropdown-list" role="listbox">` +
+            owned.map((id) => `<button type="button" class="hs-hangar-ship-dropdown-item${id === shipId ? ' is-active' : ''}" data-hangar-ship="${id}" role="option" aria-selected="${id === shipId}">${shipLabel(id)}</button>`).join('') +
+            `</div></div>`;
 
         const powerBudget = (typeof shipLoadoutManager !== 'undefined'
             && shipLoadoutManager.computePowerBudget)
@@ -155,19 +160,18 @@ extendClass(HomeStationUI, {
                 </div>
                 <div class="hs-hangar-split${this._hangarLeftCollapsed ? ' hs-hangar-left-collapsed' : ''}${this._hangarRightCollapsed ? ' hs-hangar-right-collapsed' : ''}">
                     <aside class="hs-hangar-list hs-panel">
+                        <div class="hs-hangar-ship-dropdown-row">${shipDropdown}</div>
                         <h3 class="hs-panel-title">
                             <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
-                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : this._hangarLeftView === 'slots' ? 'SLOTS' : 'SHIPS'}</span>
+                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SLOTS'}</span>
                             <span class="hs-panel-scan" aria-hidden="true"></span>
                             ${this.renderHangarLeftViewToggle()}
                             <button type="button" class="hs-sidebar-toggle hs-sidebar-strip" data-hangar-sidebar="left"
-                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'} ›</span></button>
+                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SLOTS'} ›</span></button>
                         </h3>
                         ${this._hangarLeftView === 'parts'
                             ? this.renderHangarPartsGrid(inventory, loadout)
-                            : this._hangarLeftView === 'slots'
-                            ? this.renderHangarSlotsView(hangarSlots.slots, layout)
-                            : `<div class="hs-actions-col hs-hangar-ships is-picker" id="hsHangarShipsContainer">${shipPicker}</div>`}
+                            : this.renderHangarSlotsView(hangarSlots.slots, layout)}
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>

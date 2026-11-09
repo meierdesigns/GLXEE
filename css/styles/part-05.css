@@ -156,6 +156,107 @@
     background: rgba(0, 0, 0, 0.78);
     padding: 16px;
 }
+/* Ship anatomy modal: inside .home-station-content (the station screen), same
+   absolute overlay pattern as .hs-res-buy-modal — modal chrome, not a new tab. */
+.home-station-content > .hs-anatomy-modal-overlay,
+.hs-anatomy-modal-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.78);
+    padding: 16px;
+    box-sizing: border-box;
+}
+.hs-anatomy-modal {
+    width: min(1280px, 100%);
+    height: min(900px, 100%);
+    max-width: 100%;
+    max-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    background: #050308;
+    border: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 85%, #fff);
+    box-shadow: 4px 4px 0 0 #000, inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 30%, transparent);
+    box-sizing: border-box;
+}
+.hs-anatomy-modal-head {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.hs-anatomy-modal-title {
+    font-weight: bold;
+    letter-spacing: 0.1em;
+}
+.hs-anatomy-modal-close {
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--color-primary) 14%, #05060a);
+    color: var(--color-text, #fff);
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
+    cursor: pointer;
+}
+.hs-anatomy-modal-close:hover {
+    border-color: var(--color-primary);
+}
+.hs-anatomy-modal .hs-hangar-bay-stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+}
+/* Anatomy modal: style panels become full-height side rails. */
+.hs-anatomy-modal .hs-floating-area-style {
+    top: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: min(280px, calc(100% - 16px));
+    height: auto;
+    max-height: none;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    overflow-y: auto;
+}
+.hs-anatomy-modal .hs-floating-area-style.is-right {
+    left: auto;
+    right: 8px;
+}
+.hs-anatomy-modal .hs-floating-area-style strong {
+    flex: 0 0 auto;
+}
+.hs-anatomy-modal .hs-floating-wing-preview,
+.hs-anatomy-modal .hs-floating-style-carousel,
+.hs-anatomy-modal .hs-floating-area-crop {
+    flex: 0 0 auto;
+}
+.hs-anatomy-modal .hs-floating-panel-link {
+    margin-top: auto;
+}
+/* Anatomy modal: pins only — no hangar side-rail cards or link stubs. */
+.hs-anatomy-modal .hs-hangar-slot-card,
+.hs-anatomy-modal .hs-hangar-link-svg {
+    display: none !important;
+}
+.hs-anatomy-modal .hs-hangar-slot-pin {
+    opacity: 1;
+}
+/* The ship thumb on STATION doubles as the anatomy-modal trigger. */
+.hs-ship-thumb[data-open-anatomy-modal] {
+    cursor: pointer;
+}
 .home-station-content > .hs-res-buy-modal {
     position: absolute;
     z-index: 80;

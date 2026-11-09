@@ -945,6 +945,11 @@ button.hs-faction-card.nav-focused {
     border-bottom: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
     font-variant-numeric: tabular-nums;
 }
+/* No divider between a ship's info row and its own SHIP STORAGE grid right below it —
+   they read as one card, the border only belongs between separate ships/rows. */
+.hs-ship-table tbody.hs-ship-card > tr:not(.hs-ship-storage-row) > td {
+    border-bottom: 0;
+}
 .hs-ship-table-weapons {
     display: flex;
     flex-wrap: wrap;
@@ -969,6 +974,7 @@ button.hs-faction-card.nav-focused {
    Stacks to a single column when the host panel is narrow (see part-21 @container).
    Bordered card: wraps ship info + storage into one visual container. */
 .hs-ship-card {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) max-content;
     align-items: stretch;
@@ -981,9 +987,66 @@ button.hs-faction-card.nav-focused {
     box-sizing: border-box;
 }
 .hs-ship-card tr { border-bottom: none !important; }
-.hs-ship-card > tr:not(.hs-ship-storage-row) {
+.hs-ship-card > .hs-ship-id-row {
+    grid-column: 1;
+    grid-row: 1;
     min-width: 0;
     align-content: center;
+}
+.hs-ship-card > .hs-ship-storage-row {
+    grid-column: 2;
+    grid-row: 1;
+}
+.hs-ship-table-name .hs-ship-meta {
+    width: 100%;
+    max-width: 100%;
+}
+.hs-ship-thumb {
+    overflow: visible;
+    flex-shrink: 0;
+}
+/* Hangar button: badge on the ship thumb, bottom-right — only on card hover/focus. */
+.hs-ship-thumb-action {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    z-index: 3;
+    margin: 0;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(4px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.hs-ship-card:hover .hs-ship-thumb-action,
+.hs-ship-card:focus-within .hs-ship-thumb-action {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+.hs-ship-thumb-action .hs-ship-hangar-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    margin: 0;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border-radius: 0;
+    clip-path: none;
+    border: 2px solid var(--faction-accent, var(--color-primary));
+    background: #05060a;
+    box-shadow: 0 0 0 2px #05060a;
+    cursor: pointer;
+}
+.hs-ship-thumb-action .hs-ship-hangar-badge::before,
+.hs-ship-thumb-action .hs-ship-hangar-badge::after {
+    content: none !important;
+    display: none !important;
+}
+.hs-ship-thumb-action .hs-ship-hangar-badge .hs-pixel {
+    width: 16px;
+    height: 16px;
 }
 .hs-ship-storage-row {
     display: flex !important;
@@ -1039,22 +1102,22 @@ button.hs-ship-icon-btn:is(:hover, .nav-focused) {
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #05060a);
 }
 .hs-ship-table-thumb {
-    width: 60px;
+    width: 148px;
 }
 .hs-ship-table-name strong {
     display: block;
     letter-spacing: 0.08em;
 }
-.hs-ship-table-name span {
+.hs-ship-table-name span:not(.hs-ship-slot-dots):not(.hs-ship-slot-dot) {
     opacity: 0.6;
     letter-spacing: 0.1em;
 }
 .hs-ship-thumb {
     display: inline-flex;
-    width: 56px;
-    height: 44px;
-}
-.hs-ship-thumb {
+    align-items: center;
+    justify-content: center;
+    width: 140px;
+    height: 110px;
     position: relative;
 }
 /* Placeholder while / if the ship render is missing. */
@@ -1074,6 +1137,7 @@ button.hs-ship-icon-btn:is(:hover, .nav-focused) {
     position: relative;
     width: 100%;
     height: 100%;
+    transform: translateY(-10px);
     image-rendering: pixelated;
 }
 /* Blueprint icon: ship drawn as white line art on grid paper. */

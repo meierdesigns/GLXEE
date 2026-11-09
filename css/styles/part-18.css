@@ -474,7 +474,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-l
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn { min-height: 120px !important; }
 html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch { min-height: 120px !important; }
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label { margin: 0 5px 5px; }
-html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label { margin: 0 2px; }
+html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label { margin: 0 5px 5px; }
 html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
     left: 3px;
     right: 3px;
@@ -560,9 +560,9 @@ html body .home-station-overlay .home-station-content .hs-header-split > .hs-pla
 }
 @media (min-width: 1101px) and (max-width: 1650px) {
     html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch {
-        flex: 0 1 clamp(112px, calc(10.5 * var(--sv-w)), 172px) !important;
+        flex: 0 0 clamp(112px, calc(10.5 * var(--sv-w)), 172px) !important;
         width: clamp(112px, calc(10.5 * var(--sv-w)), 172px) !important;
-        min-width: 0;
+        min-width: 112px !important;
     }
 }
 
@@ -1089,12 +1089,48 @@ html body .galaxy-map-embedded .galaxy-map-header {
     box-sizing: border-box;
 }
 
-/* Active nav button: bold label. */
+/* Active nav button: same weight/size as default, only the colour changes. */
 html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-label,
 html body .home-station-overlay .home-station-content .hs-tab.active .hs-tab-label,
 html body .home-station-overlay .home-station-content .hs-play-launch.active .hs-play-launch-label {
-    font-weight: 800 !important;
-    letter-spacing: 0.06em;
+    font-weight: 700 !important;
+}
+
+/* Dev mode: gated hub areas (Hangar / Factions / Wiki) before planet clear.
+   Pixel fonts have no italic glyphs — skew the label so the lock reads clearly. */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.is-locked .hs-tab-label {
+    font-style: italic !important;
+    transform: skewX(-18deg);
+    transform-origin: center;
+    opacity: 0.72;
+    letter-spacing: 0.12em;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.is-locked .hs-tab-icon {
+    opacity: 0.55;
+    transform: skewX(-10deg);
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.is-locked.hs-area-lock-out {
+    animation: hs-area-lock-out 0.28s ease-in forwards;
+    pointer-events: none;
+    overflow: hidden !important;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+}
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.is-locked.hs-area-lock-in {
+    animation: hs-area-lock-in 0.34s cubic-bezier(.2, .8, .3, 1) both;
+}
+@keyframes hs-area-lock-out {
+    0% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); max-width: 140px; margin: 8px 0 6px; }
+    100% { opacity: 0; transform: translateY(-14px) scale(0.72); filter: brightness(1.7); max-width: 0; margin: 8px 0 6px; padding-left: 0; padding-right: 0; border-width: 0; }
+}
+@keyframes hs-area-lock-in {
+    0% { opacity: 0; transform: translateY(-12px) scale(0.78); filter: brightness(1.8); }
+    70% { opacity: 1; transform: translateY(0) scale(1.03); filter: brightness(1.15); }
+    100% { opacity: 1; transform: translateY(0) scale(1); filter: brightness(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.is-locked.hs-area-lock-out,
+    html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.is-locked.hs-area-lock-in { animation: none; }
 }
 
 /* Mission button now lives in the ship bar row; hide the navbar copy wherever that row is present. */
@@ -1447,10 +1483,11 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     gap: 10px;
     min-width: 0;
     min-height: 0;
-    /* Hug content; do not stretch empty chrome under the storage/ship rows. */
-    height: auto;
+    /* Fill the row's full height instead of leaving dead space below the
+       storage/ship rows when their content is shorter than the sibling panels. */
+    height: 100%;
     max-height: 100%;
-    align-self: start;
+    align-self: stretch;
     overflow-y: auto;
     overflow-x: auto;
     scrollbar-width: thin;
@@ -1477,6 +1514,10 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     width: max-content;
     max-width: none;
     overflow-x: auto;
+    /* The grid hugs its own content width (so it doesn't stretch to the full cell) —
+       centre that box in the td instead of leaving it flush against the left edge. */
+    margin-left: auto;
+    margin-right: auto;
 }
 .hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row {
     overflow-x: auto;
@@ -1588,19 +1629,6 @@ html body .hs-body .hs-mission { padding-block: 10px; }
 }
 .hs-panel-layout-toggle[aria-pressed="true"] {
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 34%, #05060a);
-}
-.hs-station-section.is-collapsed > .hs-row {
-    display: none;
-}
-.hs-panel-title[data-station-section-toggle] {
-    cursor: pointer;
-    user-select: none;
-}
-.hs-panel-caret {
-    margin-left: auto;
-    padding-left: 8px;
-    opacity: 0.7;
-    font-size: 11px;
 }
 .hs-panel-stack.is-side-by-side {
     flex-direction: row;

@@ -17,11 +17,11 @@ extendClass(HomeStationUI, {
         return `<span class="hs-slot-glyph${extraClass ? ' ' + extraClass : ''}" data-slot-kind="${kind}" aria-hidden="true"></span>`;
     },
     renderHangarLeftViewToggle() {
-        const view = (this._hangarLeftView === 'parts' || this._hangarLeftView === 'slots') ? this._hangarLeftView : 'ships';
+        const view = this._hangarLeftView === 'parts' ? 'parts' : 'slots';
         const btn = (id, label, icon) =>
             `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
             `${this.iconHtml(icon, 40, 'hs-pixel hs-pixel-40', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
+        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
     /** SLOTS view: the ship's slot layout per hull area (same idea as the start profile's HULL AREAS list). */
     renderHangarSlotsView(slots, layout) {
@@ -297,10 +297,12 @@ extendClass(HomeStationUI, {
      */
     formatDetailStatLineHtml(line) {
         const text = String(line || '');
-        const chip = (icon, val, type) =>
-            `<span class="hs-hangar-weapon-stat" data-stat="${type}">` +
+        const chip = (icon, val, type, worse, better) =>
+            `<span class="hs-hangar-weapon-stat${worse ? ' is-bad' : ''}${better ? ' is-good' : ''}" data-stat="${type}">` +
             `${this.iconHtml(icon, 14, 'hs-pixel', false, this.hangarStatColor(type))}` +
-            `<span>${String(val).replace(/</g, '&lt;')}</span></span>`;
+            `<b class="hs-stat-num">${String(val).replace(/</g, '&lt;')}</b>` +
+            `${worse ? '<span class="hs-stat-worse">▼</span>' : ''}` +
+            `${better ? '<span class="hs-stat-better">▲</span>' : ''}</span>`;
         const wrap = (html) => `<span class="hs-hangar-weapon-stats">${html}</span>`;
         const sm = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
         if (sm) {
@@ -313,19 +315,27 @@ extendClass(HomeStationUI, {
         const statType = { SPEED: 'speed', DAMAGE: 'damage', ARMOR: 'armor', 'FIRE RATE': 'firerate' };
         const parts = text.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
         if (parts.length && parts.every(Boolean)) {
-            return wrap(parts.map((pm) => chip(statIcon[pm[2]], pm[1], statType[pm[2]])).join(''));
+            return wrap(parts.map((pm) => {
+                const n = Number(pm[1]);
+                const worse = Number.isFinite(n) && n < 0;
+                const better = Number.isFinite(n) && n > 0;
+                return chip(statIcon[pm[2]], pm[1], statType[pm[2]], worse, better);
+            }).join(''));
         }
         return text.replace(/</g, '&lt;');
     },
-    /** Compact DMG / SPD / fire-rate line for a weapon row. */
-    hangarWeaponStatsHtml(id) {
+    /** Compact DMG / SPD / fire-rate line for a weapon row.
+     *  `compareId`: when set (e.g. currently equipped gun), stats that are worse
+     *  than that baseline get `is-bad` / better get `is-good`. */
+    hangarWeaponStatsHtml(id, compareId) {
         if (typeof weaponConfigManager === 'undefined') return '';
         const w = weaponConfigManager.getWeapon(id);
         if (!w) return '';
-        const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) : '—';
+        const rateNum = w.cooldown ? (1000 / w.cooldown) : 0;
+        const rate = w.cooldown ? rateNum.toFixed(1) : '—';
         // Icon instead of a text label (same icons as the details panel); label stays in the tooltip.
-        const stat = (icon, tip, value, type, boosted) =>
-            `<span class="hs-hangar-weapon-stat${boosted ? ' is-boosted' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}${value}${boosted ? '<span class="hs-stat-boost">▲</span>' : ''}</span>`;
+        const stat = (icon, tip, value, type, boosted, worse, better) =>
+            `<span class="hs-hangar-weapon-stat${boosted ? ' is-boosted' : ''}${worse ? ' is-bad' : ''}${better ? ' is-good' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}<b class="hs-stat-num">${value}</b>${boosted ? '<span class="hs-stat-boost">▲</span>' : ''}${worse ? '<span class="hs-stat-worse">▼</span>' : ''}${better ? '<span class="hs-stat-better">▲</span>' : ''}</span>`;
         // Hull-class and faction affinity (+20% each, as in game): show the
         // boosted damage and name where the bonus comes from.
         const shipId = this.hangarShipId || 'player_scrap';
@@ -340,16 +350,38 @@ extendClass(HomeStationUI, {
         if (factionMul > 1) sources.push(String(faction).toUpperCase() + ' +' + Math.round((factionMul - 1) * 100) + '%');
         const dmg = Math.round((w.damage || 0) * classMul * factionMul);
         const dmgTip = sources.length ? 'DAMAGE ' + w.damage + ' → ' + dmg + ' (' + sources.join(' · ') + ')' : 'DAMAGE';
+        const cmp = (compareId && compareId !== id) ? weaponConfigManager.getWeapon(compareId) : null;
+        let cDmg = null;
+        let cSpd = null;
+        let cRate = null;
+        if (cmp) {
+            const cMul = (weaponConfigManager.getShipClassWeaponMul
+                ? weaponConfigManager.getShipClassWeaponMul(model && model.modelClass, compareId) : 1)
+                * (weaponConfigManager.getFactionWeaponMul
+                    ? weaponConfigManager.getFactionWeaponMul(faction, compareId) : 1);
+            cDmg = Math.round((cmp.damage || 0) * cMul);
+            cSpd = Number(cmp.speed) || 0;
+            cRate = cmp.cooldown ? (1000 / cmp.cooldown) : 0;
+        }
+        const worse = (mine, theirs) => (theirs != null && mine != null && Number(mine) < Number(theirs));
+        const better = (mine, theirs) => (theirs != null && mine != null && Number(mine) > Number(theirs));
         let powerHtml = '';
         if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
             const power = balanceConfigManager.computeWeaponPower(w, id);
             const eDps = Math.round(balanceConfigManager.volleyDps(w) * balanceConfigManager.getHitRate(id, w));
-            powerHtml = stat('statDamage', 'BALANCE POWER (eDPS ' + eDps + ')', power.toFixed(2), 'power', false);
+            let powerWorse = false;
+            let powerBetter = false;
+            if (cmp && balanceConfigManager.computeWeaponPower) {
+                const cPower = balanceConfigManager.computeWeaponPower(cmp, compareId);
+                powerWorse = power < cPower;
+                powerBetter = power > cPower;
+            }
+            powerHtml = stat('statDamage', 'BALANCE POWER (eDPS ' + eDps + ')', power.toFixed(2), 'power', false, powerWorse, powerBetter);
         }
         return `<span class="hs-hangar-weapon-stats">` +
-            stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0) +
-            stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed') +
-            stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate') +
+            stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0, worse(dmg, cDmg), better(dmg, cDmg)) +
+            stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed', false, worse(w.speed, cSpd), better(w.speed, cSpd)) +
+            stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate', false, worse(rateNum, cRate), better(rateNum, cRate)) +
             powerHtml +
             `</span>`;
     },

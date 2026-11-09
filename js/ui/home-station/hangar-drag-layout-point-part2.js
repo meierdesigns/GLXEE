@@ -17,12 +17,10 @@ extendClass(HomeStationUI, {
         const GRIP_PX = 14;
         const reach = GRIP_PX / Math.max(1, h.scale);
         const inward = (size) => Math.min(reach, size * 0.4);
-        // Each segment is tested in its own space, so a rotated wing's
-        // clickable area tilts with the frame drawn around it.
+        // Scale grips use the unrotated AABB (same as the drawn rectangle).
         const local = (seg) => this.hangarSegmentLocalPoint(pt, seg.id, h.model, h.scale);
         let localPt = pt;
-        // Wing resize grips win over hull frames: a rotated wing's edge
-        // sweeps across the nose/tail frames and was unreachable there.
+        // Wing resize grips win over hull frames so tip edges stay reachable.
         const inGrip = (seg) => {
             const q = local(seg);
             const inside = q.lx >= seg.x - reach && q.lx <= seg.x + seg.width + reach
@@ -102,8 +100,7 @@ extendClass(HomeStationUI, {
                 right: seg.id === 'wingRight',
                 width: seg.width,
                 height: seg.height,
-                edge: bestCorner.edge,
-                rotation: (this.hangarSegmentRotation(seg.id, h.model, h.scale) || { angle: 0 }).angle
+                edge: bestCorner.edge
             };
         }
         let hit = segments.find((seg) =>
@@ -202,8 +199,7 @@ extendClass(HomeStationUI, {
             right: hit.id === 'wingRight',
             width: hit.width,
             height: hit.height,
-            edge: edge,
-            rotation: (this.hangarSegmentRotation(hit.id, h.model, h.scale) || { angle: 0 }).angle
+            edge: edge
         };
     },
     hangarDragCursor(hit) {
@@ -213,17 +209,6 @@ extendClass(HomeStationUI, {
         // Wing bridge slides up/down along the hull.
         if (hit.connector && !hit.spine && (hit.left || hit.right)) return 'ns-resize';
         if (hit.connector) return 'alias';
-        if (hit.edge && hit.rotation) {
-            // Turn the edge's direction with the wing, then pick the
-            // closest of the four resize cursors (45° steps).
-            const dir = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
-            let vx = 0;
-            let vy = 0;
-            hit.edge.split('-').forEach((part) => { vx += dir[part][0]; vy += dir[part][1]; });
-            const deg = (Math.atan2(vy, vx) + hit.rotation) * 180 / Math.PI;
-            const step = ((Math.round(deg / 45) % 4) + 4) % 4;
-            return ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][step];
-        }
         switch (hit.edge) {
             case 'left':
             case 'right':

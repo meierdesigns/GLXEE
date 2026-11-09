@@ -38,22 +38,37 @@ extendClass(ShipLoadoutManager, {
         });
         if (!energy.length) energy.push('energy_core');
         const modelClass = (cfg && cfg.modelClass) || 'starfighter';
+        // Hull profile anatomy first (scrap = no wings, interceptor = no aft,
+        // heavy = no nose). Faction stock layout may override afterwards.
+        const roleOff = this.getShipRoleDisabledAreas
+            ? this.getShipRoleDisabledAreas(shipId)
+            : { front: false, back: false, wing: false };
         const base = {
             weapons: weapons,
             defenses: defenses,
             abilities: abilities,
             energy: energy,
-            fireMode: 'auto'
+            fireMode: 'auto',
+            disabledAreas: roleOff
         };
+        const coreGun = this.getShipRoleCoreGun ? this.getShipRoleCoreGun(shipId) : null;
+        if (coreGun) {
+            base.weaponMounts = { 0: { area: 'center', split: coreGun === 'split', off: 0.2, ny: 0.5, fixed: true } };
+        }
         if (this.applyFactionLayoutDefaults) this.applyFactionLayoutDefaults(base, faction);
         // A faction anatomy with the nose switched off would drop the
-        // starter weapon (slot 0 = nose): move it onto the wings instead.
+        // starter weapon (slot 0 = nose): move it onto the wings instead,
+        // unless this hull already mounts the gun in the core.
         const off = base.disabledAreas || {};
         const gun = weapons[0] || 'laser';
-        if (off.front && !off.wing) base.weaponSlots = [null, gun];
+        if (off.front && !off.wing && !coreGun) base.weaponSlots = [null, gun];
         let L = this.clampLoadoutToCaps(base, shipId, modelClass);
         // A new ship always keeps one usable, filled weapon slot.
-        const usable = (L.weaponSlots || []).some((id, i) => id && !(i === 0 ? off.front : off.wing));
+        const usable = (L.weaponSlots || []).some((id, i) => {
+            if (!id) return false;
+            if (coreGun && i === 0) return true;
+            return !(i === 0 ? off.front : off.wing);
+        });
         if (!usable) {
             base.disabledAreas = Object.assign({}, off, { front: false });
             base.weaponSlots = [gun];

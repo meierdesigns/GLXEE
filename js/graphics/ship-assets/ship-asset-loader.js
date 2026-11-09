@@ -3,17 +3,17 @@
 import { ShipAssetLoader } from './ship-asset-loader/core.js';
 import './ship-asset-loader/render-ship-as-segments.js?v=voxel-crisp-2';
 import './ship-asset-loader/resolve-segment-sprite-key.js?v=voxel-raster-24';
-import './ship-asset-loader/render-hull-segments.js?v=jshift-1';
+import './ship-asset-loader/render-hull-segments.js?v=wbridge-8';
 import './ship-asset-loader/render-fallback-segmented-hull.js?v=voxel-raster-24';
 import './ship-asset-loader/render-segment-from-full-sprite.js?v=focus-1';
-import './ship-asset-loader/lit-bounds.js?v=focus-1';
+import './ship-asset-loader/lit-bounds.js?v=wbridge-8';
 import './ship-asset-loader/build-wing-grid.js?v=focus-1';
 import './ship-asset-loader/build-center-grid.js?v=focus-1';
 import './ship-asset-loader/resolve-hull-shape-seed.js?v=focus-1';
 import './ship-asset-loader/render-ship-module.js?v=voxel-raster-24';
 import './ship-asset-loader/weapon-grid.js?v=split-1';
 import './ship-asset-loader/module-templates.js?v=split-1';
-import './ship-asset-loader/hull-segment-parts.js?v=split-1';
+import './ship-asset-loader/hull-segment-parts.js?v=wbridge-6';
 import './ship-asset-loader/grid-helpers.js?v=split-1';
 import './ship-asset-loader/get-sprite-name-for-ship.js?v=voxel-raster-24';
 

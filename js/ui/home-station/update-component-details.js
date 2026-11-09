@@ -177,7 +177,10 @@ extendClass(HomeStationUI, {
             });
         });
         panel.querySelectorAll('[data-open-spine]').forEach((button) => {
-            button.addEventListener('click', () => this.showFloatingSpineConnectionStyle(area));
+            button.addEventListener('click', () => {
+                this.showFloatingSpineConnectionStyle(area);
+                if (this.panHangarToSelection) this.panHangarToSelection();
+            });
         });
         panel.querySelectorAll('[data-panel-style]').forEach((control) => {
             control.addEventListener('click', () => {
@@ -193,10 +196,16 @@ extendClass(HomeStationUI, {
             });
         });
         panel.querySelectorAll('[data-open-spine]').forEach((button) => {
-            button.addEventListener('click', () => this.showFloatingSpineConnectionStyle(area));
+            button.addEventListener('click', () => {
+                this.showFloatingSpineConnectionStyle(area);
+                if (this.panHangarToSelection) this.panHangarToSelection();
+            });
         });
         panel.querySelectorAll('[data-open-connection]').forEach((button) => {
-            button.addEventListener('click', () => this.showFloatingConnectionStyle(area));
+            button.addEventListener('click', () => {
+                this.showFloatingConnectionStyle(area);
+                if (this.panHangarToSelection) this.panHangarToSelection();
+            });
         });
         panel.querySelectorAll('[data-voxel-scale]').forEach((input) => {
             input.addEventListener('input', () => {
@@ -256,7 +265,7 @@ extendClass(HomeStationUI, {
                 ${this.connectionStrengthRow('WING', 'data-wing-connection-width-end', 0.02, 0.5,
                     Number(shipLoadoutManager.getLoadout(shipId).wingConnectionWidthEnd) || this.getWingConnectionWidthValue(shipId))}
                 <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(shipLoadoutManager.getLoadout(shipId).wingConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
-                <label><span>OFFSET</span><input type="range" data-wing-connection min="-1" max="1" step="0.01" value="${this.getWingConnectionValue(shipId)}"></label>
+                <label><span>HULL HEIGHT</span><input type="range" data-wing-connection min="-1" max="1" step="0.01" value="${this.getWingConnectionValue(shipId)}"></label>
             </div>
             <button type="button" class="hs-floating-panel-link" data-open-wing>← BACK TO WING</button>`;
 

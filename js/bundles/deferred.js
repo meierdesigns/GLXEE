@@ -14766,22 +14766,37 @@ extendClass(ShipLoadoutManager, {
         });
         if (!energy.length) energy.push('energy_core');
         const modelClass = (cfg && cfg.modelClass) || 'starfighter';
+        // Hull profile anatomy first (scrap = no wings, interceptor = no aft,
+        // heavy = no nose). Faction stock layout may override afterwards.
+        const roleOff = this.getShipRoleDisabledAreas
+            ? this.getShipRoleDisabledAreas(shipId)
+            : { front: false, back: false, wing: false };
         const base = {
             weapons: weapons,
             defenses: defenses,
             abilities: abilities,
             energy: energy,
-            fireMode: 'auto'
+            fireMode: 'auto',
+            disabledAreas: roleOff
         };
+        const coreGun = this.getShipRoleCoreGun ? this.getShipRoleCoreGun(shipId) : null;
+        if (coreGun) {
+            base.weaponMounts = { 0: { area: 'center', split: coreGun === 'split', off: 0.2, ny: 0.5, fixed: true } };
+        }
         if (this.applyFactionLayoutDefaults) this.applyFactionLayoutDefaults(base, faction);
         // A faction anatomy with the nose switched off would drop the
-        // starter weapon (slot 0 = nose): move it onto the wings instead.
+        // starter weapon (slot 0 = nose): move it onto the wings instead,
+        // unless this hull already mounts the gun in the core.
         const off = base.disabledAreas || {};
         const gun = weapons[0] || 'laser';
-        if (off.front && !off.wing) base.weaponSlots = [null, gun];
+        if (off.front && !off.wing && !coreGun) base.weaponSlots = [null, gun];
         let L = this.clampLoadoutToCaps(base, shipId, modelClass);
         // A new ship always keeps one usable, filled weapon slot.
-        const usable = (L.weaponSlots || []).some((id, i) => id && !(i === 0 ? off.front : off.wing));
+        const usable = (L.weaponSlots || []).some((id, i) => {
+            if (!id) return false;
+            if (coreGun && i === 0) return true;
+            return !(i === 0 ? off.front : off.wing);
+        });
         if (!usable) {
             base.disabledAreas = Object.assign({}, off, { front: false });
             base.weaponSlots = [gun];
@@ -15067,17 +15082,22 @@ extendClass(ShipLoadoutManager, {
 
         // --- Base segment geometry (layout units inside core) ---
         const segGap = Math.max(0, Number(this.segmentGap) || 0);
-        const wingGap = Math.max(0, Number(this.wingGap) || 0);
+        // Voidborn (and any focus.wingGap faction) float the wings off the hull.
+        let wingGap = Math.max(0, Number(this.wingGap) || 0);
+        if (faction && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionFocus) {
+            const focus = factionShipStyles.getFactionFocus(faction);
+            if (focus && focus.wingGap) {
+                wingGap = Math.max(wingGap, Math.max(1, Math.round(coreWidth * 0.08)));
+            }
+        }
         const segmentScale = this.applyFactionAnatomy(this.normalizeSegmentScale(L.segmentScale), faction);
         const segmentOffset = this.normalizeSegmentOffset(L.segmentOffset);
         const moduleOffset = this.normalizeModuleOffset(L.moduleOffset);
-        // Without a custom anatomy the hull uses spaceship proportions: a
-        // long tapered nose, a compact aft and broad wings. The sprite UV
-        // bands are tuned for cropping art and made a stubby nose cap, a
-        // tall block body and pencil-thin wings when used as hull sizes.
-        const hullBands = L.segmentUv
-            ? { front: uv.front.h, back: uv.back.h, wing: uv.wing.h }
-            : { front: 0.32, back: 0.2, wing: 0.62 };
+        // Sprite UV bands crop source art only — never use them as hull sizes.
+        // Doing so made a stubby nose, tall block body and pencil wings that
+        // read as an upside-down H instead of the faction's anatomy.
+        // Faction shape still arrives via applyFactionAnatomy on segmentScale.
+        const hullBands = { front: 0.32, back: 0.2, wing: 0.62 };
         let frontH = Math.max(2, Math.round(coreHeight * hullBands.front));
         let backH = Math.max(2, Math.round(coreHeight * hullBands.back));
         let centerH = Math.max(2, coreHeight - frontH - backH);
@@ -15161,9 +15181,11 @@ extendClass(ShipLoadoutManager, {
         );
         // Wings are always independent geometry, even when no wing module is
         // installed. This lets the player move both mirrored wings inward.
+        // Always use ship proportions (never UV crop widths) so wings stay
+        // broad enough to read as the faction's planform, not pencil stubs.
         wingSpan = Math.max(
             edgeMs + 1,
-            expandWing || Math.round(coreWidth * (L.segmentUv ? 0.24 : 0.42)),
+            expandWing || Math.round(coreWidth * 0.42),
             Math.min(3, Math.max(1, wingNeed)) * edgeMs
         );
         wingSpan = Math.max(2, Math.round(wingSpan * segmentScale.wing.x));
@@ -15216,13 +15238,12 @@ extendClass(ShipLoadoutManager, {
             frontY - wingTravel,
             Math.min(
                 Math.max(frontY, hullBottom - wingH) + wingTravel,
-                Math.floor(baseFrontH + segGap + (baseCenterH - wingH) * (L.segmentUv ? 0.5 : 0.8) + wingShiftY)
+                Math.floor(baseFrontH + segGap + (baseCenterH - wingH) * 0.8 + wingShiftY)
             )
         );
         // Default anatomy seats the wing roots on the fuselage flank instead
         // of the wider core edge, which left a gap only a thin strut crossed.
-        const wingShiftX = Math.round(coreWidth * L.wingOffsetX)
-            - (L.segmentUv ? 0 : scaledCenterX);
+        const wingShiftX = Math.round(coreWidth * L.wingOffsetX) - scaledCenterX;
 
         return {
             coreWidth, coreHeight, L, ms, gap, evenSize, edgeMs, centerMs, hullMid, parts,
@@ -17575,9 +17596,48 @@ extendClass(ShipLoadoutManager, {
 //               wing weapon moves into a free nose slot
 var TOGGLEABLE_AREAS = ['front', 'wing', 'back'];
 
+/**
+ * Per-hull anatomy signature: which areas the stock profile is built without.
+ * Matches starter-kit roleOff — scrap has no wings, interceptor no aft,
+ * heavy no nose (core gun), assault keeps the full frame.
+ */
+var SHIP_ROLE_OFF_AREAS = {
+    player_scrap: ['wing'],
+    player: ['wing'],
+    player_interceptor: ['back'],
+    player_kronax_raider: ['back'],
+    player_heavy: ['front'],
+    player_assault: []
+};
+
+var SHIP_ROLE_CORE_GUN = {
+    player_heavy: 'split'
+};
+
 extendClass(ShipLoadoutManager, {
     getToggleableAreas() {
         return TOGGLEABLE_AREAS.slice();
+    },
+
+    /** Area ids this hull profile is built without (nose / aft / wings). */
+    getShipRoleOffAreas(shipId) {
+        const id = String(shipId || '');
+        const off = SHIP_ROLE_OFF_AREAS[id];
+        return off ? off.slice() : [];
+    },
+
+    /** disabledAreas object for a hull's stock anatomy signature. */
+    getShipRoleDisabledAreas(shipId) {
+        const out = { front: false, back: false, wing: false };
+        this.getShipRoleOffAreas(shipId).forEach((a) => {
+            if (TOGGLEABLE_AREAS.indexOf(a) !== -1) out[a] = true;
+        });
+        return out;
+    },
+
+    /** Heavy (and similar) profiles mount the starter gun in the core. */
+    getShipRoleCoreGun(shipId) {
+        return SHIP_ROLE_CORE_GUN[String(shipId || '')] || null;
     },
 
     isAreaEnabled(shipId, areaId) {
@@ -54318,21 +54378,27 @@ var UiTooltipManager = class UiTooltipManager {
                     } else {
                     const chips = (() => {
                         // Weapon stat line "DMG 11 · SPD 13 · 4.5/S" (rate optional) -> the same stat icons as the hangar rows.
+                        // 4th slot: 'up' | 'down' | null vs currently equipped gun on the ship.
                         const sm = line.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?$/);
                         if (sm) {
-                            return [['statDamage', sm[1], '#ff6a4a'], ['statSpeed', sm[2], '#4ad8ff'], sm[3] ? ['shotRapid', sm[3], '#ffa04a'] : null].filter(Boolean);
+                            const delta = this._weaponStatDeltas(anchor, sm);
+                            return [
+                                ['statDamage', sm[1], '#ff6a4a', delta[0]],
+                                ['statSpeed', sm[2], '#4ad8ff', delta[1]],
+                                sm[3] ? ['shotRapid', sm[3], '#ffa04a', delta[2]] : null
+                            ].filter(Boolean);
                         }
                         // Weapon fire mode "MODE AUTO" / "MODE CHARGE".
                         const mm = line.match(/^MODE (AUTO|CHARGE)$/);
                         if (mm) {
-                            return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a']];
+                            return [[mm[1] === 'CHARGE' ? 'statEnergy' : 'shotRapid', mm[1], mm[1] === 'CHARGE' ? '#ffd24a' : '#ffa04a', null]];
                         }
                         // Ability/defense/energy "TYPE · TIER n" (tier optional) -> type + tier icons.
                         // Single keyword only — never match meta lines (EQUIPPED, MOVE TO …).
                         const tm = line.match(/^(PASSIVE|ACTIVE|TOGGLE|CHANNEL|INSTANT|AURA|BUFF|SHIELD|DRIVE|SYSTEM)(?: · TIER (\d+))?$/);
                         if (tm) {
-                            const out = [['statAbilities', tm[1], '#c08cff']];
-                            if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a']);
+                            const out = [['statAbilities', tm[1], '#c08cff', null]];
+                            if (tm[2]) out.push(['hsBlueprint', 'T' + tm[2], '#ffd24a', null]);
                             return out;
                         }
                         // Ability stat-mod line(s), e.g. "+0.3 SPEED" or "+1 DAMAGE · +2 ARMOR"
@@ -54343,17 +54409,25 @@ var UiTooltipManager = class UiTooltipManager {
                         const statCol = { SPEED: '#4ad8ff', DAMAGE: '#ff6a4a', ARMOR: '#5ce1ff', 'FIRE RATE': '#ffa04a' };
                         const statParts = line.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
                         if (statParts.length && statParts.every(Boolean)) {
-                            return statParts.map((pm) => [statIcon[pm[2]], pm[1] + ' ' + pm[2], statCol[pm[2]]]);
+                            return statParts.map((pm) => {
+                                const n = Number(pm[1]);
+                                const d = Number.isFinite(n) ? (n < 0 ? 'down' : (n > 0 ? 'up' : null)) : null;
+                                return [statIcon[pm[2]], pm[1] + ' ' + pm[2], statCol[pm[2]], d];
+                            });
                         }
                         return null;
                     })();
                     if (chips && ir) {
                         row.className = 'ui-tooltip-stats';
                         row.style.cssText = 'display:flex;gap:' + (compact ? '8px' : '14px') + ';align-items:center;flex-wrap:nowrap';
-                        chips.forEach(([key, val, col]) => {
+                        chips.forEach(([key, val, col, delta]) => {
                             const s = document.createElement('span');
+                            s.className = 'ui-tooltip-stat' + (delta === 'down' ? ' is-bad' : (delta === 'up' ? ' is-good' : ''));
                             s.style.cssText = 'display:inline-flex;gap:4px;align-items:center;white-space:nowrap';
-                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') + '<span>' + val + '</span>';
+                            const mark = delta === 'down' ? '<span class="hs-stat-worse">▼</span>'
+                                : (delta === 'up' ? '<span class="hs-stat-better">▲</span>' : '');
+                            s.innerHTML = String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                                + '<b class="hs-stat-num">' + val + '</b>' + mark;
                             row.appendChild(s);
                         });
                     } else {
@@ -54418,12 +54492,37 @@ var UiTooltipManager = class UiTooltipManager {
             place(sl, r.top + r.height / 2 - th / 2, 'side-right');
             return;
         }
-        // Bay inventory: tuck beside the hovered cell (near the cursor), not the whole panel edge.
-        const invPanel = !anchor.closest('[data-tip-side]') && anchor.closest('.hs-bay-inv');
+        // Ship-row equipment dots sit packed in one line — opening above/below
+        // would cover the neighbouring dots, so open beside the row instead.
+        if (anchor.classList.contains('hs-ship-slot-dot')) {
+            const row = anchor.closest('.hs-ship-slot-dots') || anchor;
+            const b = row.getBoundingClientRect();
+            let sl = b.right + gap;
+            if (sl + tw > window.innerWidth - pad) sl = b.left - tw - gap;
+            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
+            return;
+        }
+        // Bay inventory + ship-row storage: open beside the cell so the tip never
+        // covers the hovered item (below+clamp used to slide back over it) and
+        // never covers the equipment-slot dots sitting just above the grid.
+        const invPanel = !anchor.closest('[data-tip-side]') && (
+            anchor.closest('.hs-bay-inv')
+            || anchor.closest('.hs-ship-storage-row .hs-storage-cell')
+            || (anchor.classList.contains('hs-storage-cell') && !!anchor.closest('.hs-storage-grid'))
+        );
         if (invPanel) {
             let sl = r.right + gap;
             if (sl + tw > window.innerWidth - pad) sl = Math.max(pad, r.left - tw - gap);
-            place(sl, r.top + r.height / 2 - th / 2, 'side-right');
+            // Vertically centre on the cell, but keep the tip from sliding back
+            // over the cell when clampBox hits the viewport edge.
+            let st = r.top + r.height / 2 - th / 2;
+            const tipBottom = st + th;
+            if (st < r.bottom && tipBottom > r.top) {
+                // Would overlap the cell: prefer below, else above, else side-only clamp.
+                if (r.bottom + gap + th <= window.innerHeight - pad) st = r.bottom + gap;
+                else if (r.top - gap - th >= pad) st = r.top - th - gap;
+            }
+            place(sl, st, 'side-right');
             return;
         }
         const leftBar = anchor.closest('.hs-hangar-list, [data-tip-side="right"]');
@@ -54455,7 +54554,62 @@ var UiTooltipManager = class UiTooltipManager {
             top = r.top - th - gap;
             tip.classList.remove('below');
         }
+        // Final guard: if clamp would drag the tip back over the anchor, open
+        // beside it instead so the hovered item stays visible.
+        const rawTop = top;
+        const clamped = this.clampBox(left, top, tw, th, pad);
+        if (clamped.top < r.bottom && clamped.top + th > r.top
+            && clamped.left < r.right && clamped.left + tw > r.left) {
+            let sl = r.right + gap;
+            if (sl + tw > window.innerWidth - pad) sl = Math.max(pad, r.left - tw - gap);
+            tip.classList.remove('below');
+            place(sl, rawTop, 'side-right');
+            return;
+        }
         place(left, top, null);
+    }
+
+    /** Equipped weapon id to compare a storage/shop tip against, or null. */
+    _weaponCompareId(anchor) {
+        if (!anchor || typeof anchor.getAttribute !== 'function') return null;
+        if (anchor.getAttribute('data-part-kind') !== 'weapon') return null;
+        const partId = anchor.getAttribute('data-part-id');
+        if (!partId || anchor.classList.contains('is-equipped')) return null;
+        let shipId = anchor.getAttribute('data-drag-ship') || anchor.getAttribute('data-ship') || '';
+        if (!shipId && typeof profileManager !== 'undefined' && profileManager.getActiveProfile) {
+            const p = profileManager.getActiveProfile();
+            shipId = (p && p.activeShipId) || '';
+        }
+        if (!shipId && typeof homeStationUI !== 'undefined' && homeStationUI.hangarShipId) {
+            shipId = homeStationUI.hangarShipId;
+        }
+        if (!shipId || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.getLoadout) return null;
+        const L = shipLoadoutManager.getLoadout(shipId);
+        const mounted = (L && (L.weaponSlots || L.weapons)) || [];
+        const compareId = mounted.find((w) => w) || null;
+        if (!compareId || compareId === partId) return null;
+        return compareId;
+    }
+
+    /** Per-stat 'up'/'down'/null for a tip DMG line vs the equipped gun. */
+    _weaponStatDeltas(anchor, sm) {
+        const out = [null, null, null];
+        const compareId = this._weaponCompareId(anchor);
+        if (!compareId || typeof weaponConfigManager === 'undefined' || !weaponConfigManager.getWeapon) return out;
+        const c = weaponConfigManager.getWeapon(compareId);
+        if (!c) return out;
+        const mine = [Number(sm[1]), Number(sm[2]), sm[3] ? parseFloat(sm[3]) : NaN];
+        const theirs = [
+            Number(c.damage) || 0,
+            Number(c.speed) || 0,
+            c.cooldown ? (1000 / c.cooldown) : 0
+        ];
+        for (let i = 0; i < 3; i++) {
+            if (!Number.isFinite(mine[i])) continue;
+            if (mine[i] < theirs[i]) out[i] = 'down';
+            else if (mine[i] > theirs[i]) out[i] = 'up';
+        }
+        return out;
     }
 
     hide() {
@@ -80902,11 +81056,15 @@ extendClass(ProfileSelectionManager, {
     kitDefs() {
         // Each hull role also hands out its own free hull-area level, so the four profiles differ in the ship they build.
         const roleAreas = { player_scrap: { back: 1 }, player_interceptor: { wing: 1 }, player_heavy: { center: 1 }, player_assault: { front: 1 } };
-        // Hull areas a start profile's ship is built without (nose = front, aft = back, wings = wing).
-        const roleOff = { player_scrap: ['wing'], player_interceptor: ['back'], player_heavy: ['front'], player_assault: [] };
-        // Hulls built without a nose carry their gun in the core: a pair left / right of the axis ('split') or one on the axis ('single').
-        const roleCore = { player_heavy: 'split' };
-        const K = (id, label, text, icon, ship, bonus) => ({ id, label, text, icon, ship, off: roleOff[ship] || [], coreGun: roleCore[ship] || null, bonus: Object.assign({ areas: roleAreas[ship] || {} }, bonus || {}) });
+        // Hull areas a start profile is built without — same map as shipLoadoutManager.getShipRoleOffAreas.
+        const roleOff = (ship) => (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getShipRoleOffAreas
+            ? shipLoadoutManager.getShipRoleOffAreas(ship)
+            : ({ player_scrap: ['wing'], player_interceptor: ['back'], player_heavy: ['front'], player_assault: [] }[ship] || []));
+        // Hulls built without a nose carry their gun in the core.
+        const roleCore = (ship) => (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getShipRoleCoreGun
+            ? shipLoadoutManager.getShipRoleCoreGun(ship)
+            : ({ player_heavy: 'split' }[ship] || null));
+        const K = (id, label, text, icon, ship, bonus) => ({ id, label, text, icon, ship, off: roleOff(ship), coreGun: roleCore(ship), bonus: Object.assign({ areas: roleAreas[ship] || {} }, bonus || {}) });
         // Faction doctrine, added on top of every profile of the faction: cargo shape, an extra hull area level and a stash.
         const DOCTRINE = {
             terran: { credits: 60, second: { player_assault: 'railgun', player_interceptor: 'laser_twin' } },                                                               // fleet command: money, balanced hold
@@ -85816,10 +85974,12 @@ var HomeStationUI = class HomeStationUI {
         this._stationColResizeObs = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = true;
-        // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.
-        this._hangarLeftView = 'ships';
+        // Hangar left sidebar view (SLOTS | PARTS) — ship picking moved into its own
+        // dropdown above this, so "ships" is no longer a view here. Still remembered
+        // across reloads (and an old saved "ships" value falls back to "slots").
+        this._hangarLeftView = 'slots';
         try {
-            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships' || v === 'slots') this._hangarLeftView = v; }
+            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'slots') this._hangarLeftView = v; }
         } catch (e) { /* ignore */ }
         // Last sub-tab per top-bar area (HANGAR→SHIPYARD/UPGRADE/…), across area switches + reloads.
         this._areaLastTab = {};
@@ -86257,19 +86417,6 @@ extendClass(HomeStationUI, {
             `</h3>`;
     },
 
-    /** Collapsed state { ships: bool, storage: bool } for the station stack sections, persisted. */
-    stationCollapsedSections() {
-        if (!this._stationCollapsedSections) {
-            let map = {};
-            try {
-                const raw = JSON.parse(localStorage.getItem('vf_hs_station_collapsed_sections') || '{}');
-                if (raw && typeof raw === 'object') map = raw;
-            } catch (err) { /* ignore */ }
-            this._stationCollapsedSections = map;
-        }
-        return this._stationCollapsedSections;
-    },
-
     /** Whether OWNED SHIPS / STATION STORAGE sit side-by-side instead of stacked, persisted. */
     stationLayoutSideBySide() {
         if (this._stationLayoutSideBySide === undefined) {
@@ -86280,41 +86427,9 @@ extendClass(HomeStationUI, {
         return this._stationLayoutSideBySide;
     },
 
-    /** Panel header for a collapsible station stack section (OWNED SHIPS / STATION STORAGE). */
-    stationSectionHeaderHtml(iconKey, label, sectionKey, collapsed) {
-        return `<h3 class="hs-panel-title" data-station-section-toggle="${sectionKey}" role="button" tabindex="0" aria-expanded="${!collapsed}">` +
-            `<span class="hs-panel-icon">${this.iconHtml(iconKey, 32, 'hs-pixel')}</span>` +
-            `<span class="hs-panel-label">${label}</span>` +
-            `<span class="hs-panel-scan" aria-hidden="true"></span>` +
-            `<span class="hs-panel-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span>` +
-            `</h3>`;
-    },
-
-    /** Binds collapse toggles + the stacked/side-by-side layout switch on the station stack panel. */
+    /** Binds the stacked/side-by-side layout switch on the station stack panel. */
     bindStationPanelToggles() {
         if (!this.overlay) return;
-        this.overlay.querySelectorAll('[data-station-section-toggle]').forEach((head) => {
-            const toggle = () => {
-                const key = head.getAttribute('data-station-section-toggle');
-                const map = this.stationCollapsedSections();
-                map[key] = !map[key];
-                try {
-                    localStorage.setItem('vf_hs_station_collapsed_sections', JSON.stringify(map));
-                } catch (err) { /* ignore */ }
-                const sec = head.closest('.hs-station-section');
-                const c = !!map[key];
-                if (sec) sec.classList.toggle('is-collapsed', c);
-                head.setAttribute('aria-expanded', String(!c));
-                const caret = head.querySelector('.hs-panel-caret');
-                if (caret) caret.textContent = c ? '▼' : '▲';
-            };
-            head.addEventListener('click', toggle);
-            head.addEventListener('keydown', (e) => {
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                toggle();
-            });
-        });
         const layoutBtn = this.overlay.querySelector('[data-station-layout-toggle]');
         if (layoutBtn) {
             layoutBtn.addEventListener('click', () => {
@@ -86392,7 +86507,23 @@ extendClass(HomeStationUI, {
             `<span class="hs-tab-icon">${this.navIconHtml('menu', 'menuSettings')}</span>` +
             `<span class="hs-tab-label">MENU</span>` +
             `</button>`;
-        return areaOrder.map((entry, oi) => {
+        // Drop locked areas (and orphan dividers) so early-game nav is only LAUNCH + STATION + PROFILES/MENU.
+        const visible = [];
+        areaOrder.forEach((entry) => {
+            if (entry === '|') {
+                if (visible.length && visible[visible.length - 1] !== '|') visible.push('|');
+                return;
+            }
+            if (entry === 'profiles' || entry === 'menu') {
+                visible.push(entry);
+                return;
+            }
+            const area = MENU_AREAS.find((a) => a.id === entry);
+            if (area && area.tabs.length && this.isStationAreaVisible(area.id)) visible.push(entry);
+        });
+        while (visible.length && visible[0] === '|') visible.shift();
+        while (visible.length && visible[visible.length - 1] === '|') visible.pop();
+        return visible.map((entry, oi) => {
             if (entry === '|') return `<span class="hs-tab-divider" data-area-order-index="${oi}" aria-hidden="true"></span>`;
             if (entry === 'profiles') return profilesBtn(oi);
             if (entry === 'menu') return menuBtn(oi);
@@ -86407,9 +86538,11 @@ extendClass(HomeStationUI, {
             const modal = (id) => id === 'play';
             const pages = tabs.filter((id) => !modal(id));
             const target = this.getAreaLandingTab(area, pages) || pages[0] || tabs[0];
+            // Dev mode: gated areas that are not progress-unlocked yet render italic.
+            const lockedCls = (!this.isHubAreasProgressUnlocked() && area.id !== 'station') ? ' is-locked' : '';
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
-            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item>` +
+            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${lockedCls}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item${lockedCls ? ' data-ui-tip="UNLOCKS AFTER CLEARING A PLANET"' : ''}>` +
                 this.areaDecoHtml(area.id) +
                 `<span class="hs-tab-icon">${this.navIconHtml(area.id, this.menuIconFor('area:' + area.id, area.icon))}</span>` +
                 `<span class="hs-tab-label">${areaLabel}</span>` +
@@ -86497,19 +86630,58 @@ extendClass(HomeStationUI, {
         return !!on && !was;
     },
 
-    /**
-     * LAUNCH stays hidden until the pilot clears a first stage. Before that,
-     * new games already open on the map; if they leave for hangar, show LAUNCH
-     * so they can still return.
-     */
+    /** LAUNCH is always part of the header nav (active while on the map). */
     isPlayLaunchUnlocked() {
-        if (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()) return true;
-        if (typeof profileManager === 'undefined' || !profileManager.hasClearedAnyStage) return true;
-        return !!profileManager.hasClearedAnyStage();
+        return true;
+    },
+
+    /**
+     * True once a planet is fully cleared (boss on the start world, or any
+     * clearedPlanetIds entry). Ignores dev mode — that only previews locked areas.
+     */
+    isHubAreasProgressUnlocked() {
+        if (typeof profileManager === 'undefined') return true;
+        if (profileManager.hasClearedFirstPlanet && profileManager.hasClearedFirstPlanet()) return true;
+        const p = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        if (!p || !p.progress || !p.progress.galaxies) return false;
+        return Object.keys(p.progress.galaxies).some((gid) => {
+            const gp = p.progress.galaxies[gid];
+            return !!(gp && (gp.clearedPlanetIds || []).length);
+        });
+    },
+
+    /** Access allowed: progress unlock, or Shift+C so locked areas stay clickable. */
+    isHubAreasUnlocked() {
+        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) return true;
+        return this.isHubAreasProgressUnlocked();
+    },
+
+    /** Area ids gated behind the first planet clear. STATION / PROFILES / MENU stay open. */
+    isStationAreaUnlocked(areaId) {
+        if (!areaId || areaId === 'station' || areaId === 'profiles' || areaId === 'menu' || areaId === 'play') return true;
+        return this.isHubAreasUnlocked();
+    },
+
+    /**
+     * Nav visibility: locked Hangar/Factions/Wiki stay hidden in normal play,
+     * but appear (italic) in dev mode so their gated state is still readable.
+     */
+    isStationAreaVisible(areaId) {
+        if (!areaId || areaId === 'station' || areaId === 'profiles' || areaId === 'menu' || areaId === 'play') return true;
+        if (this.isHubAreasProgressUnlocked()) return true;
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    },
+
+    /** If the current tab sits in a locked area, fall back to PLAY (or STATION). */
+    clampTabToUnlockedAreas() {
+        const area = this.getTabArea(this.tab);
+        if (!area || this.isStationAreaUnlocked(area.id)) return false;
+        this.tab = 'play';
+        if (this.persistTab) this.persistTab();
+        return true;
     },
 
     renderPlayLaunch() {
-        if (!this.isPlayLaunchUnlocked() && this.tab === 'play') return '';
         const ids = (typeof planetSVGManager !== 'undefined') ? ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'] : [];
         const planets = ids.map((id, i) => {
             const svg = planetSVGManager.getPlanetSVG(id);
@@ -86644,6 +86816,7 @@ extendClass(HomeStationUI, {
         const restored = savedTab;
         // PLAY sits in the main menu, not in an area's tab row.
         this.tab = (restored === 'play' || this._tabs.includes(restored)) ? restored : 'station';
+        this.clampTabToUnlockedAreas();
         this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'resources';
         this.ensureShopCategory();
         if (savedState.factionDetail) this._factionDetail = savedState.factionDetail;
@@ -86797,7 +86970,7 @@ extendClass(HomeStationUI, {
             hangarTestArena.show({
                 shipId: this.hangarShipId || 'player_scrap',
                 onClose: () => {
-                    if (this.isVisible && this.tab === 'hangar') {
+                    if (this.isVisible && this.hangarBayActive()) {
                         this.startHangarPreview();
                     }
                 }
@@ -87783,6 +87956,11 @@ extendClass(HomeStationUI, {
         }
         this.overlay.dataset.hsTab = this.tab || 'station';
         this.applyFactionTheme();
+        // Delegated on the overlay root itself (idempotent, guarded inside), so it's
+        // live from the first frame regardless of which tab-render path runs below —
+        // unlike binding it per-tab after the body swap, which could race a soft/
+        // cached re-render that skips rebinding.
+        this.bindShipSlotDotHoverHighlight();
 
         // Soft tab switch: keep header/shell, only swap .hs-body (H10 — full setOverlayHtml was ~70–100ms).
         if (profile && this._hsShellReady && this._trySoftTabSwitch(profile, scrollState)) {
@@ -87815,6 +87993,7 @@ extendClass(HomeStationUI, {
             return;
         }
 
+        this.clampTabToUnlockedAreas();
         const built = this._buildTabBody(profile);
         const { body, bodyClass, isPlay, isMenu, hideTabsForTutorial } = built;
 
@@ -87877,11 +88056,14 @@ extendClass(HomeStationUI, {
         this._finishTabMount(scrollState, { bindChrome: true });
         this._hsShellReady = true;
         this._softBodyTab = this.tab;
+        this._hsHubAreasUnlocked = (!!this.isHubAreasProgressUnlocked() ? '1' : '0')
+            + ((typeof startScreenManager !== 'undefined' && startScreenManager.devMode) ? 'D' : '');
         this._syncTabsUnlockReveal(this.overlay.querySelector('.hs-tabs'), hideTabsForTutorial);
     },
 
     /**
-     * Navbar stays visible at all times, including before the first planet is cleared.
+     * Never blank the whole navbar — LAUNCH + STATION stay. Hangar/Factions/Wiki
+     * are filtered per-area in renderAreaTabs once a planet is cleared.
      */
     shouldHideTabsForTutorial(profile) {
         return false;
@@ -87891,13 +88073,10 @@ extendClass(HomeStationUI, {
      * Shift+C: refresh only nav chrome (area tabs + subnav). Keeps the shell
      * and active body so toggling dev mode stays cheap (~DOM patch, no rebuild).
      */
-    /** Insert/remove the header's LAUNCH button to match current tab + unlock state —
-     *  the soft-render paths below only patch chrome in place, so this must run after
-     *  anything that could change `isPlayLaunchUnlocked()` (tab switch, dev mode toggle). */
+    /** Keep the header LAUNCH button present across soft tab switches; only sync active state. */
     _syncPlayLaunchButton(content) {
-        let playBtn = content.querySelector('[data-play-launch]');
-        const shouldShowLaunch = !(this.tab === 'play' && !this.isPlayLaunchUnlocked());
-        if (!playBtn && shouldShowLaunch) {
+        let playBtn = content.querySelector('.hs-header-split > [data-play-launch]');
+        if (!playBtn) {
             const header = content.querySelector('.hs-header');
             const headerMain = header && header.querySelector('.hs-header-main');
             if (header && headerMain) {
@@ -87914,11 +88093,6 @@ extendClass(HomeStationUI, {
                     playBtn = el;
                 }
             }
-        } else if (playBtn && !shouldShowLaunch) {
-            // Dev mode (or a prior clear) made it show; if that got toggled off again
-            // while still unprogressed and on the play tab, it must hide once more.
-            playBtn.remove();
-            playBtn = null;
         }
         if (playBtn) {
             playBtn.classList.toggle('active', this.tab === 'play');
@@ -87931,26 +88105,19 @@ extendClass(HomeStationUI, {
         const content = this.overlay.querySelector('.vf-browser-shell .home-station-content')
             || this.overlay.querySelector('.home-station-content');
         if (!content) return;
+        // Leaving a gated area while disabling dev mode: hop back to PLAY.
+        if (this.clampTabToUnlockedAreas()) {
+            this.createUI();
+            return;
+        }
         this._syncPlayLaunchButton(content);
         const profile = this.getProfile();
         const hide = this.shouldHideTabsForTutorial(profile);
         const tabsWrap = content.querySelector('.hs-tabs');
         if (tabsWrap) {
-            const needFill = !hide && !tabsWrap.firstElementChild;
             tabsWrap.classList.toggle('hs-tabs-hidden', !!hide);
-            if (needFill) {
-                tabsWrap.innerHTML = this.renderTabs();
-                this._bindSoftTabButtons(tabsWrap);
-                tabsWrap.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
-                    if (menuBtn.dataset.vfSoftBound === '1') return;
-                    menuBtn.dataset.vfSoftBound = '1';
-                    menuBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
-                    });
-                });
-            }
+            // Keep prev hub sig so locked preview tabs can animate out/in.
+            this._syncHubAreaTabs(content, tabsWrap, hide);
             this._syncTabsUnlockReveal(tabsWrap, hide);
         }
         const bodyEl = Array.from(content.children).find((el) => el.classList && el.classList.contains('hs-body'));
@@ -87982,6 +88149,91 @@ extendClass(HomeStationUI, {
         this._hsTabsWereHidden = !!hideTabsForTutorial;
     },
 
+    /**
+     * Rebuild area buttons when Hangar/Factions/Wiki unlock after a planet clear
+     * (soft switches otherwise only patch active classes on existing buttons).
+     * Dev-mode preview of locked areas animates in/out on Shift+C.
+     */
+    _syncHubAreaTabs(content, tabsWrap, hideTabsForTutorial) {
+        if (!tabsWrap || hideTabsForTutorial) return;
+        const progress = !!this.isHubAreasProgressUnlocked();
+        const dev = !!(typeof startScreenManager !== 'undefined' && startScreenManager.devMode);
+        const sig = (progress ? '1' : '0') + (dev ? 'D' : '');
+        const prev = this._hsHubAreasUnlocked;
+        const needRebuild = (prev === undefined) ? !tabsWrap.firstElementChild
+            : (prev !== sig || !tabsWrap.firstElementChild);
+        if (!needRebuild) {
+            this._hsHubAreasUnlocked = sig;
+            return;
+        }
+
+        const wasDevPreview = typeof prev === 'string' && prev.indexOf('D') !== -1 && prev.charAt(0) !== '1';
+        const nowDevPreview = !progress && dev;
+        const reduceMotion = !!(typeof matchMedia === 'function'
+            && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+        // Dev OFF while still gated: play exit on the italic locked cards, then rebuild.
+        if (wasDevPreview && !nowDevPreview && !progress && !reduceMotion) {
+            const locked = Array.from(tabsWrap.querySelectorAll('.hs-area-btn.is-locked'));
+            if (locked.length) {
+                if (!this._hsHubAnimGen) this._hsHubAnimGen = 0;
+                const gen = ++this._hsHubAnimGen;
+                this._hsHubAreasUnlocked = sig;
+                locked.forEach((btn) => {
+                    btn.classList.add('hs-area-lock-out');
+                    btn.setAttribute('aria-hidden', 'true');
+                    btn.tabIndex = -1;
+                });
+                let finished = false;
+                const finish = () => {
+                    if (finished || gen !== this._hsHubAnimGen) return;
+                    finished = true;
+                    this._applyHubAreaTabsHtml(tabsWrap, {
+                        revealProgress: false,
+                        lockIn: false
+                    });
+                };
+                locked.forEach((btn) => btn.addEventListener('animationend', finish, { once: true }));
+                clearTimeout(this._hsHubAnimTimer);
+                this._hsHubAnimTimer = setTimeout(finish, 320);
+                this._softAreaId = null;
+                return;
+            }
+        }
+
+        this._hsHubAreasUnlocked = sig;
+        this._applyHubAreaTabsHtml(tabsWrap, {
+            revealProgress: typeof prev === 'string' && prev.charAt(0) !== '1' && progress,
+            lockIn: nowDevPreview && !wasDevPreview && !reduceMotion
+        });
+    },
+
+    _applyHubAreaTabsHtml(tabsWrap, opts) {
+        if (!tabsWrap) return;
+        tabsWrap.innerHTML = this.renderTabs();
+        if (opts && opts.revealProgress) {
+            tabsWrap.classList.add('hs-tabs-reveal');
+            tabsWrap.addEventListener('animationend', () => tabsWrap.classList.remove('hs-tabs-reveal'), { once: true });
+        }
+        if (opts && opts.lockIn) {
+            tabsWrap.querySelectorAll('.hs-area-btn.is-locked').forEach((btn) => {
+                btn.classList.add('hs-area-lock-in');
+                btn.addEventListener('animationend', () => btn.classList.remove('hs-area-lock-in'), { once: true });
+            });
+        }
+        this._bindSoftTabButtons(tabsWrap);
+        tabsWrap.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
+            if (menuBtn.dataset.vfSoftBound === '1') return;
+            menuBtn.dataset.vfSoftBound = '1';
+            menuBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+            });
+        });
+        this._softAreaId = null;
+    },
+
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
     _buildTabBody(profile) {
         const stats = (typeof profileManager !== 'undefined')
@@ -87992,10 +88244,9 @@ extendClass(HomeStationUI, {
         const ownedHtml = owned.length
             ? `<table class="hs-ship-table">${owned.map((id) => {
                 const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                    `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
+                    `<button type="button" class="hs-ship-icon-btn hs-ship-hangar-badge" data-open-hangar="${id}" data-nav-item data-ui-tip="EDIT ANATOMY" aria-label="Edit ship anatomy">` +
                     `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
                 const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
-                    `<div class="hs-ship-storage-caption">SHIP STORAGE</div>` +
                     `<div class="hs-row">${this.renderShipStorage(profile, id)}</div>` +
                     `</td></tr>`;
                 return `<tbody class="hs-ship-card">${row}${storageRow}</tbody>`;
@@ -88047,12 +88298,12 @@ extendClass(HomeStationUI, {
                     </div>
                     <div class="hs-panel hs-panel-stack hs-panel-parts hs-panel-ships hs-panel-storage${this.stationLayoutSideBySide() ? ' is-side-by-side' : ''}">
                         <button type="button" class="hs-panel-layout-toggle" data-station-layout-toggle aria-pressed="${this.stationLayoutSideBySide()}" aria-label="Switch layout" data-ui-tip="SWITCH LAYOUT">⇄</button>
-                        <section class="hs-station-section${this.stationCollapsedSections().storage ? ' is-collapsed' : ''}" data-station-section="storage">
-                            ${this.stationSectionHeaderHtml('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile), 'storage', !!this.stationCollapsedSections().storage)}
+                        <section class="hs-station-section" data-station-section="storage">
+                            ${this.panelTitle('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile))}
                             <div class="hs-row hs-station-storage-row">${this.renderStationStorage(profile)}</div>
                         </section>
-                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
-                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
+                        <section class="hs-station-section" data-station-section="ships">
+                            ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
                             <div class="hs-row hs-ship-row">${ownedHtml}</div>
                         </section>
                     </div>
@@ -88096,8 +88347,15 @@ extendClass(HomeStationUI, {
     _parkSoftBody(bodyEl, leavingTab) {
         // Hangar owns a live canvas + ResizeObservers — parking it across Esc
         // menu toggles left stale rAFs sizing a detached viewport (layout trash).
-        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu'
-            || leavingTab === 'components' || leavingTab === 'hangar') return;
+        // Those tabs must still empty the body: otherwise a later soft restore
+        // of STATION (appendChild of the parked frag) stacks under leftover
+        // hangar DOM and the UI "stays in hangar".
+        if (!bodyEl || !leavingTab) return;
+        if (leavingTab === 'play' || leavingTab === 'menu'
+            || leavingTab === 'components' || leavingTab === 'hangar') {
+            bodyEl.innerHTML = '';
+            return;
+        }
         if (!this._softBodyCache) this._softBodyCache = Object.create(null);
         const frag = document.createDocumentFragment();
         while (bodyEl.firstChild) frag.appendChild(bodyEl.firstChild);
@@ -88169,6 +88427,7 @@ extendClass(HomeStationUI, {
             this._parkSoftBody(bodyEl, leavingTab);
         }
 
+        this.clampTabToUnlockedAreas();
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
         let hideTabsForTutorial = this.shouldHideTabsForTutorial(profile);
         const isPlay = this.tab === 'play';
@@ -88192,6 +88451,7 @@ extendClass(HomeStationUI, {
 
         const tabsWrap = content.querySelector('.hs-tabs');
         if (tabsWrap) tabsWrap.classList.toggle('hs-tabs-hidden', !!hideTabsForTutorial);
+        this._syncHubAreaTabs(content, tabsWrap, hideTabsForTutorial);
         this._syncTabsUnlockReveal(tabsWrap, hideTabsForTutorial);
 
         // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
@@ -88355,6 +88615,7 @@ extendClass(HomeStationUI, {
                 if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
                 // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
                 if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
+                if (t === 'station') this.bindShipSlotDotHoverHighlight();
                 if (t === 'hangar') { this.bindHangarTabEvents(); this.bindStorageDragAndDrop(); }
                 // Storage grid is rebuilt on soft switch — reattach the 2-column resize grip.
                 if (t === 'station') {
@@ -88375,6 +88636,17 @@ extendClass(HomeStationUI, {
         // Buys from the trader call setStatus→createUI; remount the modal on top.
         if (this._tpsModalOpen && this.visitPostId && this.mountTradingPostModal) {
             this.mountTradingPostModal();
+        }
+        // Anatomy modal lives outside .hs-body; hard createUI wipes it — remount
+        // while still on STATION, otherwise drop the stale flag.
+        if (this._anatomyModalShipId && this.openShipAnatomyModal) {
+            if (this.tab === 'station') {
+                if (!this.overlay.querySelector('[data-anatomy-modal]')) {
+                    this.openShipAnatomyModal(this._anatomyModalShipId);
+                }
+            } else {
+                this.closeShipAnatomyModal({ skipRefresh: true });
+            }
         }
         // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
         // Generation guard: a later createUI (Esc menu mash) invalidates these.
@@ -88523,19 +88795,12 @@ extendClass(HomeStationUI, {
                 this.createUI();
             });
         });
+        // Badge and ship thumb both open the floating anatomy modal.
         this.overlay.querySelectorAll('[data-open-hangar]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                if (this.tab === 'menu') {
-                    this.unmountMenuTab();
-                    this._menuOpts = null;
-                    this._prevTab = null;
-                }
-                this.hangarShipId = btn.getAttribute('data-open-hangar');
-                this.statusMsg = '';
-                this.focusIndex = 0;
-                this.tab = 'hangar';
-                this.persistTab();
-                this.createUI();
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openShipAnatomyModal(btn.getAttribute('data-open-hangar'));
             });
         });
     },
@@ -92047,18 +92312,17 @@ extendClass(HomeStationUI, {
     /** One ship row; the thumb canvas is filled later by drawAreaThumbs(). */
     renderShipTableRow(id, thumbClass, note, actionHtml) {
         const cfg = (typeof shipConfigManager !== 'undefined') ? shipConfigManager.getConfig(id) : {};
-        const cls = this.shipClassLabel(this.shipModelClass(id, cfg));
         const val = (v) => (v != null ? v : '—');
         // tip: a multi-line per-part breakdown (e.g. each weapon's own damage) shown as a proper
         // hover tooltip instead of the plain native `title`, for stats that sum several equipped
         // parts into one number — so hovering the total explains what it's made of.
-        const stat = (icon, label, v, col, tip) => {
+        const stat = (icon, label, v, col, tip, key) => {
             const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
             const img = ir && ir.imgHtml ? ir.imgHtml(icon, 14, 'hs-pixel hs-pixel-12', col, false) : this.iconHtml(icon, 14, 'hs-pixel hs-pixel-12', false);
             const tipAttrs = tip
                 ? `data-ui-tip-instant data-ui-tip-head="${label}" data-ui-tip="${String(tip).replace(/"/g, '&quot;')}"`
                 : `title="${label}"`;
-            return `<span class="hs-ship-stat" style="--stat:${col}" ${tipAttrs}><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
+            return `<span class="hs-ship-stat" data-stat="${key || label.toLowerCase()}" style="--stat:${col}" ${tipAttrs}><span class="hs-ship-stat-ico">${img}</span><b>${val(v)}</b></span>`;
         };
         // HP/Armor/Speed/Damage: live, not the static hull config — getMergedModel() runs the
         // same base-hull → frame-hull-bonus → equipped-ability-stat-mod → weapon-upgrade-bonus
@@ -92091,37 +92355,173 @@ extendClass(HomeStationUI, {
         // equipped defense modules (massive/heavy armor plating) — both are "how much less
         // damage gets through", so a defense part now actually moves this number too.
         const liveArmor = (Number(merged.armor) || 0) + (Number(merged.damageReduction) || 0);
-        const tipText = [['TIER', cfg.tier], ['HP', merged.maxHealth], ['ARMOR', liveArmor], ['DAMAGE', liveDamage], ['SPEED', merged.speed], ['ENERGY', merged.maxEnergy]]
+        const tier = Math.max(0, Math.round(Number(cfg.tier) || 0));
+        const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+        const tierStarIco = ir && ir.imgHtml
+            ? ir.imgHtml('navStar', 14, 'hs-pixel hs-pixel-12', '#ffe14a', false)
+            : '★';
+        const tierStarsHtml = tier > 0
+            ? (' <span class="hs-ship-tier-stars">' + Array.from({ length: tier }, () =>
+                `<span class="hs-ship-tier-star">${tierStarIco}</span>`).join('') + '</span>')
+            : '';
+        const tipText = [['TIER', tier], ['HP', merged.maxHealth], ['ARMOR', liveArmor], ['DAMAGE', liveDamage], ['SPEED', merged.speed], ['ENERGY', merged.maxEnergy]]
             .map((x) => x[0] + ' ' + val(x[1])).join(' · ')
             + (merged.shieldMax ? ' · SHIELD ' + merged.shieldMax : '');
-        const statsHtml = `<div class="hs-ship-stats">` +
-            stat('navStar', 'Tier', cfg.tier, '#ffe14a') +
-            stat('statHealth', 'Health', merged.maxHealth, '#5cff7a') +
-            stat('statArmor', 'Armor', liveArmor, '#5ce1ff') +
-            stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip) +
-            stat('statSpeed', 'Speed', merged.speed, '#c58bff') +
-            stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a') +
-            `</div>`;
-        return `<tr>` +
-            `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}">` +
-            (thumbClass === 'hs-ship-thumb-bp'
-                ? `<span class="hs-ship-thumb-type">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>`
-                : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 32, 'hs-pixel', false)}</span>` +
-                  `<canvas width="56" height="44" data-area-thumb="${id}|"></canvas>`) +
+        // Tier lives as stars after the name — no separate star+value column.
+        // Name → one column per stat, with that stat's equipment slots directly
+        // underneath (Armor→defense, Damage→weapons, Speed→ability, Energy→energy;
+        // Health has hull only, so an empty spacer keeps the row height even).
+        const thumbInner = (thumbClass === 'hs-ship-thumb-bp'
+            ? `<span class="hs-ship-thumb-type">${this.iconHtml('hsShip', 48, 'hs-pixel')}</span>`
+            : `<span class="hs-ship-thumb-empty">${this.iconHtml('hsShip', 48, 'hs-pixel', false)}</span>` +
+              `<canvas width="140" height="110" data-area-thumb="${id}|"></canvas>`) +
+            (actionHtml != null ? `<span class="hs-ship-thumb-action">${actionHtml}</span>` : '');
+        return `<tr class="hs-ship-id-row">` +
+            `<td class="hs-ship-table-thumb"><span class="hs-ship-thumb ${thumbClass}" data-open-anatomy-modal="${id}" data-ui-tip="EDIT ANATOMY" role="button" tabindex="0">` +
+            thumbInner +
             `</span></td>` +
             `<td class="hs-ship-table-name" data-ui-tip="${tipText}">` +
-            statsHtml +
-            `<strong>${this.shipName(id)}</strong>` +
-            // Skip the class line when it would just repeat the ship's own name in full
-            // (e.g. an "Assault" hull simply named "Assault") — nothing new to show twice.
-            (this.shipName(id).trim().toUpperCase() === cls.trim().toUpperCase() && !note
-                ? ''
-                : `<span>${cls}${note ? ' · ' + note : ''}</span>`) +
+            `<strong>${this.shipName(id)}${tierStarsHtml}</strong>` +
+            (() => {
+                const modelClass = (typeof this.shipModelClass === 'function') ? this.shipModelClass(id, cfg) : null;
+                const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+                const caps = (slm && slm.getSlotCaps) ? slm.getSlotCaps(id, modelClass) : {};
+                const loadout = (slm && slm.getLoadout) ? slm.getLoadout(id) : {};
+                // Size level (0 S, 1 M, 2 L) sizes the dot itself and is spelled out in
+                // the tooltip head, same S/M/L the hangar slot-upgrade menu uses.
+                const SIZE_LABEL = ['S', 'M', 'L'];
+                const BUCKET_OF = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' };
+                const dot = (kind, label, filledId, split, sizeLevel) => {
+                    // Full item tooltip (name, description, stats, type/tier) — not just
+                    // the bare name — same detail level the storage-grid cells show.
+                    const tip = filledId
+                        ? String(this.hangarModuleTip(kind, filledId) || this.hangarModuleLabel(filledId)).replace(/"/g, '&quot;')
+                        : (split
+                            ? ('EMPTY SPLIT ' + label + ' SLOT · L/R PAIR')
+                            : ('EMPTY ' + label + ' SLOT'));
+                    const lv = Math.max(0, Math.min(2, Number(sizeLevel) || 0));
+                    const sizeTag = SIZE_LABEL[lv];
+                    // Hidden physical-item casing, same art the storage grid uses — invisible on
+                    // the dot itself (0×0), but ui-tooltip.js picks up its .hs-item-body
+                    // background-image to show the actual item icon in the tooltip head.
+                    let icon = '';
+                    if (filledId && this._storageItemMeta && typeof physicalItem !== 'undefined') {
+                        const meta = this._storageItemMeta(BUCKET_OF[kind] || 'weapons', filledId);
+                        icon = physicalItem.wrap(meta.kind, meta.physId, 48, 48, meta.color, '');
+                    }
+                    return `<span class="hs-ship-slot-dot hs-ship-slot-dot-size-${lv}${filledId ? ' is-filled' : ''}${split ? ' is-split' : ''}" data-slot-kind="${kind}" data-slot-size="${sizeTag}"` +
+                        (filledId ? ` data-module-id="${filledId}"` : '') +
+                        ` data-ui-tip-instant data-ui-tip-head="${label} · ${sizeTag}" data-ui-tip="${tip}">${icon}</span>`;
+                };
+                // Weapons are positional (weaponSlots[i] === null means that exact slot is
+                // empty); the other categories have no slot index, so the first N equipped
+                // ids fill the first N dots and the rest render empty.
+                const padDots = (kind, label, ids, count, isSplit) => {
+                    const list = ids || [];
+                    const out = [];
+                    for (let i = 0; i < (count || 0); i++) {
+                        const split = isSplit && isSplit(i);
+                        let sizeLevel = (slm && slm.getSlotSizeLevel) ? slm.getSlotSizeLevel(id, kind, i) : 1;
+                        // A split mount's own slot level is stored as S (it's a pair of
+                        // half-size sockets) but displays as its full M/L mount size —
+                        // same bump shipLoadoutManager.partFitsSlot applies for fit checks.
+                        if (split) sizeLevel = Math.max(sizeLevel, 1);
+                        out.push(dot(kind, label, list[i] || null, split, sizeLevel));
+                    }
+                    return out;
+                };
+                // loadout.weaponSlots only lists slots currently in use — pad it out to every
+                // mount the ship actually has (weaponMountSlots(caps.weapons)) so unused mounts
+                // show up as empty dots too, not just the ones already touched.
+                const weaponMounts = (slm && slm.weaponMountSlots) ? slm.weaponMountSlots(caps.weapons) : (loadout.weaponSlots || []).length;
+                // A split weapon mount is a mirrored pair (wing/split guns) sharing one
+                // dot — mark it so the CSS can draw a vertical divider through it.
+                const isSplitWeapon = (i) => (slm && slm.isSplitSlot) ? slm.isSplitSlot(id, 'weapon', i) : false;
+                const weaponDots = padDots('weapon', 'WEAPON', loadout.weaponSlots, Math.max(weaponMounts, (loadout.weaponSlots || []).length), isSplitWeapon);
+                const defenseDots = padDots('defense', 'SHIELD', loadout.defenses, caps.defenses);
+                const abilityDots = padDots('ability', 'ABILITY', loadout.abilities, caps.abilities);
+                const energyDots = padDots('energy', 'ENERGY', loadout.energy, caps.energy);
+                // One column = one stat + its matching slot kind under it. Multiple mounts
+                // of the same kind share that column (side by side), so a second gun never
+                // pushes Energy's bar under Speed.
+                const col = (key, statHtml, dots) => {
+                    const dotsHtml = (dots && dots.length)
+                        ? `<span class="hs-ship-slot-dots">${dots.join('')}</span>`
+                        : `<span class="hs-ship-slot-dots is-empty" aria-hidden="true"></span>`;
+                    return `<div class="hs-ship-meta-col" data-stat-col="${key}">${statHtml}${dotsHtml}</div>`;
+                };
+                return `<div class="hs-ship-meta">` +
+                    col('health', stat('statHealth', 'Health', merged.maxHealth, '#5cff7a', null, 'health'), []) +
+                    col('armor', stat('statArmor', 'Armor', liveArmor, '#5ce1ff', null, 'armor'), defenseDots) +
+                    col('damage', stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip, 'damage'), weaponDots) +
+                    col('speed', stat('statSpeed', 'Speed', merged.speed, '#c58bff', null, 'speed'), abilityDots) +
+                    col('energy', stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a', null, 'energy'), energyDots) +
+                    (note ? `<span class="hs-ship-meta-note">${note}</span>` : '') +
+                    `</div>`;
+            })() +
             `</td>` +
-            (actionHtml != null
-                ? `<td class="hs-ship-table-action">${actionHtml}</td>`
-                : '') +
             `</tr>`;
+    },
+
+    /** Hovering a ship row's slot dot highlights the same module's icon wherever
+     * else it's shown on screen (parts list / hangar grid), matched by the id
+     * both sides already carry (data-module-id here, data-part-id there). */
+    bindShipSlotDotHoverHighlight() {
+        if (!this.overlay) return;
+        // Bound once on the overlay root (stable for the UI's whole lifetime), not on
+        // the ship table itself — that table is torn down and rebuilt on every tab
+        // switch/refresh, so a listener attached to it (even re-attached per render)
+        // can race a cached/soft re-render that skips the rebind step and silently
+        // leave hovering dead with no console error.
+        if (this.overlay.dataset.slotDotHoverBound === '1') return;
+        this.overlay.dataset.slotDotHoverBound = '1';
+        const clearHighlight = () => {
+            this.overlay.querySelectorAll('.is-slot-hover-highlight').forEach((el) => el.classList.remove('is-slot-hover-highlight'));
+        };
+        const escId = (id) => (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(id) : id;
+        this.overlay.addEventListener('pointerover', (e) => {
+            const dot = e.target && e.target.closest ? e.target.closest('.hs-ship-slot-dot[data-module-id]') : null;
+            if (dot) {
+                const id = dot.getAttribute('data-module-id');
+                clearHighlight();
+                if (this.clearShipStatCompareMarks) this.clearShipStatCompareMarks();
+                dot.classList.add('is-slot-hover-highlight');
+                this.overlay.querySelectorAll(`[data-part-id="${escId(id)}"]`).forEach((el) => el.classList.add('is-slot-hover-highlight'));
+                return;
+            }
+            // Reverse direction: hovering an assigned item (storage grid / parts
+            // list) pulses the matching slot dot(s) on the ship row.
+            const item = e.target && e.target.closest ? e.target.closest('[data-part-id]') : null;
+            if (!item) return;
+            const id = item.getAttribute('data-part-id');
+            clearHighlight();
+            if (this.clearShipStatCompareMarks) this.clearShipStatCompareMarks();
+            item.classList.add('is-slot-hover-highlight');
+            this.overlay.querySelectorAll(`.hs-ship-slot-dot[data-module-id="${escId(id)}"]`).forEach((el) => el.classList.add('is-slot-hover-highlight'));
+            // Storage weapon hover: punch ship damage green/red vs the mounted gun.
+            if (item.getAttribute('data-part-kind') === 'weapon' && this.markShipStatCompareForWeapon) {
+                const shipId = item.getAttribute('data-drag-ship')
+                    || item.getAttribute('data-ship')
+                    || (typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+                        ? ((profileManager.getActiveProfile() || {}).activeShipId || '') : '');
+                if (shipId) this.markShipStatCompareForWeapon(shipId, id);
+            }
+        });
+        this.overlay.addEventListener('pointerout', (e) => {
+            const source = (e.target && e.target.closest) ? e.target.closest('.hs-ship-slot-dot[data-module-id], [data-part-id]') : null;
+            if (!source) return;
+            const related = (e.relatedTarget && e.relatedTarget.closest) ? e.relatedTarget.closest('.hs-ship-slot-dot[data-module-id], [data-part-id]') : null;
+            if (related === source) return;
+            clearHighlight();
+            if (this.clearShipStatCompareMarks) this.clearShipStatCompareMarks();
+            // Keep equipment-tab selection marks if a part stays selected.
+            if (this.markShipStatsWorseForSelected && this.expandedEquipItem) {
+                const p = typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+                    ? profileManager.getActiveProfile() : null;
+                const shipId = (p && p.activeShipId) || '';
+                if (shipId) this.markShipStatsWorseForSelected(shipId);
+            }
+        });
     },
 });
 
@@ -92380,6 +92780,35 @@ extendClass(HomeStationUI, {
         return used + '/' + cap;
     },
 
+    /** True when filing `bucket`/`id` into station storage would exceed the bay budget
+     *  (same check moveToStationStorage uses for BAY FULL). */
+    _stationRejectsItem(profile, bucket, id) {
+        if (!profile) return false;
+        const defId = this._storageDefId ? this._storageDefId(id) : String(id || '');
+        const span = this._storageItemSpan(bucket, defId);
+        const add = Math.max(1, (span[0] || 1) * (span[1] || 1));
+        return this._stationStorageUsed(profile) + add > this._stationStorageSlots(profile);
+    },
+
+    /** True when `shipId` has no free, fitting mount left for this part (equip would refuse). */
+    _noFreeShipSlot(shipId, kind, partId) {
+        if (!shipId || !kind || kind === 'blueprint' || !partId) return false;
+        if (typeof shipLoadoutManager === 'undefined') return false;
+        const slm = shipLoadoutManager;
+        const key = slm.kindToLoadoutKey(kind);
+        const caps = slm.getSlotCaps(shipId, slm.resolveModelClass(shipId));
+        const cap = key === 'weapons' ? slm.weaponMountSlots(caps.weapons) : Math.max(0, Number(caps[key]) || 0);
+        if (!cap) return true;
+        const L = slm.getLoadout(shipId);
+        const list = key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || []);
+        if (list.indexOf(partId) !== -1) return false; // already equipped — unequip still works
+        const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(shipId, kind, partId, i).ok;
+        for (let i = 0; i < cap; i++) {
+            if (!(list[i] || null) && fits(i)) return false;
+        }
+        return true;
+    },
+
     /** Turn a slot budget into a compact cols×rows bay (grows wider first, then taller). */
     _stationStorageGrid(profile, usedCells, opts) {
         const budget = Math.max(this._stationStorageSlots(profile), usedCells | 0);
@@ -92478,7 +92907,7 @@ extendClass(HomeStationUI, {
         const layout = this._storageLayoutPx();
         const cs = layout.cell;
         const gap = layout.gap;
-        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
+        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; grid-auto-flow: column dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
@@ -92527,6 +92956,9 @@ extendClass(HomeStationUI, {
                 const L2 = shipLoadoutManager.getLoadout(activeShipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
+            if (!isBp && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.partSizeLabel) {
+                stats.push('SIZE ' + shipLoadoutManager.partSizeLabel(meta.kind, meta.physId));
+            }
             if (!isBp && e.unit != null) {
                 const lv = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeLevel)
                     ? profileManager.getItemUpgradeLevel(e.bucket, e.id, profile) : 0;
@@ -92560,10 +92992,14 @@ extendClass(HomeStationUI, {
             return { html, span, pos: pinnedPos };
         });
         const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        const cap = this._stationStorageSlots(profile);
+        const fullCls = used >= cap ? ' is-capacity-full' : '';
+        const extra = ((opts.extraGridClass || '') + fullCls).trim();
         return this._storageGridHtml(
             cells,
             this._stationStorageGrid(profile, used, { maxCols: opts.maxCols }),
-            'data-storage-target="station"'
+            'data-storage-target="station"',
+            extra
         );
     },
 
@@ -92656,6 +93092,9 @@ extendClass(HomeStationUI, {
                 const L2 = shipLoadoutManager.getLoadout(shipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
+            if (!isBp && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.partSizeLabel) {
+                stats.push('SIZE ' + shipLoadoutManager.partSizeLabel(meta.kind, meta.physId));
+            }
             if (!isBp && e.unit != null) {
                 const lv = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeLevel)
                     ? profileManager.getItemUpgradeLevel(e.bucket, e.id, profile) : 0;
@@ -92670,18 +93109,29 @@ extendClass(HomeStationUI, {
                     ? `data-equip-select="${key}"`
                     : `data-move-to-station="${key}" data-ship="${shipId}"`);
             // tipAction:false (hangar bay) drops the station-move hint — click toggles equip there.
+            // Lock cursor when equip can't land (no free mount) or — on the station tab —
+            // when filing into station storage would hit BAY FULL.
+            const slotsFull = !isBp && !equipped && this._noFreeShipSlot(shipId, meta.kind, meta.physId);
+            const stationFull = !selectMode && opts.tipAction !== false
+                && this._stationRejectsItem(profile, e.bucket, defId);
+            const destFull = slotsFull || stationFull;
             const tipAction = selectMode ? 'SELECT'
-                : (opts.tipAction === false ? null : '→ STATION');
+                : (opts.tipAction === false ? (slotsFull ? 'SLOTS FULL' : null)
+                    : (stationFull ? 'STATION FULL' : (slotsFull ? 'SLOTS FULL' : '→ STATION')));
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, defId)).concat(qty > 1 ? ['×' + qty] : [])
                 : stats.concat([equipped ? 'EQUIPPED' : null, tipAction].filter(Boolean))).join('\n').replace(/"/g, '&quot;');
+            const lockReason = stationFull ? 'station storage full' : (slotsFull ? 'all slots full' : null);
             const ariaLabel = isBp ? `Craft ${meta.label}`
-                : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to station storage`);
+                : (selectMode ? `Select ${meta.label}`
+                    : (opts.tipAction === false
+                        ? (slotsFull ? `${meta.label} — all slots full` : meta.label)
+                        : (lockReason ? `${meta.label} — ${lockReason}` : `Move ${meta.label} to station storage`)));
             const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
             // data-part-kind/-id: see renderStationStorage above — same reason, needed here too
             // since this is the function the hangar bay-inventory grid actually calls.
             // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
             const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}${destFull ? ' is-dest-full' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
@@ -95178,13 +95628,18 @@ extendClass(HomeStationUI, {
                     : null));
         const frameMaxed = frameLevel >= frameMax;
 
-        // Ships view: a plain picker.
-        const shipPicker = owned.map((id) => {
-            const selected = id === profile.activeShipId ? ' ★' : '';
-            return `<button type="button" class="hs-hangar-ship hs-hangar-ship-pick${id === shipId ? ' active' : ''}" data-hangar-ship="${id}">` +
-                `<canvas class="hs-area-thumb is-ship" width="72" height="48" data-area-thumb="${id}|"></canvas>` +
-                `<span>${this.shipName(id)}${selected}</span></button>`;
-        }).join('');
+        // Ship picker: a dropdown above the SLOTS/PARTS sidebar instead of its own tab —
+        // one ship is "open" at a time, so a whole tab for picking it cost more space
+        // than the choice itself needs. A custom button+list, not a native <select>: a
+        // native popup can't be themed (looked out of place against the pixel UI) and its
+        // close interferes with the overlay's own click handling.
+        const shipLabel = (id) => `${this.shipName(id)}${id === profile.activeShipId ? ' ★' : ''}`;
+        const shipDropdown = `<div class="hs-hangar-ship-dropdown${this._hangarShipDropdownOpen ? ' is-open' : ''}" data-hangar-ship-dropdown>` +
+            `<button type="button" class="hs-hangar-ship-dropdown-btn" data-hangar-ship-dropdown-toggle aria-haspopup="listbox" aria-expanded="${!!this._hangarShipDropdownOpen}">` +
+            `<span>${shipLabel(shipId)}</span><span class="hs-hangar-ship-dropdown-arrow" aria-hidden="true">▾</span></button>` +
+            `<div class="hs-hangar-ship-dropdown-list" role="listbox">` +
+            owned.map((id) => `<button type="button" class="hs-hangar-ship-dropdown-item${id === shipId ? ' is-active' : ''}" data-hangar-ship="${id}" role="option" aria-selected="${id === shipId}">${shipLabel(id)}</button>`).join('') +
+            `</div></div>`;
 
         const powerBudget = (typeof shipLoadoutManager !== 'undefined'
             && shipLoadoutManager.computePowerBudget)
@@ -95288,19 +95743,18 @@ extendClass(HomeStationUI, {
                 </div>
                 <div class="hs-hangar-split${this._hangarLeftCollapsed ? ' hs-hangar-left-collapsed' : ''}${this._hangarRightCollapsed ? ' hs-hangar-right-collapsed' : ''}">
                     <aside class="hs-hangar-list hs-panel">
+                        <div class="hs-hangar-ship-dropdown-row">${shipDropdown}</div>
                         <h3 class="hs-panel-title">
                             <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
-                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : this._hangarLeftView === 'slots' ? 'SLOTS' : 'SHIPS'}</span>
+                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SLOTS'}</span>
                             <span class="hs-panel-scan" aria-hidden="true"></span>
                             ${this.renderHangarLeftViewToggle()}
                             <button type="button" class="hs-sidebar-toggle hs-sidebar-strip" data-hangar-sidebar="left"
-                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SHIPS'} ›</span></button>
+                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SLOTS'} ›</span></button>
                         </h3>
                         ${this._hangarLeftView === 'parts'
                             ? this.renderHangarPartsGrid(inventory, loadout)
-                            : this._hangarLeftView === 'slots'
-                            ? this.renderHangarSlotsView(hangarSlots.slots, layout)
-                            : `<div class="hs-actions-col hs-hangar-ships is-picker" id="hsHangarShipsContainer">${shipPicker}</div>`}
+                            : this.renderHangarSlotsView(hangarSlots.slots, layout)}
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
@@ -96681,10 +97135,18 @@ extendClass(HomeStationUI, {
 
         const mw = Math.max(8, model.width || 20);
         const mh = Math.max(8, model.height || 16);
+        // Anatomy modal has no side-rail slot cards — use tighter gutters and a
+        // higher max scale so wings stay readable instead of thin dark lines.
+        const anatomy = !!this._anatomyModalShipId;
+        const maxFit = anatomy ? 18 : 10;
         // Leave side gutters for slot cards; ship stays centered and clickable
         // (smaller gutters → a bigger default zoom; the wheel still zooms out)
-        const padX = Math.max(48, Math.floor(w * 0.12));
-        const padY = Math.max(20, Math.floor(h * 0.06));
+        const padX = anatomy
+            ? Math.max(24, Math.floor(w * 0.04))
+            : Math.max(48, Math.floor(w * 0.12));
+        const padY = anatomy
+            ? Math.max(16, Math.floor(h * 0.04))
+            : Math.max(20, Math.floor(h * 0.06));
         // Fit the reference hull, not this layout, so moving areas never
         // rescales the ship (it grows/shrinks in place instead).
         const refW = typeof PLAYER_REF_W !== 'undefined' ? PLAYER_REF_W : 36;
@@ -96692,15 +97154,18 @@ extendClass(HomeStationUI, {
         const fitScale = Math.max(2, Math.min(
             Math.floor((w - padX * 2) / refW),
             Math.floor((h - padY * 2) / refH),
-            10
+            maxFit
         ));
         // The fit scale is sticky per ship and bay size: editing a part
         // grows or shrinks the bounding box, and re-fitting on every change
         // popped the whole ship to a new size.
-        // Inventory open on the left: the ship is fitted and centred in the part of the bay that stays visible.
-        const invPx = this._bayInv ? Math.min(428, Math.floor(w * 0.6)) : 0;
+        // Inventory open on the left: the ship is fitted and centred in the part of the bay
+        // that stays visible. The anatomy modal has no inventory panel at all (and no
+        // toggle to open one) — _bayInv is a persisted global flag left over from a
+        // previous HANGAR tab visit, so it must not skew this view's centring.
+        const invPx = (this._bayInv && !anatomy) ? Math.min(428, Math.floor(w * 0.6)) : 0;
         const wv = w - invPx, cxView = invPx + wv / 2;
-        const fitKey = shipId + '|' + w + '|' + h + '|' + invPx;
+        const fitKey = shipId + '|' + w + '|' + h + '|' + invPx + (anatomy ? '|a' : '');
         // The view (zoom / pan) only starts fresh for another ship or a clearly different bay size. A rebuild of the
         // hangar UI (clicking an area, releasing a drag) lays the canvas out at slightly different sizes first, and
         // re-fitting on each of those threw the user's zoom and pan away.
@@ -96715,15 +97180,21 @@ extendClass(HomeStationUI, {
             this._hangarFit = { key: fitKey, scale: fitScale, ship: shipId, w: w, h: h };
             const vis = this.measureHangarShipVisible(model, fitScale);
             if (vis) {
-                const padTop = Math.max(110, Math.floor(h * 0.22));
-                const padBottom = Math.max(40, Math.floor(h * 0.15));
-                const padSide = Math.max(40, Math.floor(wv * 0.24));
+                const padTop = anatomy
+                    ? Math.max(36, Math.floor(h * 0.08))
+                    : Math.max(110, Math.floor(h * 0.22));
+                const padBottom = anatomy
+                    ? Math.max(28, Math.floor(h * 0.08))
+                    : Math.max(40, Math.floor(h * 0.15));
+                const padSide = anatomy
+                    ? Math.max(24, Math.floor(wv * 0.06))
+                    : Math.max(40, Math.floor(wv * 0.24));
                 const bw = vis.w / fitScale;
                 const bh = vis.h / fitScale;
                 const s = Math.max(2, Math.min(
                     Math.floor((wv - padSide * 2) / bw),
                     Math.floor((h - padTop - padBottom) / bh),
-                    10
+                    maxFit
                 ));
                 this._hangarFit.scale = s;
                 const ox0 = Math.floor((w - mw * s) / 2);
@@ -96742,8 +97213,12 @@ extendClass(HomeStationUI, {
             this._hangarRecenter = false;
             const vis = this.measureHangarShipVisible(model, baseScale);
             if (vis) {
-                const padTop = Math.max(110, Math.floor(h * 0.22));
-                const padBottom = Math.max(40, Math.floor(h * 0.15));
+                const padTop = anatomy
+                    ? Math.max(36, Math.floor(h * 0.08))
+                    : Math.max(110, Math.floor(h * 0.22));
+                const padBottom = anatomy
+                    ? Math.max(28, Math.floor(h * 0.08))
+                    : Math.max(40, Math.floor(h * 0.15));
                 const z = Math.max(0.12, Math.min(4, this._hangarBayZoom || 1));
                 const s = baseScale * z;
                 const cx = (vis.x + vis.w / 2) / baseScale * s;
@@ -97240,8 +97715,21 @@ extendClass(HomeStationUI, {
             const side = slotEl.getAttribute('data-slot-side') === 'left' ? 'left' : 'right';
             const startX = (side === 'left' ? cardRect.right : cardRect.left) - layerRect.left;
             const startY = (cardRect.top + cardRect.height / 2) - layerRect.top;
-            const endX = (pinRect.left + pinRect.width / 2) - layerRect.left;
-            const endY = (pinRect.top + pinRect.height / 2) - layerRect.top;
+            const pinCx = (pinRect.left + pinRect.width / 2) - layerRect.left;
+            const pinCy = (pinRect.top + pinRect.height / 2) - layerRect.top;
+            // Stop at the pin's nearest edge, not its centre — several cards can share one
+            // pin, and lines converging dead-centre behind the move handle read as a messy
+            // knot instead of each one visibly pointing at the mount. Ray from the pin
+            // centre out towards the card, clipped where it exits the pin's box.
+            const halfW = pinRect.width / 2;
+            const halfH = pinRect.height / 2;
+            const dx = startX - pinCx;
+            const dy = startY - pinCy;
+            const sx = dx !== 0 ? halfW / Math.abs(dx) : Infinity;
+            const sy = dy !== 0 ? halfH / Math.abs(dy) : Infinity;
+            const s = Math.min(sx, sy, 1);
+            const endX = pinCx + dx * s;
+            const endY = pinCy + dy * s;
             const d = `M ${startX.toFixed(1)} ${startY.toFixed(1)} L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
             const key = kind + ':' + index;
             seen.add(key);
@@ -97265,7 +97753,162 @@ extendClass(HomeStationUI, {
 });
 
 
-/* --- js/ui/home-station/update-component-details.js?v=pull-1 --- */
+/* --- js/ui/home-station/ship-anatomy-modal.js?v=hangar-1 --- */
+"use strict";
+
+// HomeStationUI methods: a standalone "ship anatomy" modal — the same canvas-drawn
+// hull/wing/spine editing the full HANGAR tab's bay stage has (drag a wing to rotate
+// it, drag a joint to scale it, toggle hull areas), opened from the STATION view
+// without navigating away. It reuses the hangar bay's own ids (#hsHangarBayCanvas,
+// #hsHangarBayStage, …) and drawing/drag functions (drawHangarBay, bindHangarWingDrag,
+// onHangarDragDown/Up) unchanged — those already read/write the same profile +
+// shipLoadoutManager state the HANGAR tab's own editor does, so a change made here
+// shows up there too (and vice versa) with no separate state to keep in sync.
+extendClass(HomeStationUI, {
+    /** True while the hangar bay stage is live on screen — either the full HANGAR tab
+     *  or this modal — so the many `this.tab === 'hangar'` redraw gates elsewhere also
+     *  fire for the modal instead of silently dropping every interactive drag frame. */
+    hangarBayActive() {
+        return this.tab === 'hangar' || !!this._anatomyModalShipId;
+    },
+    /** True when the hangar ship-tree sidebar is the place to edit selections.
+     *  The anatomy modal has no tree — clicks must open floating style panels. */
+    hangarSidebarOpen() {
+        if (this._anatomyModalShipId) return false;
+        return !this._hangarLeftCollapsed;
+    },
+    /** On-ship slot pins for the anatomy modal (same markup as the hangar bay
+     *  layer, without needing the hangar tab's side rails). */
+    renderAnatomyModalSlotsHtml(shipId) {
+        if (!shipId || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.buildHangarSlots) return '';
+        const merged = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+            ? shipConfigManager.getMergedModel(shipId) : null;
+        const modelClass = this.shipModelClass
+            ? this.shipModelClass(shipId, typeof shipConfigManager !== 'undefined' ? shipConfigManager.getConfig(shipId) : null)
+            : null;
+        const hangarSlots = shipLoadoutManager.buildHangarSlots(shipId, modelClass, merged);
+        const loadout = shipLoadoutManager.getLoadout(shipId) || {};
+        const inventory = shipLoadoutManager.getInventory
+            ? shipLoadoutManager.getInventory(shipId) : loadout;
+        const equippedByKind = { weapon: {}, defense: {}, ability: {}, energy: {} };
+        (loadout.weapons || []).forEach((id) => { equippedByKind.weapon[id] = true; });
+        (loadout.defenses || []).forEach((id) => { equippedByKind.defense[id] = true; });
+        (loadout.abilities || []).forEach((id) => { equippedByKind.ability[id] = true; });
+        (loadout.energy || []).forEach((id) => { equippedByKind.energy[id] = true; });
+        if (!this.renderHangarSlotDropdown) return '';
+        return (hangarSlots.slots || []).map((slot) =>
+            this.renderHangarSlotDropdown(slot, inventory, equippedByKind)).join('');
+    },
+
+    renderShipAnatomyModalHtml(shipId) {
+        return `<div class="hs-anatomy-modal-overlay" data-anatomy-modal role="dialog" aria-modal="true" aria-label="Ship anatomy">` +
+            `<div class="hs-anatomy-modal">` +
+            `<div class="hs-anatomy-modal-head">` +
+            `<span class="hs-anatomy-modal-title">${this.shipName(shipId)} · ANATOMY</span>` +
+            `<button type="button" class="hs-anatomy-modal-close" data-anatomy-modal-close aria-label="Close">✕</button>` +
+            `</div>` +
+            `<div class="hs-hangar-bay-stage is-anatomy-modal" id="hsHangarBayStage">` +
+            `<canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Ship anatomy"></canvas>` +
+            `<div class="hs-bay-zoom" role="group" aria-label="Zoom">` +
+            `<input type="range" id="hsBayZoomSlider" class="hs-bay-zoom-slider" min="0" max="100" step="1" value="63" aria-label="Zoom" title="Zoom (mouse wheel works too)">` +
+            `<output id="hsBayZoomOut" class="hs-bay-zoom-out">100%</output>` +
+            `<button type="button" class="hs-bay-zoom-btn is-fit" data-bay-zoom="fit" title="Fit ship" aria-label="Fit ship">FIT</button>` +
+            `</div>` +
+            `<div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">` +
+            `<svg class="hs-hangar-link-svg" id="hsHangarLinkSvg" aria-hidden="true"></svg>` +
+            this.renderAnatomyModalSlotsHtml(shipId) +
+            `</div>` +
+            `</div>` +
+            `</div></div>`;
+    },
+
+    /**
+     * Open ship anatomy as a modal inside the station screen (.home-station-content):
+     * dimmed overlay + dialog over the tab body, not over the browser/bezel.
+     */
+    openShipAnatomyModal(shipId) {
+        if (!shipId || !this.overlay) return;
+        // Drop a previous modal without a station refresh (we're mounting a new one).
+        const prev = this.overlay.querySelector('[data-anatomy-modal]');
+        if (prev) prev.remove();
+        if (this._anatomyModalKeyHandler) {
+            document.removeEventListener('keydown', this._anatomyModalKeyHandler);
+            this._anatomyModalKeyHandler = null;
+        }
+        this.hangarShipId = shipId;
+        this._anatomyModalShipId = shipId;
+        this._hangarFit = null;
+        this._hangarBayZoom = 1;
+        this._hangarZoomTarget = 1;
+        const root = this.overlay.querySelector('.vf-browser-shell .home-station-content')
+            || this.overlay.querySelector('.home-station-content');
+        if (!root) {
+            this._anatomyModalShipId = null;
+            return;
+        }
+        root.insertAdjacentHTML('beforeend', this.renderShipAnatomyModalHtml(shipId));
+        this.bindShipAnatomyModalEvents();
+        // Pins + bay ResizeObserver (same path the HANGAR tab uses).
+        if (this.bindHangarSlotEvents) this.bindHangarSlotEvents();
+        // Two frames: first lets the modal layout size the stage, second fits
+        // the ship (a single frame often measured a 0×0 canvas and left wings tiny).
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                if (this._anatomyModalShipId !== shipId) return;
+                this._hangarFit = null;
+                if (this.hangarBayZoomStep) this.hangarBayZoomStep('fit');
+                else if (this.drawHangarBay) this.drawHangarBay();
+            });
+        });
+    },
+
+    closeShipAnatomyModal(opts) {
+        if (!this.overlay) return;
+        const had = !!this._anatomyModalShipId
+            || !!this.overlay.querySelector('[data-anatomy-modal]');
+        const modal = this.overlay.querySelector('[data-anatomy-modal]');
+        if (modal) modal.remove();
+        this._anatomyModalShipId = null;
+        if (this._anatomyModalKeyHandler) {
+            document.removeEventListener('keydown', this._anatomyModalKeyHandler);
+            this._anatomyModalKeyHandler = null;
+        }
+        // Modal owned the bay ResizeObserver — drop it unless the hangar tab is live.
+        if (this.tab !== 'hangar' && this._hangarBayResizeObs) {
+            this._hangarBayResizeObs.disconnect();
+            this._hangarBayResizeObs = null;
+        }
+        // The station ship row's own thumb/stats may have changed (e.g. an area
+        // toggled off changes stats) — refresh it now that the modal is gone.
+        if (had && this.tab === 'station' && !(opts && opts.skipRefresh)) this.createUI();
+    },
+
+    bindShipAnatomyModalEvents() {
+        const modal = this.overlay && this.overlay.querySelector('[data-anatomy-modal]');
+        if (!modal) return;
+        const closeBtn = modal.querySelector('[data-anatomy-modal-close]');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.closeShipAnatomyModal());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) this.closeShipAnatomyModal();
+        });
+        const fitBtn = modal.querySelector('[data-bay-zoom="fit"]');
+        if (fitBtn) fitBtn.addEventListener('click', () => this.hangarBayZoomStep('fit'));
+        const slider = modal.querySelector('#hsBayZoomSlider');
+        if (slider) slider.addEventListener('input', () => this.hangarBayZoomStep('set', slider.value));
+        this._anatomyModalKeyHandler = (e) => {
+            if (e.key === 'Escape') this.closeShipAnatomyModal();
+        };
+        document.addEventListener('keydown', this._anatomyModalKeyHandler);
+        // Slot pins must be draggable here too — the hangar tab binds these on
+        // its own mount, but the anatomy modal is a separate stage.
+        if (this.bindHangarSlotPinDrag) this.bindHangarSlotPinDrag();
+        if (this.ensureHangarMirrorPinGrab) this.ensureHangarMirrorPinGrab();
+        if (this.bindHangarSlotHoverLink) this.bindHangarSlotHoverLink();
+    },
+});
+
+
+/* --- js/ui/home-station/update-component-details.js?v=wbridge-1 --- */
 "use strict";
 
 // HomeStationUI methods, split from home-station.js.
@@ -97445,7 +98088,10 @@ extendClass(HomeStationUI, {
             });
         });
         panel.querySelectorAll('[data-open-spine]').forEach((button) => {
-            button.addEventListener('click', () => this.showFloatingSpineConnectionStyle(area));
+            button.addEventListener('click', () => {
+                this.showFloatingSpineConnectionStyle(area);
+                if (this.panHangarToSelection) this.panHangarToSelection();
+            });
         });
         panel.querySelectorAll('[data-panel-style]').forEach((control) => {
             control.addEventListener('click', () => {
@@ -97461,10 +98107,16 @@ extendClass(HomeStationUI, {
             });
         });
         panel.querySelectorAll('[data-open-spine]').forEach((button) => {
-            button.addEventListener('click', () => this.showFloatingSpineConnectionStyle(area));
+            button.addEventListener('click', () => {
+                this.showFloatingSpineConnectionStyle(area);
+                if (this.panHangarToSelection) this.panHangarToSelection();
+            });
         });
         panel.querySelectorAll('[data-open-connection]').forEach((button) => {
-            button.addEventListener('click', () => this.showFloatingConnectionStyle(area));
+            button.addEventListener('click', () => {
+                this.showFloatingConnectionStyle(area);
+                if (this.panHangarToSelection) this.panHangarToSelection();
+            });
         });
         panel.querySelectorAll('[data-voxel-scale]').forEach((input) => {
             input.addEventListener('input', () => {
@@ -97524,7 +98176,7 @@ extendClass(HomeStationUI, {
                 ${this.connectionStrengthRow('WING', 'data-wing-connection-width-end', 0.02, 0.5,
                     Number(shipLoadoutManager.getLoadout(shipId).wingConnectionWidthEnd) || this.getWingConnectionWidthValue(shipId))}
                 <label class="hs-connection-link-ends"><input type="checkbox" data-link-ends${Number(shipLoadoutManager.getLoadout(shipId).wingConnectionWidthEnd) ? '' : ' checked'}> <span>SAME BOTH ENDS</span></label>
-                <label><span>OFFSET</span><input type="range" data-wing-connection min="-1" max="1" step="0.01" value="${this.getWingConnectionValue(shipId)}"></label>
+                <label><span>HULL HEIGHT</span><input type="range" data-wing-connection min="-1" max="1" step="0.01" value="${this.getWingConnectionValue(shipId)}"></label>
             </div>
             <button type="button" class="hs-floating-panel-link" data-open-wing>← BACK TO WING</button>`;
 
@@ -97703,7 +98355,7 @@ extendClass(HomeStationUI, {
 });
 
 
-/* --- js/ui/home-station/wing-preview-pixel-zoom.js?v=jshift-1 --- */
+/* --- js/ui/home-station/wing-preview-pixel-zoom.js?v=wbridge-6 --- */
 "use strict";
 
 // HomeStationUI methods, split from home-station.js.
@@ -97834,20 +98486,59 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * A wing's editable frame is the part its cropped art actually covers, so
-     * the selection box and drag zones sit on the visible wing rather than
-     * around empty space the crop left behind.
+     * A wing's editable frame is the axis-aligned box around the art that is
+     * actually on screen: start from the cropped visible rect, then if the
+     * wing is rotated take the AABB of its lit cells after rotation so the
+     * upright scale rectangle fits the silhouette (not the empty corners of
+     * the unrotated rect, which pad swept wings off-axis).
      */
     hangarSegmentFrame(seg, model, scale) {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         if (!loader || !loader.wingVisibleRect) return seg;
-        return loader.wingVisibleRect(seg, model, scale);
+        const vis = loader.wingVisibleRect(seg, model, scale);
+        if (!vis || (seg.id !== 'wingLeft' && seg.id !== 'wingRight')) return vis || seg;
+        const rot = this.hangarSegmentRotation(seg.id, model, scale);
+        if (!rot || !rot.angle) return vis;
+        const cos = Math.cos(rot.angle);
+        const sin = Math.sin(rot.angle);
+        const px = rot.pivot.x;
+        const py = rot.pivot.y;
+        const lit = loader.wingLitCells && loader.wingLitCells(seg, model, scale);
+        const half = lit && lit.cell ? lit.cell * 0.5 : 0;
+        const pts = (lit && lit.pts && lit.pts.length)
+            ? lit.pts
+            : [
+                [vis.x, vis.y],
+                [vis.x + vis.width, vis.y],
+                [vis.x, vis.y + vis.height],
+                [vis.x + vis.width, vis.y + vis.height]
+            ];
+        let x0 = Infinity;
+        let y0 = Infinity;
+        let x1 = -Infinity;
+        let y1 = -Infinity;
+        pts.forEach(([x, y]) => {
+            const dx = x - px;
+            const dy = y - py;
+            const rx = px + dx * cos - dy * sin;
+            const ry = py + dx * sin + dy * cos;
+            if (rx - half < x0) x0 = rx - half;
+            if (rx + half > x1) x1 = rx + half;
+            if (ry - half < y0) y0 = ry - half;
+            if (ry + half > y1) y1 = ry + half;
+        });
+        return {
+            id: seg.id,
+            x: x0,
+            y: y0,
+            width: Math.max(0.5, x1 - x0),
+            height: Math.max(0.5, y1 - y0)
+        };
     },
 
     /**
-     * Rotation a wing's frame and hit area share with its art: same angle and
-     * same root pivot renderProceduralWing uses, so the selection box tilts
-     * with the wing instead of staying axis-aligned beside it.
+     * Wing art rotation (root pivot + angle). Used by the rotate knob and
+     * procedural wing draw — not by the scale frame, which stays axis-aligned.
      */
     hangarSegmentRotation(segId, model, scale) {
         if (segId !== 'wingLeft' && segId !== 'wingRight') return null;
@@ -97864,18 +98555,12 @@ extendClass(HomeStationUI, {
         };
     },
 
-    /** Map a layout point into a segment's own (possibly rotated) space. */
+    /**
+     * Scale/hit points stay in unrotated layout space so resize grips are
+     * always upright rectangles, matching the drawn scale frame.
+     */
     hangarSegmentLocalPoint(pt, segId, model, scale) {
-        const rot = this.hangarSegmentRotation(segId, model, scale);
-        if (!rot) return pt;
-        const cos = Math.cos(-rot.angle);
-        const sin = Math.sin(-rot.angle);
-        const dx = pt.lx - rot.pivot.x;
-        const dy = pt.ly - rot.pivot.y;
-        return {
-            lx: rot.pivot.x + dx * cos - dy * sin,
-            ly: rot.pivot.y + dx * sin + dy * cos
-        };
+        return pt;
     },
 
     /**
@@ -97888,62 +98573,39 @@ extendClass(HomeStationUI, {
         const center = segments.find((seg) => seg.id === 'center');
         if (!center) return [];
         const loadout = shipLoadoutManager.getLoadout(this.hangarShipId);
-        const connectionY = Number(loadout.wingConnectionY) || 0;
         const connectionWidth = Number(loadout.wingConnectionWidth) || 0.1;
         const endWidth = Number(loadout.wingConnectionWidthEnd) || connectionWidth;
-        const style = loadout.wingConnectionStyle || 'strut';
         const loader = graphicsManager.shipAssetLoader;
+        if (!loader || !loader.wingBridgeGeometry) return [];
         return segments
             .filter((seg) => seg.id === 'wingLeft' || seg.id === 'wingRight')
             .filter((seg) => {
-                // Same visibility rule as the renderer: no bridge, no hit.
-                const isLeft = seg.id === 'wingLeft';
-                const attach = loader.wingAttachPoint(seg, model, scale);
-                const edge = isLeft ? center.x : center.x + center.width;
+                const geo = loader.wingBridgeGeometry(seg, center, model, scale);
                 return loader.wingConnectionVisible(
-                    model.layout, isLeft, edge * scale, attach.x * scale, scale
+                    model.layout, geo.left, geo.x0 * scale, geo.attach.x * scale, scale
                 );
             })
             .map((seg) => {
-                const left = seg.id === 'wingLeft';
-                const attach = graphicsManager.shipAssetLoader.wingAttachPoint(seg, model, scale);
-                // Same wing-end shift as renderHullSegments (along the turned root).
-                const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
-                const ang = deg * Math.PI / 180 * (left ? -1 : 1);
-                const dX = (left ? -1 : 1) * Math.cos(ang);
-                const dY = (left ? -1 : 1) * Math.sin(ang);
-                const nX = left ? dY : -dY;
-                const nY = left ? -dX : dX;
-                const endShift = Math.max(-1, Math.min(1, Number(loadout.wingConnectionYEnd) || 0))
-                    * loader.wingVisibleRect(seg, model, scale).height * 0.5;
-                const hullEdgeX = left ? center.x : center.x + center.width;
-                const hullYc = center.y + center.height * (0.5 + connectionY * 0.5);
-                const pixEnd = loader.wingBridgeEnd(seg, model, scale, hullEdgeX, hullYc);
-                const endY = pixEnd ? pixEnd.y + nY * endShift : attach.y + nY * endShift;
+                // Same trapezoid the renderer draws — one geometry source, so
+                // the hit band and the voxels cannot drift apart.
+                const geo = loader.wingBridgeGeometry(seg, center, model, scale);
                 return {
                     id: seg.id,
-                    left: left,
-                    x0: left ? center.x : center.x + center.width,
-                    // Hull end slid toward the wing pivot height, like the renderer (hull-segment-parts.js).
-                    y0: center.y + center.height * (0.5 + connectionY * 0.5) + Math.max(-center.height * 0.32, Math.min(center.height * 0.32, (endY - (center.y + center.height * (0.5 + connectionY * 0.5))) * 0.7)),
-                    // The bridge meets the wing's real pixels (see wingBridgeEnd), shifted along the turned root like the renderer.
-                    x1: pixEnd ? pixEnd.x + nX * endShift : attach.x + nX * endShift,
-                    y1: endY,
-                    // Outer extents exactly as renderHullSegments draws them:
-                    // plate widens the band, double splits it into two
-                    // struts whose outer edges reach further out.
-                    ...(() => {
-                        const sides = loader.wingJointSides(model.layout.loadout);
-                        // Same rule as the renderer: style never changes the
-                        // outer extents, only strength does.
-                        const hullUnit = center.height;
-                        const wingUnit = loader.wingVisibleRect(seg, model, scale).height * 1.2;
-                        const up0 = Math.max(1, hullUnit * sides.up0);
-                        const down0 = Math.max(1, hullUnit * sides.down0);
-                        const up1 = Math.max(1, wingUnit * sides.up1);
-                        const down1 = Math.max(1, wingUnit * sides.down1);
-                        return { up0, down0, up1, down1, half0: (up0 + down0) / 2, half1: (up1 + down1) / 2 };
-                    })(),
+                    left: geo.left,
+                    x0: geo.x0,
+                    y0: geo.y0,
+                    x1: geo.x1,
+                    y1: geo.y1,
+                    n0: geo.n0,
+                    n1: geo.n1,
+                    e0: geo.e0,
+                    e1: geo.e1,
+                    up0: geo.up0,
+                    down0: geo.down0,
+                    up1: geo.up1,
+                    down1: geo.down1,
+                    half0: geo.half0,
+                    half1: geo.half1,
                     half: Math.max(4, center.height * Math.max(connectionWidth, endWidth))
                 };
             });
@@ -97956,6 +98618,11 @@ extendClass(HomeStationUI, {
 
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
+    /** True if segments AB and CD cross (proper intersection test, not just bounding boxes). */
+    segmentsCross(a, b, c, d) {
+        const ccw = (p, q, r) => (r[1] - p[1]) * (q[0] - p[0]) > (q[1] - p[1]) * (r[0] - p[0]);
+        return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+    },
     /**
      * Focus marker for a hull-to-wing connection: the bridge band itself,
      * since it is too thin to read as "selected" from a bounding box.
@@ -97972,10 +98639,10 @@ extendClass(HomeStationUI, {
         ctx.fillStyle = accent;
         ctx.beginPath();
         if (k) {
-            // Wing end corners ordered top / bottom so the outline never crosses when the wing swings past 90 degrees.
-            const eTop = k.e0[1] <= k.e1[1] ? k.e0 : k.e1;
-            const eBot = eTop === k.e0 ? k.e1 : k.e0;
-            [k.s0, eTop, eBot, k.s1].forEach((p, i) => {
+            // hangarJointCorners already resolves e0/e1 into the non-crossing pairing
+            // with s0/s1 (it has to, since the handles and side midpoints read through
+            // it too) — just draw the quad in that order.
+            [k.s0, k.e0, k.e1, k.s1].forEach((p, i) => {
                 const [x, y] = pt(p);
                 if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
             });
@@ -98083,7 +98750,7 @@ extendClass(HomeStationUI, {
         if (!this._hangarAnimTimer) {
             this._hangarAnimTimer = setTimeout(() => {
                 this._hangarAnimTimer = 0;
-                if (this.isVisible && this.tab === 'hangar' && !this._hangarLiveDrawRaf) this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive() && !this._hangarLiveDrawRaf) this.drawHangarBay();
             }, 125);
         }
         return step;
@@ -98155,17 +98822,21 @@ extendClass(HomeStationUI, {
         // rebuild drops the panel and must not leave a stale highlight.
         // The open sidebar tree counts as the panel for the selection.
         const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
-            || !this._hangarLeftCollapsed;
+            || this.hangarSidebarOpen();
         const selectedConnection = panelOpen ? this._hangarSelectedConnection : null;
         const selectedArea = panelOpen ? this._hangarSelectedArea : null;
         if (!canvas || !model || (!hoverState && !selectedModule && !selectedConnection && !selectedArea
             && !this.hangarRotatableWings().length)) return;
         // With nothing hovered, the part whose panel is open stays marked.
+        // Keep wingLeft/wingRight specific so only the selected wing is framed
+        // (mapping both to 'wing' drew two boxes and offset the visual axis).
         const hover = hoverState || (selectedArea
             ? {
-                segment: selectedArea === 'wingLeft' || selectedArea === 'wingRight' ? 'wing' : selectedArea,
+                segment: selectedArea,
                 edge: null,
-                selectedOnly: true
+                selectedOnly: true,
+                side: selectedArea === 'wingLeft' ? 'left'
+                    : (selectedArea === 'wingRight' ? 'right' : null)
             }
             : { segment: null, edge: null });
         const ctx = canvas.getContext('2d');
@@ -98194,13 +98865,20 @@ extendClass(HomeStationUI, {
             ctx.save();
             ctx.strokeStyle = accent;
             ctx.lineWidth = 2;
-            // Animated only while hovered, so an idle hangar doesn't redraw.
+            // Axis stem: from the attach pivot through the frame tip to the knob,
+            // so the rotation axis reads as centred on the root, not the AABB mid.
             if (hot) this.hangarMarchingDash(ctx); else ctx.setLineDash([4, 4]);
             ctx.beginPath();
-            ctx.moveTo(Math.round(ox + knob.tipX * scale), Math.round(oy + knob.tipY * scale));
+            ctx.moveTo(Math.round(ox + knob.pivot.x * scale), Math.round(oy + knob.pivot.y * scale));
+            ctx.lineTo(Math.round(ox + knob.tipX * scale), Math.round(oy + knob.tipY * scale));
             ctx.lineTo(Math.round(kx), Math.round(ky));
             ctx.stroke();
             ctx.setLineDash([]);
+            // Pivot mark on the real rotation axis.
+            const pvx = Math.round(ox + knob.pivot.x * scale);
+            const pvy = Math.round(oy + knob.pivot.y * scale);
+            ctx.fillStyle = accent;
+            ctx.fillRect(pvx - 2, pvy - 2, 4, 4);
             // Big pixel octagon knob (square with stepped, notched corners).
             const c = this.hangarHandleColors(accent);
             const R = 14 + (hot && (this.hangarAnimStep() % 2) ? 2 : 0);
@@ -98247,23 +98925,12 @@ extendClass(HomeStationUI, {
         }).map((seg) => this.hangarSegmentFrame(seg, model, scale));
         if (!selected.length && !selectedModule) return;
         ctx.save();
-        // A rotated wing's frame turns with it, around the same root pivot.
-        const withRotation = (seg, draw) => {
-            const rot = this.hangarSegmentRotation(seg.id, model, scale);
-            if (!rot) return draw();
-            ctx.save();
-            const px = ox + rot.pivot.x * scale;
-            const py = oy + rot.pivot.y * scale;
-            ctx.translate(px, py);
-            ctx.rotate(rot.angle);
-            ctx.translate(-px, -py);
-            draw();
-            ctx.restore();
-        };
-        // No fill: the area is outlined only, so its slots stay readable.
+        // Scale frame is always an axis-aligned rectangle — wing art may
+        // rotate, but resize grips stay upright so left/right/top/bottom
+        // keep their meaning.
         ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
-        selected.forEach((seg) => withRotation(seg, () => {
+        selected.forEach((seg) => {
             const left = Math.round(ox + seg.x * scale);
             const top = Math.round(oy + seg.y * scale);
             const right = Math.round(ox + (seg.x + seg.width) * scale);
@@ -98281,8 +98948,11 @@ extendClass(HomeStationUI, {
             // Edge under the pointer — or being dragged — lights up solid
             // along its whole length, with a grip block in its middle.
             const drag = this._hangarWingDragState;
-            const activeEdge = (drag && drag.edge && (drag.segment === hover.segment
-                || (hover.segment === 'wing' && drag.segment === 'wing'))) ? drag.edge : hover.edge;
+            const sameWing = (hover.segment === 'wing' || hover.segment === 'wingLeft'
+                || hover.segment === 'wingRight')
+                && drag.segment === 'wing';
+            const activeEdge = (drag && drag.edge && (drag.segment === hover.segment || sameWing))
+                ? drag.edge : hover.edge;
             if (activeEdge) {
                 const has = (k) => activeEdge.indexOf(k) !== -1;
                 ctx.save();
@@ -98327,7 +98997,7 @@ extendClass(HomeStationUI, {
                 const r = Math.max(3, Math.min(7, corner * 0.5));
                 this.drawHangarPixelHandle(ctx, cx, cy, Math.max(10, r * 2), Math.max(10, r * 2), true, accent);
             }
-        }));
+        });
         if (selectedModule && model.layout.modules) {
             const mod = model.layout.modules.find((item) =>
                 item.kind === selectedModule.kind && item.id === selectedModule.id
@@ -98463,7 +99133,7 @@ extendClass(HomeStationUI, {
 });
 
 
-/* --- js/ui/home-station/hangar-drag-layout-point.js?v=jshift-1 --- */
+/* --- js/ui/home-station/hangar-drag-layout-point.js?v=wbridge-6 --- */
 "use strict";
 
 // HomeStationUI methods, split from home-station.js.
@@ -98613,7 +99283,7 @@ extendClass(HomeStationUI, {
         if (!id || !model || !model.layout) return null;
         // Same rule as the marker: only while its panel or the sidebar is open.
         const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
-            || !this._hangarLeftCollapsed;
+            || this.hangarSidebarOpen();
         if (!panelOpen) return null;
         return this.hangarJointBand(model, scale, id);
     },
@@ -98643,29 +99313,28 @@ extendClass(HomeStationUI, {
         }
         const path = this.hangarConnectionPaths(model, scale).find((p) => p.id === id);
         if (!path) return null;
-        const loadout = model.layout.loadout || {};
-        const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
-        const left = id === 'wingLeft';
-        // Same frame renderHullSegments uses for the wing-side edge.
-        const ang = deg * Math.PI / 180 * (left ? -1 : 1);
-        const dirX = (left ? -1 : 1) * Math.cos(ang);
-        const dirY = (left ? -1 : 1) * Math.sin(ang);
-        const n1 = left ? [dirY, -dirX] : [-dirY, dirX];
+        // Normals + optional silhouette corners from wingBridgeGeometry.
         return {
             id, kind: 'wing',
             x0: path.x0, y0: path.y0, x1: path.x1, y1: path.y1,
             half0: path.half0, half1: path.half1,
             up0: path.up0, down0: path.down0, up1: path.up1, down1: path.down1,
-            n0: [0, 1], n1
+            n0: path.n0 || [0, 1], n1: path.n1 || [0, 1],
+            e0Override: path.e0 || null,
+            e1Override: path.e1 || null
         };
     },
     /** The joint's four corners and the midpoints of its two long sides. */
     hangarJointCorners(band) {
-        // side "-1" = up / left of the edge, "+1" = down / right.
+        // side "-1" = nose / up, "+1" = aft / down — same mapping the renderer uses.
         const s0 = [band.x0 - band.n0[0] * band.up0, band.y0 - band.n0[1] * band.up0];
         const s1 = [band.x0 + band.n0[0] * band.down0, band.y0 + band.n0[1] * band.down0];
-        const e0 = [band.x1 - band.n1[0] * band.up1, band.y1 - band.n1[1] * band.up1];
-        const e1 = [band.x1 + band.n1[0] * band.down1, band.y1 + band.n1[1] * band.down1];
+        // Prefer the wing's nearest-edge corners so the marker hugs the same
+        // side the voxels meet.
+        const e0 = band.e0Override
+            || [band.x1 - band.n1[0] * band.up1, band.y1 - band.n1[1] * band.up1];
+        const e1 = band.e1Override
+            || [band.x1 + band.n1[0] * band.down1, band.y1 + band.n1[1] * band.down1];
         const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
         return { s0, s1, e0, e1, side0: mid(s0, e0), side1: mid(s1, e1) };
     },
@@ -98732,7 +99401,7 @@ extendClass(HomeStationUI, {
      */
     hangarRotatableWings() {
         const panelOpen = !!(this.overlay && this.overlay.querySelector('.hs-floating-area-style'))
-            || !this._hangarLeftCollapsed;
+            || this.hangarSidebarOpen();
         const selected = panelOpen ? this._hangarSelectedArea : null;
         const wings = new Set();
         if (selected === 'wingLeft' || selected === 'wingRight') wings.add(selected);
@@ -98742,41 +99411,33 @@ extendClass(HomeStationUI, {
         return [...wings];
     },
     /**
-     * Rotation knob position in layout units: the middle of the wing's
-     * outer edge, swung with the wing around its root pivot, then pushed a
-     * fixed screen distance further out.
+     * Rotation knob position in layout units: fixed on the outer left/right
+     * of the upright scale frame (AABB). Tracks wing size, but never swings
+     * with wingRotation — left stays left, right stays right. Stem Y follows
+     * the attach pivot (real rotation axis), not the AABB mid — swept wings
+     * leave empty bbox space that drifts the mid off the axis.
      */
     hangarWingRotateHandle(wingId, model, scale) {
         const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
         const seg = model && model.layout && (model.layout.segments || []).find((s) => s.id === wingId);
         if (!seg || !loader || !loader.wingVisibleRect) return null;
-        const vis = loader.wingVisibleRect(seg, model, scale);
-        const pivot = loader.wingAttachPoint(seg, model, scale);
+        const frame = this.hangarSegmentFrame
+            ? this.hangarSegmentFrame(seg, model, scale)
+            : loader.wingVisibleRect(seg, model, scale);
+        if (!frame) return null;
+        const pivot = loader.wingAttachPoint
+            ? loader.wingAttachPoint(seg, model, scale)
+            : { x: frame.x + frame.width * 0.5, y: frame.y + frame.height * 0.5 };
         const left = wingId === 'wingLeft';
-        const tipX = left ? vis.x : vis.x + vis.width;
-        const tipY = vis.y + vis.height * 0.5;
-        const rot = this.hangarSegmentRotation(wingId, model, scale);
-        const angle = rot ? rot.angle : 0;
-        const dx = tipX - pivot.x;
-        const dy = tipY - pivot.y;
-        const x = pivot.x + dx * Math.cos(angle) - dy * Math.sin(angle);
-        const y = pivot.y + dx * Math.sin(angle) + dy * Math.cos(angle);
-        const len = Math.max(0.0001, Math.hypot(x - pivot.x, y - pivot.y));
-        // Far enough out that the (large) knob clears the wing tip.
+        const tipX = left ? frame.x : frame.x + frame.width;
+        const tipY = Math.max(frame.y, Math.min(frame.y + frame.height, pivot.y));
         const push = 28 / Math.max(1, scale);
-        // Always on the outer side of the ship: a wing swung inward must not put the knob over the hull.
         const outward = left ? -1 : 1;
-        let kx = x + (x - pivot.x) / len * push;
-        let ky = y + (y - pivot.y) / len * push;
-        if ((kx - pivot.x) * outward < vis.width * 0.5) {
-            kx = pivot.x + outward * (vis.width * 0.5 + push);
-            ky = y;
-        }
         return {
-            x: kx,
-            y: ky,
-            tipX: x,
-            tipY: y,
+            x: tipX + outward * push,
+            y: tipY,
+            tipX: tipX,
+            tipY: tipY,
             pivot
         };
     },
@@ -98803,12 +99464,10 @@ extendClass(HomeStationUI, {
         const GRIP_PX = 14;
         const reach = GRIP_PX / Math.max(1, h.scale);
         const inward = (size) => Math.min(reach, size * 0.4);
-        // Each segment is tested in its own space, so a rotated wing's
-        // clickable area tilts with the frame drawn around it.
+        // Scale grips use the unrotated AABB (same as the drawn rectangle).
         const local = (seg) => this.hangarSegmentLocalPoint(pt, seg.id, h.model, h.scale);
         let localPt = pt;
-        // Wing resize grips win over hull frames: a rotated wing's edge
-        // sweeps across the nose/tail frames and was unreachable there.
+        // Wing resize grips win over hull frames so tip edges stay reachable.
         const inGrip = (seg) => {
             const q = local(seg);
             const inside = q.lx >= seg.x - reach && q.lx <= seg.x + seg.width + reach
@@ -98888,8 +99547,7 @@ extendClass(HomeStationUI, {
                 right: seg.id === 'wingRight',
                 width: seg.width,
                 height: seg.height,
-                edge: bestCorner.edge,
-                rotation: (this.hangarSegmentRotation(seg.id, h.model, h.scale) || { angle: 0 }).angle
+                edge: bestCorner.edge
             };
         }
         let hit = segments.find((seg) =>
@@ -98988,8 +99646,7 @@ extendClass(HomeStationUI, {
             right: hit.id === 'wingRight',
             width: hit.width,
             height: hit.height,
-            edge: edge,
-            rotation: (this.hangarSegmentRotation(hit.id, h.model, h.scale) || { angle: 0 }).angle
+            edge: edge
         };
     },
     hangarDragCursor(hit) {
@@ -98999,17 +99656,6 @@ extendClass(HomeStationUI, {
         // Wing bridge slides up/down along the hull.
         if (hit.connector && !hit.spine && (hit.left || hit.right)) return 'ns-resize';
         if (hit.connector) return 'alias';
-        if (hit.edge && hit.rotation) {
-            // Turn the edge's direction with the wing, then pick the
-            // closest of the four resize cursors (45° steps).
-            const dir = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
-            let vx = 0;
-            let vy = 0;
-            hit.edge.split('-').forEach((part) => { vx += dir[part][0]; vy += dir[part][1]; });
-            const deg = (Math.atan2(vy, vx) + hit.rotation) * 180 / Math.PI;
-            const step = ((Math.round(deg / 45) % 4) + 4) % 4;
-            return ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'][step];
-        }
         switch (hit.edge) {
             case 'left':
             case 'right':
@@ -99370,9 +100016,7 @@ extendClass(HomeStationUI, {
             // its cropped visible box — a 2-unit wing frame made one short
             // drag slam straight into the scale clamp.
             frameWidth: Math.max(1, (rawSegment && rawSegment.width) || hit.width || h.core.width || 1),
-            frameHeight: Math.max(1, (rawSegment && rawSegment.height) || hit.height || h.core.height || 1),
-            // A rotated wing resizes along its own axes, not the screen's.
-            rotation: (this.hangarSegmentRotation(rawSegmentId, h.model, h.scale) || { angle: 0 }).angle
+            frameHeight: Math.max(1, (rawSegment && rawSegment.height) || hit.height || h.core.height || 1)
         };
         this._hangarSelectedModule = null;
         this._hangarWingDragState = h.drag;
@@ -99462,7 +100106,7 @@ extendClass(HomeStationUI, {
         if (!this._hangarLiveDrawRaf) {
             this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                 this._hangarLiveDrawRaf = 0;
-                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
             });
         }
     },
@@ -99491,7 +100135,7 @@ extendClass(HomeStationUI, {
             if (!this._hangarLiveDrawRaf) {
                 this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                     this._hangarLiveDrawRaf = 0;
-                    if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                    if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
                 });
             }
             return;
@@ -99515,7 +100159,7 @@ extendClass(HomeStationUI, {
             if (!this._hangarLiveDrawRaf) {
                 this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                     this._hangarLiveDrawRaf = 0;
-                    if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                    if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
                 });
             }
             return;
@@ -99561,11 +100205,9 @@ extendClass(HomeStationUI, {
         } else if (h.drag.segment === 'wing') {
             const edge = h.drag.edge;
             if (edge) {
-                // Project the drag into the wing's rotated frame first.
-                const a = -(h.drag.rotation || 0);
-                const ldx = dx * Math.cos(a) - dy * Math.sin(a);
-                const ldy = dx * Math.sin(a) + dy * Math.cos(a);
-                const outward = h.drag.side === 'left' ? -ldx : ldx;
+                // Axis-aligned resize: screen X/Y map straight to width/height
+                // (scale frame is an unrotated rectangle).
+                const outward = h.drag.side === 'left' ? -dx : dx;
                 // Corner edges (e.g. "top-left") contain both an X and a Y
                 // token, so both axes resize together from one drag.
                 const hasX = edge.indexOf('left') !== -1 || edge.indexOf('right') !== -1;
@@ -99578,7 +100220,7 @@ extendClass(HomeStationUI, {
                     this.hangarShipId,
                     'wing',
                     h.drag.startScaleX + (hasX ? outward : 0) / Math.max(1, h.drag.frameWidth),
-                    h.drag.startScaleY + (hasY ? heightSign * ldy : 0) / Math.max(1, h.drag.frameHeight)
+                    h.drag.startScaleY + (hasY ? heightSign * dy : 0) / Math.max(1, h.drag.frameHeight)
                 );
             } else {
                 const outward = h.drag.side === 'left' ? -dx : dx;
@@ -99616,7 +100258,7 @@ extendClass(HomeStationUI, {
         if (!this._hangarLiveDrawRaf) {
             this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                 this._hangarLiveDrawRaf = 0;
-                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
             });
         }
     },
@@ -99750,7 +100392,9 @@ extendClass(HomeStationUI, {
         }
         // Keep the side dropdown open while an individual module moves.
         // Still refresh canvas + pink pins without rebuilding the hangar DOM.
+        // Anatomy modal: never createUI — that remounts the floating dialog.
         if (movingModule && !clickedModule) this.drawHangarBay();
+        else if (this._anatomyModalShipId) this.drawHangarBay();
         else this.createUI();
 
         // Show component details in sidebar AFTER createUI(). With the ship
@@ -99759,12 +100403,14 @@ extendClass(HomeStationUI, {
         if (moduleToSelect) {
             // Tree shown: jump to the slot there. Otherwise nothing extra —
             // the separate component details panel is not used for slots.
-            if (!this._hangarLeftCollapsed && this.focusTreeSlot(moduleToSelect.kind, moduleToSelect.index)) return;
+            if (this.hangarSidebarOpen()) this.focusTreeSlot(moduleToSelect.kind, moduleToSelect.index);
+            if (this.panHangarToSelection) this.panHangarToSelection();
+            return;
         }
         // With the ship sidebar open, its tree already holds every setting:
         // open the matching section there instead of a second panel on top
         // of the bay.
-        if (!this._hangarLeftCollapsed && (floatingSpine || floatingConnection || floatingArea)) {
+        if (this.hangarSidebarOpen() && (floatingSpine || floatingConnection || floatingArea)) {
             let nodeId;
             if (floatingSpine) {
                 this._hangarSelectedConnection = floatingSpine;
@@ -99780,14 +100426,18 @@ extendClass(HomeStationUI, {
                 nodeId = `hs-tree-area-${merged ? 'wings' : floatingArea}`;
             }
             this.focusTreeSection(nodeId);
+            if (this.panHangarToSelection) this.panHangarToSelection();
             return;
         }
         if (floatingSpine) {
             this.showFloatingSpineConnectionStyle(floatingSpine === 'spineBack' ? 'back' : 'front', floatingSpine);
+            if (this.panHangarToSelection) this.panHangarToSelection();
         } else if (floatingConnection) {
             this.showFloatingConnectionStyle(floatingConnection);
+            if (this.panHangarToSelection) this.panHangarToSelection();
         } else if (floatingArea) {
             this.showFloatingAreaStyle(floatingArea);
+            if (this.panHangarToSelection) this.panHangarToSelection();
         }
     },
 
@@ -99886,7 +100536,7 @@ extendClass(HomeStationUI, {
             const done = Math.abs(goal - cur) / goal < 0.004;
             if (done) next = goal;
             this._hangarBayZoom = next;
-            if (!this.isVisible || this.tab !== 'hangar') {
+            if (!this.isVisible || !this.hangarBayActive()) {
                 this._hangarZoomAnimating = false;
                 return;
             }
@@ -100021,41 +100671,7 @@ extendClass(HomeStationUI, {
             });
         }
 
-        // The mirrored half of a split pair (also ones added live while
-        // dragging): pan to it and act like the main marker. Delegated once.
-        if (this._mirrorPinClickRoot !== this.overlay) {
-            this._mirrorPinClickRoot = this.overlay;
-            // Grabbing the mirror half of an empty split slot drags the slot
-            // from the mirror's spot (the main marker runs the drag).
-            this.overlay.addEventListener('pointerdown', (e) => {
-                const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
-                const slot = m && m.closest('.hs-hangar-slot.is-empty');
-                const main = slot && slot.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
-                if (!main || e.button !== 0) return;
-                e.preventDefault();
-                e.stopPropagation();
-                this._hangarMirrorGrab = true;
-                try {
-                    main.dispatchEvent(new PointerEvent('pointerdown', {
-                        clientX: e.clientX, clientY: e.clientY, button: 0, buttons: 1,
-                        pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true,
-                        bubbles: true, cancelable: true
-                    }));
-                } finally {
-                    this._hangarMirrorGrab = false;
-                }
-            });
-            this.overlay.addEventListener('click', (e) => {
-                const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
-                if (!m) return;
-                e.preventDefault();
-                e.stopPropagation();
-                const main = m.closest('.hs-hangar-slot').querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
-                if (!main) return;
-                this._hsPanTarget = m;
-                main.click();
-            });
-        }
+        this.ensureHangarMirrorPinGrab();
         this.overlay.querySelectorAll('[data-hangar-slot-toggle]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 if (btn._hsJustDragged) {
@@ -100068,17 +100684,18 @@ extendClass(HomeStationUI, {
                 e.stopPropagation();
                 const kind = btn.getAttribute('data-hangar-slot-toggle');
                 const index = Number(btn.getAttribute('data-slot-index') || 0);
-                // A slot placed on the ship is already in view: no re-centring.
+                const panTarget = this._hsPanTarget;
                 this._hsPanTarget = null;
                 // Sidebar open: go to the slot's container in the tree; the
                 // slot stays selected instead of toggling open/closed.
-                if (!this._hangarLeftCollapsed && this.focusTreeSlot(kind, index)) {
+                if (this.hangarSidebarOpen() && this.focusTreeSlot(kind, index)) {
                     this._hangarOpenSlot = { kind: kind, index: index };
                     this.overlay.querySelectorAll('.hs-hangar-slot').forEach((el) => {
                         el.classList.toggle('is-open', el.getAttribute('data-slot-kind') === kind
                             && Number(el.getAttribute('data-slot-index')) === index);
                     });
                     this.updateHangarSlotLinks();
+                    if (this.panHangarToSlot) this.panHangarToSlot(kind, index, panTarget);
                     return;
                 }
                 const same = this._hangarOpenSlot
@@ -100092,6 +100709,8 @@ extendClass(HomeStationUI, {
                     el.classList.toggle('is-open', open);
                 });
                 this.updateHangarSlotLinks();
+                // Pan to the opened slot; keep zoom as-is. Closing skips pan.
+                if (!same && this.panHangarToSlot) this.panHangarToSlot(kind, index, panTarget);
                 // No separate details panel on slot clicks: the slot's own
                 // card (and the tree, when shown) hold its settings.
             });
@@ -100170,54 +100789,56 @@ extendClass(HomeStationUI, {
                 this._hangarBayResizeObs = null;
             }
             this._hangarBayResizeObs = new ResizeObserver(() => {
-                if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
             });
             this._hangarBayResizeObs.observe(stage);
         }
 
-        // Redraw bay after layout settles (stage may start at 0 height).
-        // The very first drawHangarBay() call ran before layout had settled, so it
-        // cached a fit/pan computed off a stale size; drawHangarBay's own "sameView"
-        // dead-band (+/-12%) then treats the now-correct size as unchanged and never
-        // recomputes the pan, leaving the ship off-centre until something (e.g. the
-        // inventory toggle) clears _hangarFit. Clear it here once layout is stable so
-        // this frame does a real refit instead of being absorbed by the dead-band.
-        requestAnimationFrame(() => {
-            this.drawHangarBay();
-            requestAnimationFrame(() => {
-                this._hangarFit = null;
-                this.drawHangarBay();
-            });
-        });
-        // Ship art (faction sprites) can still be arriving on the first frames: redraw a few times so the
-        // ship appears on its own instead of waiting for a hover. Only the first settle pass (below) forces
-        // a real refit; later redraws keep drawHangarBay's sameView dead-band so a manual zoom/pan the
-        // player made in the meantime isn't wiped, and the ship doesn't visibly jump on each late redraw.
-        let bayFitSettled = false;
-        const redraw = () => {
-            if (!this.isVisible || this.tab !== 'hangar') return;
-            if (!bayFitSettled) this._hangarFit = null;
-            this.drawHangarBay();
-        };
-        // Keep the bay canvas hidden until the second draw, so the grey placeholder core never flashes.
-        const bayCanvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
-        // Only on a fresh open of the hangar; a re-render while working (clicking an area) must not blank the bay.
-        // NOTE: create-ui.js calls drawHangarBay() (which stamps _hangarBayStamp = now) immediately
-        // before bindHangarSlotEvents() runs, so comparing against _hangarBayStamp here always measured
-        // ~0ms and "fresh" was always false — the canvas was never actually hidden on a real fresh open,
-        // so the unsettled first paint was visible and the 200ms settle pass then visibly snapped/jumped
-        // to the correct pan/zoom. Track "already settled once" on the overlay itself instead: it starts
-        // unset on every freshly built overlay (page load / hangar first opened) and is set once the first
-        // settle pass has revealed the canvas, so later re-renders on the same overlay never hide it again.
+        // Redraw bay after layout settles (stage may start at 0 height) — but only forcing a
+        // real refit (clearing _hangarFit) on a genuinely fresh hangar open. This whole block
+        // used to run unconditionally on every bindHangarSlotEvents call, which fires on every
+        // re-render (e.g. equipping a part, toggling an area) — so any manual zoom/pan got
+        // thrown away by the very next click, not just on first opening the bay.
+        // Track "already settled once" on the overlay itself: it starts unset on every freshly
+        // built overlay (page load / hangar first opened) and is set once the first settle pass
+        // has revealed the canvas, so later re-renders on the same overlay never hide it again.
         const fresh = !!this.overlay && !this.overlay._hangarBaySettled;
-        if (bayCanvas && fresh) bayCanvas.style.visibility = 'hidden';
-        const reveal = () => {
-            if (bayCanvas) bayCanvas.style.visibility = '';
-            if (this.overlay) this.overlay._hangarBaySettled = true;
-        };
-        setTimeout(() => { redraw(); bayFitSettled = true; reveal(); }, 200);
-        setTimeout(reveal, 700);   // safety: never stay hidden
-        [600, 1500].forEach((ms) => setTimeout(redraw, ms));
+        const bayCanvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
+        if (fresh) {
+            // The very first drawHangarBay() call ran before layout had settled, so it cached a
+            // fit/pan computed off a stale size; drawHangarBay's own "sameView" dead-band
+            // (+/-12%) then treats the now-correct size as unchanged and never recomputes the
+            // pan, leaving the ship off-centre until something clears _hangarFit.
+            requestAnimationFrame(() => {
+                this.drawHangarBay();
+                requestAnimationFrame(() => {
+                    this._hangarFit = null;
+                    this.drawHangarBay();
+                });
+            });
+            // Ship art (faction sprites) can still be arriving on the first frames: redraw a few
+            // times so the ship appears on its own instead of waiting for a hover. Only the first
+            // settle pass forces a real refit; later redraws keep drawHangarBay's sameView
+            // dead-band so a manual zoom/pan the player made in the meantime isn't wiped.
+            let bayFitSettled = false;
+            const redraw = () => {
+                if (!this.isVisible || this.tab !== 'hangar') return;
+                if (!bayFitSettled) this._hangarFit = null;
+                this.drawHangarBay();
+            };
+            // Keep the bay canvas hidden until the second draw, so the grey placeholder core never flashes.
+            if (bayCanvas) bayCanvas.style.visibility = 'hidden';
+            const reveal = () => {
+                if (bayCanvas) bayCanvas.style.visibility = '';
+                if (this.overlay) this.overlay._hangarBaySettled = true;
+            };
+            setTimeout(() => { redraw(); bayFitSettled = true; reveal(); }, 200);
+            setTimeout(reveal, 700);   // safety: never stay hidden
+            [600, 1500].forEach((ms) => setTimeout(redraw, ms));
+        } else {
+            // Re-render while working: just redraw with the existing fit/pan, don't reset it.
+            requestAnimationFrame(() => this.drawHangarBay());
+        }
         // Click (or Enter) on a slot in the SLOTS list opens the part picker.
         if (this.overlay && !this.overlay._slotPickBound) {
             this.overlay._slotPickBound = true;
@@ -100232,7 +100853,7 @@ extendClass(HomeStationUI, {
         }
         if (!this._hangarPacksBound) {
             this._hangarPacksBound = true;
-            document.addEventListener('vf-faction-packs-ready', () => { if (this.isVisible && this.tab === 'hangar') this.drawHangarBay(); });
+            document.addEventListener('vf-faction-packs-ready', () => { if (this.isVisible && this.hangarBayActive()) this.drawHangarBay(); });
         }
     },
 
@@ -100368,15 +100989,44 @@ extendClass(HomeStationUI, {
     },
 
     /**
-     * The .hs-hangar-slot-pin buttons sit on top of the hangar-bay canvas
-     * (pointer-events: auto, so they can be clicked to open the loadout
-     * dropdown) and therefore intercept every pointerdown on a module icon
-     * before the canvas's own moduleHit/drag code ever sees it — dragging a
-     * module was effectively impossible. This gives each pin its own
-     * pointer-drag: a plain click still opens the dropdown, but a real drag
-     * moves the module, using the same ox/oy/scale/model cached by
-     * drawHangarBay() so both systems agree on where the module actually is.
+     * Mirror half of a split slot → primary pin (drag + click). Shared by the
+     * hangar tab and the anatomy modal; delegated once per overlay.
      */
+    ensureHangarMirrorPinGrab() {
+        if (!this.overlay || this._mirrorPinClickRoot === this.overlay) return;
+        this._mirrorPinClickRoot = this.overlay;
+        this.overlay.addEventListener('pointerdown', (e) => {
+            const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
+            const slot = m && m.closest('.hs-hangar-slot');
+            if (!slot || (!slot.classList.contains('is-empty')
+                && slot.getAttribute('data-slot-kind') !== 'weapon')) return;
+            const main = slot.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+            if (!main || e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this._hangarMirrorGrab = true;
+            try {
+                main.dispatchEvent(new PointerEvent('pointerdown', {
+                    clientX: e.clientX, clientY: e.clientY, button: 0, buttons: 1,
+                    pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true,
+                    bubbles: true, cancelable: true
+                }));
+            } finally {
+                this._hangarMirrorGrab = false;
+            }
+        });
+        this.overlay.addEventListener('click', (e) => {
+            const m = e.target.closest && e.target.closest('.hs-hangar-slot-pin.is-mirror');
+            if (!m) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const main = m.closest('.hs-hangar-slot').querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
+            if (!main) return;
+            this._hsPanTarget = m;
+            main.click();
+        });
+    },
+
     /**
      * A module's stored x offset is measured from its area's centre, so 0 is
      * exactly centred. Pull the drag onto it within a fixed screen-pixel
@@ -100410,11 +101060,11 @@ extendClass(HomeStationUI, {
         return `<span class="hs-slot-glyph${extraClass ? ' ' + extraClass : ''}" data-slot-kind="${kind}" aria-hidden="true"></span>`;
     },
     renderHangarLeftViewToggle() {
-        const view = (this._hangarLeftView === 'parts' || this._hangarLeftView === 'slots') ? this._hangarLeftView : 'ships';
+        const view = this._hangarLeftView === 'parts' ? 'parts' : 'slots';
         const btn = (id, label, icon) =>
             `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
             `${this.iconHtml(icon, 40, 'hs-pixel hs-pixel-40', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('ships', 'SHIPS', 'menuShips')}${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
+        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
     },
     /** SLOTS view: the ship's slot layout per hull area (same idea as the start profile's HULL AREAS list). */
     renderHangarSlotsView(slots, layout) {
@@ -100690,10 +101340,12 @@ extendClass(HomeStationUI, {
      */
     formatDetailStatLineHtml(line) {
         const text = String(line || '');
-        const chip = (icon, val, type) =>
-            `<span class="hs-hangar-weapon-stat" data-stat="${type}">` +
+        const chip = (icon, val, type, worse, better) =>
+            `<span class="hs-hangar-weapon-stat${worse ? ' is-bad' : ''}${better ? ' is-good' : ''}" data-stat="${type}">` +
             `${this.iconHtml(icon, 14, 'hs-pixel', false, this.hangarStatColor(type))}` +
-            `<span>${String(val).replace(/</g, '&lt;')}</span></span>`;
+            `<b class="hs-stat-num">${String(val).replace(/</g, '&lt;')}</b>` +
+            `${worse ? '<span class="hs-stat-worse">▼</span>' : ''}` +
+            `${better ? '<span class="hs-stat-better">▲</span>' : ''}</span>`;
         const wrap = (html) => `<span class="hs-hangar-weapon-stats">${html}</span>`;
         const sm = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
         if (sm) {
@@ -100706,19 +101358,27 @@ extendClass(HomeStationUI, {
         const statType = { SPEED: 'speed', DAMAGE: 'damage', ARMOR: 'armor', 'FIRE RATE': 'firerate' };
         const parts = text.split(' · ').map((part) => part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
         if (parts.length && parts.every(Boolean)) {
-            return wrap(parts.map((pm) => chip(statIcon[pm[2]], pm[1], statType[pm[2]])).join(''));
+            return wrap(parts.map((pm) => {
+                const n = Number(pm[1]);
+                const worse = Number.isFinite(n) && n < 0;
+                const better = Number.isFinite(n) && n > 0;
+                return chip(statIcon[pm[2]], pm[1], statType[pm[2]], worse, better);
+            }).join(''));
         }
         return text.replace(/</g, '&lt;');
     },
-    /** Compact DMG / SPD / fire-rate line for a weapon row. */
-    hangarWeaponStatsHtml(id) {
+    /** Compact DMG / SPD / fire-rate line for a weapon row.
+     *  `compareId`: when set (e.g. currently equipped gun), stats that are worse
+     *  than that baseline get `is-bad` / better get `is-good`. */
+    hangarWeaponStatsHtml(id, compareId) {
         if (typeof weaponConfigManager === 'undefined') return '';
         const w = weaponConfigManager.getWeapon(id);
         if (!w) return '';
-        const rate = w.cooldown ? (1000 / w.cooldown).toFixed(1) : '—';
+        const rateNum = w.cooldown ? (1000 / w.cooldown) : 0;
+        const rate = w.cooldown ? rateNum.toFixed(1) : '—';
         // Icon instead of a text label (same icons as the details panel); label stays in the tooltip.
-        const stat = (icon, tip, value, type, boosted) =>
-            `<span class="hs-hangar-weapon-stat${boosted ? ' is-boosted' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}${value}${boosted ? '<span class="hs-stat-boost">▲</span>' : ''}</span>`;
+        const stat = (icon, tip, value, type, boosted, worse, better) =>
+            `<span class="hs-hangar-weapon-stat${boosted ? ' is-boosted' : ''}${worse ? ' is-bad' : ''}${better ? ' is-good' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}<b class="hs-stat-num">${value}</b>${boosted ? '<span class="hs-stat-boost">▲</span>' : ''}${worse ? '<span class="hs-stat-worse">▼</span>' : ''}${better ? '<span class="hs-stat-better">▲</span>' : ''}</span>`;
         // Hull-class and faction affinity (+20% each, as in game): show the
         // boosted damage and name where the bonus comes from.
         const shipId = this.hangarShipId || 'player_scrap';
@@ -100733,16 +101393,38 @@ extendClass(HomeStationUI, {
         if (factionMul > 1) sources.push(String(faction).toUpperCase() + ' +' + Math.round((factionMul - 1) * 100) + '%');
         const dmg = Math.round((w.damage || 0) * classMul * factionMul);
         const dmgTip = sources.length ? 'DAMAGE ' + w.damage + ' → ' + dmg + ' (' + sources.join(' · ') + ')' : 'DAMAGE';
+        const cmp = (compareId && compareId !== id) ? weaponConfigManager.getWeapon(compareId) : null;
+        let cDmg = null;
+        let cSpd = null;
+        let cRate = null;
+        if (cmp) {
+            const cMul = (weaponConfigManager.getShipClassWeaponMul
+                ? weaponConfigManager.getShipClassWeaponMul(model && model.modelClass, compareId) : 1)
+                * (weaponConfigManager.getFactionWeaponMul
+                    ? weaponConfigManager.getFactionWeaponMul(faction, compareId) : 1);
+            cDmg = Math.round((cmp.damage || 0) * cMul);
+            cSpd = Number(cmp.speed) || 0;
+            cRate = cmp.cooldown ? (1000 / cmp.cooldown) : 0;
+        }
+        const worse = (mine, theirs) => (theirs != null && mine != null && Number(mine) < Number(theirs));
+        const better = (mine, theirs) => (theirs != null && mine != null && Number(mine) > Number(theirs));
         let powerHtml = '';
         if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
             const power = balanceConfigManager.computeWeaponPower(w, id);
             const eDps = Math.round(balanceConfigManager.volleyDps(w) * balanceConfigManager.getHitRate(id, w));
-            powerHtml = stat('statDamage', 'BALANCE POWER (eDPS ' + eDps + ')', power.toFixed(2), 'power', false);
+            let powerWorse = false;
+            let powerBetter = false;
+            if (cmp && balanceConfigManager.computeWeaponPower) {
+                const cPower = balanceConfigManager.computeWeaponPower(cmp, compareId);
+                powerWorse = power < cPower;
+                powerBetter = power > cPower;
+            }
+            powerHtml = stat('statDamage', 'BALANCE POWER (eDPS ' + eDps + ')', power.toFixed(2), 'power', false, powerWorse, powerBetter);
         }
         return `<span class="hs-hangar-weapon-stats">` +
-            stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0) +
-            stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed') +
-            stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate') +
+            stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0, worse(dmg, cDmg), better(dmg, cDmg)) +
+            stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed', false, worse(w.speed, cSpd), better(w.speed, cSpd)) +
+            stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate', false, worse(rateNum, cRate), better(rateNum, cRate)) +
             powerHtml +
             `</span>`;
     },
@@ -101862,14 +102544,17 @@ extendClass(HomeStationUI, {
                     if (!shipLoadoutManager.setEmptySlotAnchor) return;
                     const container = pin.closest('.hs-hangar-slot');
                     const index = Number(pin.getAttribute('data-slot-index') || 0);
-                    // A mirror marker starts from its own (mirrored) spot;
-                    // the mount is symmetric, so both halves follow.
-                    const isMirror = pin.classList.contains('is-mirror') || !!this._hangarMirrorGrab;
+                    // Always drive the PRIMARY pin (--pin-x/y). Grabbing the
+                    // mirrored half used to seed startNx from --pin-mx, which
+                    // made the pair jump to the other wing on the first move.
+                    // Mirror grabs keep primary coords and invert the X delta
+                    // so the half under the pointer still follows it.
+                    const mirrorGrab = pin.classList.contains('is-mirror') || !!this._hangarMirrorGrab;
                     const startNx = container
-                        ? parseFloat(container.style.getPropertyValue(isMirror ? '--pin-mx' : '--pin-x')) || 0.5
+                        ? parseFloat(container.style.getPropertyValue('--pin-x')) || 0.5
                         : 0.5;
                     const startNy = container
-                        ? parseFloat(container.style.getPropertyValue(isMirror ? '--pin-my' : '--pin-y')) || 0.5
+                        ? parseFloat(container.style.getPropertyValue('--pin-y')) || 0.5
                         : 0.5;
                     drag = {
                         emptySlot: true,
@@ -101880,6 +102565,7 @@ extendClass(HomeStationUI, {
                         index: index,
                         startNx: startNx,
                         startNy: startNy,
+                        mirrorGrab: mirrorGrab,
                         mw: Math.max(8, model.width || 20),
                         mh: Math.max(8, model.height || 16)
                     };
@@ -101968,14 +102654,27 @@ extendClass(HomeStationUI, {
                     const sw = Math.max(1, drag.mw * scale);
                     const sh = Math.max(1, drag.mh * scale);
                     // Empty-slot anchors are ship-normalized, so 0.5 is the
-                    // hull centreline rather than 0.
-                    const nx = drag.startNx + dxCanvas / sw;
-                    let snappedNx = 0.5 + this.snapOffsetToCenter(nx - 0.5, drag.mw, scale);
-                    this._hangarSnapCenter = snappedNx !== nx ? drag.kind : null;
+                    // hull centreline rather than 0. Mirror grab: invert X so
+                    // the reflected half under the pointer tracks with it.
+                    const xSign = drag.mirrorGrab ? -1 : 1;
+                    const nx = drag.startNx + xSign * dxCanvas / sw;
                     let ny = drag.startNy + dyCanvas / sh;
                     // Only the areas its type allows: weapons nose/wings,
                     // defense/energy core, abilities aft/core.
                     const lastModel = this._hangarLastModel;
+                    // Peek the area first: centreline snap is for nose/core
+                    // single mounts — applying it on a wing sucks the pair
+                    // onto the hull axis and collapses the split.
+                    let areaHint = null;
+                    if (lastModel && lastModel.layout && shipLoadoutManager.clampToSlotArea) {
+                        const peek = shipLoadoutManager.clampToSlotArea(drag.kind, nx, ny, lastModel.layout);
+                        areaHint = peek && peek.area;
+                    }
+                    const onWing = areaHint === 'wingLeft' || areaHint === 'wingRight';
+                    let snappedNx = onWing
+                        ? nx
+                        : (0.5 + this.snapOffsetToCenter(nx - 0.5, drag.mw, scale));
+                    this._hangarSnapCenter = (!onWing && snappedNx !== nx) ? drag.kind : null;
                     if (lastModel && lastModel.layout && shipLoadoutManager.clampToSlotArea) {
                         const c = shipLoadoutManager.clampToSlotArea(drag.kind, snappedNx, ny, lastModel.layout);
                         snappedNx = c.nx;
@@ -102014,7 +102713,7 @@ extendClass(HomeStationUI, {
                 if (!this._hangarLiveDrawRaf) {
                     this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                         this._hangarLiveDrawRaf = 0;
-                        if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                        if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
                     });
                 }
                 e.preventDefault();
@@ -102335,8 +103034,18 @@ extendClass(HomeStationUI, {
             // Moved empty slots go back to their default spots too.
             loadout.slotAnchors = {};
             loadout.singleWeaponSide = null;
-            // Switched-off areas (nose / aft / wings) come back on.
-            loadout.disabledAreas = { front: false, back: false, wing: false };
+            // Restore the hull profile's anatomy signature (scrap = no wings,
+            // interceptor = no aft, heavy = no nose), then layer faction stock.
+            loadout.disabledAreas = shipLoadoutManager.getShipRoleDisabledAreas
+                ? shipLoadoutManager.getShipRoleDisabledAreas(shipId)
+                : { front: false, back: false, wing: false };
+            const coreGun = shipLoadoutManager.getShipRoleCoreGun
+                ? shipLoadoutManager.getShipRoleCoreGun(shipId) : null;
+            if (coreGun) {
+                loadout.weaponMounts = Object.assign({}, loadout.weaponMounts, {
+                    0: { area: 'center', split: coreGun === 'split', off: 0.2, ny: 0.5, fixed: true }
+                });
+            }
             // Factions with a stock anatomy reset to that instead of the bare frame.
             if (shipLoadoutManager.applyFactionLayoutDefaults) shipLoadoutManager.applyFactionLayoutDefaults(loadout);
             shipLoadoutManager.setLoadout(shipId, loadout);
@@ -104902,6 +105611,17 @@ extendClass(HomeStationUI, {
 extendClass(HomeStationUI, {
     /** Cargo teleport, station upgrade tree, unlocks, purchases and crafting. */
     bindStationEvents() {
+        // Ship thumb opens the anatomy modal (same as the EDIT ANATOMY badge).
+        this.overlay.querySelectorAll('[data-open-anatomy-modal]').forEach((el) => {
+            const open = (e) => {
+                if (e.target && e.target.closest && e.target.closest('[data-open-hangar]')) return;
+                if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                this.openShipAnatomyModal(el.getAttribute('data-open-anatomy-modal'));
+            };
+            el.addEventListener('click', open);
+            el.addEventListener('keydown', open);
+        });
         const teleport = this.overlay.querySelector('#hsTeleport');
         if (teleport) {
             teleport.addEventListener('click', () => {
@@ -105314,6 +106034,7 @@ extendClass(HomeStationUI, {
         // (hangar-parts-grid-part2.js) — the grid hit-test and ghost placement both read layout.
         let rafId = 0;
         let lastMove = null;
+        const setDropBlocked = (on) => document.body.classList.toggle('hs-drop-blocked', !!on);
         const applyMove = (ev) => {
             if (!dragging) {
                 if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESH) return;
@@ -105321,9 +106042,26 @@ extendClass(HomeStationUI, {
             }
             if (place) place(ev.clientX, ev.clientY);
             clearDropMarks();
+            setDropBlocked(false);
             const grid = gridAt(ev.clientX, ev.clientY);
-            if (grid) grid.classList.add('is-drag-over');
-            if (grid) markDropCell(ev.clientX, ev.clientY); else clearCellMark();
+            if (grid) {
+                grid.classList.add('is-drag-over');
+                // Cross-storage drop into a full station bay: lock cursor (same BAY FULL
+                // refusal the actual transfer would return). Same-grid rearrange stays open.
+                const tScope = grid.getAttribute('data-storage-target') || '';
+                const tShip = grid.getAttribute('data-ship') || '';
+                const sameGrid = tScope === source && tShip === shipId;
+                if (!sameGrid && tScope === 'station') {
+                    const sep = key.indexOf(':');
+                    const bucket = sep === -1 ? '' : key.slice(0, sep);
+                    const id = sep === -1 ? key : key.slice(sep + 1);
+                    const profile = this.getProfile ? this.getProfile() : null;
+                    if (profile && this._stationRejectsItem && this._stationRejectsItem(profile, bucket, id)) {
+                        setDropBlocked(true);
+                    }
+                }
+                markDropCell(ev.clientX, ev.clientY);
+            } else clearCellMark();
         };
         const onMove = (ev) => {
             lastMove = ev;
@@ -105345,6 +106083,7 @@ extendClass(HomeStationUI, {
             } catch (err) { /* ignore */ }
             cell.classList.remove('is-dragging');
             document.body.classList.remove('hs-part-grabbing');
+            document.body.classList.remove('hs-drop-blocked');
             clearDropMarks();
             clearCellMark();
             if (ghost) { ghost.remove(); ghost = null; }
@@ -105626,12 +106365,44 @@ extendClass(HomeStationUI, {
         this.overlay.querySelectorAll('[data-hangar-ship]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const selectedShipId = btn.getAttribute('data-hangar-ship');
-                if (selectedShipId === this.hangarShipId) return;
+                this._hangarShipDropdownOpen = false;
+                if (selectedShipId === this.hangarShipId) {
+                    // Same ship re-clicked in the open dropdown: no re-render coming to
+                    // close it, so close it here directly.
+                    const dd = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown]');
+                    const toggle = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown-toggle]');
+                    if (dd) dd.classList.remove('is-open');
+                    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                    return;
+                }
                 this.hangarShipId = selectedShipId;
                 this.statusMsg = '';
                 this.createUI();
             });
         });
+        const shipDropdownToggle = this.overlay.querySelector('[data-hangar-ship-dropdown-toggle]');
+        if (shipDropdownToggle) {
+            shipDropdownToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this._hangarShipDropdownOpen = !this._hangarShipDropdownOpen;
+                const dd = this.overlay.querySelector('[data-hangar-ship-dropdown]');
+                if (dd) dd.classList.toggle('is-open', this._hangarShipDropdownOpen);
+                shipDropdownToggle.setAttribute('aria-expanded', String(this._hangarShipDropdownOpen));
+            });
+            if (!this._hangarShipDropdownOutsideBound) {
+                this._hangarShipDropdownOutsideBound = true;
+                document.addEventListener('click', (e) => {
+                    if (!this._hangarShipDropdownOpen) return;
+                    if (e.target && e.target.closest && e.target.closest('[data-hangar-ship-dropdown]')) return;
+                    this._hangarShipDropdownOpen = false;
+                    const dd = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown]');
+                    const toggle = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown-toggle]');
+                    if (dd) dd.classList.remove('is-open');
+                    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                });
+            }
+        }
 
         this.overlay.querySelectorAll('[data-hangar-sidebar]').forEach((btn) => {
             btn.addEventListener('click', () => {
@@ -106090,17 +106861,71 @@ extendClass(HomeStationUI, {
                 if (shipLoadoutManager.applyLayoutToModel) shipLoadoutManager.applyLayoutToModel(model, shipId);
                 models[shipId] = model;
             }
+            // Match the CSS layout box (offset*, not getBoundingClientRect — the
+            // home-station glass host is transform:scale'd). Table thumbs are
+            // larger than the legacy 56×44 canvas attributes.
+            const cssW = Math.max(1, c.offsetWidth || c.width);
+            const cssH = Math.max(1, c.offsetHeight || c.height);
+            if (c.width !== cssW) c.width = cssW;
+            if (c.height !== cssH) c.height = cssH;
             const ctx = c.getContext('2d');
             ctx.clearRect(0, 0, c.width, c.height);
             ctx.imageSmoothingEnabled = false;
+            if (ctx.mozImageSmoothingEnabled !== undefined) ctx.mozImageSmoothingEnabled = false;
+            if (ctx.webkitImageSmoothingEnabled !== undefined) ctx.webkitImageSmoothingEnabled = false;
+            if (ctx.msImageSmoothingEnabled !== undefined) ctx.msImageSmoothingEnabled = false;
             const mw = Math.max(8, model.width || 20);
             const mh = Math.max(8, model.height || 16);
-            const scale = Math.max(1, Math.floor(Math.min((c.width - 4) / mw, (c.height - 4) / mh)));
-            const ox = Math.round((c.width - mw * scale) / 2);
-            const oy = Math.round((c.height - mh * scale) / 2);
+            // Integer base render at the largest scale that fits the thumb, then a
+            // small nearest-neighbor stretch for the leftover fraction — fills the
+            // box without the chunky 32px HUD base that looked too coarse at 140×110.
+            const pad = 1;
+            const maxW = Math.max(1, c.width - pad * 2);
+            const maxH = Math.max(1, c.height - pad * 2);
+            const baseFit = Math.max(1, Math.floor(Math.min(maxW / mw, maxH / mh)) || 1);
+            const bw = Math.max(1, Math.round(mw * baseFit));
+            const bh = Math.max(1, Math.round(mh * baseFit));
+            const base = document.createElement('canvas');
+            base.width = bw;
+            base.height = bh;
+            const bctx = base.getContext('2d');
+            if (!bctx) return;
+            bctx.imageSmoothingEnabled = false;
             try {
-                loader.renderShip(ctx, model, ox, oy, scale, null, 0, { allowColorMountSprites: true });
+                loader.renderShip(bctx, model, 0, 0, baseFit, null, 0, { allowColorMountSprites: true });
             } catch (e) { return; }
+            // Table thumbs (no area outline): crop transparent padding so the
+            // hull fills the box. Area rows keep the full model bounds.
+            let srcX = 0, srcY = 0, srcW = bw, srcH = bh;
+            if (!areaId) {
+                try {
+                    const px = bctx.getImageData(0, 0, bw, bh).data;
+                    let minX = bw, minY = bh, maxX = -1, maxY = -1;
+                    for (let y = 0; y < bh; y++) {
+                        for (let x = 0; x < bw; x++) {
+                            if (px[(y * bw + x) * 4 + 3]) {
+                                if (x < minX) minX = x;
+                                if (y < minY) minY = y;
+                                if (x > maxX) maxX = x;
+                                if (y > maxY) maxY = y;
+                            }
+                        }
+                    }
+                    if (maxX >= minX && maxY >= minY) {
+                        srcX = minX;
+                        srcY = minY;
+                        srcW = maxX - minX + 1;
+                        srcH = maxY - minY + 1;
+                    }
+                } catch (e) { /* keep full bounds */ }
+            }
+            const fill = Math.min(maxW / srcW, maxH / srcH);
+            const rw = Math.max(1, Math.round(srcW * fill));
+            const rh = Math.max(1, Math.round(srcH * fill));
+            const ox = Math.floor((c.width - rw) / 2);
+            const oy = Math.floor((c.height - rh) / 2);
+            const scale = rw / mw;
+            ctx.drawImage(base, srcX, srcY, srcW, srcH, ox, oy, rw, rh);
             // Hide the placeholder icon once the canvas actually has ship pixels.
             if (c.parentNode && c.parentNode.classList) {
                 let drawn = false;
@@ -106280,9 +107105,123 @@ extendClass(HomeStationUI, {
     },
 
     /**
+     * Animate a pan delta in canvas pixels. Zoom is left untouched.
+     */
+    panHangarBy(dx, dy) {
+        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
+        const fromX = this._hangarBayPanX || 0;
+        const fromY = this._hangarBayPanY || 0;
+        const start = performance.now();
+        const dur = 260;
+        if (this._hangarPanRaf) cancelAnimationFrame(this._hangarPanRaf);
+        const step = (now) => {
+            const t = Math.min(1, (now - start) / dur);
+            const e = 1 - Math.pow(1 - t, 3);
+            this._hangarBayPanX = Math.round(fromX + dx * e);
+            this._hangarBayPanY = Math.round(fromY + dy * e);
+            if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
+            this._hangarPanRaf = t < 1 ? requestAnimationFrame(step) : 0;
+        };
+        this._hangarPanRaf = requestAnimationFrame(step);
+    },
+
+    /**
+     * Visible bay centre in canvas pixels, accounting for a full-height
+     * floating style sidebar so selection pans into the free stage, not
+     * under the panel.
+     */
+    hangarVisibleCenter() {
+        const canvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
+        if (!canvas) return { x: 0, y: 0 };
+        let x0 = 0;
+        let x1 = canvas.width;
+        const stage = this.overlay.querySelector('#hsHangarBayStage');
+        const panel = stage && stage.querySelector('.hs-floating-area-style');
+        if (panel && canvas.width > 0) {
+            const cr = canvas.getBoundingClientRect();
+            const pr = panel.getBoundingClientRect();
+            const sx = canvas.width / Math.max(1, cr.width);
+            if (pr.width > 0 && cr.width > 0) {
+                const left = (pr.left - cr.left) * sx;
+                const right = (pr.right - cr.left) * sx;
+                if (panel.classList.contains('is-right')) {
+                    x1 = Math.min(x1, Math.max(x0 + 40, right > canvas.width * 0.5 ? left : x1));
+                } else {
+                    x0 = Math.max(x0, Math.min(x1 - 40, left < canvas.width * 0.5 ? right : x0));
+                }
+            }
+        }
+        return { x: (x0 + x1) / 2, y: canvas.height / 2 };
+    },
+
+    /**
+     * Pan so a layout-space point sits in the visible bay centre. Does not zoom.
+     */
+    panHangarToLayoutPoint(lx, ly) {
+        const canvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
+        if (!canvas || this._hangarLastOx == null || this._hangarLastOy == null) return;
+        const scale = Math.max(1, this._hangarLastScale || 1);
+        const cx = this._hangarLastOx + lx * scale;
+        const cy = this._hangarLastOy + ly * scale;
+        const mid = this.hangarVisibleCenter();
+        this.panHangarBy(mid.x - cx, mid.y - cy);
+    },
+
+    /**
+     * Pan the bay to the currently selected area, joint, or slot — pan only,
+     * never a zoom/fit reset.
+     */
+    panHangarToSelection() {
+        const slot = this._hangarOpenSlot;
+        if (slot && slot.kind != null) {
+            this.panHangarToSlot(slot.kind, slot.index, this._hsPanTarget);
+            return;
+        }
+        const model = this._hangarLastModel;
+        const scale = this._hangarLastScale || 1;
+        if (!model) return;
+        const conn = this._hangarSelectedConnection;
+        if (conn && this.hangarJointBand) {
+            const band = this.hangarJointBand(model, scale, conn);
+            if (band) {
+                this.panHangarToLayoutPoint((band.x0 + band.x1) / 2, (band.y0 + band.y1) / 2);
+            }
+            return;
+        }
+        const area = this._hangarSelectedArea;
+        if (!area) return;
+        const seg = ((model.layout && model.layout.segments) || []).find((s) => s.id === area);
+        if (!seg) return;
+        const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
+        // Wings: centre on the attach pivot (rotation axis), not the AABB mid
+        // which drifts on swept silhouettes.
+        if ((area === 'wingLeft' || area === 'wingRight') && loader && loader.wingAttachPoint) {
+            const pivot = loader.wingAttachPoint(seg, model, scale);
+            const frame = this.hangarSegmentFrame
+                ? this.hangarSegmentFrame(seg, model, scale)
+                : seg;
+            if (pivot && frame) {
+                this.panHangarToLayoutPoint(
+                    frame.x + (frame.width || 0) / 2,
+                    pivot.y
+                );
+                return;
+            }
+        }
+        const frame = this.hangarSegmentFrame
+            ? this.hangarSegmentFrame(seg, model, scale)
+            : seg;
+        if (!frame) return;
+        this.panHangarToLayoutPoint(
+            frame.x + (frame.width || 0) / 2,
+            frame.y + (frame.height || 0) / 2
+        );
+    },
+
+    /**
      * Smoothly pan the hangar bay so the clicked slot marker sits in the
      * centre. `target` is the marker that was clicked (either half of a
-     * split pair); without it the slot's main marker is used.
+     * split pair); without it the slot's main marker is used. Zoom stays.
      */
     panHangarToSlot(kind, index, target) {
         const canvas = this.overlay && this.overlay.querySelector('#hsHangarBayCanvas');
@@ -106299,23 +107238,10 @@ extendClass(HomeStationUI, {
         // Screen → canvas pixels (the pan offset is in canvas pixels).
         const sx = canvas.width / Math.max(1, cr.width);
         const sy = canvas.height / Math.max(1, cr.height);
-        const dx = (cr.left + cr.width / 2 - px) * sx;
-        const dy = (cr.top + cr.height / 2 - py) * sy;
-        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
-        const fromX = this._hangarBayPanX || 0;
-        const fromY = this._hangarBayPanY || 0;
-        const start = performance.now();
-        const dur = 260;
-        if (this._hangarPanRaf) cancelAnimationFrame(this._hangarPanRaf);
-        const step = (now) => {
-            const t = Math.min(1, (now - start) / dur);
-            const e = 1 - Math.pow(1 - t, 3);
-            this._hangarBayPanX = Math.round(fromX + dx * e);
-            this._hangarBayPanY = Math.round(fromY + dy * e);
-            if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
-            this._hangarPanRaf = t < 1 ? requestAnimationFrame(step) : 0;
-        };
-        this._hangarPanRaf = requestAnimationFrame(step);
+        this.panHangarBy(
+            (cr.left + cr.width / 2 - px) * sx,
+            (cr.top + cr.height / 2 - py) * sy
+        );
     },
 
     bindSlotUpgradeEvents() {
@@ -118956,13 +119882,19 @@ physicalItem.bayInventoryHtml = function (ui) {
     const filter = ui._bayInvFilter || 'all';
     const cs = (ui.STORAGE_CELL_PX | 0) || 56;
     const gridHtml = ui.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
+    // Station storage too — its cells already carry data-move-to-ship (render-parts-list.js),
+    // so a click/drag here moves the part straight onto this ship without a tab switch.
+    const stationGridHtml = ui.renderStationStorage(profile, { extraGridClass: 'hs-pick-grid' });
     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
     // Native 16×16 sprite grid — size ≥24 triggers Scale2x and looks mushy in these tiny filter buttons.
     const ico = (key, col) => (ir ? String(ir.imgHtml(key, 16, 'hs-pixel', col, false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '');
     const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', colors.weapon], ['defense', 'DEFENSE', 'statArmor', colors.defense], ['ability', 'ABILITIES', 'statAbilities', colors.ability], ['energy', 'ENERGY', 'statEnergy', colors.energy]]
         .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
     return `<div class="hs-slot-picker hs-bay-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div>` +
-        `</div>${gridHtml}</div>`;
+        `</div>` +
+        `<div class="hs-bay-inv-group-label">SHIP</div>${gridHtml}` +
+        `<div class="hs-bay-inv-group-label">STATION</div>${stationGridHtml}` +
+        `</div>`;
 };
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-bay-inv]');
@@ -122956,6 +123888,24 @@ extendClass(HomeStationUI, {
             actionHtml += `<button class="action-button hs-line-action" data-move-to-station="${bucket}:${id}" data-ship="${shipId}">TO STATION</button>`;
         }
         const where = equipped ? 'EQUIPPED' : (onStation ? 'STATION' : 'SHIP');
+        // Compare selected weapon to what's currently mounted so weaker stats
+        // light up (is-bad) — same signal as hangar ability hover.
+        let statsHtml = '';
+        if (bucket === 'weapons' && this.hangarWeaponStatsHtml) {
+            let compareId = null;
+            if (!equipped && typeof shipLoadoutManager !== 'undefined') {
+                const L = shipLoadoutManager.getLoadout(shipId);
+                const mounted = (L && (L.weaponSlots || L.weapons)) || [];
+                compareId = mounted.find((w) => w) || null;
+            }
+            statsHtml = this.hangarWeaponStatsHtml(defId, compareId);
+        } else if (bucket === 'abilities' && this.hangarAbilityStatsHtml) {
+            statsHtml = this.hangarAbilityStatsHtml(defId);
+        } else if (bucket === 'energy' && this.hangarEnergyStatsHtml) {
+            statsHtml = this.hangarEnergyStatsHtml(defId);
+        }
+        const tip = this.hangarModuleTip ? this.hangarModuleTip(kind, defId) : '';
+        const desc = tip ? String(tip).split('\n')[1] : '';
         return wrap(
             `<div class="hs-line hs-shop-line hs-equip-line is-expanded">` +
             `<span class="hs-line-name">` +
@@ -122963,6 +123913,8 @@ extendClass(HomeStationUI, {
             `<span class="hs-line-text">` +
             `<strong>${meta.label}</strong>` +
             `<span class="hs-line-meta">L${level}/${maxLevel} · ${where}</span>` +
+            (desc ? `<span class="hs-line-desc">${String(desc).replace(/</g, '&lt;')}</span>` : '') +
+            (statsHtml ? `<span class="hs-equip-compare-stats">${statsHtml}</span>` : '') +
             `</span></span>` +
             `<span class="hs-line-actions">${actionHtml}</span>` +
             `</div>` +
@@ -122992,6 +123944,11 @@ extendClass(HomeStationUI, {
 
         const selected = this.renderSelectedEquipItem(profile, shipId);
 
+        // After paint: if the selected part is a weaker swap, light up ship-card damage.
+        requestAnimationFrame(() => {
+            if (this.markShipStatsWorseForSelected) this.markShipStatsWorseForSelected(shipId);
+        });
+
         return `<div class="hs-equip-ship">` +
             shipPicker +
             `<div class="hs-equip-cols">` +
@@ -123008,6 +123965,49 @@ extendClass(HomeStationUI, {
             selected +
             `</div>` +
             `</div>`;
+    },
+
+    /** Clear up/down marks on ship-card stat chips. */
+    clearShipStatCompareMarks() {
+        if (!this.overlay) return;
+        this.overlay.querySelectorAll('.hs-ship-stat.is-worse, .hs-ship-stat.is-better').forEach((el) => {
+            el.classList.remove('is-worse', 'is-better');
+        });
+    },
+
+    /** Mark ship-card damage when a weapon would upgrade/downgrade vs the mounted gun. */
+    markShipStatCompareForWeapon(shipId, defId) {
+        if (!this.overlay || !shipId || !defId || typeof weaponConfigManager === 'undefined') return;
+        if (this._itemIsEquippedOnShip && this._itemIsEquippedOnShip(shipId, 'weapons', defId)) return;
+        const L = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager.getLoadout(shipId) : null;
+        const mounted = (L && (L.weaponSlots || L.weapons)) || [];
+        const compareId = mounted.find((w) => w) || null;
+        if (!compareId || compareId === defId) return;
+        const w = weaponConfigManager.getWeapon(defId);
+        const c = weaponConfigManager.getWeapon(compareId);
+        if (!w || !c) return;
+        const mine = Number(w.damage) || 0;
+        const theirs = Number(c.damage) || 0;
+        if (mine === theirs) return;
+        const el = this.overlay.querySelector(
+            `.hs-ship-table-name .hs-ship-stat[data-stat="damage"]`
+        );
+        if (!el) return;
+        el.classList.add(mine < theirs ? 'is-worse' : 'is-better');
+    },
+
+    /** Highlight ship-card numbers for the selected storage part (equipment tab). */
+    markShipStatsWorseForSelected(shipId) {
+        this.clearShipStatCompareMarks();
+        const key = this.expandedEquipItem;
+        if (!key || key.indexOf(':') < 0) return;
+        const sep = key.indexOf(':');
+        const bucket = key.slice(0, sep);
+        const rawId = key.slice(sep + 1);
+        if (bucket !== 'weapons') return;
+        const defId = (typeof profileManager !== 'undefined' && profileManager.parsePartInstanceId)
+            ? (profileManager.parsePartInstanceId(rawId).defId || rawId) : rawId;
+        this.markShipStatCompareForWeapon(shipId, defId);
     },
 });
 

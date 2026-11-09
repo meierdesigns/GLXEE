@@ -51,6 +51,11 @@ extendClass(HomeStationUI, {
         }
         this.overlay.dataset.hsTab = this.tab || 'station';
         this.applyFactionTheme();
+        // Delegated on the overlay root itself (idempotent, guarded inside), so it's
+        // live from the first frame regardless of which tab-render path runs below —
+        // unlike binding it per-tab after the body swap, which could race a soft/
+        // cached re-render that skips rebinding.
+        this.bindShipSlotDotHoverHighlight();
 
         // Soft tab switch: keep header/shell, only swap .hs-body (H10 — full setOverlayHtml was ~70–100ms).
         if (profile && this._hsShellReady && this._trySoftTabSwitch(profile, scrollState)) {
@@ -83,6 +88,7 @@ extendClass(HomeStationUI, {
             return;
         }
 
+        this.clampTabToUnlockedAreas();
         const built = this._buildTabBody(profile);
         const { body, bodyClass, isPlay, isMenu, hideTabsForTutorial } = built;
 
@@ -145,11 +151,14 @@ extendClass(HomeStationUI, {
         this._finishTabMount(scrollState, { bindChrome: true });
         this._hsShellReady = true;
         this._softBodyTab = this.tab;
+        this._hsHubAreasUnlocked = (!!this.isHubAreasProgressUnlocked() ? '1' : '0')
+            + ((typeof startScreenManager !== 'undefined' && startScreenManager.devMode) ? 'D' : '');
         this._syncTabsUnlockReveal(this.overlay.querySelector('.hs-tabs'), hideTabsForTutorial);
     },
 
     /**
-     * Navbar stays visible at all times, including before the first planet is cleared.
+     * Never blank the whole navbar — LAUNCH + STATION stay. Hangar/Factions/Wiki
+     * are filtered per-area in renderAreaTabs once a planet is cleared.
      */
     shouldHideTabsForTutorial(profile) {
         return false;
@@ -159,13 +168,10 @@ extendClass(HomeStationUI, {
      * Shift+C: refresh only nav chrome (area tabs + subnav). Keeps the shell
      * and active body so toggling dev mode stays cheap (~DOM patch, no rebuild).
      */
-    /** Insert/remove the header's LAUNCH button to match current tab + unlock state —
-     *  the soft-render paths below only patch chrome in place, so this must run after
-     *  anything that could change `isPlayLaunchUnlocked()` (tab switch, dev mode toggle). */
+    /** Keep the header LAUNCH button present across soft tab switches; only sync active state. */
     _syncPlayLaunchButton(content) {
-        let playBtn = content.querySelector('[data-play-launch]');
-        const shouldShowLaunch = !(this.tab === 'play' && !this.isPlayLaunchUnlocked());
-        if (!playBtn && shouldShowLaunch) {
+        let playBtn = content.querySelector('.hs-header-split > [data-play-launch]');
+        if (!playBtn) {
             const header = content.querySelector('.hs-header');
             const headerMain = header && header.querySelector('.hs-header-main');
             if (header && headerMain) {
@@ -182,11 +188,6 @@ extendClass(HomeStationUI, {
                     playBtn = el;
                 }
             }
-        } else if (playBtn && !shouldShowLaunch) {
-            // Dev mode (or a prior clear) made it show; if that got toggled off again
-            // while still unprogressed and on the play tab, it must hide once more.
-            playBtn.remove();
-            playBtn = null;
         }
         if (playBtn) {
             playBtn.classList.toggle('active', this.tab === 'play');
@@ -199,26 +200,19 @@ extendClass(HomeStationUI, {
         const content = this.overlay.querySelector('.vf-browser-shell .home-station-content')
             || this.overlay.querySelector('.home-station-content');
         if (!content) return;
+        // Leaving a gated area while disabling dev mode: hop back to PLAY.
+        if (this.clampTabToUnlockedAreas()) {
+            this.createUI();
+            return;
+        }
         this._syncPlayLaunchButton(content);
         const profile = this.getProfile();
         const hide = this.shouldHideTabsForTutorial(profile);
         const tabsWrap = content.querySelector('.hs-tabs');
         if (tabsWrap) {
-            const needFill = !hide && !tabsWrap.firstElementChild;
             tabsWrap.classList.toggle('hs-tabs-hidden', !!hide);
-            if (needFill) {
-                tabsWrap.innerHTML = this.renderTabs();
-                this._bindSoftTabButtons(tabsWrap);
-                tabsWrap.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
-                    if (menuBtn.dataset.vfSoftBound === '1') return;
-                    menuBtn.dataset.vfSoftBound = '1';
-                    menuBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
-                    });
-                });
-            }
+            // Keep prev hub sig so locked preview tabs can animate out/in.
+            this._syncHubAreaTabs(content, tabsWrap, hide);
             this._syncTabsUnlockReveal(tabsWrap, hide);
         }
         const bodyEl = Array.from(content.children).find((el) => el.classList && el.classList.contains('hs-body'));
@@ -250,6 +244,91 @@ extendClass(HomeStationUI, {
         this._hsTabsWereHidden = !!hideTabsForTutorial;
     },
 
+    /**
+     * Rebuild area buttons when Hangar/Factions/Wiki unlock after a planet clear
+     * (soft switches otherwise only patch active classes on existing buttons).
+     * Dev-mode preview of locked areas animates in/out on Shift+C.
+     */
+    _syncHubAreaTabs(content, tabsWrap, hideTabsForTutorial) {
+        if (!tabsWrap || hideTabsForTutorial) return;
+        const progress = !!this.isHubAreasProgressUnlocked();
+        const dev = !!(typeof startScreenManager !== 'undefined' && startScreenManager.devMode);
+        const sig = (progress ? '1' : '0') + (dev ? 'D' : '');
+        const prev = this._hsHubAreasUnlocked;
+        const needRebuild = (prev === undefined) ? !tabsWrap.firstElementChild
+            : (prev !== sig || !tabsWrap.firstElementChild);
+        if (!needRebuild) {
+            this._hsHubAreasUnlocked = sig;
+            return;
+        }
+
+        const wasDevPreview = typeof prev === 'string' && prev.indexOf('D') !== -1 && prev.charAt(0) !== '1';
+        const nowDevPreview = !progress && dev;
+        const reduceMotion = !!(typeof matchMedia === 'function'
+            && matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+        // Dev OFF while still gated: play exit on the italic locked cards, then rebuild.
+        if (wasDevPreview && !nowDevPreview && !progress && !reduceMotion) {
+            const locked = Array.from(tabsWrap.querySelectorAll('.hs-area-btn.is-locked'));
+            if (locked.length) {
+                if (!this._hsHubAnimGen) this._hsHubAnimGen = 0;
+                const gen = ++this._hsHubAnimGen;
+                this._hsHubAreasUnlocked = sig;
+                locked.forEach((btn) => {
+                    btn.classList.add('hs-area-lock-out');
+                    btn.setAttribute('aria-hidden', 'true');
+                    btn.tabIndex = -1;
+                });
+                let finished = false;
+                const finish = () => {
+                    if (finished || gen !== this._hsHubAnimGen) return;
+                    finished = true;
+                    this._applyHubAreaTabsHtml(tabsWrap, {
+                        revealProgress: false,
+                        lockIn: false
+                    });
+                };
+                locked.forEach((btn) => btn.addEventListener('animationend', finish, { once: true }));
+                clearTimeout(this._hsHubAnimTimer);
+                this._hsHubAnimTimer = setTimeout(finish, 320);
+                this._softAreaId = null;
+                return;
+            }
+        }
+
+        this._hsHubAreasUnlocked = sig;
+        this._applyHubAreaTabsHtml(tabsWrap, {
+            revealProgress: typeof prev === 'string' && prev.charAt(0) !== '1' && progress,
+            lockIn: nowDevPreview && !wasDevPreview && !reduceMotion
+        });
+    },
+
+    _applyHubAreaTabsHtml(tabsWrap, opts) {
+        if (!tabsWrap) return;
+        tabsWrap.innerHTML = this.renderTabs();
+        if (opts && opts.revealProgress) {
+            tabsWrap.classList.add('hs-tabs-reveal');
+            tabsWrap.addEventListener('animationend', () => tabsWrap.classList.remove('hs-tabs-reveal'), { once: true });
+        }
+        if (opts && opts.lockIn) {
+            tabsWrap.querySelectorAll('.hs-area-btn.is-locked').forEach((btn) => {
+                btn.classList.add('hs-area-lock-in');
+                btn.addEventListener('animationend', () => btn.classList.remove('hs-area-lock-in'), { once: true });
+            });
+        }
+        this._bindSoftTabButtons(tabsWrap);
+        tabsWrap.querySelectorAll('[data-open-menu]').forEach((menuBtn) => {
+            if (menuBtn.dataset.vfSoftBound === '1') return;
+            menuBtn.dataset.vfSoftBound = '1';
+            menuBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openMainMenuOverlay(this.menuButtonOpts(menuBtn));
+            });
+        });
+        this._softAreaId = null;
+    },
+
     /** Build tab body HTML + chrome flags shared by hard and soft createUI paths. */
     _buildTabBody(profile) {
         const stats = (typeof profileManager !== 'undefined')
@@ -260,10 +339,9 @@ extendClass(HomeStationUI, {
         const ownedHtml = owned.length
             ? `<table class="hs-ship-table">${owned.map((id) => {
                 const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
-                    `<button type="button" class="action-button hs-ship-icon-btn" data-open-hangar="${id}" data-nav-item data-ui-tip="OPEN IN HANGAR" aria-label="Open in hangar">` +
+                    `<button type="button" class="hs-ship-icon-btn hs-ship-hangar-badge" data-open-hangar="${id}" data-nav-item data-ui-tip="EDIT ANATOMY" aria-label="Edit ship anatomy">` +
                     `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
                 const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
-                    `<div class="hs-ship-storage-caption">SHIP STORAGE</div>` +
                     `<div class="hs-row">${this.renderShipStorage(profile, id)}</div>` +
                     `</td></tr>`;
                 return `<tbody class="hs-ship-card">${row}${storageRow}</tbody>`;
@@ -315,12 +393,12 @@ extendClass(HomeStationUI, {
                     </div>
                     <div class="hs-panel hs-panel-stack hs-panel-parts hs-panel-ships hs-panel-storage${this.stationLayoutSideBySide() ? ' is-side-by-side' : ''}">
                         <button type="button" class="hs-panel-layout-toggle" data-station-layout-toggle aria-pressed="${this.stationLayoutSideBySide()}" aria-label="Switch layout" data-ui-tip="SWITCH LAYOUT">⇄</button>
-                        <section class="hs-station-section${this.stationCollapsedSections().storage ? ' is-collapsed' : ''}" data-station-section="storage">
-                            ${this.stationSectionHeaderHtml('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile), 'storage', !!this.stationCollapsedSections().storage)}
+                        <section class="hs-station-section" data-station-section="storage">
+                            ${this.panelTitle('hsCraft', 'STATION STORAGE · ' + this.stationStorageLabel(profile))}
                             <div class="hs-row hs-station-storage-row">${this.renderStationStorage(profile)}</div>
                         </section>
-                        <section class="hs-station-section${this.stationCollapsedSections().ships ? ' is-collapsed' : ''}" data-station-section="ships">
-                            ${this.stationSectionHeaderHtml('hsShip', 'OWNED SHIPS · ' + slotsLabel, 'ships', !!this.stationCollapsedSections().ships)}
+                        <section class="hs-station-section" data-station-section="ships">
+                            ${this.panelTitle('hsShip', 'OWNED SHIPS · ' + slotsLabel)}
                             <div class="hs-row hs-ship-row">${ownedHtml}</div>
                         </section>
                     </div>
@@ -364,8 +442,15 @@ extendClass(HomeStationUI, {
     _parkSoftBody(bodyEl, leavingTab) {
         // Hangar owns a live canvas + ResizeObservers — parking it across Esc
         // menu toggles left stale rAFs sizing a detached viewport (layout trash).
-        if (!bodyEl || !leavingTab || leavingTab === 'play' || leavingTab === 'menu'
-            || leavingTab === 'components' || leavingTab === 'hangar') return;
+        // Those tabs must still empty the body: otherwise a later soft restore
+        // of STATION (appendChild of the parked frag) stacks under leftover
+        // hangar DOM and the UI "stays in hangar".
+        if (!bodyEl || !leavingTab) return;
+        if (leavingTab === 'play' || leavingTab === 'menu'
+            || leavingTab === 'components' || leavingTab === 'hangar') {
+            bodyEl.innerHTML = '';
+            return;
+        }
         if (!this._softBodyCache) this._softBodyCache = Object.create(null);
         const frag = document.createDocumentFragment();
         while (bodyEl.firstChild) frag.appendChild(bodyEl.firstChild);
@@ -437,6 +522,7 @@ extendClass(HomeStationUI, {
             this._parkSoftBody(bodyEl, leavingTab);
         }
 
+        this.clampTabToUnlockedAreas();
         const cacheHit = this._restoreSoftBody(bodyEl, profile);
         let hideTabsForTutorial = this.shouldHideTabsForTutorial(profile);
         const isPlay = this.tab === 'play';
@@ -460,6 +546,7 @@ extendClass(HomeStationUI, {
 
         const tabsWrap = content.querySelector('.hs-tabs');
         if (tabsWrap) tabsWrap.classList.toggle('hs-tabs-hidden', !!hideTabsForTutorial);
+        this._syncHubAreaTabs(content, tabsWrap, hideTabsForTutorial);
         this._syncTabsUnlockReveal(tabsWrap, hideTabsForTutorial);
 
         // Sync active classes in place — full renderTabs()/subnav rebuild was costly.
@@ -623,6 +710,7 @@ extendClass(HomeStationUI, {
                 if (t === 'shop' || t === 'upgrade' || t === 'craft' || t === 'travel') this.bindShopEvents();
                 // The station upgrade tree lives on the UPGRADE tab: its nodes need these handlers (tooltips, select, buy).
                 if (t === 'station' || t === 'shop' || t === 'craft' || t === 'upgrade') this.bindStationEvents();
+                if (t === 'station') this.bindShipSlotDotHoverHighlight();
                 if (t === 'hangar') { this.bindHangarTabEvents(); this.bindStorageDragAndDrop(); }
                 // Storage grid is rebuilt on soft switch — reattach the 2-column resize grip.
                 if (t === 'station') {
@@ -643,6 +731,17 @@ extendClass(HomeStationUI, {
         // Buys from the trader call setStatus→createUI; remount the modal on top.
         if (this._tpsModalOpen && this.visitPostId && this.mountTradingPostModal) {
             this.mountTradingPostModal();
+        }
+        // Anatomy modal lives outside .hs-body; hard createUI wipes it — remount
+        // while still on STATION, otherwise drop the stale flag.
+        if (this._anatomyModalShipId && this.openShipAnatomyModal) {
+            if (this.tab === 'station') {
+                if (!this.overlay.querySelector('[data-anatomy-modal]')) {
+                    this.openShipAnatomyModal(this._anatomyModalShipId);
+                }
+            } else {
+                this.closeShipAnatomyModal({ skipRefresh: true });
+            }
         }
         // Soft: defer focus walk + hint (was ~15–22ms) so body paints first.
         // Generation guard: a later createUI (Esc menu mash) invalidates these.
@@ -791,19 +890,12 @@ extendClass(HomeStationUI, {
                 this.createUI();
             });
         });
+        // Badge and ship thumb both open the floating anatomy modal.
         this.overlay.querySelectorAll('[data-open-hangar]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                if (this.tab === 'menu') {
-                    this.unmountMenuTab();
-                    this._menuOpts = null;
-                    this._prevTab = null;
-                }
-                this.hangarShipId = btn.getAttribute('data-open-hangar');
-                this.statusMsg = '';
-                this.focusIndex = 0;
-                this.tab = 'hangar';
-                this.persistTab();
-                this.createUI();
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openShipAnatomyModal(btn.getAttribute('data-open-hangar'));
             });
         });
     },

@@ -294,4 +294,112 @@ extendClass(ShipAssetLoader, {
         return { up0: start, down0: start, up1: end, down1: end };
     },
 
+    /** True if segments AB and CD properly intersect (shared by bridge pairing). */
+    segmentsCross(a, b, c, d) {
+        const ccw = (p, q, r) => (r[1] - p[1]) * (q[0] - p[0]) > (q[1] - p[1]) * (r[0] - p[0]);
+        return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+    },
+
+    /**
+     * Hull↔wing bridge in layout units: a trapezoid between two knobs.
+     *   OFFSET (wingConnectionY)     → hull end height on the body flank
+     *   wingConnectionYEnd           → slide along the wing root
+     *   wingConnectionWidth / End    → strength at each end
+     * Always meets the wing at its root (rotation pivot), never at whichever
+     * lit pixel swung closest to the hull — that pulled the strut onto a tip
+     * or corner and crossed the two long sides into a bowtie.
+     */
+    wingBridgeGeometry(seg, centerSeg, shipModel, scale) {
+        const loadout = (shipModel && shipModel.layout && shipModel.layout.loadout) || {};
+        const left = seg.id === 'wingLeft';
+        const vis = this.wingVisibleRect(seg, shipModel, scale);
+        const root = this.wingRootAttach(seg, shipModel, scale);
+        const attach = this.wingAttachPoint(seg, shipModel, scale);
+        const connectionY = Math.max(-1, Math.min(1, Number(loadout.wingConnectionY) || 0));
+        const connectionYEnd = Math.max(-1, Math.min(1, Number(loadout.wingConnectionYEnd) || 0));
+        const deg = Math.max(-180, Math.min(180, Number(loadout.wingRotation) || 0));
+        const ang = deg * Math.PI / 180 * (left ? -1 : 1);
+        const dirX = (left ? -1 : 1) * Math.cos(ang);
+        const dirY = (left ? -1 : 1) * Math.sin(ang);
+        // Root tangent with +n toward aft so L/R share nose/aft meaning.
+        let nX = left ? dirY : -dirY;
+        let nY = left ? -dirX : dirX;
+        if (nY < 0) { nX = -nX; nY = -nY; }
+        const sides = this.wingJointSides(loadout);
+        const hullUnit = centerSeg.height;
+        const segs = (shipModel.layout && shipModel.layout.segments) || [];
+        const other = segs.find((s) => s.id === (left ? 'wingRight' : 'wingLeft'));
+        const otherRoot = other ? this.wingRootAttach(other, shipModel, scale) : root;
+        const rootH = Math.max(1, (root.height + otherRoot.height) * 0.5);
+        const up0 = Math.max(0.5, hullUnit * sides.up0);
+        const down0 = Math.max(0.5, hullUnit * sides.down0);
+        // Fallback half-widths only when the wing edge can't be sampled.
+        const maxEnd = Math.max(0.5, Math.min(rootH, hullUnit) * Math.max(sides.up1, sides.down1));
+        const endShift = connectionYEnd * rootH * 0.5;
+        const hullX = left ? centerSeg.x : centerSeg.x + centerSeg.width;
+        const hintY = attach.y + nY * endShift + hullUnit * connectionY * 0.5;
+        // Wing edge corners = connection end corners (no capping).
+        const pix = this.wingBridgeEnd(seg, shipModel, scale, hullX, hintY);
+        let x1 = attach.x + nX * endShift;
+        let y1 = hintY;
+        let e0 = null;
+        let e1 = null;
+        let up1 = Math.max(0.5, maxEnd * 0.5);
+        let down1 = up1;
+        if (pix) {
+            x1 = pix.x;
+            y1 = pix.y;
+            e0 = [pix.topX, pix.topY];
+            e1 = [pix.botX, pix.botY];
+            up1 = Math.max(0.5, Math.hypot(pix.topX - pix.x, pix.topY - pix.y));
+            down1 = Math.max(0.5, Math.hypot(pix.botX - pix.x, pix.botY - pix.y));
+        }
+        // Hull end tracks the wing meeting height; HULL HEIGHT offsets from it.
+        const y0 = (pix ? y1 : attach.y + nY * endShift) + hullUnit * connectionY * 0.5;
+        return {
+            left,
+            x0: hullX,
+            y0,
+            x1,
+            y1: pix ? y1 : y0,
+            e0,
+            e1,
+            attach,
+            root,
+            dirX, dirY, nX, nY,
+            n0: [0, 1],
+            n1: [nX, nY],
+            up0, down0, up1, down1,
+            half0: (up0 + down0) / 2,
+            half1: (up1 + down1) / 2,
+            endShift,
+            vis
+        };
+    },
+
+    /**
+     * Four corners of the bridge. Hull end is vertical; wing end uses the
+     * silhouette corners (e0/e1) when present so it shares the wing's nearest
+     * side instead of leaving a flat gap beside a turned root.
+     */
+    wingBridgeCorners(geo, upA, downA, upB, downB, wingOffset) {
+        const off = Number(wingOffset) || 0;
+        const ax = geo.x0;
+        const ay = geo.y0;
+        const bx = geo.x1 + geo.nX * off;
+        const by = geo.y1 + geo.nY * off;
+        const aTop = [ax, ay - upA];
+        const aBot = [ax, ay + downA];
+        let bTop;
+        let bBot;
+        if (geo.e0 && geo.e1 && !off) {
+            bTop = [geo.e0[0], geo.e0[1]];
+            bBot = [geo.e1[0], geo.e1[1]];
+        } else {
+            bTop = [bx - geo.nX * upB, by - geo.nY * upB];
+            bBot = [bx + geo.nX * downB, by + geo.nY * downB];
+        }
+        return { aTop, aBot, bTop, bBot, ax, ay, bx, by };
+    },
+
 });

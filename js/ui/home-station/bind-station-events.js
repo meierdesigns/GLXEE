@@ -4,6 +4,17 @@
 extendClass(HomeStationUI, {
     /** Cargo teleport, station upgrade tree, unlocks, purchases and crafting. */
     bindStationEvents() {
+        // Ship thumb opens the anatomy modal (same as the EDIT ANATOMY badge).
+        this.overlay.querySelectorAll('[data-open-anatomy-modal]').forEach((el) => {
+            const open = (e) => {
+                if (e.target && e.target.closest && e.target.closest('[data-open-hangar]')) return;
+                if (e.type === 'keydown' && e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                this.openShipAnatomyModal(el.getAttribute('data-open-anatomy-modal'));
+            };
+            el.addEventListener('click', open);
+            el.addEventListener('keydown', open);
+        });
         const teleport = this.overlay.querySelector('#hsTeleport');
         if (teleport) {
             teleport.addEventListener('click', () => {
@@ -416,6 +427,7 @@ extendClass(HomeStationUI, {
         // (hangar-parts-grid-part2.js) — the grid hit-test and ghost placement both read layout.
         let rafId = 0;
         let lastMove = null;
+        const setDropBlocked = (on) => document.body.classList.toggle('hs-drop-blocked', !!on);
         const applyMove = (ev) => {
             if (!dragging) {
                 if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < THRESH) return;
@@ -423,9 +435,26 @@ extendClass(HomeStationUI, {
             }
             if (place) place(ev.clientX, ev.clientY);
             clearDropMarks();
+            setDropBlocked(false);
             const grid = gridAt(ev.clientX, ev.clientY);
-            if (grid) grid.classList.add('is-drag-over');
-            if (grid) markDropCell(ev.clientX, ev.clientY); else clearCellMark();
+            if (grid) {
+                grid.classList.add('is-drag-over');
+                // Cross-storage drop into a full station bay: lock cursor (same BAY FULL
+                // refusal the actual transfer would return). Same-grid rearrange stays open.
+                const tScope = grid.getAttribute('data-storage-target') || '';
+                const tShip = grid.getAttribute('data-ship') || '';
+                const sameGrid = tScope === source && tShip === shipId;
+                if (!sameGrid && tScope === 'station') {
+                    const sep = key.indexOf(':');
+                    const bucket = sep === -1 ? '' : key.slice(0, sep);
+                    const id = sep === -1 ? key : key.slice(sep + 1);
+                    const profile = this.getProfile ? this.getProfile() : null;
+                    if (profile && this._stationRejectsItem && this._stationRejectsItem(profile, bucket, id)) {
+                        setDropBlocked(true);
+                    }
+                }
+                markDropCell(ev.clientX, ev.clientY);
+            } else clearCellMark();
         };
         const onMove = (ev) => {
             lastMove = ev;
@@ -447,6 +476,7 @@ extendClass(HomeStationUI, {
             } catch (err) { /* ignore */ }
             cell.classList.remove('is-dragging');
             document.body.classList.remove('hs-part-grabbing');
+            document.body.classList.remove('hs-drop-blocked');
             clearDropMarks();
             clearCellMark();
             if (ghost) { ghost.remove(); ghost = null; }
@@ -728,12 +758,44 @@ extendClass(HomeStationUI, {
         this.overlay.querySelectorAll('[data-hangar-ship]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const selectedShipId = btn.getAttribute('data-hangar-ship');
-                if (selectedShipId === this.hangarShipId) return;
+                this._hangarShipDropdownOpen = false;
+                if (selectedShipId === this.hangarShipId) {
+                    // Same ship re-clicked in the open dropdown: no re-render coming to
+                    // close it, so close it here directly.
+                    const dd = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown]');
+                    const toggle = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown-toggle]');
+                    if (dd) dd.classList.remove('is-open');
+                    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                    return;
+                }
                 this.hangarShipId = selectedShipId;
                 this.statusMsg = '';
                 this.createUI();
             });
         });
+        const shipDropdownToggle = this.overlay.querySelector('[data-hangar-ship-dropdown-toggle]');
+        if (shipDropdownToggle) {
+            shipDropdownToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this._hangarShipDropdownOpen = !this._hangarShipDropdownOpen;
+                const dd = this.overlay.querySelector('[data-hangar-ship-dropdown]');
+                if (dd) dd.classList.toggle('is-open', this._hangarShipDropdownOpen);
+                shipDropdownToggle.setAttribute('aria-expanded', String(this._hangarShipDropdownOpen));
+            });
+            if (!this._hangarShipDropdownOutsideBound) {
+                this._hangarShipDropdownOutsideBound = true;
+                document.addEventListener('click', (e) => {
+                    if (!this._hangarShipDropdownOpen) return;
+                    if (e.target && e.target.closest && e.target.closest('[data-hangar-ship-dropdown]')) return;
+                    this._hangarShipDropdownOpen = false;
+                    const dd = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown]');
+                    const toggle = this.overlay && this.overlay.querySelector('[data-hangar-ship-dropdown-toggle]');
+                    if (dd) dd.classList.remove('is-open');
+                    if (toggle) toggle.setAttribute('aria-expanded', 'false');
+                });
+            }
+        }
 
         this.overlay.querySelectorAll('[data-hangar-sidebar]').forEach((btn) => {
             btn.addEventListener('click', () => {

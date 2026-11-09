@@ -127,8 +127,18 @@ extendClass(HomeStationUI, {
             // Moved empty slots go back to their default spots too.
             loadout.slotAnchors = {};
             loadout.singleWeaponSide = null;
-            // Switched-off areas (nose / aft / wings) come back on.
-            loadout.disabledAreas = { front: false, back: false, wing: false };
+            // Restore the hull profile's anatomy signature (scrap = no wings,
+            // interceptor = no aft, heavy = no nose), then layer faction stock.
+            loadout.disabledAreas = shipLoadoutManager.getShipRoleDisabledAreas
+                ? shipLoadoutManager.getShipRoleDisabledAreas(shipId)
+                : { front: false, back: false, wing: false };
+            const coreGun = shipLoadoutManager.getShipRoleCoreGun
+                ? shipLoadoutManager.getShipRoleCoreGun(shipId) : null;
+            if (coreGun) {
+                loadout.weaponMounts = Object.assign({}, loadout.weaponMounts, {
+                    0: { area: 'center', split: coreGun === 'split', off: 0.2, ny: 0.5, fixed: true }
+                });
+            }
             // Factions with a stock anatomy reset to that instead of the bare frame.
             if (shipLoadoutManager.applyFactionLayoutDefaults) shipLoadoutManager.applyFactionLayoutDefaults(loadout);
             shipLoadoutManager.setLoadout(shipId, loadout);

@@ -948,12 +948,13 @@ html body .home-station-overlay .home-station-content .hs-header-split > .hs-hea
     margin: 0 !important;
 }
 
-/* Final say for the nav cards (measured): same top / bottom edges as PLAY, in every state.
-   The 120px min-height and the -3px bottom margin made them 6px taller than PLAY. */
+/* Final say for the nav cards (measured): same height and top/bottom edges as PLAY,
+   in every state — PLAY is pinned to 120px, so the area cards match it exactly
+   instead of auto-sizing to their (shorter) content. */
 html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn {
     margin: 8px 0 6px !important;
-    min-height: 0 !important;
-    height: auto !important;
+    min-height: 120px !important;
+    height: 120px !important;
     align-self: stretch !important;
 }
 
@@ -974,6 +975,7 @@ html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .
 html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active .hs-tab-label {
     margin: 0 5px 5px !important;
     font-weight: 700 !important;
+    letter-spacing: normal;
 }
 html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before {
     background: var(--color-primary) !important;

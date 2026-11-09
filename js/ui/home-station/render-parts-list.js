@@ -251,6 +251,35 @@ extendClass(HomeStationUI, {
         return used + '/' + cap;
     },
 
+    /** True when filing `bucket`/`id` into station storage would exceed the bay budget
+     *  (same check moveToStationStorage uses for BAY FULL). */
+    _stationRejectsItem(profile, bucket, id) {
+        if (!profile) return false;
+        const defId = this._storageDefId ? this._storageDefId(id) : String(id || '');
+        const span = this._storageItemSpan(bucket, defId);
+        const add = Math.max(1, (span[0] || 1) * (span[1] || 1));
+        return this._stationStorageUsed(profile) + add > this._stationStorageSlots(profile);
+    },
+
+    /** True when `shipId` has no free, fitting mount left for this part (equip would refuse). */
+    _noFreeShipSlot(shipId, kind, partId) {
+        if (!shipId || !kind || kind === 'blueprint' || !partId) return false;
+        if (typeof shipLoadoutManager === 'undefined') return false;
+        const slm = shipLoadoutManager;
+        const key = slm.kindToLoadoutKey(kind);
+        const caps = slm.getSlotCaps(shipId, slm.resolveModelClass(shipId));
+        const cap = key === 'weapons' ? slm.weaponMountSlots(caps.weapons) : Math.max(0, Number(caps[key]) || 0);
+        if (!cap) return true;
+        const L = slm.getLoadout(shipId);
+        const list = key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || []);
+        if (list.indexOf(partId) !== -1) return false; // already equipped — unequip still works
+        const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(shipId, kind, partId, i).ok;
+        for (let i = 0; i < cap; i++) {
+            if (!(list[i] || null) && fits(i)) return false;
+        }
+        return true;
+    },
+
     /** Turn a slot budget into a compact cols×rows bay (grows wider first, then taller). */
     _stationStorageGrid(profile, usedCells, opts) {
         const budget = Math.max(this._stationStorageSlots(profile), usedCells | 0);
@@ -349,7 +378,7 @@ extendClass(HomeStationUI, {
         const layout = this._storageLayoutPx();
         const cs = layout.cell;
         const gap = layout.gap;
-        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; grid-auto-flow: row dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
+        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; grid-auto-flow: column dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
@@ -398,6 +427,9 @@ extendClass(HomeStationUI, {
                 const L2 = shipLoadoutManager.getLoadout(activeShipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
+            if (!isBp && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.partSizeLabel) {
+                stats.push('SIZE ' + shipLoadoutManager.partSizeLabel(meta.kind, meta.physId));
+            }
             if (!isBp && e.unit != null) {
                 const lv = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeLevel)
                     ? profileManager.getItemUpgradeLevel(e.bucket, e.id, profile) : 0;
@@ -431,10 +463,14 @@ extendClass(HomeStationUI, {
             return { html, span, pos: pinnedPos };
         });
         const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        const cap = this._stationStorageSlots(profile);
+        const fullCls = used >= cap ? ' is-capacity-full' : '';
+        const extra = ((opts.extraGridClass || '') + fullCls).trim();
         return this._storageGridHtml(
             cells,
             this._stationStorageGrid(profile, used, { maxCols: opts.maxCols }),
-            'data-storage-target="station"'
+            'data-storage-target="station"',
+            extra
         );
     },
 
@@ -527,6 +563,9 @@ extendClass(HomeStationUI, {
                 const L2 = shipLoadoutManager.getLoadout(shipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
             }
+            if (!isBp && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.partSizeLabel) {
+                stats.push('SIZE ' + shipLoadoutManager.partSizeLabel(meta.kind, meta.physId));
+            }
             if (!isBp && e.unit != null) {
                 const lv = (typeof profileManager !== 'undefined' && profileManager.getItemUpgradeLevel)
                     ? profileManager.getItemUpgradeLevel(e.bucket, e.id, profile) : 0;
@@ -541,18 +580,29 @@ extendClass(HomeStationUI, {
                     ? `data-equip-select="${key}"`
                     : `data-move-to-station="${key}" data-ship="${shipId}"`);
             // tipAction:false (hangar bay) drops the station-move hint — click toggles equip there.
+            // Lock cursor when equip can't land (no free mount) or — on the station tab —
+            // when filing into station storage would hit BAY FULL.
+            const slotsFull = !isBp && !equipped && this._noFreeShipSlot(shipId, meta.kind, meta.physId);
+            const stationFull = !selectMode && opts.tipAction !== false
+                && this._stationRejectsItem(profile, e.bucket, defId);
+            const destFull = slotsFull || stationFull;
             const tipAction = selectMode ? 'SELECT'
-                : (opts.tipAction === false ? null : '→ STATION');
+                : (opts.tipAction === false ? (slotsFull ? 'SLOTS FULL' : null)
+                    : (stationFull ? 'STATION FULL' : (slotsFull ? 'SLOTS FULL' : '→ STATION')));
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, defId)).concat(qty > 1 ? ['×' + qty] : [])
                 : stats.concat([equipped ? 'EQUIPPED' : null, tipAction].filter(Boolean))).join('\n').replace(/"/g, '&quot;');
+            const lockReason = stationFull ? 'station storage full' : (slotsFull ? 'all slots full' : null);
             const ariaLabel = isBp ? `Craft ${meta.label}`
-                : (selectMode ? `Select ${meta.label}` : `Move ${meta.label} to station storage`);
+                : (selectMode ? `Select ${meta.label}`
+                    : (opts.tipAction === false
+                        ? (slotsFull ? `${meta.label} — all slots full` : meta.label)
+                        : (lockReason ? `${meta.label} — ${lockReason}` : `Move ${meta.label} to station storage`)));
             const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
             // data-part-kind/-id: see renderStationStorage above — same reason, needed here too
             // since this is the function the hangar bay-inventory grid actually calls.
             // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
             const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}${destFull ? ' is-dest-full' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +

@@ -32,14 +32,17 @@ extendClass(HomeStationUI, {
                     if (!shipLoadoutManager.setEmptySlotAnchor) return;
                     const container = pin.closest('.hs-hangar-slot');
                     const index = Number(pin.getAttribute('data-slot-index') || 0);
-                    // A mirror marker starts from its own (mirrored) spot;
-                    // the mount is symmetric, so both halves follow.
-                    const isMirror = pin.classList.contains('is-mirror') || !!this._hangarMirrorGrab;
+                    // Always drive the PRIMARY pin (--pin-x/y). Grabbing the
+                    // mirrored half used to seed startNx from --pin-mx, which
+                    // made the pair jump to the other wing on the first move.
+                    // Mirror grabs keep primary coords and invert the X delta
+                    // so the half under the pointer still follows it.
+                    const mirrorGrab = pin.classList.contains('is-mirror') || !!this._hangarMirrorGrab;
                     const startNx = container
-                        ? parseFloat(container.style.getPropertyValue(isMirror ? '--pin-mx' : '--pin-x')) || 0.5
+                        ? parseFloat(container.style.getPropertyValue('--pin-x')) || 0.5
                         : 0.5;
                     const startNy = container
-                        ? parseFloat(container.style.getPropertyValue(isMirror ? '--pin-my' : '--pin-y')) || 0.5
+                        ? parseFloat(container.style.getPropertyValue('--pin-y')) || 0.5
                         : 0.5;
                     drag = {
                         emptySlot: true,
@@ -50,6 +53,7 @@ extendClass(HomeStationUI, {
                         index: index,
                         startNx: startNx,
                         startNy: startNy,
+                        mirrorGrab: mirrorGrab,
                         mw: Math.max(8, model.width || 20),
                         mh: Math.max(8, model.height || 16)
                     };
@@ -138,14 +142,27 @@ extendClass(HomeStationUI, {
                     const sw = Math.max(1, drag.mw * scale);
                     const sh = Math.max(1, drag.mh * scale);
                     // Empty-slot anchors are ship-normalized, so 0.5 is the
-                    // hull centreline rather than 0.
-                    const nx = drag.startNx + dxCanvas / sw;
-                    let snappedNx = 0.5 + this.snapOffsetToCenter(nx - 0.5, drag.mw, scale);
-                    this._hangarSnapCenter = snappedNx !== nx ? drag.kind : null;
+                    // hull centreline rather than 0. Mirror grab: invert X so
+                    // the reflected half under the pointer tracks with it.
+                    const xSign = drag.mirrorGrab ? -1 : 1;
+                    const nx = drag.startNx + xSign * dxCanvas / sw;
                     let ny = drag.startNy + dyCanvas / sh;
                     // Only the areas its type allows: weapons nose/wings,
                     // defense/energy core, abilities aft/core.
                     const lastModel = this._hangarLastModel;
+                    // Peek the area first: centreline snap is for nose/core
+                    // single mounts — applying it on a wing sucks the pair
+                    // onto the hull axis and collapses the split.
+                    let areaHint = null;
+                    if (lastModel && lastModel.layout && shipLoadoutManager.clampToSlotArea) {
+                        const peek = shipLoadoutManager.clampToSlotArea(drag.kind, nx, ny, lastModel.layout);
+                        areaHint = peek && peek.area;
+                    }
+                    const onWing = areaHint === 'wingLeft' || areaHint === 'wingRight';
+                    let snappedNx = onWing
+                        ? nx
+                        : (0.5 + this.snapOffsetToCenter(nx - 0.5, drag.mw, scale));
+                    this._hangarSnapCenter = (!onWing && snappedNx !== nx) ? drag.kind : null;
                     if (lastModel && lastModel.layout && shipLoadoutManager.clampToSlotArea) {
                         const c = shipLoadoutManager.clampToSlotArea(drag.kind, snappedNx, ny, lastModel.layout);
                         snappedNx = c.nx;
@@ -184,7 +201,7 @@ extendClass(HomeStationUI, {
                 if (!this._hangarLiveDrawRaf) {
                     this._hangarLiveDrawRaf = requestAnimationFrame(() => {
                         this._hangarLiveDrawRaf = 0;
-                        if (this.isVisible && this.tab === 'hangar') this.drawHangarBay();
+                        if (this.isVisible && this.hangarBayActive()) this.drawHangarBay();
                     });
                 }
                 e.preventDefault();

@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.10 · TRACKER LIVE · STYLE MIX ONLINE                   │
+│  BUILD           1.14.11 · TRACKER LIVE · STYLE MIX ONLINE                   │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,9 +717,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.10** ships scene-aware tracker BGM (combat / boss / map / end screens),
-live STYLE mixing, channel voices, BPM, crossfades, mute-key VOL / SND / MUS, and
-Linux gamepad display-wake — on top of bezel glass, salvage, and the victory trader.
+Build **1.14.11** keeps scene-aware tracker BGM and adds the ship anatomy modal,
+early hub gating (LAUNCH always; Hangar / Factions / Wiki after a planet clear),
+and hangar layout polish — on top of STYLE mix, mute VOL / SND / MUS, and gamepad wake.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -1053,6 +1053,9 @@ be reviewed or reverted independently.
 | 73L | Smooth pilot thrust | Player ship moves on continuous velocity (no VOXEL cell teleports); lattice snap stays for FX/enemies |
 | 73M | Map right-click fly | Always animate map travel (no reduced-motion teleport); SVG NS ship marker; closer hit target |
 | 73N | Release 1.14.10 | Deploy ZIP `.claude/GLXEE-V1.14.10.zip` — smooth pilot, map fly, combat pools (73J–73M) |
+| 73O | Ship anatomy + hangar | Floating anatomy modal from ship thumbs; station/hangar layout, slot dots, inventory polish |
+| 73P | Early hub gate | LAUNCH always visible; Hangar/Factions/Wiki after planet clear; Dev Mode italic preview + toggle anim |
+| 73Q | Release 1.14.11 | Deploy ZIP `.claude/GLXEE-V1.14.11.zip` — anatomy modal, hub gate, hangar polish (73O–73P) |
 
 The wave commit convention is:
 
@@ -1102,5 +1105,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.10** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.11** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

@@ -21,19 +21,6 @@ extendClass(HomeStationUI, {
             `</h3>`;
     },
 
-    /** Collapsed state { ships: bool, storage: bool } for the station stack sections, persisted. */
-    stationCollapsedSections() {
-        if (!this._stationCollapsedSections) {
-            let map = {};
-            try {
-                const raw = JSON.parse(localStorage.getItem('vf_hs_station_collapsed_sections') || '{}');
-                if (raw && typeof raw === 'object') map = raw;
-            } catch (err) { /* ignore */ }
-            this._stationCollapsedSections = map;
-        }
-        return this._stationCollapsedSections;
-    },
-
     /** Whether OWNED SHIPS / STATION STORAGE sit side-by-side instead of stacked, persisted. */
     stationLayoutSideBySide() {
         if (this._stationLayoutSideBySide === undefined) {
@@ -44,41 +31,9 @@ extendClass(HomeStationUI, {
         return this._stationLayoutSideBySide;
     },
 
-    /** Panel header for a collapsible station stack section (OWNED SHIPS / STATION STORAGE). */
-    stationSectionHeaderHtml(iconKey, label, sectionKey, collapsed) {
-        return `<h3 class="hs-panel-title" data-station-section-toggle="${sectionKey}" role="button" tabindex="0" aria-expanded="${!collapsed}">` +
-            `<span class="hs-panel-icon">${this.iconHtml(iconKey, 32, 'hs-pixel')}</span>` +
-            `<span class="hs-panel-label">${label}</span>` +
-            `<span class="hs-panel-scan" aria-hidden="true"></span>` +
-            `<span class="hs-panel-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span>` +
-            `</h3>`;
-    },
-
-    /** Binds collapse toggles + the stacked/side-by-side layout switch on the station stack panel. */
+    /** Binds the stacked/side-by-side layout switch on the station stack panel. */
     bindStationPanelToggles() {
         if (!this.overlay) return;
-        this.overlay.querySelectorAll('[data-station-section-toggle]').forEach((head) => {
-            const toggle = () => {
-                const key = head.getAttribute('data-station-section-toggle');
-                const map = this.stationCollapsedSections();
-                map[key] = !map[key];
-                try {
-                    localStorage.setItem('vf_hs_station_collapsed_sections', JSON.stringify(map));
-                } catch (err) { /* ignore */ }
-                const sec = head.closest('.hs-station-section');
-                const c = !!map[key];
-                if (sec) sec.classList.toggle('is-collapsed', c);
-                head.setAttribute('aria-expanded', String(!c));
-                const caret = head.querySelector('.hs-panel-caret');
-                if (caret) caret.textContent = c ? '▼' : '▲';
-            };
-            head.addEventListener('click', toggle);
-            head.addEventListener('keydown', (e) => {
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                toggle();
-            });
-        });
         const layoutBtn = this.overlay.querySelector('[data-station-layout-toggle]');
         if (layoutBtn) {
             layoutBtn.addEventListener('click', () => {
@@ -156,7 +111,23 @@ extendClass(HomeStationUI, {
             `<span class="hs-tab-icon">${this.navIconHtml('menu', 'menuSettings')}</span>` +
             `<span class="hs-tab-label">MENU</span>` +
             `</button>`;
-        return areaOrder.map((entry, oi) => {
+        // Drop locked areas (and orphan dividers) so early-game nav is only LAUNCH + STATION + PROFILES/MENU.
+        const visible = [];
+        areaOrder.forEach((entry) => {
+            if (entry === '|') {
+                if (visible.length && visible[visible.length - 1] !== '|') visible.push('|');
+                return;
+            }
+            if (entry === 'profiles' || entry === 'menu') {
+                visible.push(entry);
+                return;
+            }
+            const area = MENU_AREAS.find((a) => a.id === entry);
+            if (area && area.tabs.length && this.isStationAreaVisible(area.id)) visible.push(entry);
+        });
+        while (visible.length && visible[0] === '|') visible.shift();
+        while (visible.length && visible[visible.length - 1] === '|') visible.pop();
+        return visible.map((entry, oi) => {
             if (entry === '|') return `<span class="hs-tab-divider" data-area-order-index="${oi}" aria-hidden="true"></span>`;
             if (entry === 'profiles') return profilesBtn(oi);
             if (entry === 'menu') return menuBtn(oi);
@@ -171,9 +142,11 @@ extendClass(HomeStationUI, {
             const modal = (id) => id === 'play';
             const pages = tabs.filter((id) => !modal(id));
             const target = this.getAreaLandingTab(area, pages) || pages[0] || tabs[0];
+            // Dev mode: gated areas that are not progress-unlocked yet render italic.
+            const lockedCls = (!this.isHubAreasProgressUnlocked() && area.id !== 'station') ? ' is-locked' : '';
             // Reuse .hs-tab so the area buttons get the faction chrome of the
             // station tabs.
-            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item>` +
+            return `<button type="button" class="hs-tab hs-area-btn${active ? ' active' : ''}${lockedCls}${active && anim.area ? ' hs-anim-activate holo-on' + dirClass : ''}" data-tab="${target}" data-area="${area.id}" data-area-order-index="${oi}" data-nav-item${lockedCls ? ' data-ui-tip="UNLOCKS AFTER CLEARING A PLANET"' : ''}>` +
                 this.areaDecoHtml(area.id) +
                 `<span class="hs-tab-icon">${this.navIconHtml(area.id, this.menuIconFor('area:' + area.id, area.icon))}</span>` +
                 `<span class="hs-tab-label">${areaLabel}</span>` +
@@ -261,19 +234,58 @@ extendClass(HomeStationUI, {
         return !!on && !was;
     },
 
-    /**
-     * LAUNCH stays hidden until the pilot clears a first stage. Before that,
-     * new games already open on the map; if they leave for hangar, show LAUNCH
-     * so they can still return.
-     */
+    /** LAUNCH is always part of the header nav (active while on the map). */
     isPlayLaunchUnlocked() {
-        if (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()) return true;
-        if (typeof profileManager === 'undefined' || !profileManager.hasClearedAnyStage) return true;
-        return !!profileManager.hasClearedAnyStage();
+        return true;
+    },
+
+    /**
+     * True once a planet is fully cleared (boss on the start world, or any
+     * clearedPlanetIds entry). Ignores dev mode — that only previews locked areas.
+     */
+    isHubAreasProgressUnlocked() {
+        if (typeof profileManager === 'undefined') return true;
+        if (profileManager.hasClearedFirstPlanet && profileManager.hasClearedFirstPlanet()) return true;
+        const p = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        if (!p || !p.progress || !p.progress.galaxies) return false;
+        return Object.keys(p.progress.galaxies).some((gid) => {
+            const gp = p.progress.galaxies[gid];
+            return !!(gp && (gp.clearedPlanetIds || []).length);
+        });
+    },
+
+    /** Access allowed: progress unlock, or Shift+C so locked areas stay clickable. */
+    isHubAreasUnlocked() {
+        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) return true;
+        return this.isHubAreasProgressUnlocked();
+    },
+
+    /** Area ids gated behind the first planet clear. STATION / PROFILES / MENU stay open. */
+    isStationAreaUnlocked(areaId) {
+        if (!areaId || areaId === 'station' || areaId === 'profiles' || areaId === 'menu' || areaId === 'play') return true;
+        return this.isHubAreasUnlocked();
+    },
+
+    /**
+     * Nav visibility: locked Hangar/Factions/Wiki stay hidden in normal play,
+     * but appear (italic) in dev mode so their gated state is still readable.
+     */
+    isStationAreaVisible(areaId) {
+        if (!areaId || areaId === 'station' || areaId === 'profiles' || areaId === 'menu' || areaId === 'play') return true;
+        if (this.isHubAreasProgressUnlocked()) return true;
+        return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+    },
+
+    /** If the current tab sits in a locked area, fall back to PLAY (or STATION). */
+    clampTabToUnlockedAreas() {
+        const area = this.getTabArea(this.tab);
+        if (!area || this.isStationAreaUnlocked(area.id)) return false;
+        this.tab = 'play';
+        if (this.persistTab) this.persistTab();
+        return true;
     },
 
     renderPlayLaunch() {
-        if (!this.isPlayLaunchUnlocked() && this.tab === 'play') return '';
         const ids = (typeof planetSVGManager !== 'undefined') ? ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'] : [];
         const planets = ids.map((id, i) => {
             const svg = planetSVGManager.getPlanetSVG(id);
@@ -408,6 +420,7 @@ extendClass(HomeStationUI, {
         const restored = savedTab;
         // PLAY sits in the main menu, not in an area's tab row.
         this.tab = (restored === 'play' || this._tabs.includes(restored)) ? restored : 'station';
+        this.clampTabToUnlockedAreas();
         this.shopCategory = this._shopCategories.includes(savedShopCat) ? savedShopCat : 'resources';
         this.ensureShopCategory();
         if (savedState.factionDetail) this._factionDetail = savedState.factionDetail;
@@ -561,7 +574,7 @@ extendClass(HomeStationUI, {
             hangarTestArena.show({
                 shipId: this.hangarShipId || 'player_scrap',
                 onClose: () => {
-                    if (this.isVisible && this.tab === 'hangar') {
+                    if (this.isVisible && this.hangarBayActive()) {
                         this.startHangarPreview();
                     }
                 }

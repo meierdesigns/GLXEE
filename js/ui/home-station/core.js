@@ -51,10 +51,12 @@ class HomeStationUI {
         this._stationColResizeObs = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = true;
-        // Hangar left sidebar view (AREAS | PARTS), remembered across reloads.
-        this._hangarLeftView = 'ships';
+        // Hangar left sidebar view (SLOTS | PARTS) — ship picking moved into its own
+        // dropdown above this, so "ships" is no longer a view here. Still remembered
+        // across reloads (and an old saved "ships" value falls back to "slots").
+        this._hangarLeftView = 'slots';
         try {
-            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'ships' || v === 'slots') this._hangarLeftView = v; }
+            { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'slots') this._hangarLeftView = v; }
         } catch (e) { /* ignore */ }
         // Last sub-tab per top-bar area (HANGAR→SHIPYARD/UPGRADE/…), across area switches + reloads.
         this._areaLastTab = {};

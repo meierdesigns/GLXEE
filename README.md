@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.11 · TRACKER LIVE · STYLE MIX ONLINE                   │
+│  BUILD           1.14.12 · TRACKER LIVE · VOICES 300% · FAST BPM BODY         │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,9 +717,10 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.11** keeps scene-aware tracker BGM and adds the ship anatomy modal,
-early hub gating (LAUNCH always; Hangar / Factions / Wiki after a planet clear),
-and hangar layout polish — on top of STYLE mix, mute VOL / SND / MUS, and gamepad wake.
+Build **1.14.12** rewrites planet Hauptmelodien, hardens Jungle / DnB kit ownership,
+raises BASS / LEAD / ARP / DRUMS to **300%** with live bus + instant revoice, and
+keeps note body when MUSIC BPM speeds up — on top of the 1.14.11 anatomy modal,
+hub gate, and hangar polish.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -1067,6 +1068,7 @@ be reviewed or reverted independently.
 | 73Y | Voice faders 300% | BASS/LEAD/ARP/DRUMS volume sliders (settings + FX remote) go to 300% |
 | 73Z | Live drums / voices | Channel buses on fader move; poly drums; voice pick keeps wave under STYLE morph; instant revoice; FX vol won't wipe dropdown |
 | 74A | Fast BPM body | Tempo reanchor keeps hook + cancels stale oneshots; ADSR/gates scale with row; softer note cuts |
+| 74B | Release 1.14.12 | GitHub README + version bump — melodies, Jungle/DnB, live voices 300%, fast BPM body (73R–74A) |
 
 The wave commit convention is:
 
@@ -1116,5 +1118,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.11** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.12** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

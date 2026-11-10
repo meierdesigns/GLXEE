@@ -204,13 +204,17 @@ extendClass(ProfileManager, {
 
     /** Files a pending cargo part onto `shipId`'s storage: grants real ownership (profile.parts)
      *  and marks it filed on that ship in one step, then clears it out of cargo. Blueprints
-     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way. */
-    takeCargoPartToShip(shipId, key) {
+     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way.
+     *  `amount` defaults to the full stack; pass 1 for one victory-grid cell. */
+    takeCargoPartToShip(shipId, key, amount) {
         const profile = this.getActiveProfile();
         if (!profile || !shipId) return { ok: false, reason: 'NO PROFILE' };
         this.ensureEconomyDefaults(profile);
-        const n = (profile.cargo.parts || {})[key] || 0;
-        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const available = (profile.cargo.parts || {})[key] || 0;
+        if (available <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const n = amount == null
+            ? available
+            : Math.max(1, Math.min(available, Math.round(Number(amount) || 1)));
         const bp = this.parseBlueprintKey(key);
         if (!bp) return { ok: false, reason: 'INVALID' };
         const bag = bp.kind === 'weapon' ? profile.parts.weapons
@@ -222,7 +226,9 @@ extendClass(ProfileManager, {
         if (shipBucket && this.fileUnequippedPart) {
             for (let i = 0; i < n; i++) this.fileUnequippedPart(profile, shipId, shipBucket, bp.id);
         }
-        delete profile.cargo.parts[key];
+        const left = available - n;
+        if (left > 0) profile.cargo.parts[key] = left;
+        else delete profile.cargo.parts[key];
         this.save();
         return { ok: true, amount: n };
     },

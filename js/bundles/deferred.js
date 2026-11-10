@@ -7452,13 +7452,17 @@ extendClass(ProfileManager, {
 
     /** Files a pending cargo part onto `shipId`'s storage: grants real ownership (profile.parts)
      *  and marks it filed on that ship in one step, then clears it out of cargo. Blueprints
-     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way. */
-    takeCargoPartToShip(shipId, key) {
+     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way.
+     *  `amount` defaults to the full stack; pass 1 for one victory-grid cell. */
+    takeCargoPartToShip(shipId, key, amount) {
         const profile = this.getActiveProfile();
         if (!profile || !shipId) return { ok: false, reason: 'NO PROFILE' };
         this.ensureEconomyDefaults(profile);
-        const n = (profile.cargo.parts || {})[key] || 0;
-        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const available = (profile.cargo.parts || {})[key] || 0;
+        if (available <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const n = amount == null
+            ? available
+            : Math.max(1, Math.min(available, Math.round(Number(amount) || 1)));
         const bp = this.parseBlueprintKey(key);
         if (!bp) return { ok: false, reason: 'INVALID' };
         const bag = bp.kind === 'weapon' ? profile.parts.weapons
@@ -7470,7 +7474,9 @@ extendClass(ProfileManager, {
         if (shipBucket && this.fileUnequippedPart) {
             for (let i = 0; i < n; i++) this.fileUnequippedPart(profile, shipId, shipBucket, bp.id);
         }
-        delete profile.cargo.parts[key];
+        const left = available - n;
+        if (left > 0) profile.cargo.parts[key] = left;
+        else delete profile.cargo.parts[key];
         this.save();
         return { ok: true, amount: n };
     },
@@ -21734,6 +21740,7 @@ extendClass(GameControlSystem, {
     /** Sells one pending cargo stack (part or blueprint) and refreshes the panel. */
     sellVictoryCargoItem(key, isBlueprint) {
         if (typeof profileManager === 'undefined' || !profileManager.sellCargoPart) return;
+        this.cancelVictoryAutoReturn();
         const res = profileManager.sellCargoPart(key, isBlueprint);
         if (!res || !res.ok) return;
         this.updateVictoryStats();
@@ -21744,7 +21751,9 @@ extendClass(GameControlSystem, {
         if (typeof profileManager === 'undefined' || !profileManager.takeCargoPartToShip) return;
         const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
         if (!shipId) return;
-        const res = profileManager.takeCargoPartToShip(shipId, key);
+        this.cancelVictoryAutoReturn();
+        // One cell = one unit (grid renders each found part separately).
+        const res = profileManager.takeCargoPartToShip(shipId, key, 1);
         if (!res || !res.ok) return;
         this.updateVictoryStats();
     },
@@ -21875,15 +21884,13 @@ extendClass(GameControlSystem, {
                 };
                 const onUp = (ev) => {
                     const wasDragging = dragging;
-                    const dropTarget = wasDragging ? this.victoryShipGridAt(ev.clientX, ev.clientY) : null;
                     cleanup();
-                    if (!wasDragging) return;
-                    // A real drag still ends with a native 'click' on this button — swallow it
-                    // so it doesn't also fire the cell's own sell action right after the drop.
+                    // setPointerCapture often eats the native click; always loot on release
+                    // (drop on SHIP or plain click / drag-jitter — same take-to-ship action).
                     const suppressClick = (e) => { e.preventDefault(); e.stopPropagation(); };
                     cell.addEventListener('click', suppressClick, { capture: true, once: true });
                     setTimeout(() => cell.removeEventListener('click', suppressClick, true), 0);
-                    if (dropTarget) this.takeVictoryCargoItem(cell.dataset.cargoKey);
+                    this.takeVictoryCargoItem(cell.dataset.cargoKey);
                 };
                 const onCancel = () => cleanup();
                 document.addEventListener('pointermove', onMove);
@@ -21972,6 +21979,12 @@ extendClass(GameControlSystem, {
             : null;
         const cleared = !!(currentLevel && currentLevel.isBoss) || !meta || meta.kind === 'planet';
         if (!cleared) return;
+        // Pending found parts need a take/sell click — don't auto-leave while cargo waits.
+        const cargo = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile)
+            ? (profileManager.getActiveProfile() || {}).cargo
+            : null;
+        const hasPending = (map) => !!(map && Object.keys(map).some((k) => (map[k] || 0) > 0));
+        if (hasPending(cargo && cargo.parts) || hasPending(cargo && cargo.blueprints)) return;
         const leaveBtn = overlay.querySelector('.victory-button[data-action="levelSelection"]');
         const label = leaveBtn && leaveBtn.querySelector('.button-text');
         let left = 4;

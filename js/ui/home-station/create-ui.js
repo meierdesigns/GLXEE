@@ -1039,14 +1039,11 @@ extendClass(HomeStationUI, {
         const sit = info && info.sit;
         const calm = !sit || sit.kind === 'NO ACTIVE MISSION';
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-        const who = sit && sit.attacker ? String(sit.attacker).toUpperCase() : '';
-        const head = !sit ? 'NO ACTIVE MISSION'
-            : (sit.kind === 'INVASION' || sit.kind === 'ALLY UNDER ATTACK') ? `${who} ATTACKS ${sit.planet}`
-            : (sit.kind === 'ACTIVE MISSION') ? `${sit.mission} · ${sit.planet}` : sit.kind;
-        const tip = esc(sit ? head + ' — ' + sit.objective : 'NO ACTIVE MISSION — TAKE ONE AT THE HANGAR MISSION BOARD');
+        const tip = (gm && gm.formatSituationTip) ? gm.formatSituationTip(sit)
+            : { head: 'NO ACTIVE MISSION', body: 'TAKE ONE AT THE HANGAR MISSION BOARD' };
         const accent = info && info.accent ? info.accent : 'var(--color-primary)';
         return `<button type="button" class="hs-logout-btn hs-mission-btn${calm ? ' is-calm' : ''}" id="hsMissionBtn" style="--mission-accent:${accent}" ` +
-            `data-ui-tip="${tip}" aria-label="Mission" data-nav-item>` +
+            `data-ui-tip-head="${esc(tip.head)}" data-ui-tip="${esc(tip.body)}" aria-label="${esc(tip.head)}" data-nav-item>` +
             `<span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('navScroll', 32, 'hs-tab-pixel', false)}</span></button>`;
     },
     bindMissionButton() {

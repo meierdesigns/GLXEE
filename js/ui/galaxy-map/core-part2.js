@@ -390,7 +390,40 @@ extendClass(GalaxyMapManager, {
             `<span class="galaxy-map-situation-sub">TAKE ONE AT THE HANGAR MISSION BOARD</span>` +
             `</div>`;
     },
-    /** Mission modal for the situation card: what is going on here and where to go. */
+    /** Native <title> / tooltip text for a planet node (mission hint when chosen). */
+    planetNodeTitle(planetId, unlocked) {
+        if (!unlocked) return 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK';
+        const name = String(planetId || '').toUpperCase();
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return name;
+        const profile = profileManager.getActiveProfile();
+        const m = profile && profile.activeMission;
+        if (!m || String(m.planetId) !== String(planetId)) return name;
+        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return name;
+        const type = String(m.type || 'MISSION').toUpperCase();
+        return name + ' · ACTIVE MISSION · ' + type + ' — Complete the '
+            + String(m.type || 'mission').toLowerCase() + ' here.';
+    },
+
+    /** Hover tip for the navbar / ship-bar mission button. */
+    formatSituationTip(sit) {
+        if (!sit || sit.kind === 'NO ACTIVE MISSION') {
+            return {
+                head: 'NO ACTIVE MISSION',
+                body: 'TAKE ONE AT THE HANGAR MISSION BOARD'
+            };
+        }
+        const who = sit.attacker ? String(sit.attacker).toUpperCase() : '';
+        let head = sit.kind;
+        if (sit.kind === 'INVASION' || sit.kind === 'ALLY UNDER ATTACK') {
+            head = who + ' ATTACKS ' + (sit.planet || '');
+        } else if (sit.kind === 'ACTIVE MISSION') {
+            head = (sit.mission || 'MISSION') + ' · ' + (sit.planet || '');
+        }
+        const lines = [sit.objective || ''];
+        if (sit.reward) lines.push('REWARD ' + sit.reward);
+        return { head: head, body: lines.filter(Boolean).join('\n') };
+    },
+
     /** Current situation (invasion / active mission / conflict) of the player's galaxy, also without a mounted map. */
     getSituationInfo() {
         if (typeof planetConfigManager === 'undefined' || typeof profileManager === 'undefined') return null;

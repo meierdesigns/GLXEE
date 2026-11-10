@@ -481,6 +481,45 @@ extendClass(GalaxyMapManager, {
         });
         return out;
     },
+    /**
+     * Sign / plaque on the planet of the pilot's chosen activeMission
+     * (hangar board or faction contract). Hover title carries the objective.
+     */
+    missionMarkerSvg(planetId, size) {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return '';
+        const p = profileManager.getActiveProfile();
+        const m = p && p.activeMission;
+        if (!m || !m.planetId || String(m.planetId) !== String(planetId)) return '';
+        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return '';
+        const cfg = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getConfig)
+            ? planetConfigManager.getConfig(m.planetId) : null;
+        const planet = String((cfg && cfg.name) || m.planetId || '').toUpperCase();
+        const type = String(m.type || 'MISSION').toUpperCase();
+        const reward = Object.keys(m.reward || {}).map((k) =>
+            m.reward[k] + ' ' + (k === 'credits' ? 'CR' : k.toUpperCase())).join(' · ');
+        const objective = 'Complete the ' + String(m.type || 'mission').toLowerCase() + ' on ' + planet + '.';
+        const tip = ('ACTIVE MISSION · ' + type + ' · ' + planet
+            + ' — ' + objective
+            + (reward ? ' · REWARD ' + reward : '')).replace(/"/g, '');
+        const fStyle = m.factionId && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(m.factionId) : null;
+        const accent = (fStyle && fStyle.accent) || 'var(--color-primary)';
+        const f = size / 2 + 10;
+        const label = type.length > 10 ? 'MISSION' : type;
+        return `<g class="gm-mission-mark" style="--fac:${accent}">` +
+            `<title>${tip}</title>` +
+            // Signboard above the planet (plaque + pole).
+            `<g class="gm-mission-sign" transform="translate(0,${-(f + 18)})">` +
+            `<rect class="gm-mission-sign-board" x="-46" y="-14" width="92" height="22"/>` +
+            `<rect class="gm-mission-sign-board-in" x="-44" y="-12" width="88" height="18"/>` +
+            `<line class="gm-mission-sign-pole" x1="0" y1="8" x2="0" y2="18"/>` +
+            `<text class="gm-mission-sign-label gm-vec-text" x="0" y="2">${label}</text>` +
+            `<g class="gm-stage-anchor gm-px-only" data-r="0" transform="translate(0,2)">${this.pixelTextGroup(label, 0, 0, 'middle')}</g>` +
+            `</g>` +
+            `<circle class="gm-mission-sign-dot" cx="0" cy="${-f}" r="3"/>` +
+            `</g>`;
+    },
+
     /** "UNDER ATTACK" marker on the planet of an active invasion (invasion-scenario.js). */
     invasionMarkerSvg(planetId, size) {
         if (typeof profileManager === 'undefined' || !profileManager.getInvadedPlanetId) return '';
@@ -739,15 +778,18 @@ extendClass(GalaxyMapManager, {
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
         if (gp > 0) {
             // Ratchet: refine when zooming in, never coarsen on zoom-out (pixels stay gp-sized).
+            // gp 1/2 hit detail 4 almost immediately (GM_PIXEL_U0·s/gp) and rebuilt stars/lines/
+            // planet icons into stutter — keep the art budget lower there.
+            const detailCap = gp <= 1 ? 2 : (gp <= 2 ? 3 : 4);
             try {
                 const s = this.mapScreenScale() || this._pxScreenScale || 0;
                 if (s > 0) {
-                    const need = Math.max(1, Math.min(4, GM_PIXEL_U0 * s / gp));
+                    const need = Math.max(1, Math.min(detailCap, GM_PIXEL_U0 * s / gp));
                     this._pxDetailPeak = Math.max(this._pxDetailPeak || 1, need);
                     return this._pxDetailPeak;
                 }
             } catch (e) { /* fall through */ }
-            return this._pxDetailPeak || 2;
+            return this._pxDetailPeak || Math.min(2, detailCap);
         }
         return zoomCurve;
     },

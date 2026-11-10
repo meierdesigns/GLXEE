@@ -57,7 +57,7 @@ extendClass(GalaxyMapManager, {
             nodesHtml += `
                 <g class="gm-node ${stateClass}"
                    data-planet="${n.planetId}" data-size="${size}" transform="translate(${npt.x},${npt.y})">
-                    <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
+                    <title>${this.planetNodeTitle(n.planetId, unlocked)}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         ${(() => {
@@ -77,6 +77,7 @@ extendClass(GalaxyMapManager, {
                         })()}
                     </foreignObject>
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
+                    ${this.missionMarkerSvg ? this.missionMarkerSvg(n.planetId, size) : ''}
                     ${n.planetId === baseId ? `
                         <g class="gm-base-marker" style="--fac:${rulerAccent}">
                             <title>${String(holdings.ruler).toUpperCase()} BASE${holdings.stations.length ? ' · DESTROY ITS STATIONS TO ASSAULT IT' : ' · OPEN TO ASSAULT'}</title>

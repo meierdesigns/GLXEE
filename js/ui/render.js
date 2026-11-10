@@ -95,12 +95,8 @@ window.combatVoxels = {
             const sides = enemyManager.sideEnemies;
             if (sides) for (let i = 0; i < sides.length; i++) snap(sides[i]);
         }
-        if (typeof bulletManager !== 'undefined') {
-            const pb = bulletManager.bullets;
-            const eb = bulletManager.enemyBullets;
-            if (pb) for (let i = 0; i < pb.length; i++) snap(pb[i]);
-            if (eb) for (let i = 0; i < eb.length; i++) snap(eb[i]);
-        }
+        // Shots fly on continuous coords (bullets/core.js); draw path snaps them.
+        // Lattice-snapping here froze beams whenever cell > per-frame travel.
         if (typeof obstacleManager !== 'undefined') {
             const obs = obstacleManager.obstacles;
             if (obs) for (let i = 0; i < obs.length; i++) snap(obs[i]);

@@ -458,11 +458,14 @@ class ExplosionSystem {
         const cell = cv && cv.cell ? cv.cell() : null;
         // Fine bursts (large obstacles): half-cell pixels + tighter ring step.
         const fine = !!burst.fineRing;
+        // Floor brush size: Global Pixel Size 1/2 makes combat cells << 1 and would
+        // explode ring/sparkle fill cost without changing the on-screen look much.
+        const brushFloor = 1;
         const pixelSize = fine
-            ? Math.max(1, cell ? cell * 0.5 : 1.5)
-            : (cell || (baseSize < 20 ? 2 : 3));
-        const snap = fine && cell ? Math.max(1, cell * 0.5) : (cell || 1);
-        const explosionRadius = Math.floor(explosionSize / pixelSize);
+            ? Math.max(brushFloor, cell ? cell * 0.5 : 1.5)
+            : Math.max(brushFloor, cell || (baseSize < 20 ? 2 : 3));
+        const snap = fine && cell ? Math.max(brushFloor, cell * 0.5) : Math.max(brushFloor, cell || 1);
+        const explosionRadius = Math.min(48, Math.floor(explosionSize / pixelSize));
         const angleStep = fine ? 0.12 : 0.2;
 
         // Theme colours once per burst frame, not per ring pixel.

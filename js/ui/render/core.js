@@ -77,8 +77,12 @@ class RenderManager {
         const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
         const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
         // ~240×300 @2× ≈ 288k; tighter default so CSS upscales instead of GPU fill.
-        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
+        let maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
         if (gp > 0) {
+            // gp 1/2 push the densest backing (shown/(gp·lw)). Keep fill cheap via CSS
+            // nearest-neighbor upscale — wall-clock stutter was paint/composite, not JS.
+            if (gp <= 1) maxPx = Math.min(maxPx, 100000);
+            else if (gp <= 2) maxPx = Math.min(maxPx, 140000);
             const cv = document.getElementById('gameCanvas');
             // Ancestors (body stage scale, GUI zoom) are CSS transforms: clientWidth ignores them,
             // so measure the on-screen width to make one art pixel == gp real screen px.
@@ -270,8 +274,12 @@ class RenderManager {
         if (loader) {
             loader.deviceScale = k;
             loader.voxelDetail = this.getCombatVoxelDetail();
-            loader.globalVoxelCell = this.getCombatVoxelCell();
-            if (k < 1) { loader.voxelDetail = 1; loader.globalVoxelCell = 1 / k; }
+            // Global Pixel Size still snaps FX via getCombatVoxelCell, but must NOT force
+            // FLAT ships onto the voxel fillRect path (gp 1/2 made every hull a GPU sink).
+            const voxelShips = typeof uiAppearanceManager !== 'undefined'
+                && String(uiAppearanceManager.shipRenderStyle || '').toUpperCase() === 'VOXEL';
+            loader.globalVoxelCell = voxelShips ? this.getCombatVoxelCell() : null;
+            if (voxelShips && k < 1) { loader.voxelDetail = 1; loader.globalVoxelCell = 1 / k; }
         }
         try {
             return this.renderFrame(c, width || lw, height || lh);
@@ -469,16 +477,17 @@ class RenderManager {
                     const cell = this.getCombatVoxelCell();
                     ctx.save();
                     if (cell) {
-                        // VOXEL: dashed lattice beam instead of soft stroke.
+                        // VOXEL / GP lattice beam — cap steps so gp 1/2 (tiny cells) stay cheap.
                         const dx = x1 - x0;
                         const dy = y1 - y0;
                         const len = Math.hypot(dx, dy) || 1;
-                        const steps = Math.max(1, Math.floor(len / cell));
+                        const brush = Math.max(cell, len / 64);
+                        const steps = Math.max(1, Math.min(64, Math.floor(len / brush)));
                         for (let i = 0; i <= steps; i += 2) {
                             const t = i / steps;
                             this.fillCombatRect(
-                                ctx, x0 + dx * t - cell / 2, y0 + dy * t - cell / 2,
-                                cell, cell, beamColor, 0.7
+                                ctx, x0 + dx * t - brush / 2, y0 + dy * t - brush / 2,
+                                brush, brush, beamColor, 0.7
                             );
                         }
                     } else {

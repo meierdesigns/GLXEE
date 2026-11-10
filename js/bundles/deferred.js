@@ -25383,10 +25383,12 @@ var CoreRenderManager = class CoreRenderManager {
             && typeof window.renderManager.getRenderScale === 'function')
             ? window.renderManager.getRenderScale()
             : (Number(window.PLAYFIELD_RENDER_SCALE) || 1);
-        const scaleK = Number.isFinite(k) && k >= 1 ? Math.round(k) : 1;
+        // Keep fractional GP scales (gp 1/2 often land between 1–2); rounding up to 2×
+        // briefly allocated a 4× pixel backing before setPlayfieldSize corrected it.
+        const scaleK = Number.isFinite(k) && k > 0 ? k : 1;
         if (canvas) {
-            const bw = mapW * scaleK;
-            const bh = mapH * scaleK;
+            const bw = Math.max(1, Math.round(mapW * scaleK));
+            const bh = Math.max(1, Math.round(mapH * scaleK));
             if (canvas.width !== bw) canvas.width = bw;
             if (canvas.height !== bh) canvas.height = bh;
         }
@@ -26459,6 +26461,9 @@ var CoreRenderManager = class CoreRenderManager {
                 if ((d.auMusic === 'ON') !== !!smSettings.settings.musicEnabled) smSettings.toggleMusic();
                 else if (typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
             } else if (d.auMusic && typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
+            if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.wakeAudioFromUserGesture) {
+                volumeControlsManager.wakeAudioFromUserGesture();
+            }
         }
         else if (d.debugAction === 'reload') window.location.reload();
         else if (d.debugAction === 'clear') {
@@ -26580,7 +26585,12 @@ var CoreRenderManager = class CoreRenderManager {
             return;
         }
         const ui = getUi();
-        if (!ui) return;
+        // AUDIO faders must still work when uiAppearanceManager failed to boot
+        // (partial hosted ZIP load) — they only need volumeControlsManager.
+        const sl0 = inp.dataset && inp.dataset.sl;
+        const audioOnly = (sl0 && String(sl0).indexOf('au:') === 0)
+            || (inp.dataset && inp.dataset.voiceCh != null);
+        if (!ui && !audioOnly) return;
         if (inp.dataset.frColor) {
             const frame = document.getElementById('vf-bezel');
             const cur = vfs.editFaction || frame.getAttribute('data-faction');
@@ -26637,6 +26647,7 @@ var CoreRenderManager = class CoreRenderManager {
             return;
         }
         if (inp.dataset.ix) {
+            if (!ui) return;
             const opts = inp.dataset.opts.split('|');
             const v = opts[+inp.value];
             inp.style.setProperty('--look-fill', (+inp.value / Math.max(1, opts.length - 1) * 100) + '%');
@@ -26661,17 +26672,24 @@ var CoreRenderManager = class CoreRenderManager {
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
         inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
+        // Voice rows: next sibling is <select>, not <output> — never wipe the dropdown.
         if (!(parts[0] === 'au' && (parts[1] === 'jungle' || parts[1] === 'theme' || parts[1] === 'bpm' || parts[1] === 'speed'))) {
-            inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
+            const out = (inp.classList && inp.classList.contains('vf-fx-voice-vol')
+                && inp.closest('.vf-fx-voice-row')
+                && inp.closest('.vf-fx-voice-row').querySelector('output'))
+                || (inp.nextElementSibling && inp.nextElementSibling.tagName === 'OUTPUT'
+                    ? inp.nextElementSibling : null);
+            if (out) out.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
         }
-        if (parts[0] === 'fx') ui.setFx(parts[1], v + '%');
+        if (parts[0] === 'fx') { if (ui) ui.setFx(parts[1], v + '%'); }
         else if (parts[0] === 'sz') {
+            if (!ui) return;
             ui.setSizePx(parts[1], parts[2], v);
             // Station FLEETS preview uses the same sizes: rebuild it live.
             refreshFleetPreviewLive();
         }
-        else if (parts[0] === 'sp') ui.setSizePct(parts[1], v);
-        else if (parts[0] === 'ss') ui.setShotSpeedPct(parts[1], v);
+        else if (parts[0] === 'sp') { if (ui) ui.setSizePct(parts[1], v); }
+        else if (parts[0] === 'ss') { if (ui) ui.setShotSpeedPct(parts[1], v); }
         else if (parts[0] === 'df') {
             if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }
         }
@@ -26746,11 +26764,14 @@ var CoreRenderManager = class CoreRenderManager {
                 if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = sec;
                 if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = sec;
                 try { localStorage.setItem('vf_musicCrossfade', String(sec)); } catch (err) { /* ignore */ }
+                if (volumeControlsManager.wakeAudioFromUserGesture) {
+                    volumeControlsManager.wakeAudioFromUserGesture();
+                }
             } else if (parts[1] === 'bass' || parts[1] === 'lead' || parts[1] === 'arp' || parts[1] === 'drums') {
                 // Legacy volume mix sliders (kept for older plate HTML).
                 const chMap = { bass: 0, lead: 1, arp: 2, drums: 3 };
                 const ch = chMap[parts[1]];
-                const mul = Math.max(0, Math.min(2, v / 100));
+                const mul = Math.max(0, Math.min(3, v / 100));
                 if (volumeControlsManager.setChannelVolume) volumeControlsManager.setChannelVolume(ch, mul);
             } else {
                 const pct = Math.max(0, Math.min(100, v)) / 100;
@@ -26848,7 +26869,17 @@ var CoreRenderManager = class CoreRenderManager {
     }
     /** DevMode AUDIO always hosts the Music Editor (narrow = stacked, wide = side-by-side). */
     function fxWantMusicEditor() {
-        return fxDevModeOn() && vfs.fxTab === 'audio';
+        if (!fxDevModeOn() || vfs.fxTab !== 'audio') return false;
+        // itch / GitHub ZIP: js/ui/dev/ is gitignored — don't reserve split chrome
+        // for a "Local-dev only" stub that makes AUDIO settings feel broken.
+        if (vfs._musicEditorUnavailable) return false;
+        if (typeof musicEditorUI !== 'undefined') return true;
+        // Allow a one-shot load attempt only on local origins that can serve /js/ui/dev/.
+        try {
+            const h = String(location.hostname || '');
+            if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '') return true;
+        } catch (e) { /* ignore */ }
+        return false;
     }
     /** Wide enough for AUDIO settings | Music Editor side-by-side (else stacked). */
     function fxWantAudioMusicSplit() {
@@ -26887,11 +26918,10 @@ var CoreRenderManager = class CoreRenderManager {
         };
         s.onerror = function () {
             vfs._musicEditorLoading = false;
-            const h = document.getElementById('vf-fx-music-editor');
-            if (h) {
-                h.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div>'
-                    + '<p class="vf-fx-row">Local-dev only (`js/ui/dev/` — not uploaded).</p>';
-            }
+            vfs._musicEditorUnavailable = true;
+            // Rebuild AUDIO without the empty editor split so volume/STYLE faders
+            // keep the full remote (hosted ZIP / itch).
+            try { if (typeof fillFxPlate === 'function') fillFxPlate(); } catch (err) { /* ignore */ }
         };
         document.head.appendChild(s);
     }
@@ -26979,7 +27009,7 @@ var CoreRenderManager = class CoreRenderManager {
         for (let i = 0; i < opts.length; i++) if (opts[i].id === cur) { idx = i; break; }
         const max = Math.max(0, opts.length - 1);
         const keys = ['bass', 'lead', 'arp', 'drums'];
-        const pct = Math.max(0, Math.min(200, Math.round(Number(volPct) || 100)));
+        const pct = Math.max(0, Math.min(300, Math.round(Number(volPct) || 100)));
         const ids = opts.map(function (o) { return o.id; }).join('|');
         const labels = opts.map(function (o) { return o.label; }).join('|');
         const html = opts.map(function (o) {
@@ -26987,8 +27017,8 @@ var CoreRenderManager = class CoreRenderManager {
         }).join('');
         // Order: label | volume | dropdown | style pick (dropdown left of style fader).
         return '<label class="vf-fx-row vf-fx-voice-row"><span>' + label + '</span>' +
-            '<input type="range" class="vf-fx-voice-vol" min="0" max="200" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
-            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%" aria-label="' + label + ' volume">' +
+            '<input type="range" class="vf-fx-voice-vol" min="0" max="300" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
+            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 3) + '%" aria-label="' + label + ' volume">' +
             '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
             '<input type="range" class="vf-fx-voice-pick" min="0" max="' + max + '" step="1" value="' + idx +
             '" data-voice-ch="' + ch + '" data-voice-ids="' + ids + '" data-voice-labels="' + labels +
@@ -27061,7 +27091,8 @@ var CoreRenderManager = class CoreRenderManager {
     function fillFxPlate() {
         const ui = getUi();
         const plate = buildFxPlate();
-        if (!ui) return;
+        // AUDIO only needs volumeControlsManager; other tabs need appearance.
+        if (!ui && vfs.fxTab !== 'audio') return;
         vfs._fxFilling = true;
         try {
         vfs.fxScrollLock = true;
@@ -27314,7 +27345,7 @@ var CoreRenderManager = class CoreRenderManager {
             };
             const chVolOf = function (i) {
                 const v = vol && vol.getChannelVolume ? vol.getChannelVolume(i) : 1;
-                return Math.round(Math.max(0, Math.min(2, Number(v) || 1)) * 100);
+                return Math.round(Math.max(0, Math.min(3, Number(v) || 1)) * 100);
             };
             const xfade = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.crossfadeSeconds != null)
                 ? Math.round(Number(vfTrackerManager.crossfadeSeconds) * 100) / 100
@@ -31975,22 +32006,22 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this.playbackBpm = null;
         /**
          * Per-channel mix (bass / lead / arp / drums).
-         * Lead (ch1) is ducked so square pulse doesn't bury the rest.
+         * PLANET base keeps the Hauptmelodie (lead) in front — arp supports, never buries.
          */
         // Mix targets stay near loudness-sum ~4 so STYLE swaps don't pump the bus.
-        this.channelMixBase = [1.05, 0.55, 1.55, 1.15];
-        /** Jungle mix: chopped, drums forward, lead still readable. */
-        this.channelMixJungle = [1.25, 0.38, 1.05, 1.55];
-        /** DnB mix: heavy sub, controlled kit, sparse lead. */
-        this.channelMixDnb = [1.45, 0.32, 0.95, 1.4];
+        this.channelMixBase = [1.0, 1.28, 0.68, 1.05];
+        /** Jungle mix: Amen kit dominant, chopped bass, thin lead/arp. */
+        this.channelMixJungle = [1.2, 0.55, 0.45, 1.75];
+        /** DnB mix: heavy Reese sub, two-step kit, sparse lead. */
+        this.channelMixDnb = [1.55, 0.48, 0.4, 1.45];
         /** Jungle DnB hybrid: big sub + Amen kit pressure. */
-        this.channelMixJungleDnb = [1.35, 0.35, 1.0, 1.5];
-        /** Dark minimal techno: heavy sub+kick, quiet delayed lead, present ticks. */
-        this.channelMixElektro = [1.4, 0.34, 1.05, 1.35];
+        this.channelMixJungleDnb = [1.35, 0.5, 0.42, 1.65];
+        /** Dark minimal techno: heavy sub+kick, clear delayed lead, present ticks. */
+        this.channelMixElektro = [1.32, 0.78, 0.85, 1.28];
         /** Liquid: soft drums, floating lead/arp. */
-        this.channelMixLiquid = [1.15, 0.48, 1.35, 1.1];
+        this.channelMixLiquid = [1.1, 0.95, 1.05, 1.0];
         /** NIGHTRUN (darksynth): lead + bass forward, driving kit. */
-        this.channelMixNightrun = [1.3, 0.62, 1.0, 1.35];
+        this.channelMixNightrun = [1.25, 1.05, 0.8, 1.2];
         this.channelMix = this.channelMixBase.slice();
         /** User-facing fine-tune on top of channelMix (0 = mute, 1 = authored level). */
         this.channelUserMix = [1, 1, 1, 1];
@@ -32007,6 +32038,9 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this._endedFired = false;
         this._channelBus = [];
         this._fadeOutTimer = null;
+        /** Fire-and-forget hits (drums/breaks) — cancelled on tempo re-anchor. */
+        this._liveOneshots = [];
+        this._lastCell = [];
         /** Default crossfade length when swapping tracks (seconds). */
         this.fadeSeconds = 1.4;
         /**
@@ -32014,19 +32048,19 @@ var VFTrackerPlayer = class VFTrackerPlayer {
          * k=kick(inst5), s=snare/noise(inst4), h=hat(inst4 soft), r=half-row roll.
          */
         this._jungleBreak = [
-            { k: 1 }, { h: 0.45, r: 0.55 }, { h: 0.75 }, { k: 0.55 },
-            { s: 1 }, { h: 0.4 }, { s: 0.65, r: 0.8 }, { k: 0.7 },
-            { h: 0.55 }, { k: 0.6 }, { s: 1, r: 0.7 }, { h: 0.6 },
-            { k: 1 }, { s: 0.8, r: 0.9 }, { h: 0.75 }, { s: 1 }
+            { k: 1 }, { h: 0.45 }, { s: 0.55, h: 0.5 }, { k: 0.75, h: 0.35 },
+            { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.85 }, { k: 0.8, h: 0.3 },
+            { h: 0.5 }, { k: 0.85, h: 0.35 }, { s: 1, r: 0.7 }, { h: 0.55, s: 0.3 },
+            { k: 1 }, { s: 0.9, r: 0.95 }, { k: 0.55, h: 0.6 }, { s: 1 }
         ];
         /**
-         * Two-step / rolling DnB break (left): spaced kick-snare, steady hats, few chops.
+         * Two-step DnB: kick on 1+3, snare on 2+4, rolling hats, sparse ghosts.
          */
         this._dnbBreak = [
             { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
-            { s: 1 }, { h: 0.45 }, { k: 0.6, h: 0.35 }, { h: 0.55 },
-            { h: 0.4 }, { h: 0.6 }, { s: 0.95 }, { h: 0.45 },
-            { k: 1 }, { h: 0.5 }, { h: 0.4 }, { s: 0.8 }
+            { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.22 }, { h: 0.5 },
+            { k: 0.95 }, { h: 0.5 }, { h: 0.38 }, { h: 0.48 },
+            { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.2 }, { h: 0.42 }
         ];
         /** NIGHTRUN 4/4 drive kit. */
         this._driveBreak = [
@@ -32048,17 +32082,17 @@ var VFTrackerPlayer = class VFTrackerPlayer {
     }
 
     _mixTargetForStyle() {
-        const base = this.channelMixBase || [1.05, 0.55, 1.55, 1.15];
+        const base = this.channelMixBase || [1.0, 1.28, 0.68, 1.05];
         const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
             ? VFTrackerThemes.metaOf(this.themeIndex)
             : { mix: 'base' };
         const key = meta.mix || 'base';
-        if (key === 'jungle') return this.channelMixJungle || [1.25, 0.38, 1.05, 1.55];
-        if (key === 'dnb') return this.channelMixDnb || [1.45, 0.32, 0.95, 1.4];
-        if (key === 'jungle_dnb') return this.channelMixJungleDnb || [1.35, 0.35, 1.0, 1.5];
-        if (key === 'elektro') return this.channelMixElektro || [1.4, 0.34, 1.05, 1.35];
-        if (key === 'liquid') return this.channelMixLiquid || [1.15, 0.48, 1.35, 1.1];
-        if (key === 'nightrun') return this.channelMixNightrun || [1.3, 0.62, 1.0, 1.35];
+        if (key === 'jungle') return this.channelMixJungle || [1.2, 0.55, 0.45, 1.75];
+        if (key === 'dnb') return this.channelMixDnb || [1.55, 0.48, 0.4, 1.45];
+        if (key === 'jungle_dnb') return this.channelMixJungleDnb || [1.35, 0.5, 0.42, 1.65];
+        if (key === 'elektro') return this.channelMixElektro || [1.32, 0.78, 0.85, 1.28];
+        if (key === 'liquid') return this.channelMixLiquid || [1.1, 0.95, 1.05, 1.0];
+        if (key === 'nightrun') return this.channelMixNightrun || [1.25, 1.05, 0.8, 1.2];
         return base;
     }
 
@@ -32068,25 +32102,18 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         if (t < 0.03) t = 0;
         this.jungleAmount = t;
         // Mix follows AMOUNT only (no forced floor) — avoids sudden bus pumps.
-        const mag = t;
-        const base = this.channelMixBase || [1.05, 0.55, 1.55, 1.15];
+        // PLANET (theme 0): keep authored Hauptmelodie balance — don't morph.
+        const themeIdx = Number(this.themeIndex) || 0;
+        const mag = themeIdx > 0 ? t : 0;
+        const base = this.channelMixBase || [1.0, 1.28, 0.68, 1.05];
         const target = mag > 0 ? this._mixTargetForStyle() : base;
         this.channelMix = base.map((b, i) => {
             let v = b + ((target[i] != null ? target[i] : b) - b) * mag;
-            if (i === 1) v = Math.max(b * 0.55, v);
+            // Never let STYLE duck the hook below a readable floor.
+            if (i === 1) v = Math.max(b * 0.72, v);
             return v;
         });
-        if (this._channelBus && this.ctx) {
-            const now = this.ctx.currentTime;
-            for (let i = 0; i < this._channelBus.length; i++) {
-                const bus = this._channelBus[i];
-                if (!bus) continue;
-                try {
-                    bus.gain.cancelScheduledValues(now);
-                    bus.gain.linearRampToValueAtTime(this._busGain(i), now + 0.08);
-                } catch (e) { /* ignore */ }
-            }
-        }
+        this.applyChannelBusGains();
         return t;
     }
 
@@ -32113,8 +32140,8 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const user = (this.channelUserMix && this.channelUserMix[ch] != null) ? Number(this.channelUserMix[ch]) : 1;
         const b = Number.isFinite(base) && base > 0 ? base : 1;
         const u = Number.isFinite(user) && user >= 0 ? user : 1;
-        // Hard cap per bus — STYLE drums/bass used to climb past 2.5× and pump.
-        return Math.max(0.0001, Math.min(1.85, b * u));
+        // Allow voice faders up to 300% (user × style mix); soft ceiling still tames peaks.
+        return Math.max(0.0001, Math.min(5.5, b * u));
     }
 
     /**
@@ -32185,18 +32212,38 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         return this._channelBus[ch];
     }
 
-    /** Live per-channel volume fine-tune. ch: 0=bass,1=lead,2=arp,3=drums. v: 0-2. */
+    /** Live per-channel volume fine-tune. ch: 0=bass,1=lead,2=arp,3=drums. v: 0-3 (300%). */
     setChannelVolume(ch, v) {
         const idx = Number(ch);
         if (!Number.isFinite(idx) || idx < 0) return;
-        const vol = Math.max(0, Math.min(2, Number(v)));
+        const vol = Math.max(0, Math.min(3, Number(v)));
         if (!this.channelUserMix) this.channelUserMix = [1, 1, 1, 1];
         this.channelUserMix[idx] = Number.isFinite(vol) ? vol : 1;
-        const bus = this._channelBus[idx];
+        // Create the bus immediately so fader moves bite before the next note.
+        const bus = this._ensureChannelBus(idx);
         if (bus && this.ctx) {
             const now = this.ctx.currentTime;
-            bus.gain.cancelScheduledValues(now);
-            bus.gain.linearRampToValueAtTime(this._busGain(idx), now + 0.05);
+            try {
+                bus.gain.cancelScheduledValues(now);
+                const cur = Math.max(0.0001, Number(bus.gain.value) || 0.0001);
+                bus.gain.setValueAtTime(cur, now);
+                bus.gain.linearRampToValueAtTime(this._busGain(idx), now + 0.04);
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    /** Ensure all channel buses exist at the current mix × user fader levels. */
+    applyChannelBusGains() {
+        if (!this.ctx || !this.masterGain) return;
+        const n = Math.max(4, (this.track && this.track.channels) || 4);
+        const now = this.ctx.currentTime;
+        for (let i = 0; i < n; i++) {
+            const bus = this._ensureChannelBus(i);
+            if (!bus) continue;
+            try {
+                bus.gain.cancelScheduledValues(now);
+                bus.gain.setValueAtTime(this._busGain(i), now);
+            } catch (e) { /* ignore */ }
         }
     }
 
@@ -32213,8 +32260,28 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         for (let i = 0; i < opts.length; i++) {
             if (opts[i].id === id) { ok = true; break; }
         }
-        this.channelVoices[idx] = ok ? id : 'default';
-        return this.channelVoices[idx];
+        const next = ok ? id : 'default';
+        const prev = this.channelVoices[idx];
+        this.channelVoices[idx] = next;
+        // Swap timbre on the sounding note immediately (don't wait for next row).
+        if (next !== prev && this.playing) this._revoiceChannel(idx);
+        return next;
+    }
+
+    /** Retrigger current note / kit preview so voice fader changes are audible now. */
+    _revoiceChannel(ch) {
+        if (!this.ctx || !this.playing) return;
+        const now = this.ctx.currentTime + 0.015;
+        if (ch === 3) {
+            // Drums are oneshots — fire a short kick+snare so the new kit speaks.
+            this._oneshot(3, { note: 'A-2', inst: 5, vol: 52 }, now, 0.14);
+            this._oneshot(3, { note: 'A-4', inst: 4, vol: 42 }, now + 0.05, 0.09);
+            return;
+        }
+        const last = this._lastCell && this._lastCell[ch];
+        if (!last || !last.note || last.note === 'OFF') return;
+        this._stopChannel(ch, now);
+        this._trigger(ch, last, now);
     }
 
     _resolveInstrument(ch, cellInst) {
@@ -32223,6 +32290,12 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             || (track && track.instruments && track.instruments[0])
             || null;
         const voiceId = (this.channelVoices && this.channelVoices[ch]) || 'default';
+        // Drum noise/snare/metal voices must not rewrite kick (inst 5) into hiss.
+        if (ch === 3 && Number(cellInst) === 5) {
+            const keepKick = voiceId === 'default' || voiceId === 'kit'
+                || voiceId === 'kick' || voiceId === 'tight';
+            if (!keepKick) return base;
+        }
         if (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.resolve) {
             return VFTrackerVoices.resolve(ch, voiceId, base) || base;
         }
@@ -32315,6 +32388,8 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         // GainNodes on masterGain across every in-place play().
         this._disconnectChannelBuses();
         this._channelBus = [];
+        this._liveOneshots = [];
+        this._lastCell = [];
         for (let i = 0; i < normalized.channels; i++) {
             this._channels.push({ gain: null, source: null, release: 0.1 });
         }
@@ -32348,6 +32423,8 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this._anchorRow = 0;
         this._anchorRowDur = this.rowDuration();
         this._nextRowTime = t0;
+        // Warm buses at current fader levels so live volume works before first hit.
+        this.applyChannelBusGains();
         this._startScheduler();
         return normalized;
     }
@@ -32355,7 +32432,7 @@ var VFTrackerPlayer = class VFTrackerPlayer {
     /**
      * Re-anchor musical time after a live BPM change. Drop the stale schedule
      * pocket (notes already queued at the old row duration) so cranking speed
-     * does not tangle old+new timing.
+     * does not tangle old+new timing — then keep the hook sounding.
      */
     notifyTempoChanged() {
         if (!this.playing || !this.ctx || !this.track) return;
@@ -32368,8 +32445,12 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         }
         const now = this.ctx.currentTime;
         const audible = this._anchorRow + Math.max(0, (now - this._anchorTime) / oldDur);
-        // Silent cut — never snap gain to peak (that pumped volume on every
-        // BPM drag, including notes still waiting in the schedule pocket).
+        const keep = (this._lastCell || []).map((c) => (c ? {
+            note: c.note, inst: c.inst, vol: c.vol
+        } : null));
+        // Kill only not-yet-heard oneshots from the old pocket (drums/breaks).
+        this._cancelFutureOneshots(now);
+        // Soft cut melodic slots — never snap gain to peak on BPM drag.
         for (let i = 0; i < this._channels.length; i++) {
             this._stopChannel(i, now, { silent: true });
         }
@@ -32383,6 +32464,44 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         this._anchorTime = now;
         this._anchorRowDur = newDur;
         this._nextRowTime = this._rowWhen(this._rowAbs);
+        // Revoice last melodic notes so speeding up does not swallow the hook.
+        const tVoice = now + 0.018;
+        for (let c = 0; c < 3; c++) {
+            const cell = keep[c];
+            if (cell && cell.note && cell.note !== 'OFF') {
+                this._trigger(c, cell, tVoice);
+            }
+        }
+    }
+
+    /** Drop oneshots that were scheduled ahead at the previous tempo. */
+    _cancelFutureOneshots(now) {
+        const list = this._liveOneshots || [];
+        const keep = [];
+        const t = Number(now) || (this.ctx ? this.ctx.currentTime : 0);
+        for (let i = 0; i < list.length; i++) {
+            const e = list[i];
+            if (!e || !e.source) continue;
+            if (e.start > t + 0.008) {
+                try {
+                    if (e.gain && e.gain.gain) {
+                        e.gain.gain.cancelScheduledValues(t);
+                        e.gain.gain.setValueAtTime(0.0001, t);
+                    }
+                } catch (err) { /* ignore */ }
+                try { e.source.stop(t); } catch (err2) { /* ignore */ }
+            } else {
+                keep.push(e);
+            }
+        }
+        this._liveOneshots = keep;
+    }
+
+    /** Compress ADSR when rows get short so fast BPM still has body, not choke. */
+    _tempoEnvScale() {
+        const rowDur = this.track ? this.rowDuration() : 0.1;
+        // ~0.11s ≈ 132 BPM @ 4 rows/beat. Below that, shrink envelopes.
+        return Math.max(0.42, Math.min(1, rowDur / 0.1));
     }
 
     _rowWhen(absRow) {
@@ -32457,9 +32576,10 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const now = this.ctx ? this.ctx.currentTime : 0;
         const t = Math.max(when, now);
         const rowDur = this.track ? this.rowDuration() : 0.1;
-        // Cap release to the row so high BPM does not smear into the next hit.
-        const rel = Math.max(0.012, Math.min(0.22, (slot.release || 0.1) * 1.4, rowDur * 0.45));
+        // Keep a usable release floor at high BPM so note→note does not click-swallow.
+        const rel = Math.max(0.02, Math.min(0.18, (slot.release || 0.1) * 1.15, rowDur * 0.7));
         const peak = Math.max(0.0001, slot.peak || 0.2);
+        const sustain = Math.max(0.0001, peak * 0.55);
         try {
             const g = slot.gain.gain;
             g.cancelScheduledValues(t);
@@ -32467,14 +32587,14 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                 // Tempo re-anchor: fade from the live level — never jump to peak.
                 const cur = Math.max(0.0001, Math.min(peak, Number(g.value) || 0.0001));
                 g.setValueAtTime(cur, now);
-                g.linearRampToValueAtTime(0.0001, now + 0.025);
+                g.linearRampToValueAtTime(0.0001, now + 0.03);
                 if (slot.source) {
-                    try { slot.source.stop(now + 0.04); } catch (e) { /* already stopped */ }
+                    try { slot.source.stop(now + 0.045); } catch (e) { /* already stopped */ }
                 }
             } else {
-                // Soft cut for note→note — don't read live .value for future
-                // scheduled notes (causes gaps); release from authored peak.
-                g.setValueAtTime(peak, t);
+                // Soft cut for note→note — release from sustain, not a peak jump
+                // (peak jumps at high BPM sounded like the note was swallowed).
+                g.setValueAtTime(sustain, t);
                 g.exponentialRampToValueAtTime(0.0001, t + rel);
                 if (slot.source) {
                     try { slot.source.stop(t + rel + 0.03); } catch (e2) { /* already stopped */ }
@@ -32499,13 +32619,34 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         if (!inst) return;
 
         const ctx = this.ctx;
+        if (!this._noiseBuffer) this._noiseBuffer = this._makeNoiseBuffer();
+        const styleSide = this._styleSide();
+        const heavyBreak = styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid';
+        const envScale = this._tempoEnvScale();
+        const isKick = cell.inst === 5 || (typeof freq === 'number' && freq < 120 && inst.wave !== 'noise');
+        const isHat = inst.wave === 'noise' && typeof freq === 'number' && freq >= 700;
+        const isSnare = inst.wave === 'noise' && !isHat;
         const gain = ctx.createGain();
         let filter = null;
         if (inst.filter && inst.wave !== 'noise') {
             filter = ctx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(inst.filter, when);
-            filter.Q.setValueAtTime(0.7, when);
+            filter.frequency.setValueAtTime(
+                isKick && heavyBreak
+                    ? (styleSide === 'dnb' ? 520 : 620)
+                    : inst.filter,
+                when);
+            filter.Q.setValueAtTime(isKick && heavyBreak ? 1.1 : 0.7, when);
+        } else if (isSnare && heavyBreak) {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(styleSide === 'jungle' ? 1800 : 2200, when);
+            filter.Q.setValueAtTime(0.9, when);
+        } else if (isHat && heavyBreak) {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(styleSide === 'dnb' ? 6200 : 5200, when);
+            filter.Q.setValueAtTime(0.6, when);
         }
         let source;
         if (inst.wave === 'noise') {
@@ -32514,17 +32655,39 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             source.loop = true;
         } else {
             source = ctx.createOscillator();
-            source.type = inst.wave;
-            source.frequency.setValueAtTime(Math.max(20, freq), when);
+            source.type = isKick && heavyBreak
+                ? (styleSide === 'dnb' ? 'sine' : 'triangle')
+                : inst.wave;
+            // Classic jungle/DnB kick: fast pitch drop into the thud.
+            if (isKick && heavyBreak && typeof freq === 'number') {
+                const startF = styleSide === 'dnb' ? freq * 5.2 : freq * 3.6;
+                const drop = Math.max(0.018, (styleSide === 'dnb' ? 0.055 : 0.032) * envScale);
+                source.frequency.setValueAtTime(Math.max(40, startF), when);
+                source.frequency.exponentialRampToValueAtTime(Math.max(20, freq), when + drop);
+            } else {
+                source.frequency.setValueAtTime(Math.max(20, freq), when);
+            }
         }
         const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
-        // Break oneshots stay under authored notes so kit rows don't spike.
-        const peak = Math.max(0.0001, Math.min(0.38, inst.volume * vol64 * 0.72));
-        const a = Math.max(0.001, inst.attack);
-        const d = Math.max(0.001, inst.decay);
-        const s = Math.max(0.0001, peak * inst.sustain);
-        const r = Math.max(0.04, inst.release || 0.08);
-        const gate = Math.max(a + d + 0.04, Number(gateSec) || 0.09);
+        // Jungle/DnB break hits need to read as the kit, not a soft tick under the song.
+        const breakBoost = styleSide === 'jungle' || styleSide === 'hybrid' ? 0.98
+            : styleSide === 'dnb' ? 0.9
+                : 0.72;
+        const peakCap = heavyBreak ? 0.5 : 0.38;
+        const peak = Math.max(0.0001, Math.min(peakCap, inst.volume * vol64 * breakBoost
+            * (isSnare && heavyBreak ? 1.15 : isHat && styleSide === 'dnb' ? 1.08 : 1)));
+        const a = Math.max(0.001, inst.attack * envScale);
+        const dRaw = isHat && heavyBreak ? Math.min(0.018, inst.decay)
+            : isSnare && styleSide === 'jungle' ? Math.max(0.035, inst.decay)
+                : isKick && styleSide === 'dnb' ? Math.max(0.08, inst.decay)
+                    : inst.decay;
+        const d = Math.max(0.001, dRaw * envScale);
+        const s = Math.max(0.0001, peak * (isKick && styleSide === 'dnb'
+            ? Math.max(0.08, inst.sustain)
+            : inst.sustain));
+        const r = Math.max(0.02, (isHat && heavyBreak ? 0.03 : (inst.release || 0.08)) * envScale);
+        // Floor the gate so fast BPM still has body (was vanishing under ~0.05s).
+        const gate = Math.max(a + d + 0.028, Math.max(isKick ? 0.055 : 0.04, Number(gateSec) || 0.09));
 
         gain.gain.setValueAtTime(0.0001, when);
         gain.gain.exponentialRampToValueAtTime(peak, when + a);
@@ -32542,6 +32705,14 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         gain.connect(bus);
         source.start(when);
         try { source.stop(when + gate + 0.04); } catch (e) { /* ignore */ }
+        if (!this._liveOneshots) this._liveOneshots = [];
+        const entry = { source, gain, start: when };
+        this._liveOneshots.push(entry);
+        // Prune finished entries so tempo cancels stay cheap.
+        if (this._liveOneshots.length > 64) {
+            const tNow = ctx.currentTime;
+            this._liveOneshots = this._liveOneshots.filter((e) => e && e.start + 0.4 > tNow);
+        }
     }
 
     _trigger(ch, cell, when) {
@@ -32554,9 +32725,76 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const freq = VFTrackerParse.noteToFreq(cell.note);
         if (!freq || freq === 'OFF') return;
 
-        const inst = this._resolveInstrument(ch, cell.inst);
+        let inst = this._resolveInstrument(ch, cell.inst);
         if (!inst) return;
 
+        // Morph authored voices into jungle chops / Reese / ragga lead without moving pitches.
+        // Honour an explicit VOICE pick: never overwrite its wave (fader must stay audible).
+        const styleSide = this._styleSide();
+        const styleMag = this._styleMag();
+        const voiceId = (this.channelVoices && this.channelVoices[ch]) || 'default';
+        const userVoice = voiceId !== 'default';
+        if (styleMag > 0.03 && inst.wave !== 'noise'
+            && (styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid')) {
+            if (ch === 0) {
+                if (styleSide === 'dnb' || styleSide === 'hybrid') {
+                    // Half-time Reese sub: long saw, dark filter, high sustain.
+                    const morph = {
+                        attack: Math.max(0.004, 0.002 + styleMag * 0.006),
+                        decay: Math.max(0.12, 0.1 + styleMag * 0.08),
+                        sustain: Math.min(0.92, 0.72 + styleMag * 0.18),
+                        release: Math.max(0.22, 0.16 + styleMag * 0.18),
+                        filter: Math.max(180, Math.min(480, 380 - styleMag * 160)),
+                        volume: Math.min(0.98, (Number(inst.volume) || 0.7) * (1.08 + styleMag * 0.18))
+                    };
+                    if (!userVoice) morph.wave = 'sawtooth';
+                    else if (inst.filter != null) {
+                        morph.filter = Math.round((Number(inst.filter) + morph.filter) * 0.5);
+                    }
+                    inst = Object.assign({}, inst, morph);
+                } else {
+                    // Jungle: short square chops, mid growl.
+                    const morph = {
+                        attack: 0.001,
+                        decay: Math.min(0.035, 0.045 - styleMag * 0.015),
+                        sustain: Math.min(0.42, Math.max(0.18, 0.45 - styleMag * 0.28)),
+                        release: Math.min(0.05, Math.max(0.02, 0.06 - styleMag * 0.03)),
+                        filter: Math.min(1100, 750 + (1 - styleMag) * 250),
+                        volume: Math.min(0.94, (Number(inst.volume) || 0.7) * (1.05 + styleMag * 0.1))
+                    };
+                    if (!userVoice) morph.wave = 'square';
+                    inst = Object.assign({}, inst, morph);
+                }
+            } else if (ch === 1) {
+                // Lead: ragga stabs (jungle) or thin pads (dnb) — don't fight the kit.
+                if (styleSide === 'jungle') {
+                    const morph = {
+                        attack: 0.001,
+                        decay: Math.min(0.04, 0.05 - styleMag * 0.02),
+                        sustain: Math.max(0.12, 0.32 - styleMag * 0.18),
+                        release: Math.max(0.03, 0.07 - styleMag * 0.035),
+                        filter: Math.min(3200, 2200 + styleMag * 800),
+                        volume: Math.min(0.5, (Number(inst.volume) || 0.4) * (0.85 - styleMag * 0.15))
+                    };
+                    if (!userVoice) morph.wave = 'square';
+                    inst = Object.assign({}, inst, morph);
+                } else {
+                    const morph = {
+                        attack: 0.002,
+                        decay: 0.06,
+                        sustain: Math.max(0.18, 0.36 - styleMag * 0.12),
+                        release: Math.max(0.06, 0.1 - styleMag * 0.03),
+                        filter: Math.min(2400, 1800 - styleMag * 400),
+                        volume: Math.min(0.42, (Number(inst.volume) || 0.4) * (0.75 - styleMag * 0.2))
+                    };
+                    if (!userVoice) morph.wave = styleMag > 0.5 ? 'sawtooth' : (inst.wave || 'square');
+                    inst = Object.assign({}, inst, morph);
+                }
+            }
+        }
+
+        if (!this._lastCell) this._lastCell = [];
+        this._lastCell[ch] = { note: cell.note, inst: cell.inst, vol: cell.vol };
         this._stopChannel(ch, when);
 
         const ctx = this.ctx;
@@ -32566,7 +32804,9 @@ var VFTrackerPlayer = class VFTrackerPlayer {
             filter = ctx.createBiquadFilter();
             filter.type = 'lowpass';
             filter.frequency.setValueAtTime(inst.filter, when);
-            filter.Q.setValueAtTime(0.7, when);
+            filter.Q.setValueAtTime(
+                ch === 0 && (styleSide === 'dnb' || styleSide === 'hybrid') ? 1.25 : 0.7,
+                when);
         }
 
         let source;
@@ -32583,10 +32823,11 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
         // Cap note peaks so dense patterns (Saturn) don't blow past sparse ones.
         const peak = Math.max(0.0001, Math.min(0.52, inst.volume * vol64));
-        const a = Math.max(0.001, inst.attack);
-        const d = Math.max(0.001, inst.decay);
+        const envScale = this._tempoEnvScale();
+        const a = Math.max(0.001, Math.min(0.04, inst.attack * envScale));
+        const d = Math.max(0.001, Math.min(0.12, inst.decay * envScale));
         const s = Math.max(0.0001, peak * inst.sustain);
-        const r = Math.max(0.05, inst.release || 0.1);
+        const r = Math.max(0.03, Math.min(0.16, (inst.release || 0.1) * envScale));
 
         gain.gain.setValueAtTime(0.0001, when);
         gain.gain.exponentialRampToValueAtTime(peak, when + a);
@@ -32606,8 +32847,6 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         const themeId = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.idOf)
             ? VFTrackerThemes.idOf(this.themeIndex)
             : '';
-        const styleMag = this._styleMag();
-        const styleSide = this._styleSide();
         const wantTwin = ch === 0 && inst.wave !== 'noise' && styleMag > 0.03
             && (themeId === 'reese' || themeId === 'amen' || themeId === 'neuro'
                 || themeId === 'jungle_dnb' || themeId === 'dnb' || themeId === 'nightrun'
@@ -32626,28 +32865,32 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                     : styleSide === 'dnb' || styleSide === 'hybrid'
                         || themeId === 'reese' || themeId === 'neuro' || themeId === 'dnb'
                         ? 'sawtooth'
-                        : styleSide === 'elektro'
+                        : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen'
                             ? 'square'
-                            : (inst.wave === 'triangle' ? 'sawtooth' : inst.wave);
+                            : styleSide === 'elektro'
+                                ? 'square'
+                                : (inst.wave === 'triangle' ? 'sawtooth' : inst.wave);
                 const detune = styleSide === 'drive' || themeId === 'nightrun' ? 0.988
-                    : styleSide === 'dnb' || styleSide === 'hybrid' ? 0.992
-                        : styleSide === 'elektro' ? 0.998 : 0.995;
+                    : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb' ? 0.985
+                        : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen' ? 0.997
+                            : styleSide === 'elektro' ? 0.998 : 0.995;
                 const f2 = wantLeadTwin ? freq * 0.5 : freq * detune;
                 osc2.frequency.setValueAtTime(Math.max(20, f2), when);
-                const twinScale = Math.min(0.28, (styleSide === 'drive' || themeId === 'nightrun'
+                const twinScale = Math.min(0.36, (styleSide === 'drive' || themeId === 'nightrun'
                     ? (wantLeadTwin ? 0.12 + styleMag * 0.14 : 0.14 + styleMag * 0.16)
                     : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb'
-                        ? (0.12 + styleMag * 0.14)
-                        : styleSide === 'jungle'
-                            ? (0.08 + styleMag * 0.1)
+                        ? (0.18 + styleMag * 0.2)
+                        : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen'
+                            ? (0.12 + styleMag * 0.14)
                             : styleSide === 'elektro'
                                 ? (0.06 + styleMag * 0.08)
                                 : (0.08 + styleMag * 0.1)) * styleMag);
-                const twinPeak = Math.max(0.0001, Math.min(0.22, peak * twinScale));
+                const twinPeak = Math.max(0.0001, Math.min(0.26, peak * twinScale));
                 const gate = Math.max(0.18, a + d + r
                     + (styleSide === 'drive' || themeId === 'nightrun' ? 0.3
-                        : styleSide === 'dnb' || styleSide === 'hybrid' ? 0.22
-                            : styleSide === 'elektro' ? 0.28 : 0.12));
+                        : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb' ? 0.38
+                            : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen' ? 0.08
+                                : styleSide === 'elektro' ? 0.28 : 0.12));
                 g2.gain.setValueAtTime(0.0001, when);
                 g2.gain.exponentialRampToValueAtTime(twinPeak, when + a);
                 g2.gain.exponentialRampToValueAtTime(Math.max(0.0001, twinPeak * inst.sustain), when + a + d);
@@ -32712,10 +32955,13 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                     pools[c] = VFTrackerThemes.pitchPoolFromPattern(pat, c);
                 }
             }
-            // Light break colour only — scales with AMOUNT, no forced floor.
+            // Jungle / DnB push the Amen / two-step layer hard; other styles stay mild.
+            const breakHeavy = styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid';
             const breakAmtPre = styleMag < 0.03 ? 0
                 : styleMag * (themeIdx > 0
-                    ? (0.22 + Math.min(0.55, themeBreak) * 0.28)
+                    ? (breakHeavy
+                        ? (0.42 + Math.min(1, themeBreak) * 0.52)
+                        : (0.22 + Math.min(0.55, themeBreak) * 0.28))
                     : 0.35);
             for (let c = 0; c < track.channels; c++) {
                 let cell = row[c];
@@ -32726,9 +32972,11 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                         themeIdx, this._orderIndex, rowIndex, c,
                         row[c], pools[c] || null, styleMag);
                 }
-                // Mild duck when break overlay is up — song kit stays the groove.
-                if (c === 3 && cell && breakAmtPre > 0.2) {
-                    const duck = Math.max(0.45, 1 - breakAmtPre * 0.4);
+                // Jungle/DnB: silence authored GB kit when break owns the groove.
+                if (c === 3 && cell && breakHeavy && breakAmtPre > 0.28) {
+                    cell = null;
+                } else if (c === 3 && cell && breakAmtPre > 0.2) {
+                    const duck = Math.max(0.3, 1 - breakAmtPre * 0.55);
                     if (cell.note !== 'OFF') {
                         cell = {
                             note: cell.note,
@@ -32737,13 +32985,28 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                         };
                     }
                 }
-                if (cell) this._trigger(c, cell, when);
+                if (cell) {
+                    // Drums are polyphonic (kick+hat same step) — oneshot, don't cut.
+                    if (c === 3) {
+                        const rowDur = this.rowDuration();
+                        const isKick = cell.inst === 5;
+                        // Floor gate length so high BPM drums keep body.
+                        this._oneshot(c, cell, when, Math.max(
+                            isKick ? 0.055 : 0.04,
+                            rowDur * (isKick ? 0.95 : 0.65)));
+                    } else {
+                        this._trigger(c, cell, when);
+                    }
+                }
             }
         }
         // Break overlay: STYLE kit colour as spice, not a second song.
+        const breakHeavy = styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid';
         const breakAmt = styleMag < 0.03 ? 0
             : styleMag * (themeIdx > 0
-                ? (0.22 + Math.min(0.55, themeBreak) * 0.28)
+                ? (breakHeavy
+                    ? (0.42 + Math.min(1, themeBreak) * 0.52)
+                    : (0.22 + Math.min(0.55, themeBreak) * 0.28))
                 : 0.35);
         const breakSide = (styleSide !== 'off' ? styleSide : null)
             || (themeMeta.breakSide && themeMeta.breakSide !== 'off' ? themeMeta.breakSide : null)
@@ -32787,19 +33050,23 @@ var VFTrackerPlayer = class VFTrackerPlayer {
         }
         const step = (bank || [])[rowIndex % 16];
         if (!step) return;
-        const volScale = Math.min(0.85, side === 'jungle' || side === 'hybrid'
-            ? (0.32 + amt * 0.45)
-            : side === 'drive'
-                ? (0.34 + amt * 0.4)
-                : side === 'elektro'
-                    ? (0.36 + amt * 0.38)
-                    : (0.3 + amt * 0.4));
+        const volScale = Math.min(1.15, side === 'jungle' || side === 'hybrid'
+            ? (0.62 + amt * 0.5)
+            : side === 'dnb'
+                ? (0.55 + amt * 0.48)
+                : side === 'drive'
+                    ? (0.34 + amt * 0.4)
+                    : side === 'elektro'
+                        ? (0.36 + amt * 0.38)
+                        : (0.3 + amt * 0.4));
         const rowDur = this.rowDuration();
+        // Prefer body over ultra-short ticks when BPM is cranked.
         const gate = Math.max(0.045, Math.min(
-            side === 'jungle' || side === 'hybrid' ? 0.14
-                : side === 'drive' ? 0.16
-                    : side === 'elektro' ? 0.18 : 0.18,
-            rowDur * 0.85));
+            side === 'jungle' || side === 'hybrid' ? 0.1
+                : side === 'dnb' ? 0.22
+                    : side === 'drive' ? 0.16
+                        : side === 'elektro' ? 0.18 : 0.18,
+            Math.max(rowDur * 0.95, 0.05)));
         // Oneshots on drum bus — never call _trigger(3) (that cut authored notes).
         const fire = (note, inst, vel, at, gateMul) => {
             if (!(vel > 0.05)) return;
@@ -32809,26 +33076,45 @@ var VFTrackerPlayer = class VFTrackerPlayer {
                 vol: Math.max(1, Math.min(64, Math.round(64 * vel * volScale)))
             }, at, gate * (gateMul || 1));
         };
-        if (step.k) fire('A-2', 5, step.k, when, side === 'dnb' || side === 'elektro' || side === 'drive' ? 1.35 : 1);
-        if (step.s) fire('A-4', 4, step.s * (side === 'elektro' ? 0.85 : side === 'drive' ? 1.05 : 1), when);
+        if (step.k) {
+            fire('A-2', 5, step.k, when,
+                side === 'dnb' ? 1.7
+                    : side === 'elektro' || side === 'drive' ? 1.35
+                        : side === 'jungle' || side === 'hybrid' ? 0.9 : 1);
+        }
+        if (step.s) {
+            fire('A-4', 4, step.s * (side === 'elektro' ? 0.85
+                : side === 'drive' ? 1.05
+                    : side === 'jungle' || side === 'hybrid' ? 1.18
+                        : side === 'dnb' ? 1.15 : 1), when,
+                side === 'jungle' || side === 'hybrid' ? 0.7
+                    : side === 'dnb' ? 1.1 : 1);
+        }
         if (step.h) {
             fire('A-5', 4, step.h * (side === 'elektro' ? 0.9
-                : side === 'dnb' ? 0.95
-                    : side === 'drive' ? 0.75 : 0.85), when, 0.7);
+                : side === 'dnb' ? 0.85
+                    : side === 'drive' ? 0.75
+                        : side === 'jungle' || side === 'hybrid' ? 0.8 : 0.85), when,
+                side === 'dnb' ? 0.7 : 0.55);
         }
 
-        // Jungle / hybrid: half-row + micro chops. DnB: ghost snare.
-        // Elektro (dark minimal): offbeat hat pump under the 4/4.
+        // Jungle: Amen rolls only on marked steps (not every subdivision).
+        // DnB: light mid-hat only — keep two-step space.
         if ((side === 'jungle' || side === 'hybrid') && step.r && amt > 0.18) {
             const mid = when + rowDur * 0.5;
-            const rollVel = step.r * (0.6 + amt * 0.75);
-            fire('A-4', 4, rollVel, mid, 0.65);
+            const rollVel = step.r * (0.7 + amt * 0.7);
+            fire('A-4', 4, rollVel, mid, 0.5);
             if (amt > 0.45) {
-                fire('A-5', 4, rollVel * 0.55, when + rowDur * 0.25, 0.5);
-                fire('A-4', 4, rollVel * 0.75, when + rowDur * 0.75, 0.55);
+                fire('A-4', 4, rollVel * 0.7, when + rowDur * 0.75, 0.42);
             }
-        } else if (side === 'dnb' && amt > 0.3 && step.s) {
-            fire('A-5', 4, 0.28 + amt * 0.25, when + rowDur * 0.5, 0.55);
+            if (amt > 0.7) {
+                fire('A-5', 4, rollVel * 0.45, when + rowDur * 0.25, 0.32);
+            }
+        } else if (side === 'dnb' && amt > 0.25) {
+            fire('A-5', 4, 0.22 + amt * 0.2, when + rowDur * 0.5, 0.55);
+            if (step.s && amt > 0.55) {
+                fire('A-4', 4, 0.16 + amt * 0.14, when + rowDur * 0.75, 0.45);
+            }
         } else if (side === 'elektro' && amt > 0.15) {
             fire('A-5', 4, 0.28 + amt * 0.28, when + rowDur * 0.5, 0.5);
             if (amt > 0.55 && step.k) {
@@ -33006,11 +33292,12 @@ var VFTrackerDefaults = {
     /** Game Boy-ish voices: wave bass, two pulses, noise. */
     _baseInstruments() {
         return [
-            { id: 1, name: 'wave', wave: 'triangle', volume: 0.7, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
-            { id: 2, name: 'pulse1', wave: 'square', volume: 0.28, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
-            { id: 3, name: 'pulse2', wave: 'square', volume: 0.58, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.05 },
-            { id: 4, name: 'noise', wave: 'noise', volume: 0.32, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
-            { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
+            { id: 1, name: 'wave', wave: 'triangle', volume: 0.68, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
+            // Lead must read above arp — pulse1 was quieter than pulse2 and buried the hook.
+            { id: 2, name: 'pulse1', wave: 'square', volume: 0.44, attack: 0.001, decay: 0.05, sustain: 0.36, release: 0.08, filter: 2600 },
+            { id: 3, name: 'pulse2', wave: 'square', volume: 0.32, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05, filter: 2200 },
+            { id: 4, name: 'noise', wave: 'noise', volume: 0.28, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+            { id: 5, name: 'kick', wave: 'triangle', volume: 0.74, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
         ];
     },
 
@@ -33045,145 +33332,145 @@ var VFTrackerDefaults = {
      * Lead answers itself — never random walks.
      */
 
-    // Mars — marching even 8ths, clear A-minor hook (combat workhorse).
+    // Mars — A-minor call/answer hook (E-C-A | E-D-C | A). Combat workhorse.
     mars() {
         return this._track(
-            { title: 'Main Orbit 1', planet: 'mars', notes: 'march A-C-E-D · even 8ths' },
-            132,
+            { title: 'Main Orbit 1', planet: 'mars', notes: 'call E-C-A · answer E-D-C · land A' },
+            128,
             [
                 this._pat(0,
-                    'A-2:1:60 . A-2:1:44 . A-2:1:58 . E-2:1:48 . A-2:1:60 . A-2:1:42 . E-2:1:52 . E-2:1:38',
-                    'A-4:2:52 . C-5:2:44 . E-5:2:56 . D-5:2:48 . C-5:2:50 . A-4:2:40 . G-4:2:42 . A-4:2:46',
-                    'E-4:3:20 . A-4:3:12 . E-4:3:16 . A-4:3:10 . E-4:3:18 . A-4:3:12 . E-4:3:14 . A-4:3:08',
-                    'A-2:5:68 . A-4:4:18 . A-2:5:54 . A-4:4:14 A-2:5:66 . A-4:4:18 . A-2:5:50 A-4:4:12 . .'
+                    'A-2:1:60 . A-2:1:42 . A-2:1:56 . E-2:1:46 . A-2:1:60 . A-2:1:40 . G-2:1:50 . E-2:1:38',
+                    'E-5:2:54 . C-5:2:40 . A-4:2:48 . E-5:2:56 . D-5:2:44 . C-5:2:40 . A-4:2:46 . A-4:2:52',
+                    'A-3:3:14 . . . E-4:3:12 . . . A-3:3:14 . . . C-4:3:10 . . .',
+                    'A-2:5:66 . A-4:4:16 . A-2:5:52 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .'
                 ),
                 this._pat(1,
-                    'F-2:1:56 . F-2:1:40 . F-2:1:54 . C-2:1:44 . G-2:1:56 . G-2:1:40 . E-2:1:50 . G-2:1:36',
-                    'F-4:2:48 . A-4:2:40 . C-5:2:52 . B-4:2:44 . A-4:2:46 . G-4:2:36 . E-4:2:38 . F-4:2:42',
-                    'C-4:3:18 . F-4:3:10 . C-4:3:14 . F-4:3:08 . D-4:3:16 . G-4:3:10 . D-4:3:12 . G-4:3:08',
-                    'F-2:5:62 . A-4:4:16 . F-2:5:48 . A-4:4:12 G-2:5:62 . A-4:4:16 . G-2:5:46 A-4:4:10 . .'
+                    'F-2:1:54 . F-2:1:38 . F-2:1:52 . C-2:1:42 . G-2:1:54 . G-2:1:38 . E-2:1:48 . G-2:1:36',
+                    'C-5:2:50 . A-4:2:36 . F-4:2:44 . C-5:2:52 . Bb4:2:40 . A-4:2:36 . G-4:2:38 . F-4:2:46',
+                    'C-4:3:12 . . . F-4:3:10 . . . D-4:3:12 . . . G-4:3:10 . . .',
+                    'F-2:5:60 . A-4:4:14 . F-2:5:46 . A-4:4:10 G-2:5:60 . A-4:4:14 . G-2:5:44 A-4:4:08 . .'
                 ),
                 this._pat(2,
-                    'A-2:1:64 A-2:1:40 . C-3:1:54 . E-2:1:50 A-2:1:64 . G-2:1:56 . E-2:1:44 . A-2:1:58',
-                    'A-5:2:58 . C-6:2:48 . E-6:2:62 . D-6:2:52 . C-6:2:54 . A-5:2:44 . G-5:2:46 . A-5:2:52',
-                    'A-4:3:22 E-4:3:14 . C-5:3:20 . A-4:3:18 E-4:3:12 . G-4:3:16 . E-4:3:10 . A-4:3:14',
-                    'A-2:5:74 A-4:4:22 . A-4:4:14 A-2:5:58 A-4:4:16 . A-2:5:70 A-4:4:20 . A-4:4:12 A-2:5:54 A-4:4:14 .'
+                    'A-2:1:62 . A-2:1:44 . C-3:1:52 . E-2:1:48 . A-2:1:62 . A-2:1:42 . G-2:1:54 . E-2:1:40',
+                    'A-5:2:56 . E-5:2:42 . C-5:2:48 . A-5:2:58 . G-5:2:46 . E-5:2:40 . C-5:2:44 . A-4:2:52',
+                    'E-4:3:16 . A-4:3:10 . . E-4:3:14 . C-5:3:18 . A-4:3:10 . E-4:3:12 . A-4:3:08',
+                    'A-2:5:72 A-4:4:18 . A-4:4:12 A-2:5:56 . A-4:4:14 . A-2:5:68 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
         );
     },
 
-    // Jupiter — syncopated offbeat lead, wide leaps, sparse bass hits.
+    // Jupiter — E-minor bounce: offbeat lead leaps, sparse bass punches.
     jupiter() {
         return this._track(
-            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'syncop E-G-B-A · offbeat lead' },
-            118,
+            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'bounce E-G-B · fall A-G-E · tag D-E' },
+            120,
             [
                 this._pat(0,
-                    'E-2:1:58 . . . E-2:1:46 . B-1:1:50 . . E-2:1:54 . . B-1:1:42 . . .',
-                    '. E-4:2:48 . . G-4:2:40 . B-4:2:54 . . A-4:2:44 . G-4:2:38 . E-4:2:42 .',
-                    '. . B-3:3:18 . . . E-4:3:14 . . . B-3:3:16 . . . E-4:3:12 .',
-                    'E-2:5:56 . . A-4:4:10 . E-2:5:44 . A-4:4:08 . E-2:5:52 . . A-4:4:10 . E-2:5:40 .'
+                    'E-2:1:56 . . E-2:1:40 . B-1:1:48 . E-2:1:54 . . B-1:1:42 . E-2:1:50 . B-1:1:36 .',
+                    '. E-4:2:48 . G-4:2:38 . B-4:2:54 . A-4:2:42 . G-4:2:40 . E-4:2:44 . D-4:2:36 E-4:2:48',
+                    '. . B-3:3:14 . . . E-4:3:12 . . . B-3:3:12 . . . E-4:3:10 .',
+                    'E-2:5:60 . . A-4:4:12 . E-2:5:48 . A-4:4:10 . E-2:5:56 . . A-4:4:12 . E-2:5:44 .'
                 ),
                 this._pat(1,
-                    'C-3:1:52 . . . G-2:1:40 . D-3:1:48 . . C-3:1:50 . . B-1:1:38 . . .',
-                    '. C-5:2:44 . . E-5:2:36 . G-5:2:50 . . F#5:2:40 . E-5:2:34 . C-5:2:38 .',
-                    '. . G-4:3:16 . . . C-5:3:12 . . . A-4:3:14 . . . D-5:3:10 .',
-                    'C-3:5:50 . . A-4:4:08 . C-3:5:40 . A-4:4:06 . D-3:5:48 . . A-4:4:08 . D-3:5:36 .'
+                    'C-3:1:52 . . C-3:1:36 . G-2:1:44 . D-3:1:50 . . B-1:1:38 . C-3:1:46 . G-2:1:32 .',
+                    '. C-5:2:44 . E-5:2:34 . G-5:2:50 . F-5:2:38 . E-5:2:36 . C-5:2:40 . B-4:2:32 C-5:2:44',
+                    '. . G-4:3:12 . . . C-5:3:10 . . . A-4:3:12 . . . D-5:3:08 .',
+                    'C-3:5:54 . . A-4:4:10 . C-3:5:42 . A-4:4:08 . D-3:5:50 . . A-4:4:10 . D-3:5:38 .'
                 ),
                 this._pat(2,
-                    'E-2:1:62 . . B-1:1:48 . E-2:1:56 . . G-2:1:52 . E-2:1:60 . . D-2:1:46 . E-2:1:54',
-                    '. E-5:2:56 . G-5:2:46 . B-5:2:60 . A-5:2:50 . G-5:2:48 . E-5:2:42 . D-5:2:40 . E-5:2:52',
-                    'E-4:3:20 . . B-3:3:14 E-4:3:18 . G-4:3:22 . . E-4:3:16 . D-4:3:12 . B-3:3:10 .',
-                    'E-2:5:64 . A-4:4:14 . E-2:5:50 A-4:4:12 . A-4:4:08 E-2:5:60 . A-4:4:14 . E-2:5:46 A-4:4:10 .'
-                )
-            ],
-            [0, 0, 1, 0, 2, 1, 0, 1]
-        );
-    },
-
-    // Saturn — galloping dense bass + lead every row (rings spinning).
-    saturn() {
-        return this._track(
-            { title: 'Main Orbit 3', planet: 'saturn', notes: 'gallop D-F-A-G · dense drive' },
-            144,
-            [
-                this._pat(0,
-                    'D-2:1:62 D-2:1:40 D-2:1:50 D-2:1:34 A-1:1:56 A-1:1:36 D-2:1:60 D-2:1:38 D-2:1:52 D-2:1:32 A-1:1:48 A-1:1:30 D-2:1:58 D-2:1:36 A-1:1:44 A-1:1:28',
-                    'D-4:2:50 F-4:2:36 A-4:2:54 G-4:2:40 F-4:2:44 D-4:2:32 C-4:2:36 D-4:2:42 D-4:2:48 F-4:2:34 A-4:2:52 G-4:2:38 F-4:2:42 D-4:2:30 C-4:2:34 D-4:2:40',
-                    'A-3:3:18 D-4:3:10 A-3:3:14 D-4:3:08 A-3:3:16 D-4:3:10 A-3:3:12 D-4:3:08 A-3:3:18 D-4:3:10 A-3:3:14 D-4:3:08 A-3:3:16 D-4:3:10 A-3:3:12 D-4:3:08',
-                    'D-2:5:70 A-4:4:20 D-2:5:42 A-4:4:12 D-2:5:64 A-4:4:18 A-4:4:10 . D-2:5:70 A-4:4:20 D-2:5:42 A-4:4:12 D-2:5:60 A-4:4:16 A-4:4:10 A-4:4:06'
-                ),
-                this._pat(1,
-                    'G-1:1:58 G-1:1:36 G-1:1:46 G-1:1:30 D-1:1:52 D-1:1:32 A-1:1:56 A-1:1:34 G-1:1:50 G-1:1:28 E-2:1:48 E-2:1:30 A-1:1:54 A-1:1:32 E-2:1:42 E-2:1:26',
-                    'G-3:2:46 Bb3:2:32 D-4:2:50 C-4:2:36 Bb3:2:40 A-3:2:28 G-3:2:32 A-3:2:38 G-3:2:44 Bb3:2:30 D-4:2:48 C-4:2:34 Bb3:2:38 A-3:2:26 G-3:2:30 A-3:2:36',
-                    'D-3:3:16 G-3:3:08 D-3:3:12 G-3:3:06 E-3:3:14 A-3:3:08 E-3:3:10 A-3:3:06 D-3:3:16 G-3:3:08 D-3:3:12 G-3:3:06 E-3:3:14 A-3:3:08 E-3:3:10 A-3:3:06',
-                    'G-1:5:66 A-4:4:18 G-1:5:40 A-4:4:10 A-1:5:60 A-4:4:16 A-4:4:08 . G-1:5:66 A-4:4:18 A-1:5:40 A-4:4:10 A-1:5:56 A-4:4:14 A-4:4:08 A-4:4:05'
-                ),
-                this._pat(2,
-                    'D-2:1:68 D-2:1:44 F-2:1:56 F-2:1:38 A-1:1:60 A-1:1:40 D-2:1:66 D-2:1:42 C-2:1:54 C-2:1:36 A-1:1:50 A-1:1:32 D-2:1:64 D-2:1:40 A-1:1:48 A-1:1:30',
-                    'D-5:2:56 F-5:2:42 A-5:2:60 G-5:2:46 F-5:2:50 D-5:2:38 C-5:2:42 D-5:2:48 D-5:2:54 F-5:2:40 A-5:2:58 G-5:2:44 F-5:2:48 D-5:2:36 C-5:2:40 D-5:2:46',
-                    'D-4:3:22 A-3:3:14 F-4:3:20 A-3:3:12 D-4:3:18 A-3:3:10 C-4:3:16 A-3:3:08 D-4:3:22 A-3:3:14 F-4:3:20 A-3:3:12 D-4:3:18 A-3:3:10 C-4:3:16 A-3:3:08',
-                    'D-2:5:78 A-4:4:24 D-2:5:48 A-4:4:16 D-2:5:72 A-4:4:22 A-4:4:14 A-4:4:08 D-2:5:76 A-4:4:24 D-2:5:46 A-4:4:14 D-2:5:68 A-4:4:20 A-4:4:12 A-4:4:08'
-                )
-            ],
-            [0, 0, 1, 0, 2, 1, 0, 0]
-        );
-    },
-
-    // Neptune — half-time ice: long tones, wide silence, cold pulse.
-    neptune() {
-        return this._track(
-            { title: 'Ice Lane', planet: 'neptune', notes: 'half-time B-D-F#-E · cold space' },
-            104,
-            [
-                this._pat(0,
-                    'B-1:1:52 . . . . . F#1:1:40 . . . . . B-1:1:46 . . .',
-                    'B-3:2:44 . . . D-4:2:36 . . . F#4:2:48 . . . E-4:2:38 . . .',
-                    'F#3:3:12 . . . . . . . B-3:3:10 . . . . . . .',
-                    '. . A-4:4:08 . . . B-1:5:42 . . . A-4:4:06 . . . . .'
-                ),
-                this._pat(1,
-                    'G-1:1:46 . . . . . D-1:1:34 . . . . . A-1:1:42 . . .',
-                    'G-3:2:38 . . . B-3:2:30 . . . D-4:2:42 . . . C#4:2:32 . . .',
-                    'D-3:3:10 . . . . . . . G-3:3:08 . . . . . . .',
-                    '. . A-4:4:06 . . . G-1:5:36 . . . A-4:4:05 . . . . .'
-                ),
-                this._pat(2,
-                    'B-1:1:56 . . . F#1:1:44 . . . A-1:1:48 . . . E-1:1:38 . . .',
-                    'B-4:2:50 . . D-5:2:40 . . F#5:2:54 . . E-5:2:44 . . D-5:2:42 . B-4:2:46 .',
-                    'B-3:3:16 . . F#3:3:10 . . B-3:3:14 . . D-4:3:18 . . F#3:3:10 . B-3:3:12 .',
-                    'B-1:5:50 . . A-4:4:10 . B-1:5:40 . . A-4:4:08 . B-1:5:46 . A-4:4:06 . . .'
+                    'E-2:1:60 . E-2:1:42 . G-2:1:50 . B-1:1:46 . E-2:1:60 . E-2:1:40 . D-2:1:52 . B-1:1:38',
+                    'E-5:2:54 . G-5:2:42 . B-5:2:58 . A-5:2:46 . G-5:2:44 . E-5:2:38 . D-5:2:40 . E-5:2:50',
+                    'E-4:3:16 . . B-3:3:10 E-4:3:14 . G-4:3:18 . . E-4:3:12 . D-4:3:10 . B-3:3:08',
+                    'E-2:5:66 A-4:4:16 . A-4:4:10 E-2:5:52 . A-4:4:12 . E-2:5:62 A-4:4:14 . A-4:4:08 E-2:5:46 A-4:4:10 .'
                 )
             ],
             [0, 0, 1, 0, 2, 0, 1, 0]
         );
     },
 
-    // Pluto — urgent triplet clusters then silence (Kuiper stabs).
-    pluto() {
+    // Saturn — D-minor gallop: short-short-long lead over driving bass.
+    saturn() {
         return this._track(
-            { title: 'Kuiper Rush', planet: 'pluto', notes: 'cluster C-Eb-G-F · stab silence' },
-            152,
+            { title: 'Main Orbit 3', planet: 'saturn', notes: 'gallop D-F-A · snap G-F · home D' },
+            136,
             [
                 this._pat(0,
-                    'C-2:1:64 C-2:1:48 C-2:1:36 . G-1:1:54 G-1:1:40 . . C-2:1:62 C-2:1:46 C-2:1:34 . G-1:1:50 . . .',
-                    'C-4:2:54 Eb4:2:44 G-4:2:58 . F-4:2:48 Eb4:2:40 . . C-4:2:52 Bb3:2:38 C-4:2:46 . Eb4:2:42 . . .',
-                    'G-3:3:20 C-4:3:14 G-3:3:12 . C-4:3:16 G-3:3:10 . . G-3:3:18 C-4:3:12 G-3:3:10 . C-4:3:14 . . .',
-                    'C-2:5:72 A-4:4:22 C-2:5:44 . C-2:5:64 A-4:4:16 . . C-2:5:70 A-4:4:20 C-2:5:42 . C-2:5:58 A-4:4:12 . .'
+                    'D-2:1:58 D-2:1:36 . D-2:1:54 . A-1:1:44 . D-2:1:58 D-2:1:36 . A-1:1:48 . A-1:1:34',
+                    'D-4:2:46 F-4:2:34 . A-4:2:54 . G-4:2:42 . F-4:2:40 D-4:2:32 . C-4:2:36 . D-4:2:48',
+                    'A-3:3:14 . . . D-4:3:12 . . . A-3:3:14 . . . D-4:3:10 . . .',
+                    'D-2:5:66 A-4:4:16 D-2:5:42 A-4:4:10 D-2:5:60 A-4:4:14 . D-2:5:66 A-4:4:16 D-2:5:40 A-4:4:10 D-2:5:52 A-4:4:12 .'
                 ),
                 this._pat(1,
-                    'Ab1:1:58 Ab1:1:42 Ab1:1:30 . Eb1:1:48 Eb1:1:34 . . Bb1:1:56 Bb1:1:40 Bb1:1:28 . F-2:1:46 . . .',
-                    'Ab3:2:48 C-4:2:38 Eb4:2:52 . D-4:2:42 C-4:2:34 . . Bb3:2:46 Ab3:2:32 Bb3:2:40 . C-4:2:36 . . .',
-                    'Eb3:3:18 Ab3:3:12 Eb3:3:10 . Ab3:3:14 Eb3:3:08 . . F-3:3:16 Bb3:3:10 F-3:3:08 . Bb3:3:12 . . .',
-                    'Ab1:5:66 A-4:4:18 Ab1:5:40 . Bb1:5:60 A-4:4:14 . . Bb1:5:64 A-4:4:18 Bb1:5:38 . Bb1:5:52 A-4:4:10 . .'
+                    'G-1:1:54 G-1:1:34 . G-1:1:50 . D-1:1:40 . Bb1:1:54 Bb1:1:34 . F-2:1:46 . Bb1:1:32',
+                    'G-3:2:42 Bb3:2:30 . D-4:2:50 . C-4:2:38 . Bb3:2:36 G-3:2:28 . A-3:2:32 . G-3:2:44',
+                    'D-3:3:12 . . . G-3:3:10 . . . F-3:3:12 . . . Bb3:3:10 . . .',
+                    'G-1:5:62 A-4:4:14 G-1:5:40 A-4:4:08 Bb1:5:58 A-4:4:12 . Bb1:5:62 A-4:4:14 Bb1:5:38 A-4:4:08 Bb1:5:50 A-4:4:10 .'
                 ),
                 this._pat(2,
-                    'C-2:1:70 C-2:1:52 C-2:1:40 Eb2:1:58 G-1:1:50 . C-2:1:66 C-2:1:48 Bb1:1:44 . C-2:1:68 C-2:1:50 G-1:1:46 . C-2:1:60 .',
-                    'C-5:2:60 Eb5:2:48 G-5:2:64 F-5:2:52 Eb5:2:50 . C-5:2:56 Bb4:2:42 C-5:2:54 . Eb5:2:46 G-5:2:58 . C-5:2:50 .',
-                    'C-4:3:24 G-3:3:16 Eb4:3:20 G-3:3:14 C-4:3:22 . Bb3:3:18 G-3:3:12 C-4:3:20 . Eb4:3:16 G-3:3:12 . C-4:3:14 .',
-                    'C-2:5:80 A-4:4:26 C-2:5:50 A-4:4:18 C-2:5:74 A-4:4:22 A-4:4:12 . C-2:5:76 A-4:4:24 C-2:5:48 A-4:4:16 C-2:5:68 A-4:4:18 A-4:4:10 .'
+                    'D-2:1:62 . D-2:1:42 . F-2:1:52 . A-1:1:46 . D-2:1:62 . D-2:1:40 . C-2:1:54 . A-1:1:38',
+                    'D-5:2:54 . F-5:2:42 . A-5:2:58 . G-5:2:46 . F-5:2:44 . D-5:2:38 . C-5:2:40 . D-5:2:50',
+                    'D-4:3:16 . A-3:3:10 . . D-4:3:14 . F-4:3:18 . A-3:3:10 . D-4:3:12 . A-3:3:08',
+                    'D-2:5:72 A-4:4:18 . A-4:4:10 D-2:5:56 A-4:4:14 A-4:4:08 . D-2:5:68 A-4:4:16 . A-4:4:08 D-2:5:50 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Neptune — B-minor ice: long held tones, wide gaps, cold answer.
+    neptune() {
+        return this._track(
+            { title: 'Ice Lane', planet: 'neptune', notes: 'hold B · rise D-F# · fall E-B' },
+            108,
+            [
+                this._pat(0,
+                    'B-1:1:52 . . . F#1:1:40 . . . B-1:1:48 . . . F#1:1:36 . . .',
+                    'B-3:2:46 . . . D-4:2:36 . F#4:2:50 . E-4:2:38 . . B-3:2:42 . . .',
+                    'F#3:3:12 . . . . . . . B-3:3:10 . . . . . . .',
+                    '. . A-4:4:10 . . . B-1:5:46 . . . A-4:4:08 . . B-1:5:40 .'
+                ),
+                this._pat(1,
+                    'G-1:1:46 . . . D-1:1:34 . . . A-1:1:44 . . . E-1:1:32 . . .',
+                    'G-3:2:40 . . . B-3:2:30 . D-4:2:46 . C-4:2:34 . . G-3:2:38 . . .',
+                    'D-3:3:10 . . . . . . . G-3:3:08 . . . . . . .',
+                    '. . A-4:4:08 . . . G-1:5:40 . . . A-4:4:06 . . A-1:5:36 .'
+                ),
+                this._pat(2,
+                    'B-1:1:56 . . F#1:1:42 . . A-1:1:46 . . B-1:1:54 . . F#1:1:38 . E-1:1:34 .',
+                    'B-4:2:50 . . D-5:2:40 . F#5:2:56 . E-5:2:44 . D-5:2:42 . B-4:2:38 . B-4:2:48',
+                    'B-3:3:14 . . F#3:3:10 . . B-3:3:12 . . D-4:3:16 . . F#3:3:08 . B-3:3:10 .',
+                    'B-1:5:52 . . A-4:4:12 . B-1:5:42 . A-4:4:08 . B-1:5:48 . A-4:4:10 . . . .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Pluto — C-minor stab: three hits then silence, urgent return.
+    pluto() {
+        return this._track(
+            { title: 'Kuiper Rush', planet: 'pluto', notes: 'stab C-Eb-G · gap · snap F-C' },
+            144,
+            [
+                this._pat(0,
+                    'C-2:1:60 C-2:1:40 . C-2:1:54 . G-1:1:46 . . C-2:1:58 C-2:1:38 . G-1:1:44 . . .',
+                    'C-4:2:52 Eb4:2:40 G-4:2:56 . F-4:2:44 . . C-4:2:48 Bb3:2:36 C-4:2:50 . . .',
+                    'G-3:3:16 C-4:3:10 . . C-4:3:12 . . . G-3:3:14 . C-4:3:10 . . . .',
+                    'C-2:5:70 A-4:4:18 C-2:5:44 . C-2:5:62 A-4:4:14 . . C-2:5:68 A-4:4:16 C-2:5:40 . C-2:5:54 .'
+                ),
+                this._pat(1,
+                    'Ab1:1:54 Ab1:1:36 . Ab1:1:50 . Eb1:1:40 . . Bb1:1:54 Bb1:1:34 . F-2:1:46 . . .',
+                    'Ab3:2:46 C-4:2:34 Eb4:2:50 . D-4:2:38 . . Bb3:2:44 Ab3:2:30 Bb3:2:42 . . .',
+                    'Eb3:3:14 Ab3:3:08 . . Ab3:3:10 . . . F-3:3:12 . Bb3:3:08 . . . .',
+                    'Ab1:5:64 A-4:4:14 Ab1:5:40 . Bb1:5:60 A-4:4:12 . . Bb1:5:64 A-4:4:14 Bb1:5:38 . Bb1:5:50 .'
+                ),
+                this._pat(2,
+                    'C-2:1:64 . C-2:1:44 . Eb2:1:54 . G-1:1:48 . C-2:1:64 . C-2:1:42 . Bb1:1:54 . G-1:1:40',
+                    'C-5:2:56 . Eb5:2:44 . G-5:2:60 . F-5:2:48 . Eb5:2:46 . C-5:2:40 . Bb4:2:42 . C-5:2:52',
+                    'C-4:3:18 . G-3:3:12 . . C-4:3:16 . Eb4:3:20 . G-3:3:10 . C-4:3:14 . G-3:3:08',
+                    'C-2:5:76 A-4:4:20 . A-4:4:12 C-2:5:58 A-4:4:14 A-4:4:08 . C-2:5:72 A-4:4:18 . A-4:4:10 C-2:5:52 A-4:4:12 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
@@ -33237,29 +33524,29 @@ var VFTrackerDefaults = {
         );
     },
 
-    /** Planet Select / station hub — motif G B D E | D B A G, then sequenced. */
+    /** Planet Select / station hub — G-major lift: call G-B-D | tag E-D | home G. */
     menu() {
         return this._track(
-            { title: 'Planet Select', planet: 'menu', notes: 'motif G-B-D-E · develop · return' },
-            112,
+            { title: 'Planet Select', planet: 'menu', notes: 'call G-B-D · tag E-D · home G' },
+            110,
             [
                 this._pat(0,
-                    'G-2:1:50 . G-2:1:36 . G-2:1:50 . D-2:1:40 . G-2:1:50 . G-2:1:36 . D-2:1:44 . D-2:1:32',
-                    'G-4:2:44 . B-4:2:36 . D-5:2:48 . E-5:2:40 . D-5:2:42 . B-4:2:34 . A-4:2:36 . G-4:2:40',
-                    'D-4:3:14 . . . G-4:3:12 . . . D-4:3:14 . . . G-4:3:12 . . .',
-                    'G-2:5:56 . A-4:4:12 . G-2:5:44 . A-4:4:08 G-2:5:56 . A-4:4:12 . G-2:5:40 A-4:4:06 . .'
+                    'G-2:1:52 . G-2:1:36 . G-2:1:50 . D-2:1:40 . G-2:1:52 . G-2:1:36 . D-2:1:44 . D-2:1:32',
+                    'G-4:2:48 . B-4:2:36 . D-5:2:54 . E-5:2:42 . D-5:2:40 . B-4:2:34 . A-4:2:36 . G-4:2:46',
+                    'D-4:3:12 . . . G-4:3:10 . . . D-4:3:12 . . . B-3:3:08 . . .',
+                    'G-2:5:58 . A-4:4:12 . G-2:5:44 . A-4:4:08 G-2:5:56 . A-4:4:12 . G-2:5:40 A-4:4:06 . .'
                 ),
                 this._pat(1,
-                    'E-2:1:46 . E-2:1:32 . E-2:1:46 . B-1:1:36 . E-2:1:46 . E-2:1:32 . B-1:1:40 . B-1:1:28',
-                    'E-4:2:40 . G-4:2:32 . B-4:2:44 . C-5:2:36 . B-4:2:38 . G-4:2:30 . F#4:2:32 . E-4:2:36',
-                    'B-3:3:12 . . . E-4:3:10 . . . B-3:3:12 . . . E-4:3:10 . . .',
-                    'E-2:5:52 . A-4:4:10 . E-2:5:40 . A-4:4:06 E-2:5:52 . A-4:4:10 . E-2:5:36 A-4:4:05 . .'
+                    'E-2:1:48 . E-2:1:34 . E-2:1:46 . B-1:1:38 . E-2:1:48 . E-2:1:34 . B-1:1:40 . B-1:1:30',
+                    'E-4:2:44 . G-4:2:32 . B-4:2:50 . A-4:2:38 . B-4:2:36 . G-4:2:30 . F#4:2:32 . E-4:2:42',
+                    'B-3:3:10 . . . E-4:3:08 . . . B-3:3:10 . . . G-3:3:06 . . .',
+                    'E-2:5:54 . A-4:4:10 . E-2:5:40 . A-4:4:06 E-2:5:52 . A-4:4:10 . E-2:5:36 A-4:4:05 . .'
                 ),
                 this._pat(2,
-                    'G-2:1:54 . G-2:1:38 . B-2:1:46 . D-2:1:42 . G-2:1:54 . G-2:1:38 . D-3:1:48 . B-2:1:36',
-                    'G-5:2:48 . B-5:2:40 . D-6:2:52 . E-6:2:44 . D-6:2:46 . B-5:2:38 . A-5:2:40 . G-5:2:44',
-                    'G-4:3:16 . D-4:3:10 . D-4:3:10 G-4:3:16 . B-4:3:18 . D-4:3:10 G-4:3:14 . E-4:3:10 . D-4:3:08 .',
-                    'G-2:5:60 A-4:4:14 . A-4:4:08 G-2:5:48 . A-4:4:10 . G-2:5:56 A-4:4:12 . A-4:4:06 G-2:5:42 A-4:4:08 .'
+                    'G-2:1:56 . G-2:1:40 . B-2:1:48 . D-2:1:44 . G-2:1:56 . G-2:1:38 . D-3:1:50 . B-2:1:36',
+                    'G-5:2:52 . B-5:2:40 . D-6:2:56 . E-6:2:44 . D-6:2:42 . B-5:2:36 . A-5:2:38 . G-5:2:48',
+                    'G-4:3:14 . D-4:3:08 . . G-4:3:12 . B-4:3:16 . D-4:3:08 . G-4:3:10 . D-4:3:06',
+                    'G-2:5:62 A-4:4:14 . A-4:4:08 G-2:5:48 . A-4:4:10 . G-2:5:58 A-4:4:12 . A-4:4:06 G-2:5:42 A-4:4:08 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
@@ -33981,13 +34268,15 @@ var VFTrackerThemes = {
     _meta: {
         // preferredBpm = heard tempo when the STYLE is picked (auto-applied).
         planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0, preferredBpm: 132 },
-        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.28, themeBreak: 0.7, preferredBpm: 160 },
+        // Classic jungle: Amen pressure + ragga chops ~168.
+        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.4, themeBreak: 0.95, preferredBpm: 168 },
         minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.08, themeBreak: 0.55, preferredBpm: 128 },
-        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.24, themeBreak: 0.65, preferredBpm: 164 },
-        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.2, themeBreak: 0.5, preferredBpm: 170 },
-        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.18, themeBreak: 0.48, preferredBpm: 172 },
-        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.1, themeBreak: 0.35, preferredBpm: 168 },
-        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.6, preferredBpm: 174 },
+        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.36, themeBreak: 0.9, preferredBpm: 170 },
+        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.26, themeBreak: 0.62, preferredBpm: 172 },
+        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.24, themeBreak: 0.58, preferredBpm: 174 },
+        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.12, themeBreak: 0.4, preferredBpm: 170 },
+        // Proper DnB: two-step kit + half-time sub @ 174.
+        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.34, themeBreak: 0.88, preferredBpm: 174 },
         nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.12, themeBreak: 0.55, preferredBpm: 108 }
     },
 
@@ -34037,9 +34326,13 @@ var VFTrackerThemes = {
         const id = typeof indexOrId === 'string' ? indexOrId : this.idOf(indexOrId);
         if (!id || id === 'planet') return Math.round(authored);
         const pref = this.preferredBpmOf(indexOrId);
-        const scaled = authored * (pref / (this.REF_BPM > 0 ? 132 : 132));
-        // Soft clamp toward preferred so extreme songs stay musical.
-        const blended = authored * 0.35 + scaled * 0.65;
+        const scaled = authored * (pref / 132);
+        // Jungle / Amen / DnB need their tempo to read — weight preferred hard.
+        const heavy = id === 'jungle_dnb' || id === 'amen' || id === 'dnb'
+            || id === 'reese' || id === 'neuro';
+        const blended = heavy
+            ? pref * 0.72 + scaled * 0.28
+            : authored * 0.35 + scaled * 0.65;
         return Math.max(60, Math.min(300, Math.round(blended)));
     },
 
@@ -34048,19 +34341,22 @@ var VFTrackerThemes = {
         // Classic jungle: chopped Amen bass, ragga hooks, open space for breaks.
         jungle_dnb: [
             {
-                bass: 'A-1:1:70 A-1:1:36 . E-1:1:52 A-1:1:28 . A-1:1:64 . E-1:1:44 . A-1:1:68 A-1:1:32 . E-1:1:48 . A-1:1:56 .',
-                lead: 'A-4:2:46 . . . C-5:2:34 . . . E-5:2:52 . . D-5:2:38 . . C-5:2:32 . A-4:2:40 .',
-                arp: 'E-3:3:20 . A-3:3:10 . . E-3:3:14 . . A-3:3:16 . E-3:3:12 . . A-3:3:10 . E-3:3:08 .'
+                bass: 'A-1:1:78 A-1:1:42 A-1:1:28 . E-1:1:58 A-1:1:34 . A-1:1:70 A-1:1:30 E-1:1:48 . A-1:1:74 A-1:1:38 . E-1:1:52 A-1:1:60',
+                lead: 'A-4:2:52 . . C-5:2:28 . . . E-5:2:58 . . . D-5:2:34 . C-5:2:26 . A-4:2:44 .',
+                arp: 'E-3:3:24 . A-3:3:12 E-3:3:08 . A-3:3:16 . E-3:3:18 . A-3:3:10 . E-3:3:14 A-3:3:08 . E-3:3:10',
+                drums: 'A-2:5:70 A-4:4:22 A-5:4:14 A-2:5:48 A-4:4:64 A-5:4:16 A-4:4:40 A-2:5:54 A-5:4:18 A-2:5:50 A-4:4:58 A-5:4:20 A-2:5:66 A-4:4:44 A-5:4:16 A-4:4:52'
             },
             {
-                bass: 'F-1:1:66 F-1:1:34 . C-1:1:48 F-1:1:26 . G-1:1:60 . D-1:1:42 . F-1:1:62 F-1:1:30 . C-1:1:44 . G-1:1:52 .',
-                lead: 'F-4:2:42 . . . A-4:2:30 . . . C-5:2:48 . . B-4:2:34 . . A-4:2:28 . G-4:2:36 .',
-                arp: 'C-3:3:18 . F-3:3:10 . . C-3:3:12 . . G-3:3:14 . D-3:3:10 . . F-3:3:08 . C-3:3:06 .'
+                bass: 'F-1:1:74 F-1:1:40 F-1:1:26 . C-1:1:54 F-1:1:32 . G-1:1:66 G-1:1:28 D-1:1:46 . F-1:1:70 F-1:1:36 . C-1:1:50 G-1:1:56',
+                lead: 'F-4:2:48 . . A-4:2:24 . . . C-5:2:54 . . . B-4:2:30 . A-4:2:22 . G-4:2:40 .',
+                arp: 'C-3:3:22 . F-3:3:10 C-3:3:08 . F-3:3:14 . G-3:3:16 . D-3:3:10 . F-3:3:12 C-3:3:08 . F-3:3:08',
+                drums: 'A-2:5:66 A-5:4:18 A-4:4:28 A-2:5:44 A-4:4:60 A-5:4:14 A-4:4:36 A-2:5:50 A-5:4:16 A-2:5:46 A-4:4:54 A-5:4:18 A-2:5:62 A-4:4:40 A-5:4:14 A-4:4:48'
             },
             {
-                bass: 'A-1:1:74 A-1:1:40 . E-1:1:56 A-1:1:66 . E-1:1:36 G-1:1:54 . A-1:1:72 A-1:1:38 . E-1:1:50 A-1:1:60 . E-1:1:42',
-                lead: 'A-5:2:54 . C-6:2:42 . . E-6:2:58 . D-6:2:46 . . C-6:2:44 . A-5:2:40 . G-5:2:38 . A-5:2:48',
-                arp: 'A-3:3:22 . E-3:3:14 A-3:3:18 . C-4:3:24 . E-3:3:12 . A-3:3:16 G-3:3:12 . E-3:3:10 . A-3:3:14'
+                bass: 'A-1:1:82 A-1:1:46 A-1:1:32 E-1:1:62 A-1:1:72 . E-1:1:40 G-1:1:58 A-1:1:36 A-1:1:78 A-1:1:44 . E-1:1:54 A-1:1:66 E-1:1:38 A-1:1:48',
+                lead: 'A-5:2:60 . C-6:2:36 . E-6:2:64 . . D-6:2:42 . C-6:2:38 . A-5:2:34 . G-5:2:30 A-5:2:52 .',
+                arp: 'A-3:3:26 E-3:3:14 A-3:3:18 . C-4:3:28 . E-3:3:12 A-3:3:16 G-3:3:12 E-3:3:10 . A-3:3:14 . E-3:3:08',
+                drums: 'A-2:5:74 A-4:4:26 A-5:4:16 A-2:5:52 A-4:4:68 A-5:4:18 A-4:4:44 A-2:5:58 A-5:4:20 A-2:5:54 A-4:4:62 A-5:4:22 A-2:5:70 A-4:4:48 A-5:4:18 A-4:4:56'
             }
         ],
         // Dark minimal techno (Max Minimal / dark techno set vibe):
@@ -34085,19 +34381,19 @@ var VFTrackerThemes = {
         // Amen head (classic jungle hook bank).
         amen: [
             {
-                bass: 'A-1:1:62 A-1:1:40 . E-1:1:48 . A-1:1:58 A-1:1:36 . E-1:1:44 . A-1:1:60 . E-1:1:42 . A-1:1:50 . E-1:1:38',
-                lead: 'A-4:2:44 . . C-5:2:36 . . E-5:2:48 . D-5:2:40 . . C-5:2:38 . A-4:2:34 . . G-4:2:32 . A-4:2:40',
-                arp: 'E-3:3:18 . . . A-3:3:14 . . . E-3:3:16 . . . A-3:3:12 . . .'
+                bass: 'A-1:1:70 A-1:1:44 A-1:1:30 E-1:1:52 . A-1:1:64 A-1:1:38 . E-1:1:46 A-1:1:28 A-1:1:66 . E-1:1:44 A-1:1:54 . E-1:1:40',
+                lead: 'A-4:2:50 . . C-5:2:30 . . E-5:2:54 . . D-5:2:36 . C-5:2:28 . A-4:2:40 . G-4:2:26 .',
+                arp: 'E-3:3:20 . A-3:3:12 . E-3:3:14 . A-3:3:10 . E-3:3:16 . A-3:3:08 . E-3:3:12 . A-3:3:08'
             },
             {
-                bass: 'F-1:1:58 F-1:1:36 . C-1:1:44 . G-1:1:56 G-1:1:34 . D-1:1:42 . F-1:1:54 . C-1:1:40 . G-1:1:48 . D-1:1:36',
-                lead: 'F-4:2:40 . . A-4:2:32 . . C-5:2:44 . B-4:2:36 . . A-4:2:34 . G-4:2:30 . . E-4:2:28 . F-4:2:36',
-                arp: 'C-3:3:16 . . . F-3:3:12 . . . D-3:3:14 . . . G-3:3:10 . . .'
+                bass: 'F-1:1:66 F-1:1:40 F-1:1:28 C-1:1:48 . G-1:1:62 G-1:1:36 . D-1:1:44 F-1:1:26 F-1:1:60 . C-1:1:42 G-1:1:52 . D-1:1:38',
+                lead: 'F-4:2:46 . . A-4:2:26 . . C-5:2:50 . . B-4:2:32 . A-4:2:24 . G-4:2:36 . E-4:2:22 .',
+                arp: 'C-3:3:18 . F-3:3:10 . C-3:3:12 . F-3:3:08 . D-3:3:14 . G-3:3:08 . C-3:3:10 . F-3:3:06'
             },
             {
-                bass: 'A-1:1:66 A-1:1:44 . E-1:1:52 . A-1:1:62 A-1:1:40 . G-1:1:50 . A-1:1:64 . E-1:1:46 . A-1:1:54 . E-1:1:40',
-                lead: 'A-5:2:50 . C-6:2:40 . E-6:2:54 . D-6:2:46 . C-6:2:44 . A-5:2:38 . G-5:2:36 . A-5:2:42',
-                arp: 'A-3:3:20 . E-3:3:12 . E-3:3:12 A-3:3:18 . C-4:3:22 . E-3:3:12 A-3:3:16 . G-3:3:12 . E-3:3:10 .'
+                bass: 'A-1:1:74 A-1:1:48 A-1:1:34 E-1:1:56 A-1:1:68 . G-1:1:54 A-1:1:42 A-1:1:72 . E-1:1:50 A-1:1:58 E-1:1:36 A-1:1:46 .',
+                lead: 'A-5:2:56 . C-6:2:34 . E-6:2:60 . D-6:2:40 . C-6:2:36 . A-5:2:30 . G-5:2:28 A-5:2:46 .',
+                arp: 'A-3:3:22 E-3:3:12 . A-3:3:16 C-4:3:24 . E-3:3:12 A-3:3:14 G-3:3:10 . E-3:3:10 A-3:3:12 .'
             }
         ],
         // Dark Reese: long sub drones, almost no lead — pressure from bass + breaks.
@@ -34154,22 +34450,25 @@ var VFTrackerThemes = {
                 arp: 'A-4:3:16 E-4:3:12 . C-4:3:14 . A-4:3:14 E-4:3:10 . C-4:3:12 . A-4:3:14 E-4:3:10 . C-4:3:12 .'
             }
         ],
-        // Proper DnB: half-time sub, two-step space, sparse neuro stabs.
+        // Proper DnB: half-time sub drones, two-step space, sparse neuro stabs.
         dnb: [
             {
-                bass: 'A-1:1:72 . . . A-1:1:48 . . . A-1:1:68 . . E-1:1:52 . A-1:1:58 . . .',
-                lead: 'A-4:2:36 . . . . . . C-5:2:28 . . . . . E-4:2:32 . . .',
-                arp: 'E-3:3:14 . . . . . A-3:3:10 . . . . . E-3:3:12 . . .'
+                bass: 'A-1:1:80 . . . A-1:1:72 . . . A-1:1:76 . . . E-1:1:58 . . .',
+                lead: 'A-4:2:30 . . . . . . . C-5:2:22 . . . . . . E-4:2:26 .',
+                arp: 'E-2:3:12 . . . . . . . A-2:3:08 . . . . . . .',
+                drums: 'A-2:5:72 A-5:4:18 A-5:4:14 A-5:4:16 A-4:4:64 A-5:4:16 A-5:4:12 A-5:4:18 A-5:4:14 A-2:5:36 A-4:4:58 A-5:4:16 A-2:5:68 A-5:4:16 A-5:4:12 A-4:4:54'
             },
             {
-                bass: 'F-1:1:68 . . . F-1:1:44 . . . G-1:1:64 . . D-1:1:48 . F-1:1:54 . . .',
-                lead: 'F-4:2:32 . . . . . . A-4:2:24 . . . . . C-4:2:28 . . .',
-                arp: 'C-3:3:12 . . . . . F-3:3:08 . . . . . D-3:3:10 . . .'
+                bass: 'F-1:1:76 . . . F-1:1:68 . . . G-1:1:72 . . . D-1:1:54 . . .',
+                lead: 'F-4:2:26 . . . . . . . A-4:2:18 . . . . . . C-4:2:22 .',
+                arp: 'C-2:3:10 . . . . . . . F-2:3:06 . . . . . . .',
+                drums: 'A-2:5:68 A-5:4:16 A-5:4:12 A-5:4:14 A-4:4:60 A-5:4:14 A-5:4:10 A-5:4:16 A-5:4:12 A-2:5:32 A-4:4:54 A-5:4:14 A-2:5:64 A-5:4:14 A-5:4:10 A-4:4:50'
             },
             {
-                bass: 'A-1:1:76 . . A-1:1:42 . A-1:1:70 . . E-1:1:56 . A-1:1:74 . . A-1:1:46 . E-1:1:50 . .',
-                lead: 'A-5:2:44 . . Eb5:2:34 . . . A-4:2:38 . . G-4:2:30 . . C-5:2:36 . . A-4:2:40',
-                arp: 'A-3:3:16 . . E-3:3:10 . . A-3:3:14 . . E-3:3:08 . Bb3:3:12 . . E-3:3:08 .'
+                bass: 'A-1:1:84 . . . A-1:1:74 . . E-1:1:62 . A-1:1:80 . . . A-1:1:50 . E-1:1:56 .',
+                lead: 'A-5:2:38 . . . Eb5:2:28 . . . A-4:2:32 . . . G-4:2:24 . . C-5:2:30 .',
+                arp: 'A-2:3:14 . . . E-2:3:08 . . . A-2:3:12 . . . Bb2:3:10 . . .',
+                drums: 'A-2:5:76 A-5:4:18 A-5:4:14 A-5:4:16 A-4:4:66 A-5:4:16 A-4:4:22 A-5:4:18 A-5:4:14 A-2:5:40 A-4:4:60 A-5:4:16 A-2:5:72 A-5:4:16 A-4:4:24 A-4:4:56'
             }
         ],
         // NIGHTRUN — darksynth / neon-highway (Carpenter Brut–adjacent, original name).
@@ -34194,30 +34493,33 @@ var VFTrackerThemes = {
     },
 
     /**
-     * Amen-chop 16-step break (Jungle) — denser ragga chops.
-     * k=kick, s=snare, h=hat, r=half-row roll.
+     * Amen-chop 16-step (Jungle) — classic Amen Brother skeleton + ragga rolls.
+     * k=kick, s=snare, h=hat, r=half-row snare roll.
      */
     amenBreak: [
-        { k: 1 }, { h: 0.5, r: 0.65 }, { h: 0.8 }, { k: 0.6, h: 0.35 },
-        { s: 1 }, { h: 0.45 }, { s: 0.7, r: 0.85 }, { k: 0.75 },
-        { h: 0.6 }, { k: 0.65, h: 0.3 }, { s: 1, r: 0.75 }, { h: 0.65 },
-        { k: 1 }, { s: 0.85, r: 0.95 }, { h: 0.8, r: 0.4 }, { s: 1 }
+        { k: 1 }, { h: 0.45 }, { s: 0.55, h: 0.5 }, { k: 0.75, h: 0.35 },
+        { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.85 }, { k: 0.8, h: 0.3 },
+        { h: 0.5 }, { k: 0.85, h: 0.35 }, { s: 1, r: 0.7 }, { h: 0.55, s: 0.3 },
+        { k: 1 }, { s: 0.9, r: 0.95 }, { k: 0.55, h: 0.6 }, { s: 1 }
     ],
 
-    /** Two-step / rolling DnB break — clear kick-snare, rolling hats. */
+    /**
+     * Two-step DnB — kick on 1+3, snare on 2+4, rolling hats, sparse ghosts.
+     * Half-time pressure: space between anchors, not Amen mush.
+     */
     dnbBreak: [
         { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
-        { s: 1 }, { h: 0.45 }, { k: 0.6, h: 0.35 }, { h: 0.55 },
-        { h: 0.4 }, { h: 0.6 }, { s: 0.95 }, { h: 0.45 },
-        { k: 1 }, { h: 0.5 }, { h: 0.4, r: 0.25 }, { s: 0.8 }
+        { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.22 }, { h: 0.5 },
+        { k: 0.95 }, { h: 0.5 }, { h: 0.38 }, { h: 0.48 },
+        { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.2 }, { h: 0.42 }
     ],
 
     /** Legacy hybrid map (kept for older callers). */
     jungleDnbBreak: [
-        { k: 1 }, { h: 0.45, r: 0.5 }, { h: 0.65 }, { k: 0.5 },
-        { s: 1 }, { h: 0.4 }, { k: 0.55, r: 0.4 }, { h: 0.5 },
-        { h: 0.45 }, { k: 0.6 }, { s: 1, r: 0.6 }, { h: 0.55 },
-        { k: 0.95 }, { h: 0.45 }, { s: 0.75, r: 0.55 }, { s: 0.9 }
+        { k: 1 }, { h: 0.45 }, { s: 0.4, h: 0.5 }, { k: 0.65 },
+        { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.75 }, { k: 0.7, h: 0.3 },
+        { h: 0.5 }, { k: 0.75 }, { s: 1, r: 0.7 }, { h: 0.55 },
+        { k: 1 }, { s: 0.85, r: 0.8 }, { h: 0.55 }, { s: 0.95 }
     ],
 
     /**
@@ -34353,9 +34655,9 @@ var VFTrackerThemes = {
     },
 
     /**
-     * Light STYLE colour on an authored cell — song stays intact.
-     * Bass / lead / arp: keep note + timing; only nudge velocity.
-     * Drums: blend toward style kit velocity at high AMOUNT (never replace groove).
+     * STYLE colour on an authored cell — pitches stay on the planet hook.
+     * Jungle/Amen/DnB: break kit owns drums (silence GB kit); lead gets
+     * ragga chops / two-step space so it doesn't fight the Amen.
      * @param {number} styleAmount 0..1 (AMOUNT fader)
      * @returns {object|null} cell to trigger, or null for rest
      */
@@ -34363,17 +34665,24 @@ var VFTrackerThemes = {
         const mag = Math.max(0, Math.min(1, Number(styleAmount) || 0));
         if (!(Number(themeIndex) > 0) || mag < 0.03) return authoredCell || null;
 
+        const id = this.idOf(themeIndex);
+        const jungle = id === 'jungle_dnb' || id === 'amen';
+        const dnb = id === 'dnb' || id === 'reese' || id === 'neuro';
+        const heavy = jungle || dnb;
         const styleCell = this.cellAt(themeIndex, patternIndex, rowIndex, channel);
+        const row = Math.abs(rowIndex | 0) % 16;
 
-        // Drums: keep authored hits; borrow style velocity when both hit.
+        // Drums: Jungle/DnB — mute authored GB kit so Amen/two-step owns the groove.
         if (channel === 3) {
+            if (heavy && mag > 0.28) return null;
             if (!authoredCell || !authoredCell.note || authoredCell.note === 'OFF') {
-                // Only at high AMOUNT, fill a rest with a soft style kit tick.
-                if (mag > 0.7 && styleCell && styleCell.note && styleCell.note !== 'OFF') {
+                const fillAt = heavy ? 0.38 : 0.7;
+                if (mag > fillAt && styleCell && styleCell.note && styleCell.note !== 'OFF') {
                     return {
                         note: styleCell.note,
                         inst: styleCell.inst || 4,
-                        vol: Math.max(6, Math.min(28, Math.round((styleCell.vol != null ? styleCell.vol : 20) * 0.45)))
+                        vol: Math.max(6, Math.min(heavy ? 36 : 28, Math.round(
+                            (styleCell.vol != null ? styleCell.vol : 20) * (heavy ? 0.62 : 0.45))))
                     };
                 }
                 return authoredCell || null;
@@ -34384,23 +34693,48 @@ var VFTrackerThemes = {
                 return {
                     note: authoredCell.note,
                     inst: authoredCell.inst || styleCell.inst || 5,
-                    vol: Math.max(8, Math.min(56, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
+                    vol: Math.max(8, Math.min(60, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
                 };
             }
             return authoredCell;
         }
 
-        // Melodic channels: never move pitches or timing — only gentle velocity tint.
         if (!authoredCell || !authoredCell.note) return authoredCell || null;
         if (authoredCell.note === 'OFF') return authoredCell;
-        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') return authoredCell;
+
+        // Lead: Jungle chops / DnB space — drop cluttered hits so the break breathes.
+        if (channel === 1 && heavy && mag > 0.35) {
+            const drop = jungle
+                ? (row % 4 === 1 || row % 4 === 3) && mag > 0.45
+                : (row % 2 === 1) || (dnb && row % 4 === 2 && mag > 0.55);
+            if (drop) return null;
+        }
+        // Arp: thin under jungle/dnb so sub + kit stay clear.
+        if (channel === 2 && heavy && mag > 0.4 && (row % 2 === 1 || (dnb && row % 4 !== 0))) {
+            return null;
+        }
+
+        // Velocity tint from STYLE bank when both hit.
+        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') {
+            if (!heavy) return authoredCell;
+            const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+            const boost = channel === 0 ? 1 + mag * 0.2 : channel === 1 ? (1 - mag * 0.15) : (1 - mag * 0.25);
+            return {
+                note: authoredCell.note,
+                inst: authoredCell.inst || 1,
+                vol: Math.max(12, Math.min(60, Math.round(aVol * boost)))
+            };
+        }
         const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
         const sVol = styleCell.vol != null ? styleCell.vol : aVol;
-        const tint = aVol + (sVol - aVol) * mag * 0.35;
+        const tintAmt = heavy
+            ? (channel === 0 ? 0.65 : channel === 1 ? 0.35 : 0.25)
+            : 0.35;
+        const tint = aVol + (sVol - aVol) * mag * tintAmt;
         return {
             note: authoredCell.note,
             inst: authoredCell.inst || 1,
-            vol: Math.max(16, Math.min(56, Math.round(tint)))
+            vol: Math.max(heavy && channel === 0 ? 14 : 14, Math.min(60, Math.round(tint)))
         };
     }
 };
@@ -34494,26 +34828,26 @@ var VFTrackerVoices = {
             deep: { wave: 'triangle', volume: 0.9, attack: 0.002, decay: 0.08, sustain: 0.8, release: 0.2, filter: 360 }
         },
         lead: {
-            pulse: { wave: 'square', volume: 0.3, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
-            square: { wave: 'square', volume: 0.34, attack: 0.001, decay: 0.04, sustain: 0.36, release: 0.07, filter: 2800 },
-            saw: { wave: 'sawtooth', volume: 0.28, attack: 0.001, decay: 0.06, sustain: 0.3, release: 0.09, filter: 2200 },
-            tri: { wave: 'triangle', volume: 0.4, attack: 0.001, decay: 0.05, sustain: 0.4, release: 0.1, filter: 2600 },
-            bell: { wave: 'sine', volume: 0.45, attack: 0.001, decay: 0.12, sustain: 0.15, release: 0.18, filter: 3200 },
-            sine: { wave: 'sine', volume: 0.42, attack: 0.002, decay: 0.06, sustain: 0.38, release: 0.12, filter: 2800 },
-            chip: { wave: 'square', volume: 0.32, attack: 0.001, decay: 0.02, sustain: 0.28, release: 0.04, filter: 4000 },
-            soft: { wave: 'triangle', volume: 0.36, attack: 0.004, decay: 0.08, sustain: 0.34, release: 0.14, filter: 1800 },
-            growl: { wave: 'sawtooth', volume: 0.3, attack: 0.002, decay: 0.1, sustain: 0.28, release: 0.12, filter: 1400 }
+            pulse: { wave: 'square', volume: 0.46, attack: 0.001, decay: 0.05, sustain: 0.36, release: 0.08, filter: 2600 },
+            square: { wave: 'square', volume: 0.48, attack: 0.001, decay: 0.04, sustain: 0.38, release: 0.07, filter: 2800 },
+            saw: { wave: 'sawtooth', volume: 0.4, attack: 0.001, decay: 0.06, sustain: 0.34, release: 0.09, filter: 2200 },
+            tri: { wave: 'triangle', volume: 0.5, attack: 0.001, decay: 0.05, sustain: 0.42, release: 0.1, filter: 2600 },
+            bell: { wave: 'sine', volume: 0.52, attack: 0.001, decay: 0.12, sustain: 0.18, release: 0.18, filter: 3200 },
+            sine: { wave: 'sine', volume: 0.5, attack: 0.002, decay: 0.06, sustain: 0.4, release: 0.12, filter: 2800 },
+            chip: { wave: 'square', volume: 0.46, attack: 0.001, decay: 0.02, sustain: 0.3, release: 0.04, filter: 4000 },
+            soft: { wave: 'triangle', volume: 0.44, attack: 0.004, decay: 0.08, sustain: 0.36, release: 0.14, filter: 1800 },
+            growl: { wave: 'sawtooth', volume: 0.42, attack: 0.002, decay: 0.1, sustain: 0.3, release: 0.12, filter: 1400 }
         },
         arp: {
-            pulse: { wave: 'square', volume: 0.58, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.05 },
-            square: { wave: 'square', volume: 0.62, attack: 0.001, decay: 0.03, sustain: 0.42, release: 0.05, filter: 3600 },
-            tri: { wave: 'triangle', volume: 0.6, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.06, filter: 2800 },
-            pluck: { wave: 'square', volume: 0.58, attack: 0.001, decay: 0.08, sustain: 0.12, release: 0.04, filter: 3000 },
-            soft: { wave: 'sine', volume: 0.5, attack: 0.002, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2200 },
-            saw: { wave: 'sawtooth', volume: 0.52, attack: 0.001, decay: 0.04, sustain: 0.34, release: 0.05, filter: 3200 },
-            sine: { wave: 'sine', volume: 0.48, attack: 0.001, decay: 0.04, sustain: 0.3, release: 0.07, filter: 2600 },
-            bell: { wave: 'sine', volume: 0.54, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.12, filter: 3800 },
-            chirp: { wave: 'square', volume: 0.5, attack: 0.001, decay: 0.015, sustain: 0.08, release: 0.03, filter: 4500 }
+            pulse: { wave: 'square', volume: 0.34, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05, filter: 2400 },
+            square: { wave: 'square', volume: 0.36, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05, filter: 3200 },
+            tri: { wave: 'triangle', volume: 0.34, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.06, filter: 2600 },
+            pluck: { wave: 'square', volume: 0.32, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.04, filter: 2800 },
+            soft: { wave: 'sine', volume: 0.3, attack: 0.002, decay: 0.05, sustain: 0.24, release: 0.08, filter: 2000 },
+            saw: { wave: 'sawtooth', volume: 0.3, attack: 0.001, decay: 0.04, sustain: 0.26, release: 0.05, filter: 2800 },
+            sine: { wave: 'sine', volume: 0.28, attack: 0.001, decay: 0.04, sustain: 0.22, release: 0.07, filter: 2400 },
+            bell: { wave: 'sine', volume: 0.32, attack: 0.001, decay: 0.1, sustain: 0.08, release: 0.12, filter: 3400 },
+            chirp: { wave: 'square', volume: 0.28, attack: 0.001, decay: 0.015, sustain: 0.06, release: 0.03, filter: 4000 }
         },
         drums: {
             kit: null,
@@ -35432,7 +35766,7 @@ var VFTrackerManager = class VFTrackerManager {
         });
     }
 
-    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-2 user fine-tune multiplier. */
+    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-3 user fine-tune multiplier. */
     setChannelVolume(ch, v) {
         if (this.player && this.player.setChannelVolume) this.player.setChannelVolume(ch, v);
         (this._outgoing || []).forEach((p) => {
@@ -35697,10 +36031,11 @@ var VFTrackerManager = class VFTrackerManager {
             clearTimeout(player._tempoNotifyTimer);
             player._tempoNotifyTimer = null;
         }
+        // Slightly longer debounce — mid-drag reanchors were swallowing the mix.
         player._tempoNotifyTimer = setTimeout(() => {
             player._tempoNotifyTimer = null;
             try { player.notifyTempoChanged(); } catch (e) { /* ignore */ }
-        }, 70);
+        }, 110);
     }
 
     setTempoScale(scale) {
@@ -35763,10 +36098,10 @@ var VFTrackerManager = class VFTrackerManager {
         target.playbackBpm = playbackBpm;
         target.jungleAmount = jungle;
         target.themeIndex = theme;
-        target.channelMixBase = ((src && src.channelMixBase) || [1.05, 0.55, 1.55, 1.15]).slice();
-        target.channelMixJungle = ((src && src.channelMixJungle) || [1.25, 0.38, 1.05, 1.55]).slice();
-        target.channelMixDnb = ((src && src.channelMixDnb) || [1.45, 0.32, 0.95, 1.4]).slice();
-        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.35, 0.35, 1.0, 1.5]).slice();
+        target.channelMixBase = ((src && src.channelMixBase) || [1.0, 1.28, 0.68, 1.05]).slice();
+        target.channelMixJungle = ((src && src.channelMixJungle) || [1.38, 0.3, 0.95, 1.72]).slice();
+        target.channelMixDnb = ((src && src.channelMixDnb) || [1.58, 0.26, 0.82, 1.38]).slice();
+        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.45, 0.28, 0.9, 1.62]).slice();
         target.channelMixElektro = ((src && src.channelMixElektro) || [1.4, 0.34, 1.05, 1.35]).slice();
         target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.15, 0.48, 1.35, 1.1]).slice();
         target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.3, 0.62, 1.0, 1.35]).slice();
@@ -35870,6 +36205,14 @@ var VFTrackerManager = class VFTrackerManager {
             fadeIn: (wasPlaying || hasOutgoing || doFade) ? fadeIn : 0,
             onEnded: opts && opts.onEnded
         });
+        // Re-stamp live faders/voices onto the (possibly new) player so AUDIO
+        // moves keep working immediately after a track swap / crossfade.
+        if (typeof volumeControlsManager !== 'undefined') {
+            if (volumeControlsManager.applyChannelVolumes) volumeControlsManager.applyChannelVolumes();
+            if (volumeControlsManager.applyChannelVoices) volumeControlsManager.applyChannelVoices();
+        } else if (this.player && this.player.applyChannelBusGains) {
+            this.player.applyChannelBusGains();
+        }
         // Track is loaded — finish STYLE + BPM adaptation against this song's
         // authored BPM (same result as nudging MUSIC BPM / STYLE in AUDIO).
         this._applyStylePlaybackForTrack();
@@ -37684,7 +38027,7 @@ extendClass(PlayerManager, {
 var playerManager = new PlayerManager();
 
 
-/* --- js/game/bullets/core.js?v=voxel-gb-1 --- */
+/* --- js/game/bullets/core.js?v=laser-flight-73t --- */
 "use strict";
 
 // Bullet management
@@ -37737,6 +38080,13 @@ var BulletManager = class BulletManager {
         b._ignoreObstacle = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
+        b._vxAcc = 0;
+        b._vyAcc = 0;
+        b._snapTrueX = undefined;
+        b._snapTrueY = undefined;
+        b._snapLastX = undefined;
+        b._snapLastY = undefined;
+        b._terrainRow = undefined;
         b.lightRadius = undefined;
         b.lightIntensity = undefined;
         b.lightColor = undefined;
@@ -37770,6 +38120,13 @@ var BulletManager = class BulletManager {
         b._ignoreObstacle = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
+        b._vxAcc = 0;
+        b._vyAcc = 0;
+        b._snapTrueX = undefined;
+        b._snapTrueY = undefined;
+        b._snapLastX = undefined;
+        b._snapLastY = undefined;
+        b._terrainRow = undefined;
         for (const k in fields) {
             if (Object.prototype.hasOwnProperty.call(fields, k)) b[k] = fields[k];
         }
@@ -37943,8 +38300,10 @@ var BulletManager = class BulletManager {
         const enemySpeed = ui ? ui.getShotSpeedMul('enemy') : 1;
         const bossSpeed = ui ? ui.getShotSpeedMul('boss') : 1;
 
-        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
-        const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
+        // Shots move on continuous coords (same as the pilot). Lattice stepMove
+        // froze beams for whole frames whenever cell > per-frame travel — they
+        // looked stuck mid-lane and their sweep stayed 0 so clashes/hits missed.
+        // VOXEL still snaps them at draw time via fillCombatRect / drawBullet.
 
         // Update player bullets
         for (let i = this.bullets.length - 1; i >= 0; i--) {
@@ -37965,11 +38324,8 @@ var BulletManager = class BulletManager {
                 bdy = -bullet.speed * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
-            if (voxelMove) cv.stepMove(bullet, bdx, bdy);
-            else {
-                bullet.x += bdx;
-                bullet.y += bdy;
-            }
+            bullet.x += bdx;
+            bullet.y += bdy;
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
@@ -37998,11 +38354,8 @@ var BulletManager = class BulletManager {
                 bdy = bullet.speed * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
-            if (voxelMove) cv.stepMove(bullet, bdx, bdy);
-            else {
-                bullet.x += bdx;
-                bullet.y += bdy;
-            }
+            bullet.x += bdx;
+            bullet.y += bdy;
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
@@ -49817,11 +50170,14 @@ var ExplosionSystem = class ExplosionSystem {
         const cell = cv && cv.cell ? cv.cell() : null;
         // Fine bursts (large obstacles): half-cell pixels + tighter ring step.
         const fine = !!burst.fineRing;
+        // Floor brush size: Global Pixel Size 1/2 makes combat cells << 1 and would
+        // explode ring/sparkle fill cost without changing the on-screen look much.
+        const brushFloor = 1;
         const pixelSize = fine
-            ? Math.max(1, cell ? cell * 0.5 : 1.5)
-            : (cell || (baseSize < 20 ? 2 : 3));
-        const snap = fine && cell ? Math.max(1, cell * 0.5) : (cell || 1);
-        const explosionRadius = Math.floor(explosionSize / pixelSize);
+            ? Math.max(brushFloor, cell ? cell * 0.5 : 1.5)
+            : Math.max(brushFloor, cell || (baseSize < 20 ? 2 : 3));
+        const snap = fine && cell ? Math.max(brushFloor, cell * 0.5) : Math.max(brushFloor, cell || 1);
+        const explosionRadius = Math.min(48, Math.floor(explosionSize / pixelSize));
         const angleStep = fine ? 0.12 : 0.2;
 
         // Theme colours once per burst frame, not per ring pixel.
@@ -62857,8 +63213,12 @@ var RenderManager = class RenderManager {
         const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
         const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
         // ~240×300 @2× ≈ 288k; tighter default so CSS upscales instead of GPU fill.
-        const maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
+        let maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
         if (gp > 0) {
+            // gp 1/2 push the densest backing (shown/(gp·lw)). Keep fill cheap via CSS
+            // nearest-neighbor upscale — wall-clock stutter was paint/composite, not JS.
+            if (gp <= 1) maxPx = Math.min(maxPx, 100000);
+            else if (gp <= 2) maxPx = Math.min(maxPx, 140000);
             const cv = document.getElementById('gameCanvas');
             // Ancestors (body stage scale, GUI zoom) are CSS transforms: clientWidth ignores them,
             // so measure the on-screen width to make one art pixel == gp real screen px.
@@ -63050,8 +63410,12 @@ var RenderManager = class RenderManager {
         if (loader) {
             loader.deviceScale = k;
             loader.voxelDetail = this.getCombatVoxelDetail();
-            loader.globalVoxelCell = this.getCombatVoxelCell();
-            if (k < 1) { loader.voxelDetail = 1; loader.globalVoxelCell = 1 / k; }
+            // Global Pixel Size still snaps FX via getCombatVoxelCell, but must NOT force
+            // FLAT ships onto the voxel fillRect path (gp 1/2 made every hull a GPU sink).
+            const voxelShips = typeof uiAppearanceManager !== 'undefined'
+                && String(uiAppearanceManager.shipRenderStyle || '').toUpperCase() === 'VOXEL';
+            loader.globalVoxelCell = voxelShips ? this.getCombatVoxelCell() : null;
+            if (voxelShips && k < 1) { loader.voxelDetail = 1; loader.globalVoxelCell = 1 / k; }
         }
         try {
             return this.renderFrame(c, width || lw, height || lh);
@@ -63249,16 +63613,17 @@ var RenderManager = class RenderManager {
                     const cell = this.getCombatVoxelCell();
                     ctx.save();
                     if (cell) {
-                        // VOXEL: dashed lattice beam instead of soft stroke.
+                        // VOXEL / GP lattice beam — cap steps so gp 1/2 (tiny cells) stay cheap.
                         const dx = x1 - x0;
                         const dy = y1 - y0;
                         const len = Math.hypot(dx, dy) || 1;
-                        const steps = Math.max(1, Math.floor(len / cell));
+                        const brush = Math.max(cell, len / 64);
+                        const steps = Math.max(1, Math.min(64, Math.floor(len / brush)));
                         for (let i = 0; i <= steps; i += 2) {
                             const t = i / steps;
                             this.fillCombatRect(
-                                ctx, x0 + dx * t - cell / 2, y0 + dy * t - cell / 2,
-                                cell, cell, beamColor, 0.7
+                                ctx, x0 + dx * t - brush / 2, y0 + dy * t - brush / 2,
+                                brush, brush, beamColor, 0.7
                             );
                         }
                     } else {
@@ -65386,7 +65751,7 @@ extendClass(RenderManager, {
 });
 
 
-/* --- js/ui/render.js?v=voxel-bg-1 --- */
+/* --- js/ui/render.js?v=laser-flight-73t --- */
 "use strict";
 
 // RenderManager is defined in render/core.js and extended by the other files in render/,
@@ -65484,12 +65849,8 @@ window.combatVoxels = {
             const sides = enemyManager.sideEnemies;
             if (sides) for (let i = 0; i < sides.length; i++) snap(sides[i]);
         }
-        if (typeof bulletManager !== 'undefined') {
-            const pb = bulletManager.bullets;
-            const eb = bulletManager.enemyBullets;
-            if (pb) for (let i = 0; i < pb.length; i++) snap(pb[i]);
-            if (eb) for (let i = 0; i < eb.length; i++) snap(eb[i]);
-        }
+        // Shots fly on continuous coords (bullets/core.js); draw path snaps them.
+        // Lattice-snapping here froze beams whenever cell > per-frame travel.
         if (typeof obstacleManager !== 'undefined') {
             const obs = obstacleManager.obstacles;
             if (obs) for (let i = 0; i < obs.length; i++) snap(obs[i]);
@@ -73822,7 +74183,40 @@ extendClass(GalaxyMapManager, {
             `<span class="galaxy-map-situation-sub">TAKE ONE AT THE HANGAR MISSION BOARD</span>` +
             `</div>`;
     },
-    /** Mission modal for the situation card: what is going on here and where to go. */
+    /** Native <title> / tooltip text for a planet node (mission hint when chosen). */
+    planetNodeTitle(planetId, unlocked) {
+        if (!unlocked) return 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK';
+        const name = String(planetId || '').toUpperCase();
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return name;
+        const profile = profileManager.getActiveProfile();
+        const m = profile && profile.activeMission;
+        if (!m || String(m.planetId) !== String(planetId)) return name;
+        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return name;
+        const type = String(m.type || 'MISSION').toUpperCase();
+        return name + ' · ACTIVE MISSION · ' + type + ' — Complete the '
+            + String(m.type || 'mission').toLowerCase() + ' here.';
+    },
+
+    /** Hover tip for the navbar / ship-bar mission button. */
+    formatSituationTip(sit) {
+        if (!sit || sit.kind === 'NO ACTIVE MISSION') {
+            return {
+                head: 'NO ACTIVE MISSION',
+                body: 'TAKE ONE AT THE HANGAR MISSION BOARD'
+            };
+        }
+        const who = sit.attacker ? String(sit.attacker).toUpperCase() : '';
+        let head = sit.kind;
+        if (sit.kind === 'INVASION' || sit.kind === 'ALLY UNDER ATTACK') {
+            head = who + ' ATTACKS ' + (sit.planet || '');
+        } else if (sit.kind === 'ACTIVE MISSION') {
+            head = (sit.mission || 'MISSION') + ' · ' + (sit.planet || '');
+        }
+        const lines = [sit.objective || ''];
+        if (sit.reward) lines.push('REWARD ' + sit.reward);
+        return { head: head, body: lines.filter(Boolean).join('\n') };
+    },
+
     /** Current situation (invasion / active mission / conflict) of the player's galaxy, also without a mounted map. */
     getSituationInfo() {
         if (typeof planetConfigManager === 'undefined' || typeof profileManager === 'undefined') return null;
@@ -74205,10 +74599,12 @@ extendClass(GalaxyMapManager, {
         const sit = info && info.sit;
         const calm = !sit || sit.kind === 'NO ACTIVE MISSION';
         const accent = info && info.accent ? info.accent : 'var(--color-primary)';
+        const tip = (gm && gm.formatSituationTip) ? gm.formatSituationTip(sit) : { head: 'MISSION', body: '' };
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
         const icon = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml
             ? iconRenderer.imgHtml('navScroll', 28, 'hs-tab-pixel') : '';
         return `<button type="button" class="hs-logout-btn hs-mission-btn gm-ship-bar-mission${calm ? ' is-calm' : ''}" ` +
-            `id="gmShipBarMissionBtn" style="--mission-accent:${accent}" title="Mission" aria-label="Mission">` +
+            `id="gmShipBarMissionBtn" style="--mission-accent:${accent}" data-ui-tip-head="${esc(tip.head)}" data-ui-tip="${esc(tip.body)}" aria-label="${esc(tip.head)}">` +
             `<span class="hs-logout-icon" aria-hidden="true">${icon}</span></button>`;
     },
 
@@ -74923,7 +75319,7 @@ extendClass(GalaxyMapManager, {
             nodesHtml += `
                 <g class="gm-node ${stateClass}"
                    data-planet="${n.planetId}" data-size="${size}" transform="translate(${npt.x},${npt.y})">
-                    <title>${unlocked ? String(n.planetId).toUpperCase() : 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK'}</title>
+                    <title>${this.planetNodeTitle(n.planetId, unlocked)}</title>
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         ${(() => {
@@ -74943,6 +75339,7 @@ extendClass(GalaxyMapManager, {
                         })()}
                     </foreignObject>
                     ${this.invasionMarkerSvg ? this.invasionMarkerSvg(n.planetId, size) : ''}
+                    ${this.missionMarkerSvg ? this.missionMarkerSvg(n.planetId, size) : ''}
                     ${n.planetId === baseId ? `
                         <g class="gm-base-marker" style="--fac:${rulerAccent}">
                             <title>${String(holdings.ruler).toUpperCase()} BASE${holdings.stations.length ? ' · DESTROY ITS STATIONS TO ASSAULT IT' : ' · OPEN TO ASSAULT'}</title>
@@ -76145,6 +76542,45 @@ extendClass(GalaxyMapManager, {
         });
         return out;
     },
+    /**
+     * Sign / plaque on the planet of the pilot's chosen activeMission
+     * (hangar board or faction contract). Hover title carries the objective.
+     */
+    missionMarkerSvg(planetId, size) {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return '';
+        const p = profileManager.getActiveProfile();
+        const m = p && p.activeMission;
+        if (!m || !m.planetId || String(m.planetId) !== String(planetId)) return '';
+        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return '';
+        const cfg = (typeof planetConfigManager !== 'undefined' && planetConfigManager.getConfig)
+            ? planetConfigManager.getConfig(m.planetId) : null;
+        const planet = String((cfg && cfg.name) || m.planetId || '').toUpperCase();
+        const type = String(m.type || 'MISSION').toUpperCase();
+        const reward = Object.keys(m.reward || {}).map((k) =>
+            m.reward[k] + ' ' + (k === 'credits' ? 'CR' : k.toUpperCase())).join(' · ');
+        const objective = 'Complete the ' + String(m.type || 'mission').toLowerCase() + ' on ' + planet + '.';
+        const tip = ('ACTIVE MISSION · ' + type + ' · ' + planet
+            + ' — ' + objective
+            + (reward ? ' · REWARD ' + reward : '')).replace(/"/g, '');
+        const fStyle = m.factionId && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(m.factionId) : null;
+        const accent = (fStyle && fStyle.accent) || 'var(--color-primary)';
+        const f = size / 2 + 10;
+        const label = type.length > 10 ? 'MISSION' : type;
+        return `<g class="gm-mission-mark" style="--fac:${accent}">` +
+            `<title>${tip}</title>` +
+            // Signboard above the planet (plaque + pole).
+            `<g class="gm-mission-sign" transform="translate(0,${-(f + 18)})">` +
+            `<rect class="gm-mission-sign-board" x="-46" y="-14" width="92" height="22"/>` +
+            `<rect class="gm-mission-sign-board-in" x="-44" y="-12" width="88" height="18"/>` +
+            `<line class="gm-mission-sign-pole" x1="0" y1="8" x2="0" y2="18"/>` +
+            `<text class="gm-mission-sign-label gm-vec-text" x="0" y="2">${label}</text>` +
+            `<g class="gm-stage-anchor gm-px-only" data-r="0" transform="translate(0,2)">${this.pixelTextGroup(label, 0, 0, 'middle')}</g>` +
+            `</g>` +
+            `<circle class="gm-mission-sign-dot" cx="0" cy="${-f}" r="3"/>` +
+            `</g>`;
+    },
+
     /** "UNDER ATTACK" marker on the planet of an active invasion (invasion-scenario.js). */
     invasionMarkerSvg(planetId, size) {
         if (typeof profileManager === 'undefined' || !profileManager.getInvadedPlanetId) return '';
@@ -76403,15 +76839,18 @@ extendClass(GalaxyMapManager, {
             ? uiAppearanceManager.getGlobalPixelPx() : 0;
         if (gp > 0) {
             // Ratchet: refine when zooming in, never coarsen on zoom-out (pixels stay gp-sized).
+            // gp 1/2 hit detail 4 almost immediately (GM_PIXEL_U0·s/gp) and rebuilt stars/lines/
+            // planet icons into stutter — keep the art budget lower there.
+            const detailCap = gp <= 1 ? 2 : (gp <= 2 ? 3 : 4);
             try {
                 const s = this.mapScreenScale() || this._pxScreenScale || 0;
                 if (s > 0) {
-                    const need = Math.max(1, Math.min(4, GM_PIXEL_U0 * s / gp));
+                    const need = Math.max(1, Math.min(detailCap, GM_PIXEL_U0 * s / gp));
                     this._pxDetailPeak = Math.max(this._pxDetailPeak || 1, need);
                     return this._pxDetailPeak;
                 }
             } catch (e) { /* fall through */ }
-            return this._pxDetailPeak || 2;
+            return this._pxDetailPeak || Math.min(2, detailCap);
         }
         return zoomCurve;
     },
@@ -88944,14 +89383,11 @@ extendClass(HomeStationUI, {
         const sit = info && info.sit;
         const calm = !sit || sit.kind === 'NO ACTIVE MISSION';
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-        const who = sit && sit.attacker ? String(sit.attacker).toUpperCase() : '';
-        const head = !sit ? 'NO ACTIVE MISSION'
-            : (sit.kind === 'INVASION' || sit.kind === 'ALLY UNDER ATTACK') ? `${who} ATTACKS ${sit.planet}`
-            : (sit.kind === 'ACTIVE MISSION') ? `${sit.mission} · ${sit.planet}` : sit.kind;
-        const tip = esc(sit ? head + ' — ' + sit.objective : 'NO ACTIVE MISSION — TAKE ONE AT THE HANGAR MISSION BOARD');
+        const tip = (gm && gm.formatSituationTip) ? gm.formatSituationTip(sit)
+            : { head: 'NO ACTIVE MISSION', body: 'TAKE ONE AT THE HANGAR MISSION BOARD' };
         const accent = info && info.accent ? info.accent : 'var(--color-primary)';
         return `<button type="button" class="hs-logout-btn hs-mission-btn${calm ? ' is-calm' : ''}" id="hsMissionBtn" style="--mission-accent:${accent}" ` +
-            `data-ui-tip="${tip}" aria-label="Mission" data-nav-item>` +
+            `data-ui-tip-head="${esc(tip.head)}" data-ui-tip="${esc(tip.body)}" aria-label="${esc(tip.head)}" data-nav-item>` +
             `<span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('navScroll', 32, 'hs-tab-pixel', false)}</span></button>`;
     },
     bindMissionButton() {
@@ -115079,13 +115515,14 @@ var VolumeControlsManager = class VolumeControlsManager {
 
         if (this.channelVolumes) {
             const syncChannel = (id, valueId, vol) => {
-                const pct = Math.round(Math.max(0, Math.min(2, Number(vol) || 0)) * 100);
+                const pct = Math.round(Math.max(0, Math.min(3, Number(vol) || 0)) * 100);
                 const valueEl = document.getElementById(valueId);
                 if (valueEl) valueEl.textContent = pct + '%';
                 const slider = document.getElementById(id);
                 if (slider) {
                     slider.value = pct;
-                    slider.style.setProperty('--vol-fill', Math.min(100, pct) + '%');
+                    // Fill tracks 0–300% of the fader range (not capped at 100%).
+                    slider.style.setProperty('--vol-fill', (pct / 3) + '%');
                 }
             };
             syncChannel('musicChannelBass', 'musicChannelBassValue', this.channelVolumes[0]);
@@ -115262,7 +115699,8 @@ var VolumeControlsManager = class VolumeControlsManager {
         const idx = Number(ch);
         if (!Number.isFinite(idx) || idx < 0 || idx > 3) return;
         if (!this.channelVolumes) this.channelVolumes = [1, 1, 1, 1];
-        this.channelVolumes[idx] = Math.max(0, Math.min(2, Number(v)));
+        this.channelVolumes[idx] = Math.max(0, Math.min(3, Number(v)));
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyChannelVolumes();
         this.saveVolumes();
@@ -115285,6 +115723,7 @@ var VolumeControlsManager = class VolumeControlsManager {
         if (!this.channelVoices) this.channelVoices = ['default', 'default', 'default', 'default'];
         const id = String(voiceId || 'default');
         this.channelVoices[idx] = id;
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyChannelVoices();
         this.saveVolumes();
@@ -115420,22 +115859,66 @@ var VolumeControlsManager = class VolumeControlsManager {
             if (!Number.isFinite(this.musicVolume)) this.musicVolume = d.MUSIC;
             if (!Number.isFinite(this.musicBpm)) this.musicBpm = 132;
 
-            if (savedChannels) {
+            // Schema 4: lead was buried + voice overrides made the hook unreadable.
+            // Schema 5: drop stale STYLE bank overrides that made Jungle/DnB wrong.
+            let mixSchema = null;
+            try { mixSchema = localStorage.getItem('vf_musicMixSchema'); } catch (e) { /* ignore */ }
+            if (mixSchema !== '4' && mixSchema !== '5') {
+                this.channelVolumes = [1, 1, 1, 1];
+                this.channelVoices = ['default', 'default', 'default', 'default'];
                 try {
-                    const arr = JSON.parse(savedChannels);
-                    if (Array.isArray(arr) && arr.length === 4) {
-                        this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(2, Number(v))) : 1));
+                    localStorage.setItem('vf_channelVolumes', JSON.stringify(this.channelVolumes));
+                    localStorage.setItem('vf_channelVoices', JSON.stringify(this.channelVoices));
+                    localStorage.setItem('vf_musicMixSchema', '5');
+                    localStorage.removeItem('vf_music_theme_banks_v1');
+                } catch (e2) { /* ignore */ }
+            } else if (mixSchema === '4' || mixSchema === '5') {
+                try {
+                    localStorage.removeItem('vf_music_theme_banks_v1');
+                    localStorage.setItem('vf_musicMixSchema', '5');
+                    if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.clearBankOverrides) {
+                        VFTrackerThemes.clearBankOverrides();
                     }
-                } catch (e) { /* ignore malformed value */ }
-            }
+                } catch (e5) { /* ignore */ }
+                // One-shot: snap Jungle/DnB BPM onto style tempo (was stuck ~130).
+                if (mixSchema === '4' || localStorage.getItem('vf_musicStyleTempo') !== '1') {
+                    try { localStorage.setItem('vf_musicStyleTempo', '1'); } catch (e6) { /* ignore */ }
+                    this.bpmFollowsStyle = true;
+                }
+                if (savedChannels) {
+                    try {
+                        const arr = JSON.parse(savedChannels);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(3, Number(v))) : 1));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
+                if (savedVoices) {
+                    try {
+                        const arr = JSON.parse(savedVoices);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVoices = arr.map((v) => String(v || 'default'));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
+            } else {
+                if (savedChannels) {
+                    try {
+                        const arr = JSON.parse(savedChannels);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(3, Number(v))) : 1));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
 
-            if (savedVoices) {
-                try {
-                    const arr = JSON.parse(savedVoices);
-                    if (Array.isArray(arr) && arr.length === 4) {
-                        this.channelVoices = arr.map((v) => String(v || 'default'));
-                    }
-                } catch (e) { /* ignore malformed value */ }
+                if (savedVoices) {
+                    try {
+                        const arr = JSON.parse(savedVoices);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVoices = arr.map((v) => String(v || 'default'));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
             }
 
             this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
@@ -115453,6 +115936,14 @@ var VolumeControlsManager = class VolumeControlsManager {
             // Missing key → follow STYLE (legacy saves never recorded overrides).
             const savedFollow = localStorage.getItem('vf_musicBpmFollowsStyle');
             this.bpmFollowsStyle = savedFollow !== '0';
+            // Jungle/DnB stuck at planet tempo (~130) — re-snap when following STYLE.
+            if (this.bpmFollowsStyle !== false && this.musicTheme > 0) {
+                const pref = this.getPreferredMusicBpm(this.musicTheme);
+                if (Number.isFinite(pref) && pref > 0) {
+                    this.musicBpm = Math.max(60, Math.min(300, Math.round(pref)));
+                    this.musicSpeed = this.musicBpm / this.referenceBpm;
+                }
+            }
 
             // Schema 1: 10%/5%/20% (+ hidden ×8 music bus) → keep master 10%, raise SND/MUS.
             // Schema 2: 75%/50%/65% authored default → master 10% (quiet start until adjusted).
@@ -115559,6 +116050,29 @@ var VolumeControlsManager = class VolumeControlsManager {
         }
     }
 
+    /**
+     * Hosted / itch ZIP: AudioContext stays null until a real gesture. Slider
+     * drags ARE that gesture — open the bus and start music so STYLE/BPM/VOL
+     * changes are audible instead of silently updating localStorage.
+     */
+    wakeAudioFromUserGesture() {
+        try {
+            if (typeof soundManager !== 'undefined') {
+                if (soundManager.ensureContext) soundManager.ensureContext();
+                if (soundManager.markAudioUnlocked) soundManager.markAudioUnlocked();
+                const wantMusic = this.masterVolume > 0 && this.musicVolume > 0
+                    && (soundManager.musicEnabled !== false);
+                if (wantMusic && soundManager.ensureMusicPlaying) {
+                    soundManager.ensureMusicPlaying();
+                }
+            }
+        } catch (e) { /* optional */ }
+        try {
+            const plate = document.getElementById('vf-vol');
+            if (plate) plate.dispatchEvent(new Event('vf-vol-sync'));
+        } catch (e2) { /* optional */ }
+    }
+
     _normVol(volume) {
         return (typeof VFVolume !== 'undefined')
             ? VFVolume.normalize(volume)
@@ -115568,6 +116082,7 @@ var VolumeControlsManager = class VolumeControlsManager {
     setMasterVolume(volume) {
         this.masterVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -115576,6 +116091,7 @@ var VolumeControlsManager = class VolumeControlsManager {
     setSoundVolume(volume) {
         this.soundVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -115584,6 +116100,7 @@ var VolumeControlsManager = class VolumeControlsManager {
     setMusicVolume(volume) {
         this.musicVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -115594,6 +116111,7 @@ var VolumeControlsManager = class VolumeControlsManager {
         this.musicSpeed = this.musicBpm / this.referenceBpm;
         // User (or snap) owns absolute tempo until STYLE is picked again.
         this.bpmFollowsStyle = false;
+        this.wakeAudioFromUserGesture();
         this.applyMusicBpm();
         this.saveVolumes();
     }
@@ -115640,6 +116158,7 @@ var VolumeControlsManager = class VolumeControlsManager {
         let t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (t < 0.03) t = 0;
         this.jungleAmount = t;
+        this.wakeAudioFromUserGesture();
         this.applyJungleAmount();
         this.saveVolumes();
     }
@@ -115656,6 +116175,7 @@ var VolumeControlsManager = class VolumeControlsManager {
             this.jungleAmount = 0.4;
             this.applyJungleAmount();
         }
+        this.wakeAudioFromUserGesture();
         this.applyMusicTheme();
         // Adapt heard tempo to STYLE × current song (keeps map/victory musical).
         if (prev !== next) {
@@ -115686,6 +116206,7 @@ var VolumeControlsManager = class VolumeControlsManager {
         if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = 1.4;
         if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = 1.4;
         try { localStorage.setItem('vf_musicCrossfade', '1.4'); } catch (e) { /* ignore */ }
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();

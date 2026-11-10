@@ -1056,6 +1056,17 @@ be reviewed or reverted independently.
 | 73O | Ship anatomy + hangar | Floating anatomy modal from ship thumbs; station/hangar layout, slot dots, inventory polish |
 | 73P | Early hub gate | LAUNCH always visible; Hangar/Factions/Wiki after planet clear; Dev Mode italic preview + toggle anim |
 | 73Q | Release 1.14.11 | Deploy ZIP `.claude/GLXEE-V1.14.11.zip` — anatomy modal, hub gate, hangar polish (73O–73P) |
+| 73R | Pixel Size 1/2 perf | Tighter playfield backing at gp 1/2; FLAT ships stay sprites under GP; map detail cap; cheaper beams/bursts |
+| 73S | Jungle / DnB punch | JUNGLE = Amen chops + ragga twin; DNB = two-step kit + half-time Reese sub; stronger breaks/mix/BPM |
+| 73T | Jungle / DnB kit body | Kick pitch-drop, snare/hat filters, bass envelope morph, style drum strands, louder break oneshots |
+| 73T | Laser flight fix | Shots move on continuous coords (no VOXEL stepMove freeze); clear pooled lattice acc; snap only at draw |
+| 73U | Hauptmelodie clarity | Sparse GB hooks again; lead above arp; soften P1 clashes (Bb/F, no tritones) |
+| 73V | Melody mix fix | Lead bus in front (was 0.55 vs arp 1.55); PLANET ignores AMOUNT morph; reset buried voice overrides |
+| 73W | New Hauptmelodien | Rewrite planet/menu hooks as call–answer phrases (no triad walks); distinct rhythm per planet |
+| 73X | Jungle / DnB fix | Amen/two-step own drums (no GB double-kit); Reese/chop morph; clear stale bank overrides |
+| 73Y | Voice faders 300% | BASS/LEAD/ARP/DRUMS volume sliders (settings + FX remote) go to 300% |
+| 73Z | Live drums / voices | Channel buses on fader move; poly drums; voice pick keeps wave under STYLE morph; instant revoice; FX vol won't wipe dropdown |
+| 74A | Fast BPM body | Tempo reanchor keeps hook + cancels stale oneshots; ADSR/gates scale with row; softer note cuts |
 
 The wave commit convention is:
 

@@ -253,7 +253,7 @@ class VFTrackerManager {
         });
     }
 
-    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-2 user fine-tune multiplier. */
+    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-3 user fine-tune multiplier. */
     setChannelVolume(ch, v) {
         if (this.player && this.player.setChannelVolume) this.player.setChannelVolume(ch, v);
         (this._outgoing || []).forEach((p) => {
@@ -518,10 +518,11 @@ class VFTrackerManager {
             clearTimeout(player._tempoNotifyTimer);
             player._tempoNotifyTimer = null;
         }
+        // Slightly longer debounce — mid-drag reanchors were swallowing the mix.
         player._tempoNotifyTimer = setTimeout(() => {
             player._tempoNotifyTimer = null;
             try { player.notifyTempoChanged(); } catch (e) { /* ignore */ }
-        }, 70);
+        }, 110);
     }
 
     setTempoScale(scale) {
@@ -584,10 +585,10 @@ class VFTrackerManager {
         target.playbackBpm = playbackBpm;
         target.jungleAmount = jungle;
         target.themeIndex = theme;
-        target.channelMixBase = ((src && src.channelMixBase) || [1.05, 0.55, 1.55, 1.15]).slice();
-        target.channelMixJungle = ((src && src.channelMixJungle) || [1.25, 0.38, 1.05, 1.55]).slice();
-        target.channelMixDnb = ((src && src.channelMixDnb) || [1.45, 0.32, 0.95, 1.4]).slice();
-        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.35, 0.35, 1.0, 1.5]).slice();
+        target.channelMixBase = ((src && src.channelMixBase) || [1.0, 1.28, 0.68, 1.05]).slice();
+        target.channelMixJungle = ((src && src.channelMixJungle) || [1.38, 0.3, 0.95, 1.72]).slice();
+        target.channelMixDnb = ((src && src.channelMixDnb) || [1.58, 0.26, 0.82, 1.38]).slice();
+        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.45, 0.28, 0.9, 1.62]).slice();
         target.channelMixElektro = ((src && src.channelMixElektro) || [1.4, 0.34, 1.05, 1.35]).slice();
         target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.15, 0.48, 1.35, 1.1]).slice();
         target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.3, 0.62, 1.0, 1.35]).slice();
@@ -691,6 +692,14 @@ class VFTrackerManager {
             fadeIn: (wasPlaying || hasOutgoing || doFade) ? fadeIn : 0,
             onEnded: opts && opts.onEnded
         });
+        // Re-stamp live faders/voices onto the (possibly new) player so AUDIO
+        // moves keep working immediately after a track swap / crossfade.
+        if (typeof volumeControlsManager !== 'undefined') {
+            if (volumeControlsManager.applyChannelVolumes) volumeControlsManager.applyChannelVolumes();
+            if (volumeControlsManager.applyChannelVoices) volumeControlsManager.applyChannelVoices();
+        } else if (this.player && this.player.applyChannelBusGains) {
+            this.player.applyChannelBusGains();
+        }
         // Track is loaded — finish STYLE + BPM adaptation against this song's
         // authored BPM (same result as nudging MUSIC BPM / STYLE in AUDIO).
         this._applyStylePlaybackForTrack();

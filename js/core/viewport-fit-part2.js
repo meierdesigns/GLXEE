@@ -356,6 +356,9 @@
                 if ((d.auMusic === 'ON') !== !!smSettings.settings.musicEnabled) smSettings.toggleMusic();
                 else if (typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
             } else if (d.auMusic && typeof soundManager !== 'undefined') soundManager.setMusicEnabled(d.auMusic === 'ON');
+            if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.wakeAudioFromUserGesture) {
+                volumeControlsManager.wakeAudioFromUserGesture();
+            }
         }
         else if (d.debugAction === 'reload') window.location.reload();
         else if (d.debugAction === 'clear') {
@@ -477,7 +480,12 @@
             return;
         }
         const ui = getUi();
-        if (!ui) return;
+        // AUDIO faders must still work when uiAppearanceManager failed to boot
+        // (partial hosted ZIP load) — they only need volumeControlsManager.
+        const sl0 = inp.dataset && inp.dataset.sl;
+        const audioOnly = (sl0 && String(sl0).indexOf('au:') === 0)
+            || (inp.dataset && inp.dataset.voiceCh != null);
+        if (!ui && !audioOnly) return;
         if (inp.dataset.frColor) {
             const frame = document.getElementById('vf-bezel');
             const cur = vfs.editFaction || frame.getAttribute('data-faction');
@@ -534,6 +542,7 @@
             return;
         }
         if (inp.dataset.ix) {
+            if (!ui) return;
             const opts = inp.dataset.opts.split('|');
             const v = opts[+inp.value];
             inp.style.setProperty('--look-fill', (+inp.value / Math.max(1, opts.length - 1) * 100) + '%');
@@ -558,17 +567,24 @@
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
         inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
+        // Voice rows: next sibling is <select>, not <output> — never wipe the dropdown.
         if (!(parts[0] === 'au' && (parts[1] === 'jungle' || parts[1] === 'theme' || parts[1] === 'bpm' || parts[1] === 'speed'))) {
-            inp.nextElementSibling.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
+            const out = (inp.classList && inp.classList.contains('vf-fx-voice-vol')
+                && inp.closest('.vf-fx-voice-row')
+                && inp.closest('.vf-fx-voice-row').querySelector('output'))
+                || (inp.nextElementSibling && inp.nextElementSibling.tagName === 'OUTPUT'
+                    ? inp.nextElementSibling : null);
+            if (out) out.textContent = (parts[0] === 'fx' && v === 0) ? 'OFF' : v + inp.dataset.unit;
         }
-        if (parts[0] === 'fx') ui.setFx(parts[1], v + '%');
+        if (parts[0] === 'fx') { if (ui) ui.setFx(parts[1], v + '%'); }
         else if (parts[0] === 'sz') {
+            if (!ui) return;
             ui.setSizePx(parts[1], parts[2], v);
             // Station FLEETS preview uses the same sizes: rebuild it live.
             refreshFleetPreviewLive();
         }
-        else if (parts[0] === 'sp') ui.setSizePct(parts[1], v);
-        else if (parts[0] === 'ss') ui.setShotSpeedPct(parts[1], v);
+        else if (parts[0] === 'sp') { if (ui) ui.setSizePct(parts[1], v); }
+        else if (parts[0] === 'ss') { if (ui) ui.setShotSpeedPct(parts[1], v); }
         else if (parts[0] === 'df') {
             if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }
         }
@@ -643,11 +659,14 @@
                 if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = sec;
                 if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = sec;
                 try { localStorage.setItem('vf_musicCrossfade', String(sec)); } catch (err) { /* ignore */ }
+                if (volumeControlsManager.wakeAudioFromUserGesture) {
+                    volumeControlsManager.wakeAudioFromUserGesture();
+                }
             } else if (parts[1] === 'bass' || parts[1] === 'lead' || parts[1] === 'arp' || parts[1] === 'drums') {
                 // Legacy volume mix sliders (kept for older plate HTML).
                 const chMap = { bass: 0, lead: 1, arp: 2, drums: 3 };
                 const ch = chMap[parts[1]];
-                const mul = Math.max(0, Math.min(2, v / 100));
+                const mul = Math.max(0, Math.min(3, v / 100));
                 if (volumeControlsManager.setChannelVolume) volumeControlsManager.setChannelVolume(ch, mul);
             } else {
                 const pct = Math.max(0, Math.min(100, v)) / 100;

@@ -149,13 +149,14 @@ class VolumeControlsManager {
 
         if (this.channelVolumes) {
             const syncChannel = (id, valueId, vol) => {
-                const pct = Math.round(Math.max(0, Math.min(2, Number(vol) || 0)) * 100);
+                const pct = Math.round(Math.max(0, Math.min(3, Number(vol) || 0)) * 100);
                 const valueEl = document.getElementById(valueId);
                 if (valueEl) valueEl.textContent = pct + '%';
                 const slider = document.getElementById(id);
                 if (slider) {
                     slider.value = pct;
-                    slider.style.setProperty('--vol-fill', Math.min(100, pct) + '%');
+                    // Fill tracks 0–300% of the fader range (not capped at 100%).
+                    slider.style.setProperty('--vol-fill', (pct / 3) + '%');
                 }
             };
             syncChannel('musicChannelBass', 'musicChannelBassValue', this.channelVolumes[0]);
@@ -332,7 +333,8 @@ class VolumeControlsManager {
         const idx = Number(ch);
         if (!Number.isFinite(idx) || idx < 0 || idx > 3) return;
         if (!this.channelVolumes) this.channelVolumes = [1, 1, 1, 1];
-        this.channelVolumes[idx] = Math.max(0, Math.min(2, Number(v)));
+        this.channelVolumes[idx] = Math.max(0, Math.min(3, Number(v)));
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyChannelVolumes();
         this.saveVolumes();
@@ -355,6 +357,7 @@ class VolumeControlsManager {
         if (!this.channelVoices) this.channelVoices = ['default', 'default', 'default', 'default'];
         const id = String(voiceId || 'default');
         this.channelVoices[idx] = id;
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyChannelVoices();
         this.saveVolumes();
@@ -490,22 +493,66 @@ class VolumeControlsManager {
             if (!Number.isFinite(this.musicVolume)) this.musicVolume = d.MUSIC;
             if (!Number.isFinite(this.musicBpm)) this.musicBpm = 132;
 
-            if (savedChannels) {
+            // Schema 4: lead was buried + voice overrides made the hook unreadable.
+            // Schema 5: drop stale STYLE bank overrides that made Jungle/DnB wrong.
+            let mixSchema = null;
+            try { mixSchema = localStorage.getItem('vf_musicMixSchema'); } catch (e) { /* ignore */ }
+            if (mixSchema !== '4' && mixSchema !== '5') {
+                this.channelVolumes = [1, 1, 1, 1];
+                this.channelVoices = ['default', 'default', 'default', 'default'];
                 try {
-                    const arr = JSON.parse(savedChannels);
-                    if (Array.isArray(arr) && arr.length === 4) {
-                        this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(2, Number(v))) : 1));
+                    localStorage.setItem('vf_channelVolumes', JSON.stringify(this.channelVolumes));
+                    localStorage.setItem('vf_channelVoices', JSON.stringify(this.channelVoices));
+                    localStorage.setItem('vf_musicMixSchema', '5');
+                    localStorage.removeItem('vf_music_theme_banks_v1');
+                } catch (e2) { /* ignore */ }
+            } else if (mixSchema === '4' || mixSchema === '5') {
+                try {
+                    localStorage.removeItem('vf_music_theme_banks_v1');
+                    localStorage.setItem('vf_musicMixSchema', '5');
+                    if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.clearBankOverrides) {
+                        VFTrackerThemes.clearBankOverrides();
                     }
-                } catch (e) { /* ignore malformed value */ }
-            }
+                } catch (e5) { /* ignore */ }
+                // One-shot: snap Jungle/DnB BPM onto style tempo (was stuck ~130).
+                if (mixSchema === '4' || localStorage.getItem('vf_musicStyleTempo') !== '1') {
+                    try { localStorage.setItem('vf_musicStyleTempo', '1'); } catch (e6) { /* ignore */ }
+                    this.bpmFollowsStyle = true;
+                }
+                if (savedChannels) {
+                    try {
+                        const arr = JSON.parse(savedChannels);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(3, Number(v))) : 1));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
+                if (savedVoices) {
+                    try {
+                        const arr = JSON.parse(savedVoices);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVoices = arr.map((v) => String(v || 'default'));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
+            } else {
+                if (savedChannels) {
+                    try {
+                        const arr = JSON.parse(savedChannels);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVolumes = arr.map((v) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(3, Number(v))) : 1));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
 
-            if (savedVoices) {
-                try {
-                    const arr = JSON.parse(savedVoices);
-                    if (Array.isArray(arr) && arr.length === 4) {
-                        this.channelVoices = arr.map((v) => String(v || 'default'));
-                    }
-                } catch (e) { /* ignore malformed value */ }
+                if (savedVoices) {
+                    try {
+                        const arr = JSON.parse(savedVoices);
+                        if (Array.isArray(arr) && arr.length === 4) {
+                            this.channelVoices = arr.map((v) => String(v || 'default'));
+                        }
+                    } catch (e) { /* ignore malformed value */ }
+                }
             }
 
             this.masterVolume = Math.max(0, Math.min(1, this.masterVolume));
@@ -523,6 +570,14 @@ class VolumeControlsManager {
             // Missing key → follow STYLE (legacy saves never recorded overrides).
             const savedFollow = localStorage.getItem('vf_musicBpmFollowsStyle');
             this.bpmFollowsStyle = savedFollow !== '0';
+            // Jungle/DnB stuck at planet tempo (~130) — re-snap when following STYLE.
+            if (this.bpmFollowsStyle !== false && this.musicTheme > 0) {
+                const pref = this.getPreferredMusicBpm(this.musicTheme);
+                if (Number.isFinite(pref) && pref > 0) {
+                    this.musicBpm = Math.max(60, Math.min(300, Math.round(pref)));
+                    this.musicSpeed = this.musicBpm / this.referenceBpm;
+                }
+            }
 
             // Schema 1: 10%/5%/20% (+ hidden ×8 music bus) → keep master 10%, raise SND/MUS.
             // Schema 2: 75%/50%/65% authored default → master 10% (quiet start until adjusted).
@@ -629,6 +684,29 @@ class VolumeControlsManager {
         }
     }
 
+    /**
+     * Hosted / itch ZIP: AudioContext stays null until a real gesture. Slider
+     * drags ARE that gesture — open the bus and start music so STYLE/BPM/VOL
+     * changes are audible instead of silently updating localStorage.
+     */
+    wakeAudioFromUserGesture() {
+        try {
+            if (typeof soundManager !== 'undefined') {
+                if (soundManager.ensureContext) soundManager.ensureContext();
+                if (soundManager.markAudioUnlocked) soundManager.markAudioUnlocked();
+                const wantMusic = this.masterVolume > 0 && this.musicVolume > 0
+                    && (soundManager.musicEnabled !== false);
+                if (wantMusic && soundManager.ensureMusicPlaying) {
+                    soundManager.ensureMusicPlaying();
+                }
+            }
+        } catch (e) { /* optional */ }
+        try {
+            const plate = document.getElementById('vf-vol');
+            if (plate) plate.dispatchEvent(new Event('vf-vol-sync'));
+        } catch (e2) { /* optional */ }
+    }
+
     _normVol(volume) {
         return (typeof VFVolume !== 'undefined')
             ? VFVolume.normalize(volume)
@@ -638,6 +716,7 @@ class VolumeControlsManager {
     setMasterVolume(volume) {
         this.masterVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -646,6 +725,7 @@ class VolumeControlsManager {
     setSoundVolume(volume) {
         this.soundVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -654,6 +734,7 @@ class VolumeControlsManager {
     setMusicVolume(volume) {
         this.musicVolume = this._normVol(volume);
         this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();
@@ -664,6 +745,7 @@ class VolumeControlsManager {
         this.musicSpeed = this.musicBpm / this.referenceBpm;
         // User (or snap) owns absolute tempo until STYLE is picked again.
         this.bpmFollowsStyle = false;
+        this.wakeAudioFromUserGesture();
         this.applyMusicBpm();
         this.saveVolumes();
     }
@@ -710,6 +792,7 @@ class VolumeControlsManager {
         let t = Math.max(0, Math.min(1, Number(amount) || 0));
         if (t < 0.03) t = 0;
         this.jungleAmount = t;
+        this.wakeAudioFromUserGesture();
         this.applyJungleAmount();
         this.saveVolumes();
     }
@@ -726,6 +809,7 @@ class VolumeControlsManager {
             this.jungleAmount = 0.4;
             this.applyJungleAmount();
         }
+        this.wakeAudioFromUserGesture();
         this.applyMusicTheme();
         // Adapt heard tempo to STYLE × current song (keeps map/victory musical).
         if (prev !== next) {
@@ -756,6 +840,7 @@ class VolumeControlsManager {
         if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.crossfadeSeconds = 1.4;
         if (typeof localAudioManager !== 'undefined') localAudioManager.crossfadeSeconds = 1.4;
         try { localStorage.setItem('vf_musicCrossfade', '1.4'); } catch (e) { /* ignore */ }
+        this.wakeAudioFromUserGesture();
         this.updateUI();
         this.applyVolumes();
         this.saveVolumes();

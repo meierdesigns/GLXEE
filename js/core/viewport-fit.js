@@ -68,10 +68,12 @@
             && typeof window.renderManager.getRenderScale === 'function')
             ? window.renderManager.getRenderScale()
             : (Number(window.PLAYFIELD_RENDER_SCALE) || 1);
-        const scaleK = Number.isFinite(k) && k >= 1 ? Math.round(k) : 1;
+        // Keep fractional GP scales (gp 1/2 often land between 1–2); rounding up to 2×
+        // briefly allocated a 4× pixel backing before setPlayfieldSize corrected it.
+        const scaleK = Number.isFinite(k) && k > 0 ? k : 1;
         if (canvas) {
-            const bw = mapW * scaleK;
-            const bh = mapH * scaleK;
+            const bw = Math.max(1, Math.round(mapW * scaleK));
+            const bh = Math.max(1, Math.round(mapH * scaleK));
             if (canvas.width !== bw) canvas.width = bw;
             if (canvas.height !== bh) canvas.height = bh;
         }

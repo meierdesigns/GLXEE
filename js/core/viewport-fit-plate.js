@@ -12,7 +12,17 @@
     }
     /** DevMode AUDIO always hosts the Music Editor (narrow = stacked, wide = side-by-side). */
     function fxWantMusicEditor() {
-        return fxDevModeOn() && vfs.fxTab === 'audio';
+        if (!fxDevModeOn() || vfs.fxTab !== 'audio') return false;
+        // itch / GitHub ZIP: js/ui/dev/ is gitignored — don't reserve split chrome
+        // for a "Local-dev only" stub that makes AUDIO settings feel broken.
+        if (vfs._musicEditorUnavailable) return false;
+        if (typeof musicEditorUI !== 'undefined') return true;
+        // Allow a one-shot load attempt only on local origins that can serve /js/ui/dev/.
+        try {
+            const h = String(location.hostname || '');
+            if (h === 'localhost' || h === '127.0.0.1' || h === '[::1]' || h === '') return true;
+        } catch (e) { /* ignore */ }
+        return false;
     }
     /** Wide enough for AUDIO settings | Music Editor side-by-side (else stacked). */
     function fxWantAudioMusicSplit() {
@@ -51,11 +61,10 @@
         };
         s.onerror = function () {
             vfs._musicEditorLoading = false;
-            const h = document.getElementById('vf-fx-music-editor');
-            if (h) {
-                h.innerHTML = '<div class="vf-fx-title">MUSIC EDITOR</div>'
-                    + '<p class="vf-fx-row">Local-dev only (`js/ui/dev/` — not uploaded).</p>';
-            }
+            vfs._musicEditorUnavailable = true;
+            // Rebuild AUDIO without the empty editor split so volume/STYLE faders
+            // keep the full remote (hosted ZIP / itch).
+            try { if (typeof fillFxPlate === 'function') fillFxPlate(); } catch (err) { /* ignore */ }
         };
         document.head.appendChild(s);
     }
@@ -143,7 +152,7 @@
         for (let i = 0; i < opts.length; i++) if (opts[i].id === cur) { idx = i; break; }
         const max = Math.max(0, opts.length - 1);
         const keys = ['bass', 'lead', 'arp', 'drums'];
-        const pct = Math.max(0, Math.min(200, Math.round(Number(volPct) || 100)));
+        const pct = Math.max(0, Math.min(300, Math.round(Number(volPct) || 100)));
         const ids = opts.map(function (o) { return o.id; }).join('|');
         const labels = opts.map(function (o) { return o.label; }).join('|');
         const html = opts.map(function (o) {
@@ -151,8 +160,8 @@
         }).join('');
         // Order: label | volume | dropdown | style pick (dropdown left of style fader).
         return '<label class="vf-fx-row vf-fx-voice-row"><span>' + label + '</span>' +
-            '<input type="range" class="vf-fx-voice-vol" min="0" max="200" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
-            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 2) + '%" aria-label="' + label + ' volume">' +
+            '<input type="range" class="vf-fx-voice-vol" min="0" max="300" step="1" value="' + pct + '" data-sl="au:' + keys[ch] +
+            '" data-unit="%" style="--look-fill:' + Math.min(100, pct / 3) + '%" aria-label="' + label + ' volume">' +
             '<select class="vf-fx-voice" data-voice-ch="' + ch + '" title="' + label + ' voice">' + html + '</select>' +
             '<input type="range" class="vf-fx-voice-pick" min="0" max="' + max + '" step="1" value="' + idx +
             '" data-voice-ch="' + ch + '" data-voice-ids="' + ids + '" data-voice-labels="' + labels +
@@ -225,7 +234,8 @@
     function fillFxPlate() {
         const ui = getUi();
         const plate = buildFxPlate();
-        if (!ui) return;
+        // AUDIO only needs volumeControlsManager; other tabs need appearance.
+        if (!ui && vfs.fxTab !== 'audio') return;
         vfs._fxFilling = true;
         try {
         vfs.fxScrollLock = true;
@@ -478,7 +488,7 @@
             };
             const chVolOf = function (i) {
                 const v = vol && vol.getChannelVolume ? vol.getChannelVolume(i) : 1;
-                return Math.round(Math.max(0, Math.min(2, Number(v) || 1)) * 100);
+                return Math.round(Math.max(0, Math.min(3, Number(v) || 1)) * 100);
             };
             const xfade = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.crossfadeSeconds != null)
                 ? Math.round(Number(vfTrackerManager.crossfadeSeconds) * 100) / 100

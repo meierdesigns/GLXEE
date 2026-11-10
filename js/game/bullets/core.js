@@ -50,6 +50,13 @@ class BulletManager {
         b._ignoreObstacle = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
+        b._vxAcc = 0;
+        b._vyAcc = 0;
+        b._snapTrueX = undefined;
+        b._snapTrueY = undefined;
+        b._snapLastX = undefined;
+        b._snapLastY = undefined;
+        b._terrainRow = undefined;
         b.lightRadius = undefined;
         b.lightIntensity = undefined;
         b.lightColor = undefined;
@@ -83,6 +90,13 @@ class BulletManager {
         b._ignoreObstacle = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
+        b._vxAcc = 0;
+        b._vyAcc = 0;
+        b._snapTrueX = undefined;
+        b._snapTrueY = undefined;
+        b._snapLastX = undefined;
+        b._snapLastY = undefined;
+        b._terrainRow = undefined;
         for (const k in fields) {
             if (Object.prototype.hasOwnProperty.call(fields, k)) b[k] = fields[k];
         }
@@ -256,8 +270,10 @@ class BulletManager {
         const enemySpeed = ui ? ui.getShotSpeedMul('enemy') : 1;
         const bossSpeed = ui ? ui.getShotSpeedMul('boss') : 1;
 
-        const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
-        const voxelMove = !!(cv && cv.active && cv.active() && cv.stepMove);
+        // Shots move on continuous coords (same as the pilot). Lattice stepMove
+        // froze beams for whole frames whenever cell > per-frame travel — they
+        // looked stuck mid-lane and their sweep stayed 0 so clashes/hits missed.
+        // VOXEL still snaps them at draw time via fillCombatRect / drawBullet.
 
         // Update player bullets
         for (let i = this.bullets.length - 1; i >= 0; i--) {
@@ -278,11 +294,8 @@ class BulletManager {
                 bdy = -bullet.speed * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
-            if (voxelMove) cv.stepMove(bullet, bdx, bdy);
-            else {
-                bullet.x += bdx;
-                bullet.y += bdy;
-            }
+            bullet.x += bdx;
+            bullet.y += bdy;
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
@@ -311,11 +324,8 @@ class BulletManager {
                 bdy = bullet.speed * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
-            if (voxelMove) cv.stepMove(bullet, bdx, bdy);
-            else {
-                bullet.x += bdx;
-                bullet.y += bdy;
-            }
+            bullet.x += bdx;
+            bullet.y += bdy;
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 

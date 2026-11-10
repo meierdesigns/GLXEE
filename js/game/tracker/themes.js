@@ -36,13 +36,15 @@ const VFTrackerThemes = {
     _meta: {
         // preferredBpm = heard tempo when the STYLE is picked (auto-applied).
         planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0, preferredBpm: 132 },
-        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.28, themeBreak: 0.7, preferredBpm: 160 },
+        // Classic jungle: Amen pressure + ragga chops ~168.
+        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.4, themeBreak: 0.95, preferredBpm: 168 },
         minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.08, themeBreak: 0.55, preferredBpm: 128 },
-        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.24, themeBreak: 0.65, preferredBpm: 164 },
-        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.2, themeBreak: 0.5, preferredBpm: 170 },
-        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.18, themeBreak: 0.48, preferredBpm: 172 },
-        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.1, themeBreak: 0.35, preferredBpm: 168 },
-        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.22, themeBreak: 0.6, preferredBpm: 174 },
+        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.36, themeBreak: 0.9, preferredBpm: 170 },
+        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.26, themeBreak: 0.62, preferredBpm: 172 },
+        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.24, themeBreak: 0.58, preferredBpm: 174 },
+        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.12, themeBreak: 0.4, preferredBpm: 170 },
+        // Proper DnB: two-step kit + half-time sub @ 174.
+        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.34, themeBreak: 0.88, preferredBpm: 174 },
         nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.12, themeBreak: 0.55, preferredBpm: 108 }
     },
 
@@ -92,9 +94,13 @@ const VFTrackerThemes = {
         const id = typeof indexOrId === 'string' ? indexOrId : this.idOf(indexOrId);
         if (!id || id === 'planet') return Math.round(authored);
         const pref = this.preferredBpmOf(indexOrId);
-        const scaled = authored * (pref / (this.REF_BPM > 0 ? 132 : 132));
-        // Soft clamp toward preferred so extreme songs stay musical.
-        const blended = authored * 0.35 + scaled * 0.65;
+        const scaled = authored * (pref / 132);
+        // Jungle / Amen / DnB need their tempo to read — weight preferred hard.
+        const heavy = id === 'jungle_dnb' || id === 'amen' || id === 'dnb'
+            || id === 'reese' || id === 'neuro';
+        const blended = heavy
+            ? pref * 0.72 + scaled * 0.28
+            : authored * 0.35 + scaled * 0.65;
         return Math.max(60, Math.min(300, Math.round(blended)));
     },
 
@@ -103,19 +109,22 @@ const VFTrackerThemes = {
         // Classic jungle: chopped Amen bass, ragga hooks, open space for breaks.
         jungle_dnb: [
             {
-                bass: 'A-1:1:70 A-1:1:36 . E-1:1:52 A-1:1:28 . A-1:1:64 . E-1:1:44 . A-1:1:68 A-1:1:32 . E-1:1:48 . A-1:1:56 .',
-                lead: 'A-4:2:46 . . . C-5:2:34 . . . E-5:2:52 . . D-5:2:38 . . C-5:2:32 . A-4:2:40 .',
-                arp: 'E-3:3:20 . A-3:3:10 . . E-3:3:14 . . A-3:3:16 . E-3:3:12 . . A-3:3:10 . E-3:3:08 .'
+                bass: 'A-1:1:78 A-1:1:42 A-1:1:28 . E-1:1:58 A-1:1:34 . A-1:1:70 A-1:1:30 E-1:1:48 . A-1:1:74 A-1:1:38 . E-1:1:52 A-1:1:60',
+                lead: 'A-4:2:52 . . C-5:2:28 . . . E-5:2:58 . . . D-5:2:34 . C-5:2:26 . A-4:2:44 .',
+                arp: 'E-3:3:24 . A-3:3:12 E-3:3:08 . A-3:3:16 . E-3:3:18 . A-3:3:10 . E-3:3:14 A-3:3:08 . E-3:3:10',
+                drums: 'A-2:5:70 A-4:4:22 A-5:4:14 A-2:5:48 A-4:4:64 A-5:4:16 A-4:4:40 A-2:5:54 A-5:4:18 A-2:5:50 A-4:4:58 A-5:4:20 A-2:5:66 A-4:4:44 A-5:4:16 A-4:4:52'
             },
             {
-                bass: 'F-1:1:66 F-1:1:34 . C-1:1:48 F-1:1:26 . G-1:1:60 . D-1:1:42 . F-1:1:62 F-1:1:30 . C-1:1:44 . G-1:1:52 .',
-                lead: 'F-4:2:42 . . . A-4:2:30 . . . C-5:2:48 . . B-4:2:34 . . A-4:2:28 . G-4:2:36 .',
-                arp: 'C-3:3:18 . F-3:3:10 . . C-3:3:12 . . G-3:3:14 . D-3:3:10 . . F-3:3:08 . C-3:3:06 .'
+                bass: 'F-1:1:74 F-1:1:40 F-1:1:26 . C-1:1:54 F-1:1:32 . G-1:1:66 G-1:1:28 D-1:1:46 . F-1:1:70 F-1:1:36 . C-1:1:50 G-1:1:56',
+                lead: 'F-4:2:48 . . A-4:2:24 . . . C-5:2:54 . . . B-4:2:30 . A-4:2:22 . G-4:2:40 .',
+                arp: 'C-3:3:22 . F-3:3:10 C-3:3:08 . F-3:3:14 . G-3:3:16 . D-3:3:10 . F-3:3:12 C-3:3:08 . F-3:3:08',
+                drums: 'A-2:5:66 A-5:4:18 A-4:4:28 A-2:5:44 A-4:4:60 A-5:4:14 A-4:4:36 A-2:5:50 A-5:4:16 A-2:5:46 A-4:4:54 A-5:4:18 A-2:5:62 A-4:4:40 A-5:4:14 A-4:4:48'
             },
             {
-                bass: 'A-1:1:74 A-1:1:40 . E-1:1:56 A-1:1:66 . E-1:1:36 G-1:1:54 . A-1:1:72 A-1:1:38 . E-1:1:50 A-1:1:60 . E-1:1:42',
-                lead: 'A-5:2:54 . C-6:2:42 . . E-6:2:58 . D-6:2:46 . . C-6:2:44 . A-5:2:40 . G-5:2:38 . A-5:2:48',
-                arp: 'A-3:3:22 . E-3:3:14 A-3:3:18 . C-4:3:24 . E-3:3:12 . A-3:3:16 G-3:3:12 . E-3:3:10 . A-3:3:14'
+                bass: 'A-1:1:82 A-1:1:46 A-1:1:32 E-1:1:62 A-1:1:72 . E-1:1:40 G-1:1:58 A-1:1:36 A-1:1:78 A-1:1:44 . E-1:1:54 A-1:1:66 E-1:1:38 A-1:1:48',
+                lead: 'A-5:2:60 . C-6:2:36 . E-6:2:64 . . D-6:2:42 . C-6:2:38 . A-5:2:34 . G-5:2:30 A-5:2:52 .',
+                arp: 'A-3:3:26 E-3:3:14 A-3:3:18 . C-4:3:28 . E-3:3:12 A-3:3:16 G-3:3:12 E-3:3:10 . A-3:3:14 . E-3:3:08',
+                drums: 'A-2:5:74 A-4:4:26 A-5:4:16 A-2:5:52 A-4:4:68 A-5:4:18 A-4:4:44 A-2:5:58 A-5:4:20 A-2:5:54 A-4:4:62 A-5:4:22 A-2:5:70 A-4:4:48 A-5:4:18 A-4:4:56'
             }
         ],
         // Dark minimal techno (Max Minimal / dark techno set vibe):
@@ -140,19 +149,19 @@ const VFTrackerThemes = {
         // Amen head (classic jungle hook bank).
         amen: [
             {
-                bass: 'A-1:1:62 A-1:1:40 . E-1:1:48 . A-1:1:58 A-1:1:36 . E-1:1:44 . A-1:1:60 . E-1:1:42 . A-1:1:50 . E-1:1:38',
-                lead: 'A-4:2:44 . . C-5:2:36 . . E-5:2:48 . D-5:2:40 . . C-5:2:38 . A-4:2:34 . . G-4:2:32 . A-4:2:40',
-                arp: 'E-3:3:18 . . . A-3:3:14 . . . E-3:3:16 . . . A-3:3:12 . . .'
+                bass: 'A-1:1:70 A-1:1:44 A-1:1:30 E-1:1:52 . A-1:1:64 A-1:1:38 . E-1:1:46 A-1:1:28 A-1:1:66 . E-1:1:44 A-1:1:54 . E-1:1:40',
+                lead: 'A-4:2:50 . . C-5:2:30 . . E-5:2:54 . . D-5:2:36 . C-5:2:28 . A-4:2:40 . G-4:2:26 .',
+                arp: 'E-3:3:20 . A-3:3:12 . E-3:3:14 . A-3:3:10 . E-3:3:16 . A-3:3:08 . E-3:3:12 . A-3:3:08'
             },
             {
-                bass: 'F-1:1:58 F-1:1:36 . C-1:1:44 . G-1:1:56 G-1:1:34 . D-1:1:42 . F-1:1:54 . C-1:1:40 . G-1:1:48 . D-1:1:36',
-                lead: 'F-4:2:40 . . A-4:2:32 . . C-5:2:44 . B-4:2:36 . . A-4:2:34 . G-4:2:30 . . E-4:2:28 . F-4:2:36',
-                arp: 'C-3:3:16 . . . F-3:3:12 . . . D-3:3:14 . . . G-3:3:10 . . .'
+                bass: 'F-1:1:66 F-1:1:40 F-1:1:28 C-1:1:48 . G-1:1:62 G-1:1:36 . D-1:1:44 F-1:1:26 F-1:1:60 . C-1:1:42 G-1:1:52 . D-1:1:38',
+                lead: 'F-4:2:46 . . A-4:2:26 . . C-5:2:50 . . B-4:2:32 . A-4:2:24 . G-4:2:36 . E-4:2:22 .',
+                arp: 'C-3:3:18 . F-3:3:10 . C-3:3:12 . F-3:3:08 . D-3:3:14 . G-3:3:08 . C-3:3:10 . F-3:3:06'
             },
             {
-                bass: 'A-1:1:66 A-1:1:44 . E-1:1:52 . A-1:1:62 A-1:1:40 . G-1:1:50 . A-1:1:64 . E-1:1:46 . A-1:1:54 . E-1:1:40',
-                lead: 'A-5:2:50 . C-6:2:40 . E-6:2:54 . D-6:2:46 . C-6:2:44 . A-5:2:38 . G-5:2:36 . A-5:2:42',
-                arp: 'A-3:3:20 . E-3:3:12 . E-3:3:12 A-3:3:18 . C-4:3:22 . E-3:3:12 A-3:3:16 . G-3:3:12 . E-3:3:10 .'
+                bass: 'A-1:1:74 A-1:1:48 A-1:1:34 E-1:1:56 A-1:1:68 . G-1:1:54 A-1:1:42 A-1:1:72 . E-1:1:50 A-1:1:58 E-1:1:36 A-1:1:46 .',
+                lead: 'A-5:2:56 . C-6:2:34 . E-6:2:60 . D-6:2:40 . C-6:2:36 . A-5:2:30 . G-5:2:28 A-5:2:46 .',
+                arp: 'A-3:3:22 E-3:3:12 . A-3:3:16 C-4:3:24 . E-3:3:12 A-3:3:14 G-3:3:10 . E-3:3:10 A-3:3:12 .'
             }
         ],
         // Dark Reese: long sub drones, almost no lead — pressure from bass + breaks.
@@ -209,22 +218,25 @@ const VFTrackerThemes = {
                 arp: 'A-4:3:16 E-4:3:12 . C-4:3:14 . A-4:3:14 E-4:3:10 . C-4:3:12 . A-4:3:14 E-4:3:10 . C-4:3:12 .'
             }
         ],
-        // Proper DnB: half-time sub, two-step space, sparse neuro stabs.
+        // Proper DnB: half-time sub drones, two-step space, sparse neuro stabs.
         dnb: [
             {
-                bass: 'A-1:1:72 . . . A-1:1:48 . . . A-1:1:68 . . E-1:1:52 . A-1:1:58 . . .',
-                lead: 'A-4:2:36 . . . . . . C-5:2:28 . . . . . E-4:2:32 . . .',
-                arp: 'E-3:3:14 . . . . . A-3:3:10 . . . . . E-3:3:12 . . .'
+                bass: 'A-1:1:80 . . . A-1:1:72 . . . A-1:1:76 . . . E-1:1:58 . . .',
+                lead: 'A-4:2:30 . . . . . . . C-5:2:22 . . . . . . E-4:2:26 .',
+                arp: 'E-2:3:12 . . . . . . . A-2:3:08 . . . . . . .',
+                drums: 'A-2:5:72 A-5:4:18 A-5:4:14 A-5:4:16 A-4:4:64 A-5:4:16 A-5:4:12 A-5:4:18 A-5:4:14 A-2:5:36 A-4:4:58 A-5:4:16 A-2:5:68 A-5:4:16 A-5:4:12 A-4:4:54'
             },
             {
-                bass: 'F-1:1:68 . . . F-1:1:44 . . . G-1:1:64 . . D-1:1:48 . F-1:1:54 . . .',
-                lead: 'F-4:2:32 . . . . . . A-4:2:24 . . . . . C-4:2:28 . . .',
-                arp: 'C-3:3:12 . . . . . F-3:3:08 . . . . . D-3:3:10 . . .'
+                bass: 'F-1:1:76 . . . F-1:1:68 . . . G-1:1:72 . . . D-1:1:54 . . .',
+                lead: 'F-4:2:26 . . . . . . . A-4:2:18 . . . . . . C-4:2:22 .',
+                arp: 'C-2:3:10 . . . . . . . F-2:3:06 . . . . . . .',
+                drums: 'A-2:5:68 A-5:4:16 A-5:4:12 A-5:4:14 A-4:4:60 A-5:4:14 A-5:4:10 A-5:4:16 A-5:4:12 A-2:5:32 A-4:4:54 A-5:4:14 A-2:5:64 A-5:4:14 A-5:4:10 A-4:4:50'
             },
             {
-                bass: 'A-1:1:76 . . A-1:1:42 . A-1:1:70 . . E-1:1:56 . A-1:1:74 . . A-1:1:46 . E-1:1:50 . .',
-                lead: 'A-5:2:44 . . Eb5:2:34 . . . A-4:2:38 . . G-4:2:30 . . C-5:2:36 . . A-4:2:40',
-                arp: 'A-3:3:16 . . E-3:3:10 . . A-3:3:14 . . E-3:3:08 . Bb3:3:12 . . E-3:3:08 .'
+                bass: 'A-1:1:84 . . . A-1:1:74 . . E-1:1:62 . A-1:1:80 . . . A-1:1:50 . E-1:1:56 .',
+                lead: 'A-5:2:38 . . . Eb5:2:28 . . . A-4:2:32 . . . G-4:2:24 . . C-5:2:30 .',
+                arp: 'A-2:3:14 . . . E-2:3:08 . . . A-2:3:12 . . . Bb2:3:10 . . .',
+                drums: 'A-2:5:76 A-5:4:18 A-5:4:14 A-5:4:16 A-4:4:66 A-5:4:16 A-4:4:22 A-5:4:18 A-5:4:14 A-2:5:40 A-4:4:60 A-5:4:16 A-2:5:72 A-5:4:16 A-4:4:24 A-4:4:56'
             }
         ],
         // NIGHTRUN — darksynth / neon-highway (Carpenter Brut–adjacent, original name).
@@ -249,30 +261,33 @@ const VFTrackerThemes = {
     },
 
     /**
-     * Amen-chop 16-step break (Jungle) — denser ragga chops.
-     * k=kick, s=snare, h=hat, r=half-row roll.
+     * Amen-chop 16-step (Jungle) — classic Amen Brother skeleton + ragga rolls.
+     * k=kick, s=snare, h=hat, r=half-row snare roll.
      */
     amenBreak: [
-        { k: 1 }, { h: 0.5, r: 0.65 }, { h: 0.8 }, { k: 0.6, h: 0.35 },
-        { s: 1 }, { h: 0.45 }, { s: 0.7, r: 0.85 }, { k: 0.75 },
-        { h: 0.6 }, { k: 0.65, h: 0.3 }, { s: 1, r: 0.75 }, { h: 0.65 },
-        { k: 1 }, { s: 0.85, r: 0.95 }, { h: 0.8, r: 0.4 }, { s: 1 }
+        { k: 1 }, { h: 0.45 }, { s: 0.55, h: 0.5 }, { k: 0.75, h: 0.35 },
+        { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.85 }, { k: 0.8, h: 0.3 },
+        { h: 0.5 }, { k: 0.85, h: 0.35 }, { s: 1, r: 0.7 }, { h: 0.55, s: 0.3 },
+        { k: 1 }, { s: 0.9, r: 0.95 }, { k: 0.55, h: 0.6 }, { s: 1 }
     ],
 
-    /** Two-step / rolling DnB break — clear kick-snare, rolling hats. */
+    /**
+     * Two-step DnB — kick on 1+3, snare on 2+4, rolling hats, sparse ghosts.
+     * Half-time pressure: space between anchors, not Amen mush.
+     */
     dnbBreak: [
         { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
-        { s: 1 }, { h: 0.45 }, { k: 0.6, h: 0.35 }, { h: 0.55 },
-        { h: 0.4 }, { h: 0.6 }, { s: 0.95 }, { h: 0.45 },
-        { k: 1 }, { h: 0.5 }, { h: 0.4, r: 0.25 }, { s: 0.8 }
+        { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.22 }, { h: 0.5 },
+        { k: 0.95 }, { h: 0.5 }, { h: 0.38 }, { h: 0.48 },
+        { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.2 }, { h: 0.42 }
     ],
 
     /** Legacy hybrid map (kept for older callers). */
     jungleDnbBreak: [
-        { k: 1 }, { h: 0.45, r: 0.5 }, { h: 0.65 }, { k: 0.5 },
-        { s: 1 }, { h: 0.4 }, { k: 0.55, r: 0.4 }, { h: 0.5 },
-        { h: 0.45 }, { k: 0.6 }, { s: 1, r: 0.6 }, { h: 0.55 },
-        { k: 0.95 }, { h: 0.45 }, { s: 0.75, r: 0.55 }, { s: 0.9 }
+        { k: 1 }, { h: 0.45 }, { s: 0.4, h: 0.5 }, { k: 0.65 },
+        { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.75 }, { k: 0.7, h: 0.3 },
+        { h: 0.5 }, { k: 0.75 }, { s: 1, r: 0.7 }, { h: 0.55 },
+        { k: 1 }, { s: 0.85, r: 0.8 }, { h: 0.55 }, { s: 0.95 }
     ],
 
     /**
@@ -408,9 +423,9 @@ const VFTrackerThemes = {
     },
 
     /**
-     * Light STYLE colour on an authored cell — song stays intact.
-     * Bass / lead / arp: keep note + timing; only nudge velocity.
-     * Drums: blend toward style kit velocity at high AMOUNT (never replace groove).
+     * STYLE colour on an authored cell — pitches stay on the planet hook.
+     * Jungle/Amen/DnB: break kit owns drums (silence GB kit); lead gets
+     * ragga chops / two-step space so it doesn't fight the Amen.
      * @param {number} styleAmount 0..1 (AMOUNT fader)
      * @returns {object|null} cell to trigger, or null for rest
      */
@@ -418,17 +433,24 @@ const VFTrackerThemes = {
         const mag = Math.max(0, Math.min(1, Number(styleAmount) || 0));
         if (!(Number(themeIndex) > 0) || mag < 0.03) return authoredCell || null;
 
+        const id = this.idOf(themeIndex);
+        const jungle = id === 'jungle_dnb' || id === 'amen';
+        const dnb = id === 'dnb' || id === 'reese' || id === 'neuro';
+        const heavy = jungle || dnb;
         const styleCell = this.cellAt(themeIndex, patternIndex, rowIndex, channel);
+        const row = Math.abs(rowIndex | 0) % 16;
 
-        // Drums: keep authored hits; borrow style velocity when both hit.
+        // Drums: Jungle/DnB — mute authored GB kit so Amen/two-step owns the groove.
         if (channel === 3) {
+            if (heavy && mag > 0.28) return null;
             if (!authoredCell || !authoredCell.note || authoredCell.note === 'OFF') {
-                // Only at high AMOUNT, fill a rest with a soft style kit tick.
-                if (mag > 0.7 && styleCell && styleCell.note && styleCell.note !== 'OFF') {
+                const fillAt = heavy ? 0.38 : 0.7;
+                if (mag > fillAt && styleCell && styleCell.note && styleCell.note !== 'OFF') {
                     return {
                         note: styleCell.note,
                         inst: styleCell.inst || 4,
-                        vol: Math.max(6, Math.min(28, Math.round((styleCell.vol != null ? styleCell.vol : 20) * 0.45)))
+                        vol: Math.max(6, Math.min(heavy ? 36 : 28, Math.round(
+                            (styleCell.vol != null ? styleCell.vol : 20) * (heavy ? 0.62 : 0.45))))
                     };
                 }
                 return authoredCell || null;
@@ -439,23 +461,48 @@ const VFTrackerThemes = {
                 return {
                     note: authoredCell.note,
                     inst: authoredCell.inst || styleCell.inst || 5,
-                    vol: Math.max(8, Math.min(56, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
+                    vol: Math.max(8, Math.min(60, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
                 };
             }
             return authoredCell;
         }
 
-        // Melodic channels: never move pitches or timing — only gentle velocity tint.
         if (!authoredCell || !authoredCell.note) return authoredCell || null;
         if (authoredCell.note === 'OFF') return authoredCell;
-        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') return authoredCell;
+
+        // Lead: Jungle chops / DnB space — drop cluttered hits so the break breathes.
+        if (channel === 1 && heavy && mag > 0.35) {
+            const drop = jungle
+                ? (row % 4 === 1 || row % 4 === 3) && mag > 0.45
+                : (row % 2 === 1) || (dnb && row % 4 === 2 && mag > 0.55);
+            if (drop) return null;
+        }
+        // Arp: thin under jungle/dnb so sub + kit stay clear.
+        if (channel === 2 && heavy && mag > 0.4 && (row % 2 === 1 || (dnb && row % 4 !== 0))) {
+            return null;
+        }
+
+        // Velocity tint from STYLE bank when both hit.
+        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') {
+            if (!heavy) return authoredCell;
+            const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+            const boost = channel === 0 ? 1 + mag * 0.2 : channel === 1 ? (1 - mag * 0.15) : (1 - mag * 0.25);
+            return {
+                note: authoredCell.note,
+                inst: authoredCell.inst || 1,
+                vol: Math.max(12, Math.min(60, Math.round(aVol * boost)))
+            };
+        }
         const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
         const sVol = styleCell.vol != null ? styleCell.vol : aVol;
-        const tint = aVol + (sVol - aVol) * mag * 0.35;
+        const tintAmt = heavy
+            ? (channel === 0 ? 0.65 : channel === 1 ? 0.35 : 0.25)
+            : 0.35;
+        const tint = aVol + (sVol - aVol) * mag * tintAmt;
         return {
             note: authoredCell.note,
             inst: authoredCell.inst || 1,
-            vol: Math.max(16, Math.min(56, Math.round(tint)))
+            vol: Math.max(heavy && channel === 0 ? 14 : 14, Math.min(60, Math.round(tint)))
         };
     }
 };

@@ -1,3 +1,40 @@
+
+/* Chosen mission: plaque/sign above the target planet. */
+.gm-mission-mark { pointer-events: none; shape-rendering: crispEdges; }
+.gm-mission-mark .gm-mission-sign-board {
+    fill: #05060a;
+    stroke: var(--fac, var(--color-primary));
+    stroke-width: 2;
+}
+.gm-mission-mark .gm-mission-sign-board-in {
+    fill: color-mix(in srgb, var(--fac, var(--color-primary)) 22%, #05060a);
+    stroke: none;
+}
+.gm-mission-mark .gm-mission-sign-pole {
+    stroke: var(--fac, var(--color-primary));
+    stroke-width: 2;
+}
+.gm-mission-mark .gm-mission-sign-label {
+    fill: var(--fac, var(--color-primary));
+    font-size: var(--font-small);
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    text-anchor: middle;
+    animation: gm-mission-sign-pulse 1.4s steps(2, end) infinite;
+}
+.gm-mission-mark .gm-mission-sign-dot {
+    fill: var(--fac, var(--color-primary));
+    animation: gm-mission-sign-pulse 1.4s steps(2, end) infinite;
+}
+@keyframes gm-mission-sign-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-mission-mark .gm-mission-sign-label,
+    .gm-mission-mark .gm-mission-sign-dot { animation: none; }
+}
+
 /* Galaxy map: planet under attack (invasion-scenario.js). */
 .gm-invasion { pointer-events: none; shape-rendering: crispEdges; }
 .gm-invasion .gm-invasion-ring {

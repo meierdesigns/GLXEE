@@ -85,26 +85,26 @@ const VFTrackerVoices = {
             deep: { wave: 'triangle', volume: 0.9, attack: 0.002, decay: 0.08, sustain: 0.8, release: 0.2, filter: 360 }
         },
         lead: {
-            pulse: { wave: 'square', volume: 0.3, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
-            square: { wave: 'square', volume: 0.34, attack: 0.001, decay: 0.04, sustain: 0.36, release: 0.07, filter: 2800 },
-            saw: { wave: 'sawtooth', volume: 0.28, attack: 0.001, decay: 0.06, sustain: 0.3, release: 0.09, filter: 2200 },
-            tri: { wave: 'triangle', volume: 0.4, attack: 0.001, decay: 0.05, sustain: 0.4, release: 0.1, filter: 2600 },
-            bell: { wave: 'sine', volume: 0.45, attack: 0.001, decay: 0.12, sustain: 0.15, release: 0.18, filter: 3200 },
-            sine: { wave: 'sine', volume: 0.42, attack: 0.002, decay: 0.06, sustain: 0.38, release: 0.12, filter: 2800 },
-            chip: { wave: 'square', volume: 0.32, attack: 0.001, decay: 0.02, sustain: 0.28, release: 0.04, filter: 4000 },
-            soft: { wave: 'triangle', volume: 0.36, attack: 0.004, decay: 0.08, sustain: 0.34, release: 0.14, filter: 1800 },
-            growl: { wave: 'sawtooth', volume: 0.3, attack: 0.002, decay: 0.1, sustain: 0.28, release: 0.12, filter: 1400 }
+            pulse: { wave: 'square', volume: 0.46, attack: 0.001, decay: 0.05, sustain: 0.36, release: 0.08, filter: 2600 },
+            square: { wave: 'square', volume: 0.48, attack: 0.001, decay: 0.04, sustain: 0.38, release: 0.07, filter: 2800 },
+            saw: { wave: 'sawtooth', volume: 0.4, attack: 0.001, decay: 0.06, sustain: 0.34, release: 0.09, filter: 2200 },
+            tri: { wave: 'triangle', volume: 0.5, attack: 0.001, decay: 0.05, sustain: 0.42, release: 0.1, filter: 2600 },
+            bell: { wave: 'sine', volume: 0.52, attack: 0.001, decay: 0.12, sustain: 0.18, release: 0.18, filter: 3200 },
+            sine: { wave: 'sine', volume: 0.5, attack: 0.002, decay: 0.06, sustain: 0.4, release: 0.12, filter: 2800 },
+            chip: { wave: 'square', volume: 0.46, attack: 0.001, decay: 0.02, sustain: 0.3, release: 0.04, filter: 4000 },
+            soft: { wave: 'triangle', volume: 0.44, attack: 0.004, decay: 0.08, sustain: 0.36, release: 0.14, filter: 1800 },
+            growl: { wave: 'sawtooth', volume: 0.42, attack: 0.002, decay: 0.1, sustain: 0.3, release: 0.12, filter: 1400 }
         },
         arp: {
-            pulse: { wave: 'square', volume: 0.58, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.05 },
-            square: { wave: 'square', volume: 0.62, attack: 0.001, decay: 0.03, sustain: 0.42, release: 0.05, filter: 3600 },
-            tri: { wave: 'triangle', volume: 0.6, attack: 0.001, decay: 0.03, sustain: 0.4, release: 0.06, filter: 2800 },
-            pluck: { wave: 'square', volume: 0.58, attack: 0.001, decay: 0.08, sustain: 0.12, release: 0.04, filter: 3000 },
-            soft: { wave: 'sine', volume: 0.5, attack: 0.002, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2200 },
-            saw: { wave: 'sawtooth', volume: 0.52, attack: 0.001, decay: 0.04, sustain: 0.34, release: 0.05, filter: 3200 },
-            sine: { wave: 'sine', volume: 0.48, attack: 0.001, decay: 0.04, sustain: 0.3, release: 0.07, filter: 2600 },
-            bell: { wave: 'sine', volume: 0.54, attack: 0.001, decay: 0.1, sustain: 0.1, release: 0.12, filter: 3800 },
-            chirp: { wave: 'square', volume: 0.5, attack: 0.001, decay: 0.015, sustain: 0.08, release: 0.03, filter: 4500 }
+            pulse: { wave: 'square', volume: 0.34, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05, filter: 2400 },
+            square: { wave: 'square', volume: 0.36, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05, filter: 3200 },
+            tri: { wave: 'triangle', volume: 0.34, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.06, filter: 2600 },
+            pluck: { wave: 'square', volume: 0.32, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.04, filter: 2800 },
+            soft: { wave: 'sine', volume: 0.3, attack: 0.002, decay: 0.05, sustain: 0.24, release: 0.08, filter: 2000 },
+            saw: { wave: 'sawtooth', volume: 0.3, attack: 0.001, decay: 0.04, sustain: 0.26, release: 0.05, filter: 2800 },
+            sine: { wave: 'sine', volume: 0.28, attack: 0.001, decay: 0.04, sustain: 0.22, release: 0.07, filter: 2400 },
+            bell: { wave: 'sine', volume: 0.32, attack: 0.001, decay: 0.1, sustain: 0.08, release: 0.12, filter: 3400 },
+            chirp: { wave: 'square', volume: 0.28, attack: 0.001, decay: 0.015, sustain: 0.06, release: 0.03, filter: 4000 }
         },
         drums: {
             kit: null,

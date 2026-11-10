@@ -1068,7 +1068,7 @@ be reviewed or reverted independently.
 | 73Y | Voice faders 300% | BASS/LEAD/ARP/DRUMS volume sliders (settings + FX remote) go to 300% |
 | 73Z | Live drums / voices | Channel buses on fader move; poly drums; voice pick keeps wave under STYLE morph; instant revoice; FX vol won't wipe dropdown |
 | 74A | Fast BPM body | Tempo reanchor keeps hook + cancels stale oneshots; ADSR/gates scale with row; softer note cuts |
-| 74B | Release 1.14.12 | GitHub README + version bump — melodies, Jungle/DnB, live voices 300%, fast BPM body (73R–74A) |
+| 74B | Release 1.14.12 | Deploy ZIP `.claude/GLXEE-V1.14.12.zip` — melodies, Jungle/DnB, live voices 300%, fast BPM body (73R–74A) |
 
 The wave commit convention is:
 

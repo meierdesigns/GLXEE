@@ -335,9 +335,10 @@ physicalItem.bayInventoryHtml = function (ui) {
         .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
     return `<div class="hs-slot-picker hs-bay-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div>` +
         `</div>` +
-        `<div class="hs-bay-inv-group-label">SHIP</div>${gridHtml}` +
-        `<div class="hs-bay-inv-group-label">STATION</div>${stationGridHtml}` +
-        `</div>`;
+        `<div class="hs-bay-inv-body">` +
+        `<div class="hs-bay-inv-group"><div class="hs-bay-inv-group-label">SHIP</div>${gridHtml}</div>` +
+        `<div class="hs-bay-inv-group"><div class="hs-bay-inv-group-label">STATION</div>${stationGridHtml}</div>` +
+        `</div></div>`;
 };
 document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('[data-bay-inv]');

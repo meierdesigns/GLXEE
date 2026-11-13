@@ -938,9 +938,8 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     letter-spacing: 2px; white-space: nowrap; cursor: pointer;
 }
 .hs-bay-invtoggle:hover { background: var(--color-primary); color: #05060a; }
-/* Panel sized to the shared storage grid's width, but stretched to the full
-   height of the bay stage — was height:auto, leaving dead space below a grid
-   shorter than the stage (and no room to show the STATION section below SHIP). */
+/* Bay inventory: hug each grid, place SHIP + STATION side-by-side when they fit —
+   was one ultra-wide column with dead space beside the narrower grid. */
 .hs-bay-inv {
     position: absolute; top: 0; left: 0; right: auto; bottom: 0; z-index: 4;
     display: flex; flex-direction: column; align-items: stretch;
@@ -951,16 +950,38 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     --cs: 56px;
 }
 .hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 0; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.hs-bay-inv-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.hs-bay-inv-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: max-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px 8px;
+    background: color-mix(in srgb, var(--color-primary) 5%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
 .hs-bay-inv-group-label {
     flex: 0 0 auto;
     font-size: 11px;
     letter-spacing: 2px;
     opacity: 0.7;
-    margin: 0 -8px 4px;
-    padding: 10px 8px 0;
-    background: #0a0912;
+    margin: 0 0 6px;
+    padding: 0;
+    background: transparent;
 }
 .hs-bay-inv-group-label:first-of-type { margin-top: 0; }
+html body .hs-bay-inv .hs-bay-inv-group .hs-storage-grid.hs-pick-grid {
+    align-self: stretch;
+}
 .hs-bay-inv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
 .hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }

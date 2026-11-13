@@ -338,7 +338,6 @@ html body .onboarding-overlay > .onboarding-homeworld-site.profile-selection-con
     box-shadow: none !important;
     background: transparent !important;
 }
-html body .onboarding-overlay > .onboarding-name-panel,
 html body .onboarding-overlay > .onboarding-ship-panel {
     flex: 1 1 auto !important;
     width: min(720px, 92%) !important;
@@ -346,6 +345,28 @@ html body .onboarding-overlay > .onboarding-ship-panel {
     margin: 16px auto !important;
     padding: 24px !important;
     align-self: center !important;
+}
+html body .onboarding-overlay > .onboarding-name-panel {
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 12px 16px !important;
+    padding: 16px 18px !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+html body .onboarding-overlay > .onboarding-name-panel > .profile-selection-title,
+html body .onboarding-overlay > .onboarding-name-panel > .onboarding-hint,
+html body .onboarding-overlay > .onboarding-name-panel > .onboarding-name-row {
+    flex: 0 0 auto;
+}
+html body .onboarding-overlay > .onboarding-name-panel > .onboarding-pilot-kit-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 html body .onboarding-overlay > .onboarding-pilot-panel {
     flex: 1 1 auto !important;

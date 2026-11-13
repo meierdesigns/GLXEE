@@ -1284,11 +1284,15 @@ html body .game-over .outcome-progress {
     gap: 10px;
     width: 100%;
     min-height: 0;
+    flex: 0 0 auto;
     padding-top: 108px;
+    justify-content: flex-start;
 }
 html body .game-over .outcome-progress > .outcome-planet-icon {
     width: 168px;
     height: 168px;
+    top: 0;
+    transform: translateX(-50%);
 }
 html body .game-over .outcome-planet-text strong {
     font-size: var(--font-h2);

@@ -1512,16 +1512,26 @@ html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip
 }
 .hs-equip-inv {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
     min-width: 0;
     min-height: 0;
 }
+.hs-equip-inv > .hs-panel-storage {
+    flex: 0 1 auto;
+    width: max-content;
+    max-width: 100%;
+    box-sizing: border-box;
+}
 .hs-equip-inv .hs-panel-storage .hs-row {
     overflow: auto;
-    max-height: min(38vh, 320px);
+    max-height: min(42vh, 360px);
     padding: 4px 2px 8px;
     box-sizing: border-box;
+    width: max-content;
+    max-width: 100%;
 }
 .hs-equip-inv .hs-storage-grid {
     flex-shrink: 0;

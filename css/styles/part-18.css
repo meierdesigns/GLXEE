@@ -429,7 +429,10 @@ html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-b
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn :is(.hs-tab-icon .ui-icon-tip, .hs-tab-icon img, .hs-tab-icon canvas, .hs-tab-pixel) {
     width: 64px !important;
     height: 64px !important;
-    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    filter: none !important;
 }
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label {
     grid-row: 2;
@@ -438,13 +441,13 @@ html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-b
     align-items: center;
     justify-content: center;
     padding: 0 6px;
-    background: rgba(2, 2, 3, 0.88);
+    background: transparent;
     text-align: center;
     white-space: normal;
     line-height: 1.05;
     overflow-wrap: break-word;
 }
-/* PLAY: disc + triangle centre on the upper two thirds, label strip below. */
+/* PLAY: disc + triangle centre on the upper two thirds, label below. */
 html body .home-station-overlay .home-station-content .hs-play-launch::before,
 html body .home-station-overlay .home-station-content .hs-play-launch::after,
 html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon { top: 33.333%; }
@@ -453,20 +456,19 @@ html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-l
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(2, 2, 3, 0.88);
+    background: transparent;
 }
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn > .hs-tab-icon {
     width: 100% !important;
     height: 100% !important;
     min-height: 0;
 }
-/* Make the lower third read as exactly one third: opaque dark strip with a
-   frame-coloured line on its upper edge. */
+/* Lower third label: no strip / divider — sits on the card fill. */
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn .hs-tab-label,
 html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-label {
     box-sizing: border-box;
-    background: #020203;
-    border-top: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+    background: transparent;
+    border-top: 0;
 }
 
 /* Labels sit INSIDE the outline (the frame stays visible around the strip),
@@ -482,12 +484,10 @@ html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-l
     height: calc(33.333% - 3px);
 }
 
-/* Nav icons: 2px dark outline (#05060a), same as the other glowing icons.
-   Put on the wrapper — the img itself already carries the tint filter. */
+/* Nav icons: no drop-shadow outline — filters soften pixels under glass scale. */
 html body .home-station-overlay .home-station-content .hs-tabs .hs-tab.hs-area-btn .hs-tab-icon > .ui-icon-tip {
-    filter:
-        drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a)
-        drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a);
+    filter: none !important;
+    image-rendering: pixelated !important;
 }
 
 /* Active PLAY joins the content below exactly like an active area tab:
@@ -521,7 +521,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch.active .hs
     right: 0;
     top: 100%;
     height: 35px;
-    background: #020203;
+    background: var(--hs-tabpanel, transparent);
 }
 
 /* PLAY icon: same coarse 16×16 pixel art as the nav icons (octagon ring +
@@ -544,9 +544,7 @@ html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-l
 }
 html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon::before { content: none; }
 html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
-    filter:
-        drop-shadow(2px 0 0 #05060a) drop-shadow(-2px 0 0 #05060a)
-        drop-shadow(0 2px 0 #05060a) drop-shadow(0 -2px 0 #05060a);
+    filter: none !important;
 }
 
 /* Background deco icons only on PLAY (its planets); area cards stay clean. */
@@ -724,29 +722,28 @@ html body .profile-selection-overlay.is-inline .profile-selection-content { filt
 .gv-target-list li { cursor: pointer; }
 .galaxy-viewer-modal .gv-target-list { flex: none; height: auto; min-height: 0; max-height: 200px; overflow-y: auto; }
 
-/* Main nav icons: dim when idle, holographic flicker when selected. */
-html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:not(.active) .hs-tab-icon {
-    filter: brightness(0.28) saturate(0.5) !important;
-    transition: filter 0.2s ease;
+/* Main nav icons: full crisp pixels — no brightness/saturate filters (blur under glass scale). */
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn .hs-tab-icon,
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn .hs-tab-icon :is(img, canvas, .hs-tab-pixel, .ui-icon-tip) {
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    -ms-interpolation-mode: nearest-neighbor;
 }
-html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn:not(.active):is(:hover, :focus-visible, .nav-focused) .hs-tab-icon {
-    filter: brightness(0.85) saturate(0.9) !important;
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn .hs-tab-icon,
+html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn .hs-tab-icon :is(img, canvas, .hs-tab-pixel, .ui-icon-tip) {
+    filter: none !important;
+    opacity: 1 !important;
 }
 html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon {
     position: relative;
-    background: radial-gradient(ellipse at 50% 55%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent) 0%, color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, transparent) 40%, transparent 65%) !important;
-    box-shadow: 0 0 8px 0 color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent),
-        inset 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent) !important;
-    background-size: 100% 100% !important;
+    background: none !important;
+    box-shadow: none !important;
     animation: none;
 }
 html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn.active .hs-tab-icon::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.35) 0 1px, transparent 1px 3px);
-    animation: hs-holo-scan 3.5s linear infinite;
+    content: none !important;
+    display: none !important;
 }
 @keyframes hs-holo-on {
     /* Only a slight dimming, no blackout. */
@@ -786,13 +783,16 @@ html body .home-station-overlay .home-station-content .hs-tab.hs-area-btn[data-o
     animation: none;
 }
 
-/* PLAY: dark when idle, powers on like the nav icons when active. */
-html body .home-station-overlay .home-station-content .hs-play-launch:not(.active) :is(.hs-play-launch-planets, .hs-play-launch-icon) {
-    filter: brightness(0.3) saturate(0.5);
-    transition: filter 0.2s ease;
+/* PLAY: crisp icon at full strength. */
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    image-rendering: -moz-crisp-edges !important;
+    image-rendering: pixelated !important;
+    image-rendering: crisp-edges !important;
+    opacity: 1 !important;
 }
-html body .home-station-overlay .home-station-content .hs-play-launch:not(.active):is(:hover, .nav-focused) :is(.hs-play-launch-planets, .hs-play-launch-icon) {
-    filter: brightness(0.85) saturate(0.9);
+html body .home-station-overlay .home-station-content .hs-play-launch:not(.active) .hs-play-launch-planets {
+    filter: none;
+    opacity: 1;
 }
 html body .home-station-overlay .home-station-content .hs-play-launch.active :is(.hs-play-launch-planets, .hs-play-launch-icon) {
     animation: none;

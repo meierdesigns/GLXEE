@@ -379,6 +379,8 @@
 .vf-bezel .vf-bezel-tools {
     padding: calc(4 * var(--bz-u));
     gap: calc(6 * var(--bz-u));
+    border-radius: calc(8 * var(--bz-u));
+    clip-path: inset(0 round calc(8 * var(--bz-u)));
     background: var(--hull-dark, #05080e);
     box-shadow:
         inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 rgba(0, 0, 0, 0.85),
@@ -388,6 +390,8 @@
 .vf-bezel .vf-bezel-tools button {
     position: relative;
     border: 0;
+    border-radius: calc(6 * var(--bz-u));
+    clip-path: inset(0 round calc(6 * var(--bz-u)));
     background:
         linear-gradient(180deg, color-mix(in srgb, var(--hull-lit, #2a3a52) 75%, #fff 0%) 0, var(--hull, #131a26) 55%, color-mix(in srgb, var(--hull, #131a26) 70%, #000) 100%);
     box-shadow:
@@ -550,6 +554,32 @@ html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="
 html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr::after {
     clip-path: var(--fr-shape) !important;
 }
+/* Metal parted-graphic rims (pirate/terran/kronax/machine): same rule — border-image
+   on .vf-fr::after + hull fill on ::before must not wait on #vfStageClip. */
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="pirate"]::before,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="terran"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="terran"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="terran"]::before,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="kronax"]::before,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="machine"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="machine"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-sil] #vf-bezel.vf-bezel[data-faction="machine"]::before {
+    clip-path: var(--fr-shape) !important;
+}
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="terran"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="terran"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr::after,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="machine"] .vf-fr,
+html[data-vf-frame-px="on"][data-vf-frame-vox] #vf-bezel.vf-bezel[data-faction="machine"] .vf-fr::after {
+    clip-path: var(--fr-shape) !important;
+}
 /* The stage (body) is a plain rectangle: its fill showed as black squares at the frame's notches and
    rounded corners (smooth and pixel frame alike). The frame plates are opaque over the whole band, so the
    stage only needs its fill behind the opening and the background art shows around the silhouette.
@@ -586,10 +616,13 @@ html:has(#vf-bezel) :is(#vf-cables, #vf-cables-old) {
     display: none !important;
 }
 
-/* Glass opening shape (freiraum stays black via .vf-bezel-back). */
+/* Glass opening shape (freiraum stays black via .vf-bezel-back).
+   Top has NO glass-inset: bezel ::before already ends at --fr-open-top;
+   stacking +inset there left a black/hull gutter under the rim. Side/bottom
+   keep the inset so chrome does not eat the opaque band. */
 html:has(#vf-bezel) {
     --vf-stage-shape: inset(
-        calc(var(--fr-open-top) + var(--vf-glass-inset, 0px))
+        var(--fr-open-top)
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
@@ -598,7 +631,7 @@ html:has(#vf-bezel) {
 }
 html[data-vf-frame-px="on"][data-vf-frame-sil] {
     --vf-stage-shape: inset(
-        calc(var(--fr-open-top) + var(--vf-glass-inset, 0px))
+        var(--fr-open-top)
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
@@ -621,17 +654,18 @@ html:has(#vf-bezel) #colorOverlay {
    bottom of the faction cards (and the tops of the faction swatches). */
 html:has(#vf-bezel) :is(
     .home-station-overlay,
-    .profile-selection-overlay:not(.is-inline),
+    .profile-selection-overlay:not(.is-inline):not(.onboarding-overlay),
     .player-selection-overlay
 ) {
     clip-path: var(--vf-stage-shape, none) !important;
     overflow: hidden !important;
 }
-/* Shop modals are already glass hosts (sized to the opening). Do NOT apply
+/* Shop modals / onboarding are already glass hosts (sized to the opening). Do NOT apply
    --vf-stage-shape — that inset is for full-stage overlays and would wipe them. */
-html:has(#vf-bezel) .profile-selection-overlay.is-inline {
+html:has(#vf-bezel) .profile-selection-overlay.is-inline,
+html:has(#vf-bezel) .profile-selection-overlay.onboarding-overlay {
     clip-path: none !important;
-    overflow: visible !important;
+    overflow: hidden !important;
 }
 /* Glass hosts: keep overscan parallax inside the glass box itself. */
 html:has(#vf-bezel) .vf-glass.vf-bg-parallax-host {
@@ -655,9 +689,9 @@ html body .game-container .enemy-vitals-side :is(.enemy-faction, .enemy-name) { 
 html body .game-container .enemy-vitals-side :is(.enemy-hp-text, .enemy-shield-text) { font-family: var(--ui-font-small, var(--ui-font-family)); }
 html body .game-container #gameInfoPanel { font-family: var(--ui-font-text, var(--ui-font-family)); }
 
-/* Station: small inner pad inside the glass opening. */
+/* Station: inner pad inside the glass opening; top clears overlapping rim art. */
 html body .home-station-overlay .home-station-content {
-    padding: calc(10px / var(--hs-z)) calc(12px / var(--hs-z)) !important;
+    padding: calc(40px / var(--hs-z)) calc(12px / var(--hs-z)) calc(10px / var(--hs-z)) !important;
     box-sizing: border-box !important;
 }
 
@@ -1007,6 +1041,22 @@ html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .
     max-width: 64px;
     max-height: 64px;
     flex: none;
+    /* Cancel the global active tint hack (translateX -200px + drop-shadow):
+       filter:none already wins on area-btn icons, so the shifted sprite stays
+       clipped by overflow:hidden and the icon vanishes. */
+    transform: none !important;
+    translate: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+}
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-icon {
+    overflow: visible !important;
+}
+/* Active/hover corner deco + PLAY planets: SVG tint filter draws orange blobs
+   on the card frame. Keep the cards clean. */
+html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn .hs-area-deco,
+html body .home-station-overlay .home-station-content .hs-header-split > .hs-play-launch .hs-play-launch-planets {
+    display: none !important;
 }
 
 /* Active nav card: open at the bottom, its body runs down into the sub-nav panel below. No glow on the
@@ -1027,7 +1077,9 @@ html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .
     box-shadow: none;
 }
 html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.active .hs-tab-icon {
-    filter: brightness(1.6) !important;
+    filter: none !important;
+    opacity: 1 !important;
+    overflow: visible !important;
 }
 html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::before,
 html body .home-station-overlay .home-station-content .hs-header-main .hs-tabs .hs-tab.hs-area-btn.hs-area-btn.hs-area-btn.hs-area-btn.active::after {

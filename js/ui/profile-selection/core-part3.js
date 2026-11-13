@@ -65,13 +65,13 @@ extendClass(ProfileSelectionManager, {
         const previewHtml = create && !galaxyStep ? `
             <div class="profile-faction-info-row">
             <div class="profile-faction-preview">
-                <canvas class="profile-faction-ship" width="${startStep ? 320 : 200}" height="${startStep ? 224 : 140}" aria-label="Faction ship preview"></canvas>
+                <div class="profile-faction-ship-wrap">
+                    <canvas class="profile-faction-ship" width="${startStep ? 320 : 200}" height="${startStep ? 224 : 140}" aria-label="Faction ship preview"></canvas>
+                    ${startStep ? '' : '<span class="profile-faction-preview-emblem pfc-crest profile-faction-ship-badge"></span>'}
+                </div>
                 ${startStep ? '<div class="profile-kit-ship"></div>' : ''}
                 ${startStep ? '' : `<div class="profile-faction-preview-text pfc" data-pfc>
-                    <span class="profile-faction-preview-head pfc-head">
-                        <span class="profile-faction-preview-emblem pfc-crest"></span>
-                        <strong class="profile-faction-preview-name pfc-name"></strong>
-                    </span>
+                    <strong class="profile-faction-preview-name pfc-name"></strong>
                     ${pilotStep ? '' : '<small class="profile-faction-preview-trait pfc-traits"></small><small class="profile-faction-preview-hero pfc-hero"></small>'}
                     ${create && !pickFaction && !pilotStep ? this.renderPreferredWeaponHtml() : ''}
                 </div>`}
@@ -100,6 +100,7 @@ extendClass(ProfileSelectionManager, {
                     </div>
                 </div>`).join('')}
             </div>
+            <div class="profile-faction-focus" data-faction-focus aria-label="Faction focus"></div>
             </div>` : '';
         const inputHtml = (pickFaction || startStep || galaxyStep || missionStep) ? ''
             : '<div class="profile-name-row">' + (pilotStep ? '<span class="profile-name-crest"></span>' : '') + '<input type="text" class="profile-name-input" id="profileNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>'

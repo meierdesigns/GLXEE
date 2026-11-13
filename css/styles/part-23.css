@@ -110,25 +110,25 @@ html[data-faction="machine"] .home-station-overlay :is(.hs-panel, .hs-section):n
    unrelated page content) and flush insets fixes both. */
 html[data-faction="terran"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/terran-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
     animation: none;
 }
 html[data-faction="kronax"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
     animation: none;
 }
 html[data-faction="pirate"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
     animation: none;
 }
 html[data-faction="machine"] body .home-station-overlay :is(.hs-panel, .hs-section):not(.hs-hangar-root, .hs-hangar-bay, .hs-shop-root)::before {
     background: none; inset: 0; z-index: 2; border: 16px solid transparent;
-    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/machine-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
     animation: none;
 }
@@ -161,22 +161,22 @@ html[data-faction="machine"] .home-station-overlay :is(.hs-panel, .hs-section):n
    own --faction-ctl-clip silhouette is left in place. */
 html[data-faction="terran"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/terran-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/terran-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
 }
 html[data-faction="kronax"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/kronax-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
 }
 html[data-faction="pirate"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/pirate-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
 }
 html[data-faction="machine"] body .home-station-overlay :is(.hs-tab, .hs-home-btn, .hs-menu-tab-btn, .hs-menu-btn, .hs-logout-btn, .hs-shop-ctrl, .hs-shop-cat, .hs-play, .action-button)::before {
     background: none; z-index: 2; border: 6px solid transparent;
-    border-image: url('../../assets/ui/machine-bezel-art.svg?v=11') 32 round;
+    border-image: url('../../assets/ui/machine-bezel-art.svg?v=17') 16 round;
     image-rendering: pixelated;
 }
 /* Buttons/tabs: static frame, no creep — many small instances are on screen

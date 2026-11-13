@@ -1034,27 +1034,34 @@ html body .profile-start-chip.selected :is(.profile-kit-icon, img) { filter: dro
    rule that actually wins here (outranks the other padding attempts on this class), and
    its old 20px let the frame eat into the first/last characters of the centered trait
    text ("DEBT SLAVERY..." read as "EBT SLAVERY..."). */
+/* Faction pick: ship (with crest badge) above; text block below in its own container. */
 html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview {
-    flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; align-items: center;
-    gap: clamp(12px, calc(2 * var(--sv-w)), 28px); width: 100%; box-sizing: border-box; padding: 12px 36px;
+    flex-direction: column; flex-wrap: nowrap; justify-content: center; align-items: center;
+    gap: clamp(12px, calc(2 * var(--sv-h)), 20px); width: 100%; box-sizing: border-box; padding: 16px 28px;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview .profile-faction-ship-wrap {
+    flex: 0 0 auto; width: min(100%, 280px); max-width: 100%;
 }
 html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview .profile-faction-ship {
-    flex: 0 0 40%; width: 40% !important; max-width: 40%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
+    display: block !important; width: 100% !important; max-width: 100%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
 }
 html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-preview .profile-faction-preview-text {
-    flex: 1 1 0; width: auto; min-width: 0; justify-items: start; text-align: left; justify-content: start; grid-template-columns: auto minmax(0, 1fr);
+    flex: 0 0 auto; width: 100%; min-width: 0; align-items: center; text-align: center; justify-content: center;
 }
 
-/* Same horizontal card on the start-setup step. */
+/* Start-setup step: ship+badge left, text container right. */
 html body .profile-selection-name-mode.is-name-step .profile-faction-preview {
     flex-direction: row; flex-wrap: nowrap; justify-content: flex-start; align-items: center;
     gap: clamp(16px, calc(3 * var(--sv-w)), 40px); width: 100%; max-width: none; box-sizing: border-box; padding: 14px 28px;
 }
+html body .profile-selection-name-mode.is-name-step .profile-faction-preview .profile-faction-ship-wrap {
+    flex: 0 0 34%; width: 34%; max-width: 34%;
+}
 html body .profile-selection-name-mode.is-name-step .profile-faction-preview .profile-faction-ship {
-    flex: 0 0 34%; width: 34% !important; max-width: 34%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
+    display: block !important; width: 100% !important; max-width: 100%; height: auto !important; aspect-ratio: 10 / 7; object-fit: contain;
 }
 html body .profile-selection-name-mode.is-name-step .profile-faction-preview .profile-faction-preview-text {
-    flex: 1 1 0; width: auto; min-width: 0; justify-items: start; text-align: left; justify-content: start; grid-template-columns: auto minmax(0, 1fr);
+    flex: 1 1 0; width: auto; min-width: 0; justify-items: start; text-align: left; justify-content: start; align-items: flex-start;
 }
 
 /* Crest and faction name: breathing room. */
@@ -1426,8 +1433,8 @@ html body .profile-start-main .profile-faction-preview { overflow: visible; }
 
 /* Faction card: the ship arrives last, at the very bottom of the card; the crest and name lead. */
 .profile-selection-name-mode .profile-faction-info-row .profile-faction-preview { display: flex; flex-direction: column; align-items: center; }
-.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview > .profile-faction-ship { order: 3; margin-top: auto; }
-.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview > .profile-faction-preview-text { order: 1; margin-bottom: auto; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview > .profile-faction-ship-wrap { order: 1; margin: 0; }
+.profile-selection-name-mode .profile-faction-info-row .profile-faction-preview > .profile-faction-preview-text { order: 2; margin: 0; }
 /* Fact tabs (galaxy / playstyle / weapon / allies): label, value and note scale together with the fitted size. */
 .profile-selection-name-mode .profile-faction-tabpanel .profile-faction-fact-label { font-size: 0.7em !important; }
 .profile-selection-name-mode .profile-faction-tabpanel .profile-faction-fact-value { font-size: 1em !important; line-height: 1.4; }
@@ -1457,8 +1464,7 @@ html body .profile-selection-name-mode .profile-faction-info-row .profile-factio
     justify-content: center; align-items: center; text-align: center;
 }
 
-/* Faction preview card: no ship sprite - except on the start step, which shows the chosen profile's ship. */
-html body .profile-selection-name-mode .profile-faction-info-row:not(.profile-start-main *) .profile-faction-ship { display: none !important; }
+/* Faction preview card: ship stays visible; crest rides it as a corner badge. */
 
 /* ── Faction info tabs (choose-faction step): icons, bars, map and cards instead of one line of text ── */
 .pfx { display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; box-sizing: border-box; min-height: 100%; }
@@ -1503,9 +1509,9 @@ html body .profile-selection-name-mode .profile-faction-info-row:not(.profile-st
 .pfx-card.rival { opacity: .85; border-style: dashed; }
 .pfx-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pfx-card-text b { color: var(--fc); letter-spacing: 2px; font-size: var(--font-h2, 16px); }
-/* Left container of the faction step: emblem, name, traits, hero and ship as one block, centred vertically. */
+/* Left container of the faction step: ship+badge above, text block below. */
 .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-preview { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; }
-.profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-preview .profile-faction-ship { position: static; margin: 0; align-self: center; }
+.profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-preview .profile-faction-ship-wrap { position: relative; margin: 0; align-self: center; }
 .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-preview .profile-faction-preview-text { align-items: center; text-align: center; }
 html body .profile-selection-name-mode .profile-faction-info-row .profile-faction-preview > .profile-faction-preview-text { margin-bottom: 0; }
 /* The tab content fills the card: map / bars / cards take the free height instead of leaving a void. */
@@ -1519,19 +1525,11 @@ html body .profile-selection-name-mode .profile-faction-info-row .profile-factio
 .pfx-allies .pfx-card { padding: 12px 14px; }
 .pfx-allies .pfx-card-emb { display: inline-flex; }
 
-/* Faction card: big hi-res crest, faction-coloured name, divider and trait lines. */
+/* Faction card: crest badges the ship; name/traits sit below in their own text container. */
 html body .profile-faction-info-row .profile-faction-preview { gap: 14px; }
-html body .profile-faction-info-row .profile-faction-preview-head { flex-direction: column; gap: 18px; }
-html body .profile-faction-info-row .profile-faction-preview-head { display: flex; width: 100%; align-items: center; justify-content: center; text-align: center; }
 html body .profile-faction-info-row .profile-faction-preview-text { align-items: center; text-align: center; justify-items: center; width: 100%; }
-html body .profile-faction-info-row .profile-faction-preview-head > * { margin-left: auto; margin-right: auto; }
-html body .profile-faction-info-row .profile-faction-preview-head .profile-faction-preview-emblem {
-    width: var(--pfc-crest-size, 210px) !important; height: var(--pfc-crest-size, 210px) !important; flex: 0 0 auto;
-    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent)) drop-shadow(0 0 40px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent));
-}
-html body .profile-faction-info-row .profile-faction-preview-head .profile-faction-preview-emblem img { width: 100%; height: 100%; image-rendering: pixelated; }
 html body .profile-faction-info-row .profile-faction-preview-name {
-    font-size: clamp(26px, calc(4 * var(--sv-h)), 44px) !important; letter-spacing: 6px;
+    font-size: clamp(22px, calc(3.2 * var(--sv-h)), 36px) !important; letter-spacing: 6px;
     color: var(--faction-accent, var(--color-primary));
     text-shadow: 0 0 12px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
 }
@@ -1547,8 +1545,6 @@ html body .profile-faction-info-row .profile-faction-preview-hero {
     padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, transparent);
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, transparent); width: auto !important;
 }
-html body .profile-faction-info-row .profile-faction-preview-emblem > .ui-icon-tip { display: block; width: 100%; height: 100%; }
-html body .profile-faction-info-row .profile-faction-preview-emblem img { width: 100% !important; height: 100% !important; max-width: none; image-rendering: pixelated; }
 
 /* Start step: SHIP row under the start profiles. */
 .profile-ship-list { margin-top: 10px; }
@@ -1557,29 +1553,8 @@ html body .profile-faction-info-row .profile-faction-preview-emblem img { width:
 .profile-ship-pick b { font-size: var(--font-small, 12px); letter-spacing: 1.5px; }
 .profile-start-col { display: flex; flex-direction: column; gap: 0; min-width: 0; }
 
-/* Faction card (.pfc): one place to size and align the crest block.
-   Tune with --pfc-crest-size / --pfc-gap on .pfc; parts: .pfc-head > .pfc-crest + .pfc-name, then .pfc-traits, .pfc-hero. */
-html body .pfc { --pfc-crest-size: clamp(130px, calc(24 * var(--sv-h)), 210px); --pfc-gap: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pfc-gap); width: 100%; text-align: center; }
-html body .pfc .pfc-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pfc-gap); width: 100%; }
-html body .pfc .pfc-crest { display: flex; align-items: center; justify-content: center; width: var(--pfc-crest-size) !important; height: var(--pfc-crest-size) !important; margin: 0 auto !important; flex: 0 0 auto; }
-html body .pfc .pfc-crest .ui-icon-tip { display: flex; align-items: center; justify-content: center; width: 100% !important; height: 100% !important; }
-/* The img is now rendered (see renderEmblemAtSize, core-look.js) at .pfc-crest's own real measured
-   size, not a fixed 192px — stretching it with width/height:100% here afterward would just
-   reintroduce the exact non-integer CSS scale this was meant to avoid, so it keeps its own
-   intrinsic size and is only ever capped (never stretched) by max-width/max-height.
-   A readable outline comes from the sprite's own baked-in outline ring (most faction emblems
-   already have one — see emblems-hires.js), not a CSS filter: a multi-offset drop-shadow was
-   tried here, but at the sprite's actual pixel pitch the handful of offset copies land on top of
-   the icon's OWN internal shading edges too (not just the outer silhouette), and at this image's
-   now-exact 1:1 size that reads as a grid/moiré pattern over the whole icon instead of a clean
-   outer outline — reported as "nur geslized". Any faction emblem missing its own outline ring
-   gets one added directly to its pixel data instead (see addOutlineRing.py).
-   image-rendering is deliberately NOT pixelated here: the bitmap is rendered slightly oversized
-   on purpose (EMBLEM_OVERSAMPLE, core-look.js) so this max-width/max-height cap does a small
-   SMOOTH downscale — a forced-crisp 1:1 render beat visibly against the game's global horizontal
-   scanline overlay (moiré), reported as "das Gitter ist noch da"; this is the deliberate fix for
-   that, not an oversight. */
-html body .pfc .pfc-crest img { max-width: 100% !important; max-height: 100% !important; width: auto !important; height: auto !important; object-fit: contain; image-rendering: auto !important; }
+/* Faction card (.pfc): text block under the ship. Crest lives on .profile-faction-ship-badge. */
+html body .pfc { --pfc-gap: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--pfc-gap); width: 100%; text-align: center; }
 html body .pfc .pfc-name, html body .pfc .pfc-traits, html body .pfc .pfc-hero { margin-left: auto; margin-right: auto; text-align: center; }
 
 /* Start step: ship keeps its aspect (no flex squashing), crisp pixels like in game, readable stats. */
@@ -1946,10 +1921,24 @@ html body .profile-selection-name-mode:not(.is-name-step):not(.is-pilot-step) .p
     letter-spacing: 2px;
 }
 html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
     flex: 1 1 0 !important;
     min-height: 0 !important;
     margin: 0 !important;
     align-items: stretch;
+    gap: 12px;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-preview,
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-lore {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 0 0 auto;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-lore {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 html body .profile-selection-name-mode .profile-faction-info-row > :is(.profile-faction-preview, .profile-faction-lore) {
     min-height: 0;
@@ -1992,4 +1981,309 @@ html body .profile-selection-name-mode .profile-faction-tabcard .profile-faction
     overflow-y: auto !important;
     margin: 0 36px 36px !important;
     padding: 18px 22px !important;
+}
+
+/* Ship + faction crest badge; text lives in .profile-faction-preview-text underneath / beside. */
+.profile-faction-ship-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    max-width: 100%;
+    isolation: isolate;
+}
+.profile-faction-ship-wrap .profile-faction-ship {
+    display: block;
+    position: relative;
+    z-index: 1;
+}
+.profile-faction-ship-wrap .profile-faction-ship-badge,
+.profile-faction-ship-wrap .profile-faction-preview-emblem {
+    --pfc-crest-size: clamp(40px, calc(7 * var(--sv-h)), 64px);
+    position: absolute;
+    right: 2%;
+    bottom: 4%;
+    z-index: 2;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: var(--pfc-crest-size) !important;
+    height: var(--pfc-crest-size) !important;
+    margin: 0 !important;
+    pointer-events: none;
+    filter:
+        drop-shadow(0 0 6px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent))
+        drop-shadow(0 2px 0 #05060a);
+}
+.profile-faction-ship-wrap .profile-faction-ship-badge .ui-icon-tip,
+.profile-faction-ship-wrap .profile-faction-preview-emblem .ui-icon-tip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100% !important;
+    height: 100% !important;
+}
+.profile-faction-ship-wrap .profile-faction-ship-badge img,
+.profile-faction-ship-wrap .profile-faction-preview-emblem img {
+    max-width: 100% !important;
+    max-height: 100% !important;
+    width: auto !important;
+    height: auto !important;
+    object-fit: contain;
+    image-rendering: auto !important;
+}
+html body .profile-faction-info-row .profile-faction-preview > .profile-faction-preview-text {
+    box-sizing: border-box;
+    padding: 10px 14px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #050508);
+}
+
+/* Under lore: rough stat focuses + preferred / affinity weapons. */
+.profile-faction-focus {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #050508);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.profile-faction-focus .pff-style {
+    margin: 0;
+    color: color-mix(in srgb, #fff 88%, var(--faction-accent, var(--color-primary)));
+    line-height: 1.35;
+}
+.profile-faction-focus .pff-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.profile-faction-focus .pff-label {
+    flex: 0 0 auto;
+    min-width: 7.5em;
+    font-size: var(--font-small, 12px);
+    letter-spacing: 2px;
+    color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 75%, #fff);
+    opacity: 0.85;
+}
+/* Preferred + bonus share one bordered cluster with a fixed 2-row height so
+   every faction's focus strip stays the same tall (no jump when chip counts differ). */
+.profile-faction-focus .pff-weapons-cluster {
+    display: grid;
+    grid-template-rows: 36px 36px auto;
+    gap: 6px;
+    padding: 8px;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #05060a);
+}
+.profile-faction-focus .pff-unlock-row {
+    height: auto;
+    min-height: 36px;
+    align-items: flex-start;
+}
+.profile-faction-focus .pff-unlock {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 5px 9px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 16%, #05060a);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 22%, transparent);
+    max-width: 100%;
+}
+.profile-faction-focus .pff-unlock b {
+    font-size: var(--font-small, 12px);
+    letter-spacing: 2px;
+    color: var(--faction-accent, var(--color-primary));
+}
+.profile-faction-focus .pff-unlock em {
+    font-style: normal;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: #fff;
+}
+.profile-faction-focus .pff-unlock small {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: color-mix(in srgb, #fff 75%, var(--faction-accent, var(--color-primary)));
+    line-height: 1.3;
+}
+.profile-faction-focus .pff-unlocks {
+    height: auto !important;
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+}
+.pfx-unlocks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.pfx-unlock-card {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+    background: color-mix(in srgb, var(--color-primary) 12%, #05060a);
+}
+.pfx-unlock-card .pfx-unlock-label,
+.pfx-unlocks .pfx-group-label {
+    font-size: var(--font-small, 12px);
+    letter-spacing: 2px;
+    color: var(--color-primary);
+}
+.pfx-unlock-card b { color: #fff; letter-spacing: 1.5px; }
+.pfx-unlock-card small { color: color-mix(in srgb, #fff 75%, var(--color-primary)); }
+.profile-faction-focus .pff-weapons-row {
+    display: grid;
+    grid-template-columns: 7.5em minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+    min-height: 36px;
+    height: 36px;
+}
+.profile-faction-focus .pff-weapons-row .pff-label {
+    min-width: 0;
+}
+.profile-faction-focus .pff-chips,
+.profile-faction-focus .pff-weapons {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+.profile-faction-focus .pff-weapons {
+    height: 36px;
+    overflow: hidden;
+}
+.profile-faction-focus .pff-chip,
+.profile-faction-focus .pff-level {
+    padding: 3px 8px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 50%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 14%, #05060a);
+    letter-spacing: 1.5px;
+    font-size: var(--font-small, 12px);
+    color: #fff;
+}
+.profile-faction-focus .pff-level {
+    margin-left: auto;
+    opacity: 0.9;
+}
+.profile-faction-focus .pff-bars {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 6px 12px;
+}
+.profile-faction-focus .pff-stat {
+    display: grid;
+    grid-template-columns: 32px 1fr;
+    align-items: center;
+    gap: 10px;
+    opacity: 0.55;
+    transition: opacity 0.15s ease;
+}
+.profile-faction-focus .pff-stat.is-focus {
+    opacity: 1;
+}
+.profile-faction-focus .pff-stat-ico-wrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    filter: grayscale(0.35) brightness(0.85);
+}
+.profile-faction-focus .pff-stat.is-focus .pff-stat-ico-wrap {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent));
+}
+.profile-faction-focus .pff-stat-ico-wrap :is(img, canvas, svg, .ui-icon-tip, .pff-stat-ico) {
+    width: 28px;
+    height: 28px;
+    display: block;
+    image-rendering: pixelated;
+}
+.profile-faction-focus .pff-stat b {
+    font-size: var(--font-small, 12px);
+    letter-spacing: 1.5px;
+    color: color-mix(in srgb, #fff 80%, var(--faction-accent, var(--color-primary)));
+}
+.profile-faction-focus .pff-cells {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 3px;
+}
+.profile-faction-focus .pff-cells i {
+    height: 14px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 12%, #05060a);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 28%, transparent);
+    box-sizing: border-box;
+}
+.profile-faction-focus .pff-stat.is-focus .pff-cells i {
+    height: 18px;
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent);
+}
+.profile-faction-focus .pff-cells i.on {
+    background: var(--faction-accent, var(--color-primary));
+    box-shadow: 0 0 5px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, transparent);
+}
+.profile-faction-focus .pff-stat.is-focus .pff-cells i.on {
+    box-shadow:
+        0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 80%, transparent),
+        0 0 2px #fff;
+}
+.profile-faction-focus .pff-weapon {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 36px;
+    box-sizing: border-box;
+    padding: 0 8px 0 4px;
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, transparent);
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a);
+    flex: 0 0 auto;
+}
+.profile-faction-focus .pff-weapon.is-bonus {
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent);
+    box-shadow: 0 0 8px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 25%, transparent);
+}
+.profile-faction-focus .pff-weapon b {
+    font-size: var(--font-small, 12px);
+    letter-spacing: 1px;
+    color: #fff;
+    line-height: 1;
+}
+.profile-faction-focus .pff-weapon em {
+    font-style: normal;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--faction-accent, var(--color-primary));
+    line-height: 1;
+}
+.profile-faction-focus .pff-weapon :is(img, canvas, svg, .ui-icon-tip) {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+}
+.profile-faction-focus .pff-empty {
+    font-size: var(--font-small, 12px);
+    letter-spacing: 1.5px;
+    opacity: 0.55;
+    color: #fff;
+}
+html body .profile-selection-name-mode:not(.is-name-step) .profile-faction-info-row > .profile-faction-focus {
+    flex: 0 0 auto;
+    width: 100%;
 }

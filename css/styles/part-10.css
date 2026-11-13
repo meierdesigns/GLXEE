@@ -214,19 +214,588 @@ html[data-ui-controls="off"] .onboarding-content .profile-selection-instructions
 
 /* Onboarding */
 .onboarding-content {
-    max-width: min(calc(560px * var(--zk)), calc(96 * var(--cw)));
+    max-width: none;
     text-align: center;
 }
-.onboarding-story {
-    text-align: left;
-    margin: 0 0 20px;
-    color: var(--color-text);
-    letter-spacing: 1px;
-    line-height: 1.55;
-    font-size: var(--font-h2);
+html body .profile-selection-overlay.onboarding-overlay,
+html:has(#vf-bezel) body .profile-selection-overlay.onboarding-overlay {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    /* Overlay is already sized to the glass opening (part-19). --vf-stage-shape
+       would inset fr-open again and clip stepper icons + left story text. */
+    clip-path: none !important;
 }
-.onboarding-story p {
-    margin: 0 0 12px;
+.onboarding-overlay > .profile-selection-content {
+    position: relative;
+    z-index: 1;
+}
+html body .onboarding-overlay > .onboarding-stepper.profile-stepper {
+    position: relative !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    flex: 0 0 auto;
+    height: 92px !important;
+    padding-top: 14px !important;
+    --faction-accent: var(--faction-color, var(--color-primary));
+    color: #f4f7fc;
+    background: #05060a !important;
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 70%, #fff) !important;
+}
+html body .onboarding-overlay:has(> .onboarding-stepper) {
+    padding-top: 0 !important;
+}
+html body .onboarding-overlay > .onboarding-bar.profile-selection-bar {
+    margin: 0 !important;
+    padding-left: 24px !important;
+    padding-right: 24px !important;
+    flex: 0 0 auto;
+    background: #05060a !important;
+    border-top: 2px solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 70%, #fff) !important;
+}
+html body .onboarding-overlay .profile-stepper-step {
+    opacity: 0.55 !important;
+    filter: none !important;
+    color: #dce3ee !important;
+}
+html body .onboarding-overlay .profile-stepper-step.is-done {
+    opacity: 0.8 !important;
+}
+html body .onboarding-overlay .profile-stepper-step.is-current {
+    opacity: 1 !important;
+    color: #fff !important;
+    filter: none !important;
+}
+html body .onboarding-overlay .profile-stepper-label {
+    color: inherit !important;
+    font-size: 15px !important;
+    letter-spacing: 0.18em;
+    text-shadow: 1px 1px 0 #05060a, 0 0 6px #05060a;
+}
+html body .onboarding-overlay .profile-stepper-icon {
+    color: inherit !important;
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 0 1px #05060a) !important;
+}
+html body .onboarding-overlay .profile-stepper-step.is-current .profile-stepper-icon {
+    color: var(--faction-color, var(--color-primary)) !important;
+    filter:
+        drop-shadow(0 0 1px #05060a)
+        drop-shadow(0 0 6px color-mix(in srgb, var(--faction-color, var(--color-primary)) 80%, transparent)) !important;
+}
+/* Shared panel frame so left cards + planet stage read as containers. */
+html body .onboarding-overlay .onboarding-panel {
+    border: var(--ui-border-width-thick, 3px) solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 78%, #fff) !important;
+    box-shadow:
+        inset 0 0 0 var(--ui-border-width, 2px) #05060a,
+        0 0 0 2px color-mix(in srgb, var(--faction-color, var(--color-primary)) 40%, transparent) !important;
+    background: #07090f !important;
+    box-sizing: border-box;
+}
+html body .onboarding-overlay .onboarding-preview-card {
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 72%, #fff) !important;
+    box-shadow: inset 0 0 0 1px #05060a !important;
+    background: #0c1018 !important;
+    background-image: none !important;
+    padding: 18px 20px !important;
+    position: relative;
+    z-index: 1;
+    --fp-surface-opacity: 0 !important;
+}
+/* Drop faction grid/ornament overlays so lore stays readable. */
+html body .onboarding-overlay .onboarding-preview-card::before,
+html body .onboarding-overlay .onboarding-preview-card::after {
+    display: none !important;
+}
+html body .onboarding-overlay .onboarding-preview-card > * {
+    position: relative;
+    z-index: 2;
+}
+/* Faction homeworld: fill remaining glass between stepper and bar. */
+html body .onboarding-overlay > .onboarding-homeworld-site.profile-selection-content {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr) !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    gap: 14px !important;
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 14px 16px !important;
+    overflow: hidden !important;
+    overflow-clip-margin: 0 !important;
+    box-sizing: border-box !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+html body .onboarding-overlay > .onboarding-name-panel,
+html body .onboarding-overlay > .onboarding-ship-panel {
+    flex: 1 1 auto !important;
+    width: min(720px, 92%) !important;
+    max-width: 720px !important;
+    margin: 16px auto !important;
+    padding: 24px !important;
+    align-self: center !important;
+}
+html body .onboarding-overlay > .onboarding-pilot-panel {
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 12px 16px !important;
+    padding: 16px 18px !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+html body .onboarding-overlay > .onboarding-pilot-panel > .profile-selection-title,
+html body .onboarding-overlay > .onboarding-pilot-panel > .onboarding-hint {
+    flex: 0 0 auto;
+}
+html body .onboarding-overlay > .onboarding-pilot-panel > .onboarding-pilot-options {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+html body .onboarding-overlay > .onboarding-pilot-panel .profile-start-row[data-start-row="pilot"] {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+html body .onboarding-overlay > .onboarding-pilot-panel .profile-pilot-card {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+html body .onboarding-overlay .onboarding-name-portrait {
+    width: 64px !important;
+    height: 72px !important;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+html body .onboarding-overlay .onboarding-name-portrait canvas,
+html body .onboarding-overlay .onboarding-name-portrait img,
+html body .onboarding-overlay .onboarding-name-portrait svg {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.onboarding-homeworld-main {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    min-width: 0;
+    min-height: 0;
+    padding: 16px 18px 14px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+.onboarding-homeworld-main > .profile-selection-title,
+.onboarding-homeworld-main > .onboarding-story,
+.onboarding-homeworld-main > .profile-faction-picker,
+.onboarding-homeworld-main > .profile-selection-actions,
+.onboarding-homeworld-main > .profile-selection-instructions {
+    flex: 0 0 auto;
+    margin: 0 !important;
+}
+.onboarding-homeworld-main > .onboarding-faction-preview {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    max-height: none !important;
+    height: auto !important;
+}
+.onboarding-homeworld-main > .profile-faction-picker {
+    flex: 0 0 auto;
+}
+.onboarding-homeworld-stage {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(ellipse at 50% 48%, color-mix(in srgb, var(--faction-color, var(--color-primary)) 22%, transparent), transparent 58%),
+        linear-gradient(180deg, #05060a 0%, #020308 100%);
+}
+.onboarding-homeworld-stage .hero-planet-canvas {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 0 !important;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+.onboarding-homeworld-label {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    bottom: auto;
+    z-index: 2;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 12px;
+    max-width: calc(100% - 28px);
+    pointer-events: none;
+    color: #fff;
+    text-shadow:
+        -1px 0 0 #05060a, 1px 0 0 #05060a, 0 -1px 0 #05060a, 0 1px 0 #05060a,
+        0 0 10px color-mix(in srgb, var(--faction-color, var(--color-primary)) 70%, transparent);
+}
+.onboarding-homeworld-crest {
+    flex: 0 0 auto;
+    width: 128px;
+    height: 128px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.onboarding-homeworld-crest :is(img, canvas, svg, .ui-icon-tip, .profile-faction-emblem-img) {
+    width: 128px !important;
+    height: 128px !important;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+.onboarding-homeworld-title {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    max-width: 42em;
+}
+.onboarding-homeworld-name {
+    font-size: calc(var(--font-h1, 32px) + 6px);
+    letter-spacing: 0.16em;
+    font-weight: 800;
+    line-height: 1.05;
+    color: #fff;
+}
+.onboarding-homeworld-sub {
+    font-size: var(--font-text, 14px);
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    opacity: 0.85;
+    color: color-mix(in srgb, #fff 80%, var(--faction-color, var(--color-primary)));
+}
+.onboarding-homeworld-lore {
+    margin: 14px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 35%, transparent);
+    font-size: calc(var(--font-text, 14px) + 1px);
+    line-height: 1.45;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    color: #f8fafc;
+}
+/* Faction row: emblems above labels (not colour dots), full names visible. */
+.onboarding-content .profile-faction-swatches {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+}
+.onboarding-content .profile-faction-swatch {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px;
+    min-width: 0;
+    padding: 12px 6px 10px !important;
+}
+.onboarding-content .profile-faction-swatch-emblem {
+    width: 48px !important;
+    height: 48px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+}
+.onboarding-content .profile-faction-swatch-emblem img,
+.onboarding-content .profile-faction-swatch-emblem .ui-icon-tip {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.onboarding-content .profile-faction-swatch-label {
+    max-width: 100%;
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    text-align: center;
+    line-height: 1.1;
+    letter-spacing: 0.5px !important;
+    font-size: 11px !important;
+}
+.onboarding-faction-preview {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    gap: 10px !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    align-items: stretch !important;
+    text-align: left;
+    overflow: hidden !important;
+}
+.onboarding-faction-preview .profile-faction-preview {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: auto !important;
+    max-width: none !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    padding: 16px 14px !important;
+    box-sizing: border-box;
+}
+.onboarding-faction-preview .profile-faction-ship-wrap {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 160px;
+}
+html body .onboarding-overlay .onboarding-faction-preview .profile-faction-ship {
+    display: block !important;
+    width: 100% !important;
+    max-width: 160px !important;
+    height: 100px !important;
+    flex: 0 0 auto !important;
+    image-rendering: pixelated;
+}
+.onboarding-faction-preview .profile-faction-preview-text {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 40%, transparent);
+    background: color-mix(in srgb, var(--faction-color, var(--color-primary)) 8%, #050508);
+}
+.onboarding-faction-preview .profile-faction-ship-wrap .profile-faction-preview-emblem {
+    --pfc-crest-size: 36px;
+    width: 36px !important;
+    height: 36px !important;
+}
+.onboarding-faction-preview .profile-faction-preview-name {
+    font-size: var(--font-h2) !important;
+    line-height: 1.1 !important;
+}
+.onboarding-faction-preview .profile-faction-preview-trait,
+.onboarding-faction-preview .profile-faction-preview-hero {
+    display: block;
+    white-space: normal !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-height: 2.6em;
+    font-size: 11px !important;
+    line-height: 1.25 !important;
+}
+/* One dossier card: lore → focus → full-width bars (grow) → weapons. */
+html body .onboarding-overlay .onboarding-faction-dossier {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    box-sizing: border-box;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 14px;
+    padding: 16px 18px;
+    overflow: hidden;
+    border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 55%, transparent);
+    background: #0c1018;
+    color: #f8fafc;
+}
+html body .onboarding-overlay .onboarding-dossier-lore:empty {
+    display: none !important;
+}
+html body .onboarding-overlay .onboarding-dossier-lore,
+html body .onboarding-overlay .onboarding-dossier-lore p {
+    margin: 0;
+    color: #f8fafc !important;
+    font-size: calc(var(--font-text, 14px) + 1px) !important;
+    line-height: 1.45 !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.3px;
+    text-shadow: 1px 1px 0 #05060a;
+}
+html body .onboarding-overlay .onboarding-faction-dossier > .profile-faction-focus {
+    min-height: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+}
+html body .onboarding-overlay .onboarding-faction-dossier > .profile-faction-focus > .pff-style,
+html body .onboarding-overlay .onboarding-faction-dossier > .profile-faction-focus > .pff-row,
+html body .onboarding-overlay .onboarding-faction-dossier > .profile-faction-focus > .pff-weapons-cluster {
+    flex: 0 0 auto;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-style {
+    margin: 0;
+    padding: 0 0 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 28%, transparent);
+    line-height: 1.35;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-row {
+    width: 100%;
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-label {
+    min-width: 6.5em;
+    flex: 0 0 6.5em;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-bars {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-evenly;
+    gap: 10px;
+    grid-template-columns: none !important;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-stat {
+    display: grid !important;
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    gap: 12px !important;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-stat:last-child:nth-child(odd) {
+    grid-column: auto;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-cells {
+    width: 100%;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-cells i {
+    height: 16px;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-stat.is-focus .pff-cells i {
+    height: 20px;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-weapons-cluster {
+    width: 100%;
+    margin: 0;
+}
+html body .onboarding-overlay .onboarding-faction-preview .pff-weapons-row {
+    grid-template-columns: 6.5em minmax(0, 1fr) !important;
+}
+.onboarding-faction-goal { color: var(--color-text-secondary); margin: 0 !important; }
+.onboarding-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 0 0 16px;
+}
+.onboarding-name-row .profile-name-crest {
+    width: 48px;
+    height: 48px;
+    flex: none;
+    display: inline-flex;
+}
+.onboarding-name-row .profile-name-crest img,
+.onboarding-name-row .profile-name-crest .ui-icon-tip {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+html body .onboarding-overlay .onboarding-story {
+    text-align: left;
+    margin: 0;
+    color: #f8fafc !important;
+    letter-spacing: 0.5px;
+    line-height: 1.5;
+    font-size: calc(var(--font-text, 14px) + 2px) !important;
+    font-weight: 700 !important;
+    flex: 0 0 auto;
+    text-shadow: 1px 1px 0 #05060a, 0 0 6px #05060a;
+}
+html body .onboarding-overlay .onboarding-story p {
+    margin: 0 0 8px;
+    color: #f8fafc !important;
+    font-weight: inherit !important;
+}
+.onboarding-homeworld-site .profile-selection-title {
+    margin: 0 0 6px !important;
+    color: #fff !important;
+    text-shadow: 2px 2px 0 #05060a, 0 0 8px color-mix(in srgb, var(--faction-color, var(--color-primary)) 55%, transparent);
+}
+.onboarding-homeworld-site .profile-faction-picker {
+    flex: 0 0 auto;
+    margin: 0 !important;
+}
+.onboarding-homeworld-site .profile-faction-picker-label {
+    color: #fff !important;
+    letter-spacing: 0.16em;
+    text-shadow: 1px 1px 0 #05060a;
+    margin-bottom: 8px !important;
+}
+.onboarding-content .profile-faction-swatch-label {
+    color: #f4f6fa !important;
+    text-shadow: 1px 1px 0 #05060a !important;
+}
+.onboarding-faction-preview .profile-faction-preview-name {
+    color: #fff !important;
+    text-shadow: 1px 1px 0 #05060a !important;
+}
+.onboarding-faction-preview .profile-faction-preview-trait,
+.onboarding-faction-preview .profile-faction-preview-hero {
+    color: #d7dbe6 !important;
+    text-shadow: 1px 1px 0 #05060a !important;
+}
+.onboarding-faction-goal {
+    color: #e2e8f0 !important;
+}
+.onboarding-faction-preview .profile-faction-preview-name {
+    font-weight: 700 !important;
+}
+.onboarding-faction-preview .profile-faction-preview-trait,
+.onboarding-faction-preview .profile-faction-preview-hero {
+    color: #e8edf5 !important;
+    font-weight: 600 !important;
+    max-height: none !important;
+}
+.onboarding-hint,
+.onboarding-ship-stats,
+.onboarding-content .hs-status {
+    color: #dce1ea !important;
+    text-shadow: 1px 1px 0 #05060a;
 }
 .onboarding-hint {
     color: var(--color-text-secondary);

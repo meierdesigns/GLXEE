@@ -172,7 +172,7 @@ only and never nested inside the download ZIP. DevMode editors load from
 | Escape | Pause; switch menu groups in the station |
 | Gamepad | Stick move; LB/RB/LT/RT = A/S/D/Space fire; L3 boost; R3 shot type; Start pause; menu cursor |
 | Ctrl + 1–8 | Select color palette |
-| `#` or Settings → Assets | Open Asset Generator |
+| `#` or Settings → Assets | Open Asset Generator (PORTRAITS: reference → batch replace faces) |
 | Settings → Faction | Open Faction Command |
 | Bezel FX → AUDIO | Master / sounds / music; STYLE · AMOUNT · SPEED · channel voices |
 
@@ -1082,6 +1082,7 @@ be reviewed or reverted independently.
 | 74M | DevMode Face Editor entry | Shift+C DevMode in onboarding; Settings/Bezel/PORTRAITS open Face Editor (Flux); Face Editor hosts in bezel glass |
 | 74N | Pirate chain slow | CHAIN unlock slows hit hulls briefly; scrap slug fan + item-track gates for pirate kit |
 | 74O | Story launch dialogue | Launch cutscene spoken beats via story-dialogue; path blurbs and mission copy refresh |
+| 74P | Station UI polish | Faction pick layout, bezel glass hosts, hangar/play chrome, Kronax frame soft round, pilot HUD empty plate |
 
 The wave commit convention is:
 

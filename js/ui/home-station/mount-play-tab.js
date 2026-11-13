@@ -4,32 +4,40 @@
 extendClass(HomeStationUI, {
     mountPlayTab() {
         const mount = this.overlay && this.overlay.querySelector('#hsPlayMount');
-        if (!mount || typeof galaxyMapManager === 'undefined') return;
-        const profile = this.getProfile();
-        const galaxyId = (typeof profileManager !== 'undefined')
-            ? profileManager.getCurrentGalaxyId(profile)
-            : 'milky_way';
-        galaxyMapManager.show({
-            galaxyId: galaxyId,
-            mount: mount,
-            onConfirm: (planet) => this.startMission(planet),
-            onBack: () => {
-                this.exitPlayMap();
-                this.tab = 'station';
-                this.statusMsg = '';
-                this.persistTab();
-                this.createUI();
-            },
-            onEscape: () => {
-                this.exitPlayMap();
-            },
-            onExplored: () => {},
-            onDock: (post) => this.openTradingPost(post)
-        });
-        this.mountTravelControls(mount);
-        // Back from a mission: keep the keyboard in the map on the selected planet.
-        if (galaxyMapManager.isInputActive()) this.enterPlayMap();
-        this.syncPlayHint();
+        if (!mount) return;
+        const run = () => {
+            if (typeof galaxyMapManager === 'undefined') return;
+            const profile = this.getProfile();
+            const galaxyId = (typeof profileManager !== 'undefined')
+                ? profileManager.getCurrentGalaxyId(profile)
+                : 'milky_way';
+            galaxyMapManager.show({
+                galaxyId: galaxyId,
+                mount: mount,
+                onConfirm: (planet) => this.startMission(planet),
+                onBack: () => {
+                    this.exitPlayMap();
+                    this.tab = 'station';
+                    this.statusMsg = '';
+                    this.persistTab();
+                    this.createUI();
+                },
+                onEscape: () => {
+                    this.exitPlayMap();
+                },
+                onExplored: () => {},
+                onDock: (post) => this.openTradingPost(post)
+            });
+            this.mountTravelControls(mount);
+            // Back from a mission: keep the keyboard in the map on the selected planet.
+            if (galaxyMapManager.isInputActive()) this.enterPlayMap();
+            this.syncPlayHint();
+        };
+        if (typeof galaxyMapManager === 'undefined' && typeof window.ensureVfGalaxy === 'function') {
+            window.ensureVfGalaxy(() => run());
+            return;
+        }
+        run();
     },
 
     /** Galaxy travel modal over the planet map. */

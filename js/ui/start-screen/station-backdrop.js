@@ -38,6 +38,10 @@ class StartStationBackdrop {
         this._faction = 'pirate';
         this._tier = 0;
         this._seed = 'none';
+        // No pilot yet — deep-space vista only (no scrap-pile "home station").
+        this._empty = true;
+        this._stars = null;
+        this._streaks = [];
         this._planetId = null;
         // The player's actual ship, rasterised once from the game's own ship renderer
         // and cached as an <img> so the ~12fps redraw loop can drawImage() it every
@@ -268,6 +272,7 @@ class StartStationBackdrop {
         if (window.vfResizing) { this._deferSync(); return; }
         this.W = w;
         this.H = h;
+        this._stars = null; // rebuild layered starfield for the new aspect
         // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
         // below 1 intentionally under-samples the backing buffer (CSS still stretches it
         // to the same on-screen size) to preview lower-res/perf-constrained rendering.
@@ -480,17 +485,24 @@ class StartStationBackdrop {
     }
 
     show(profile) {
-        const faction = String((profile && profile.faction) || 'pirate');
+        const empty = !profile;
+        const faction = String((profile && profile.faction) || (empty ? 'voidborn' : 'pirate'));
         const { sum, tier } = StartStationBackdrop.tierOf(profile);
         const planetId = StartStationBackdrop.currentPlanetId(profile);
-        const key = `${profile ? profile.id : '-'}|${faction}|${tier}|${planetId}`;
+        const key = `${profile ? profile.id : '-'}|${faction}|${tier}|${planetId}|e${empty ? 1 : 0}`;
         if (key === this.shownKey) return;
         this.shownKey = key;
+        this._empty = empty;
         this._faction = faction;
-        this._tier = tier;
+        this._tier = empty ? 0 : tier;
         this._planetId = planetId;
         this._seed = profile ? String(profile.id || profile.name) : 'none';
-        this._loadShipImage(profile);
+        if (empty) {
+            this._shipImg = null;
+            this._shipImgKey = null;
+        } else {
+            this._loadShipImage(profile);
+        }
         this._loadPlanetImage(planetId, faction);
         // Quick fade-swap so the change reads as a different station
         this.canvas.classList.add('is-swapping');
@@ -523,6 +535,138 @@ class StartStationBackdrop {
         };
     }
 
+    /**
+     * Sparse, clustered starfield — rebuilt on resize. Uneven pockets of sky
+     * instead of a uniform sprinkle; near stars stay chunky (2–3px).
+     */
+    _rebuildStars() {
+        const srnd = this.rngFor('stars:' + this.W + 'x' + this.H);
+        const area = Math.max(1, this.W * this.H);
+        // ~1/3 of the previous density; layers stay few and calm.
+        const layers = [
+            { n: Math.round(area / 1600), size: 1, speed: 0.55, twinkle: 0.12, bright: 0.18 },
+            { n: Math.round(area / 2800), size: 2, speed: 1.1, twinkle: 0.2, bright: 0.32 },
+            { n: Math.max(3, Math.round(area / 9000)), size: 3, speed: 1.8, twinkle: 0.28, bright: 0.55 }
+        ];
+        // A handful of soft cluster centres so density varies across the frame.
+        const clusters = [];
+        const clusterN = 4 + Math.floor(srnd() * 3);
+        for (let i = 0; i < clusterN; i++) {
+            clusters.push({
+                x: srnd() * this.W,
+                y: srnd() * this.H * 0.85,
+                r: Math.min(this.W, this.H) * (0.12 + srnd() * 0.22),
+                w: 0.55 + srnd() * 1.4
+            });
+        }
+        const pickPos = () => {
+            // Mostly near a cluster; sometimes alone in the void.
+            if (srnd() < 0.72 && clusters.length) {
+                const cl = clusters[Math.floor(srnd() * clusters.length)];
+                const ang = srnd() * Math.PI * 2;
+                const d = Math.pow(srnd(), 0.55) * cl.r;
+                return {
+                    x: (cl.x + Math.cos(ang) * d * cl.w + this.W) % this.W,
+                    y: (cl.y + Math.sin(ang) * d * 0.7 + this.H) % this.H
+                };
+            }
+            return { x: srnd() * this.W, y: srnd() * this.H };
+        };
+        const stars = [];
+        layers.forEach((L, li) => {
+            for (let i = 0; i < L.n; i++) {
+                const p = pickPos();
+                stars.push({
+                    x: p.x,
+                    y: p.y,
+                    size: L.size,
+                    speed: L.speed * (0.5 + srnd() * 0.9),
+                    phase: srnd() * Math.PI * 2,
+                    twinkle: L.twinkle * (0.4 + srnd() * 0.8),
+                    bright: srnd() < L.bright,
+                    accent: srnd() < 0.1,
+                    layer: li,
+                    // Most stars barely pulse; a few actually blink.
+                    calm: srnd() < 0.7
+                });
+            }
+        });
+        this._stars = stars;
+    }
+
+    /** Deep-space wash + slow drifting stars + rare shooting streak. */
+    _drawSpace(c, pal, tt, bob) {
+        if (!this._stars) this._rebuildStars();
+        c.fillStyle = '#02040a';
+        c.fillRect(0, 0, this.W, this.H);
+
+        // Quiet nebula — barely moves, low opacity.
+        const nebAmt = this._empty ? 0.12 : 0.06;
+        const nx = this.W * (0.28 + Math.sin(tt * 0.04) * 0.015);
+        const ny = this.H * (0.36 + Math.cos(tt * 0.03) * 0.02) + bob * 0.2;
+        const nr = Math.min(this.W, this.H) * (this._empty ? 0.55 : 0.4);
+        const neb = c.createRadialGradient(nx, ny, 4, nx, ny, nr);
+        neb.addColorStop(0, (pal.accent || '#7ec8ff') + Math.round(nebAmt * 255).toString(16).padStart(2, '0'));
+        neb.addColorStop(0.55, (pal.accent || '#7ec8ff') + '0c');
+        neb.addColorStop(1, '#02040a00');
+        c.fillStyle = neb;
+        c.fillRect(0, 0, this.W, this.H);
+
+        const dim = '#4a5570';
+        const mid = '#9aabcd';
+        const hot = '#e8eef8';
+        for (let i = 0; i < this._stars.length; i++) {
+            const s = this._stars[i];
+            const drift = (tt * s.speed) % (this.W + 8);
+            const x = Math.floor((s.x - drift + this.W + 8) % (this.W + 8) - 4);
+            const y = Math.floor((s.y + Math.sin(tt * 0.12 + s.phase) * (0.25 + s.layer * 0.35)
+                + bob * (0.08 + s.layer * 0.05) + this.H) % this.H);
+            const pulse = s.calm
+                ? (0.78 + 0.22 * Math.sin(tt * (0.25 + s.twinkle * 0.3) + s.phase))
+                : (0.5 + 0.5 * Math.max(0, Math.sin(tt * (0.45 + s.twinkle) + s.phase)));
+            if (pulse < 0.28) continue;
+            let col = s.accent ? pal.accent : (s.bright ? mid : dim);
+            if (s.size >= 3 && pulse > 0.9) col = hot;
+            c.globalAlpha = Math.min(1, 0.4 + pulse * 0.55);
+            c.fillStyle = col;
+            c.fillRect(x, y, s.size, s.size);
+            // Soft cross only on the rare bright near stars
+            if (!s.calm && s.size >= 3 && pulse > 0.9) {
+                c.fillRect(x - 1, y + 1, s.size + 2, 1);
+                c.fillRect(x + 1, y - 1, 1, s.size + 2);
+            }
+        }
+        c.globalAlpha = 1;
+
+        // Rare shooting star on the empty title — at most one, infrequently.
+        if (this._empty && !this._streaks.length
+            && Math.sin(tt * 0.17) > 0.995 && Math.cos(tt * 0.41) > 0.6) {
+            this._streaks.push({
+                x: Math.random() * this.W * 0.65,
+                y: Math.random() * this.H * 0.4,
+                vx: 70 + Math.random() * 40,
+                vy: 22 + Math.random() * 22,
+                life: 0,
+                max: 0.7 + Math.random() * 0.35
+            });
+        }
+        this._streaks = (this._streaks || []).filter((st) => {
+            st.life += this._frameInterval / 1000;
+            if (st.life >= st.max) return false;
+            const u = st.life / st.max;
+            const x = st.x + st.vx * u;
+            const y = st.y + st.vy * u;
+            const len = 8 + (1 - u) * 10;
+            c.globalAlpha = (1 - u) * 0.7;
+            c.fillStyle = '#d8e4f4';
+            for (let k = 0; k < len; k++) {
+                c.fillRect(Math.floor(x - k * 0.9), Math.floor(y - k * 0.35), k < 2 ? 2 : 1, 1);
+            }
+            c.globalAlpha = 1;
+            return true;
+        });
+    }
+
     draw(faction, tier, seed, t) {
         const pal = this.palettes[faction] || this.palettes.pirate;
         const c = this.ctx;
@@ -543,17 +687,7 @@ class StartStationBackdrop {
         const devEditing = !!(this._dragKey || this._dragHandle);
         const bob = devEditing ? 0 : Math.sin(tt * 0.7) * 3;
 
-        // deep space: stars (fixed layout, slight counter-parallax), scaled to the actual canvas area
-        const srnd = this.rngFor('stars');
-        const starDrift = bob * 0.25;
-        c.fillStyle = '#02040a';
-        c.fillRect(0, 0, this.W, this.H);
-        const starCount = Math.round((this.W * this.H) / 420);
-        for (let i = 0; i < starCount; i++) {
-            const big = srnd() < 0.12;
-            c.fillStyle = big ? pal.accent : (srnd() < 0.5 ? '#9aa6c8' : '#4a5578');
-            c.fillRect(Math.floor(srnd() * this.W), Math.floor(srnd() * this.H + starDrift), big ? 2 : 1, big ? 2 : 1);
-        }
+        this._drawSpace(c, pal, tt, bob);
         // A real planet: a sphere whose cap rises from the bottom edge, rendered with
         // PlanetSVGManager's chunky ordered-dither pixel-art and spun the same way the
         // galaxy/planet map animates its globes (_currentPlanetFrame(), detail 12)
@@ -586,6 +720,16 @@ class StartStationBackdrop {
             c.drawImage(planetFrame.img, planetCx - dr, pcy - dr, dr * 2, dr * 2);
             c.restore();
         }
+        // Empty title (no pilot): planet + living starfield only — the old default
+        // pirate scrap-pile read as a broken "city" blob next to NEW PILOT.
+        if (this._empty) {
+            this._hit.station = null;
+            this._hit.ship = null;
+            if (this.devMode) this._drawDevOverlay(c);
+            this._syncDevPanel();
+            return;
+        }
+
         // Everything below is drawn in fixed "station units"; scale it with however
         // big the column actually is so a wide/tall column gets a bigger, more
         // detailed station instead of the same small silhouette floating in more

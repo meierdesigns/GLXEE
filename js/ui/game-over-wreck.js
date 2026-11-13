@@ -113,9 +113,11 @@ const VFGameOverWreck = {
         if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
         const ctx = cv.getContext('2d');
         ctx.clearRect(0, 0, W, H);
-        // Compact wreck behind the card — stays in the bezel margins, not under the panel.
-        const scale = Math.max(2, Math.floor(Math.min(W / (s.w * 1.55), H / (s.h * 1.75))));
-        // Fly in from off-screen left, easing into lower-centre (under the card).
+        const scale = Math.max(2, Math.floor(Math.min(
+            W / (s.w * 1.55),
+            H / (s.h * 1.75)
+        )));
+        // Fly in from off-screen left, easing into place.
         if (s.t0 == null) s.t0 = t;
         const k0 = Math.min(1, (t - s.t0) / 2.4);
         const ease = 1 - Math.pow(1 - k0, 3);

@@ -131,21 +131,22 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bz: max(34px, calc(44 * var(--bz-u)));
     /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before).
-       Side/bottom 56u (was 44): metal + tooth art ate the outer glass px when
-       the hole was flush with the rim. Top keeps the thicker strip via --bz-extra. */
-    --bz-extra: 50;
+       Side/bottom/top 56u: metal + tooth art ate the outer glass px when the
+       hole was flush with a thinner rim. Top --bz-extra was 50 (open 94u) and
+       left a hull gutter under the rim art before BG/glass — keep 12 → 56u. */
+    --bz-extra: 12;
     --fr-open-side: calc(56 * var(--bz-u));
     --fr-open-bottom: calc(56 * var(--bz-u));
-    --fr-open-top: calc((44 + var(--bz-extra, 50)) * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
     --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
     --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
     /* Single glass-host zoom token (station / menus / fight). */
     --vf-glass-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    /* Pull glass inside the hole past faction rim art. Terran/machine/kronax/
-       pirate use --_art-th = --fr-ol + 14u; voidborn vine bites --_vine-ov (16u).
-       Inset = tooth (14) + thin gutter (2). Bezel SVGs 96×96 (viewBox 48);
-       border-image-slice must stay 32 (screen-frame.css). */
-    --vf-glass-inset: calc(16 * var(--bz-u));
+    /* Pull glass just inside the rim. Metal factions use slice-16 (fully
+       opaque band) with --_art-th ≈ --fr-ol + 2u — no deep tooth, so inset
+       is only a thin gutter. (Old +14u tooth + 16u inset bloated 9-slice
+       corners and made the frame read as disconnected blocks.) */
+    --vf-glass-inset: calc(4 * var(--bz-u));
 }
 
 /* One bezel-opening glass host. Body keeps stage-scale; this host is the only
@@ -159,6 +160,7 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
 .start-screen-overlay,
 .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
 .player-selection-overlay,
+.ag-overlay,
 #vf-in-stage-shop.vf-iss,
 #vf-trading-post-shop.hs-tps.vf-iss,
 html body .game-container {
@@ -186,6 +188,16 @@ html body .game-container {
     image-rendering: -moz-crisp-edges;
     image-rendering: pixelated;
     image-rendering: crisp-edges;
+}
+/* Start / station: starfield must meet the inner rim. Default glass inset
+   left a black/hull gutter under the bezel top strip (faction ::before ends
+   at --fr-ot; glass began at --fr-ot + --_gi). Keep side/bottom inset. */
+.start-screen,
+.start-screen-overlay,
+.home-station-overlay > .vf-browser-shell,
+.home-station-overlay > .home-station-content {
+    top: calc(var(--stage-y, 0px) + var(--fr-open-top));
+    height: calc((var(--fr-open-h) - var(--_gi)) / var(--_z));
 }
 .vf-bezel {
     position: absolute;
@@ -242,7 +254,7 @@ html body .game-container {
     image-rendering: pixelated;
 }
 .vf-bezel-vol {
-    /* Child of <html>, dropdown under the mute key: VOL + SND + MUS. */
+    /* Child of <html>, dropdown under the mute key: MUTE + VOL + SND + MUS. */
     position: fixed;
     z-index: 9996;
     display: flex;
@@ -262,6 +274,31 @@ html body .game-container {
     letter-spacing: 0.12em;
     line-height: 1;
     image-rendering: pixelated;
+}
+.vf-bezel-vol .vf-bezel-vol-mute {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    margin: 0 0 2px;
+    padding: 0 8px;
+    border: 2px solid var(--color-primary, #3dff6a);
+    border-radius: 0;
+    background: color-mix(in srgb, var(--color-primary, #3dff6a) 12%, #05060a);
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 2px #05060a;
+}
+.vf-bezel-vol .vf-bezel-vol-mute:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, var(--color-primary, #3dff6a) 24%, #05060a);
+    color: #fff;
+    outline: none;
+}
+.vf-bezel-vol .vf-bezel-vol-mute.is-muted {
+    background: color-mix(in srgb, var(--color-primary, #3dff6a) 28%, #05060a);
+    color: #fff;
 }
 .vf-bezel-vol .vf-bezel-vol-row {
     display: inline-flex;
@@ -367,7 +404,9 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
     justify-content: center;
     background: #0c0e12;
     border: calc(2 * var(--bz-u)) solid #2c313b;
-    border-radius: 0;
+    border-radius: calc(6 * var(--bz-u));
+    /* gv-corners forces border-radius:0 !important — clip still rounds the key. */
+    clip-path: inset(0 round calc(6 * var(--bz-u)));
     color: var(--color-primary, #3dff6a);
     cursor: pointer;
     box-sizing: border-box;
@@ -654,6 +693,7 @@ html[data-faction="voidborn"] :is(
     .start-screen-overlay,
     .profile-selection-overlay:not(.home-station-overlay):not(.is-inline),
     .player-selection-overlay,
+    .ag-overlay,
     #vf-in-stage-shop.vf-iss,
     #vf-trading-post-shop.hs-tps.vf-iss
 ),
@@ -772,22 +812,34 @@ html body .profile-selection-overlay.vf-glass > .profile-selection-content.profi
 .pd-known-toggle:hover, .pd-known-toggle:focus-visible { color: #fff; outline: none; }
 
 /* empty screen: static noise + label */
-.vf-pilot-empty { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: color-mix(in srgb, var(--color-text, #fff) 55%, transparent); letter-spacing: 0.3em; }
+.vf-pilot-empty {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    color: color-mix(in srgb, var(--ph-accent, var(--color-text, #fff)) 70%, transparent);
+    letter-spacing: 0.22em;
+    font-size: calc(14 * var(--bz-u));
+}
 .vf-pilot-empty i {
     position: absolute;
-    inset: 0;
+    inset: calc(var(--ph-rim-top, 8) * var(--bz-u)) calc(var(--ph-rim-side, 4) * var(--bz-u)) calc(var(--ph-rim-side, 4) * var(--bz-u));
     background:
         repeating-linear-gradient(90deg, #ffffff10 0 calc(3 * var(--bz-u)), transparent calc(3 * var(--bz-u)) calc(7 * var(--bz-u))),
         repeating-linear-gradient(0deg, #ffffff0c 0 calc(2 * var(--bz-u)), transparent calc(2 * var(--bz-u)) calc(5 * var(--bz-u)));
     animation: vf-pilot-noise 0.4s steps(3) infinite;
+    pointer-events: none;
 }
-.vf-pilot-empty b { position: relative; font-weight: normal; }
+.vf-pilot-empty b { position: relative; z-index: 1; font-weight: normal; }
 @keyframes vf-pilot-noise { 0% { background-position: 0 0, 0 0; } 33% { background-position: 5px 3px, -3px 2px; } 66% { background-position: -4px 6px, 2px -4px; } }
 @media (prefers-reduced-motion: reduce) { .vf-pilot-empty i { animation: none; } }
 
-/* Taller top strip only (bezel ~44 layout px; top = 44 + extra) */
+/* Top strip = side rim (56u); --bz-extra 12 on top of base 44. */
 .vf-bezel {
-    --bz-extra: 50;
+    --bz-extra: 12;
     --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
 }
 /* ::before top/sides synced via --fr-ot / --fr-ol in the glass rule above */
@@ -1052,12 +1104,21 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
    Default #000 so sky/parallax never peeks between art and screen.
    Voidborn uses vine hull so tendril gaps don't read as a dead black strip. */
 .vf-bezel { --glass-r: 0; --fr-band-fill: #000; }
-.vf-bezel[data-faction="voidborn"] { --fr-band-fill: #14041c; }
+.vf-bezel[data-faction="terran"] { --fr-band-fill: #05080e; }
+.vf-bezel[data-faction="kronax"] { --fr-band-fill: #060202; }
+.vf-bezel[data-faction="pirate"] { --fr-band-fill: #040503; }
+.vf-bezel[data-faction="machine"] { --fr-band-fill: #020706; }
+.vf-bezel[data-faction="voidborn"] {
+    /* Flat #14041c read as an empty hole under the thin vine line — give the
+       band the same pixel-dither checker as the pilot-hud frame (pilot-hud.css)
+       instead of a solid fill, so it reads as hull texture, not empty space. */
+    --fr-band-fill: conic-gradient(#1c0a2a 25%, #0e0314 0 50%, #1c0a2a 0 75%, #0e0314 0) 0 0 / calc(6 * var(--bz-u)) calc(6 * var(--bz-u));
+}
 .vf-bezel-back {
     --_gi: var(--vf-glass-inset, 0px);
     --_hl: calc(var(--fr-ol, var(--fr-open-side, calc(44 * var(--u)))) + var(--_gi));
     --_hr: calc(var(--fr-or, var(--fr-open-side, calc(44 * var(--u)))) + var(--_gi));
-    --_ht: calc(var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)))) + var(--_gi));
+    --_ht: calc(var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 12)) * var(--u)))) + var(--_gi));
     --_hb: calc(var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u)))) + var(--_gi));
     position: absolute;
     inset: 0;

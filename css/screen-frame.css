@@ -27,6 +27,19 @@
      --fr-shape by construction, so a new faction shape needs no bevel code.
    ========================================================================== */
 
+/* Critical boot tokens: must ship with screen-frame (not deferred app.css).
+   Without --bz-u / --fr-open-top the pirate/metal ::before top strip height
+   collapses and the upper bezel reads as disconnected corner blocks. */
+:root {
+    /* Was 50 — that stacked a ~26px hull gutter under the top rim art before
+       the glass/BG started. 12 → open-top = 56u, flush with side/bottom rim. */
+    --bz-extra: 12;
+    --bz-u: min(calc(var(--vw, 100vw) / 1640), calc(var(--vh, 100dvh) / 1110));
+    --fr-open-side: calc(56 * var(--bz-u));
+    --fr-open-bottom: calc(56 * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
+}
+
 .vf-bezel {
     --fr-bevel: calc(5 * var(--u));
     --fr-hole-r: 0;
@@ -36,7 +49,7 @@
     --fr-ol: var(--fr-open-side, calc(56 * var(--u)));
     --fr-or: var(--fr-open-side, calc(56 * var(--u)));
     --fr-ob: var(--fr-open-bottom, calc(56 * var(--u)));
-    --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 50)) * var(--u)));
+    --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 12)) * var(--u)));
     --glass-r: var(--fr-hole-r);
 }
 
@@ -68,6 +81,34 @@
 .vf-bezel[data-faction="pirate"] { --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4; --fr-shape: var(--fr-shape-pirate); }
 .vf-bezel[data-faction="machine"] { --hull: #071312; --hull-lit: #143832; --hull-dark: #020706; --fr-shape: var(--fr-shape-machine); }
 .vf-bezel[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--u)); }
+
+/* Metal parted-graphic rims: keep the OUTER silhouette rectangular so the
+   9-slice corner tiles stay whole. The old 6–8u chamfer clipped the tip of
+   every thick corner tile (black notch + gold lines that never met). Inner
+   tooth/step detail still comes from the art itself. */
+.vf-bezel[data-faction="terran"],
+.vf-bezel[data-faction="kronax"],
+.vf-bezel[data-faction="pirate"],
+.vf-bezel[data-faction="machine"],
+html[data-faction="terran"],
+html[data-faction="kronax"],
+html[data-faction="pirate"],
+html[data-faction="machine"] {
+    --fr-shape: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+}
+
+/* Metal: rim lives on .vf-fr::after, but .vf-fr was z-index:0 while the
+   header fill (::before) is z-index:1 — so the solid header painted OVER the
+   top/side rim and corners looked like a flat bar sitting on disconnected
+   stripes. Raise the plate stack above the header fill. */
+.vf-bezel[data-faction="machine"] .vf-fr,
+.vf-bezel[data-faction="terran"] .vf-fr,
+.vf-bezel[data-faction="kronax"] .vf-fr,
+.vf-bezel[data-faction="pirate"] .vf-fr {
+    z-index: 2;
+}
+
+
 
 /* Voidborn: the hull is nothing but vine. Plates take the vine's outline colour (no
    lit/dark bevel bands, no screen-edge bevel), and bolts, vents and hazard strips are
@@ -194,7 +235,7 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
        own --_vine-th (which is also inflated past --fr-ol via --fr-vine-ov) —
        a uniform border-image this much thicker is what reads as a chunky,
        voidborn-grade frame instead of a thin outline. */
-    --_art-th: calc(var(--fr-ol) + 14 * var(--u));
+    --_art-th: calc(var(--fr-ol) + 2 * var(--u));
     --fr-bg-crop: 0;
 }
 /* Plates/texture/deco off — the border-image paints the hull instead. */
@@ -218,34 +259,31 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
     position: absolute;
     z-index: 1;
     pointer-events: none;
-    /* Inset by the border thickness so this fill stops short of the
-       corners, same technique voidborn's own top-mid layer uses — the
-       border-image's corner tile is the ONLY thing allowed to paint
-       there; a full-width fill here collided with it and produced an
-       ugly seam exactly at the corner (reported as "die Uebergaenge an
-       den Ecken sind schlecht"). */
-    left: var(--_art-th);
-    right: var(--_art-th);
+    /* Header band above the uniform rim: solid hull only. Stretching the
+       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
+       the top read as a different plate from the sides — corners looked
+       spliced and the bezel felt disconnected. Rim art is the border-image;
+       this layer only seals the taller nav strip with the same hull. */
+    left: 0;
+    right: 0;
     top: 0;
     height: var(--fr-ot);
     clip-path: var(--fr-shape);
     background-color: #020706;
-    background-image: url('../assets/ui/machine-topstrip.svg?v=16');
-    background-repeat: repeat-x;
-    background-position: left top;
-    background-size: calc(32 * 5 * var(--u)) var(--fr-ot);
-    image-rendering: pixelated;
+    background-image: none;
+    border-radius: 0 !important;
+
 }
 .vf-bezel[data-faction="machine"] .vf-fr::after {
     content: '';
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     pointer-events: none;
     box-sizing: border-box;
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #020706;
-    border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 32 round;
+    border-image: url('../assets/ui/machine-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
     will-change: auto;
@@ -254,22 +292,22 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
 }
 /* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-machine {
-    0%   { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=15'); }
-    6%   { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=15'); }
-    10%  { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=15'); }
-    11%  { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=15'); }
-    34%  { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=15'); }
-    35%  { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=15'); }
-    40%  { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=15'); }
-    41%  { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=15'); }
-    63%  { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=15'); }
-    64%  { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=15'); }
-    68%  { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=15'); }
-    69%  { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=15'); }
-    90%  { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=15'); }
-    91%  { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=15'); }
-    97%  { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=15'); }
-    100% { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=15'); }
+    0%   { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=21'); }
+    6%   { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=21'); }
+    10%  { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=21'); }
+    11%  { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=21'); }
+    34%  { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=21'); }
+    35%  { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=21'); }
+    40%  { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=21'); }
+    41%  { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=21'); }
+    63%  { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=21'); }
+    64%  { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=21'); }
+    68%  { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=21'); }
+    69%  { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=21'); }
+    90%  { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=21'); }
+    91%  { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=21'); }
+    97%  { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=21'); }
+    100% { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=21'); }
 }
 @media (prefers-reduced-motion: reduce) {
     .vf-bezel[data-faction="machine"] .vf-fr::after,
@@ -281,7 +319,7 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
    frame" bug class voidborn had. */
 html[data-faction="machine"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/machine-bezel-art.svg?v=15') 32 round;
+    border-image: url('../assets/ui/machine-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     padding: 0;
 }
@@ -289,7 +327,7 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
 /* ── Terran: parted graphic (riveted panel border-image), same mechanism.
    Clean linear chamfer corner (regimented, machined precision) — flat panel
    end-caps need no top-mid thickener, same reasoning as machine. ── */
-.vf-bezel[data-faction="terran"] { --_art-th: calc(var(--fr-ol) + 14 * var(--u)); --fr-bg-crop: 0; }
+.vf-bezel[data-faction="terran"] { --_art-th: calc(var(--fr-ol) + 2 * var(--u)); --fr-bg-crop: 0; }
 .vf-bezel[data-faction="terran"]::after { background: none !important; box-shadow: none !important; }
 #vf-bezel.vf-bezel[data-faction="terran"] .vf-fr > .vf-fr-p,
 #vf-bezel.vf-bezel[data-faction="terran"] .vf-bezel-deco { display: none !important; }
@@ -309,34 +347,31 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
     position: absolute;
     z-index: 1;
     pointer-events: none;
-    /* Inset by the border thickness so this fill stops short of the
-       corners, same technique voidborn's own top-mid layer uses — the
-       border-image's corner tile is the ONLY thing allowed to paint
-       there; a full-width fill here collided with it and produced an
-       ugly seam exactly at the corner (reported as "die Uebergaenge an
-       den Ecken sind schlecht"). */
-    left: var(--_art-th);
-    right: var(--_art-th);
+    /* Header band above the uniform rim: solid hull only. Stretching the
+       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
+       the top read as a different plate from the sides — corners looked
+       spliced and the bezel felt disconnected. Rim art is the border-image;
+       this layer only seals the taller nav strip with the same hull. */
+    left: 0;
+    right: 0;
     top: 0;
     height: var(--fr-ot);
     clip-path: var(--fr-shape);
     background-color: #05080e;
-    background-image: url('../assets/ui/terran-topstrip.svg?v=16');
-    background-repeat: repeat-x;
-    background-position: left top;
-    background-size: calc(32 * 5 * var(--u)) var(--fr-ot);
-    image-rendering: pixelated;
+    background-image: none;
+    border-radius: 0 !important;
+
 }
 .vf-bezel[data-faction="terran"] .vf-fr::after {
     content: '';
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     pointer-events: none;
     box-sizing: border-box;
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #05080e;
-    border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 32 round;
+    border-image: url('../assets/ui/terran-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
     will-change: auto;
@@ -345,15 +380,15 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
 }
 /* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-terran {
-    0%   { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=15'); }
-    15%  { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=15'); }
-    16%  { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=15'); }
-    48%  { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=15'); }
-    49%  { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=15'); }
-    82%  { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=15'); }
-    83%  { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=15'); }
-    97%  { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=15'); }
-    100% { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=15'); }
+    0%   { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=21'); }
+    15%  { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=21'); }
+    16%  { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=21'); }
+    48%  { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=21'); }
+    49%  { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=21'); }
+    82%  { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=21'); }
+    83%  { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=21'); }
+    97%  { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=21'); }
+    100% { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=21'); }
 }
 @media (prefers-reduced-motion: reduce) {
     .vf-bezel[data-faction="terran"] .vf-fr::after,
@@ -361,7 +396,7 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
 }
 html[data-faction="terran"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/terran-bezel-art.svg?v=15') 32 round;
+    border-image: url('../assets/ui/terran-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     padding: 0;
 }
@@ -369,7 +404,7 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
 /* ── Kronax: parted graphic (clawed/jagged border-image), same mechanism.
    Sawtooth corner echoes the existing zigzag silhouette — a brawler's rim,
    sharper and more frequent twitches in its animation than terran/machine. ── */
-.vf-bezel[data-faction="kronax"] { --_art-th: calc(var(--fr-ol) + 14 * var(--u)); --fr-bg-crop: 0; }
+.vf-bezel[data-faction="kronax"] { --_art-th: calc(var(--fr-ol) + 2 * var(--u)); --fr-bg-crop: 0; }
 .vf-bezel[data-faction="kronax"]::after { background: none !important; box-shadow: none !important; }
 #vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr > .vf-fr-p,
 #vf-bezel.vf-bezel[data-faction="kronax"] .vf-bezel-deco { display: none !important; }
@@ -389,34 +424,31 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
     position: absolute;
     z-index: 1;
     pointer-events: none;
-    /* Inset by the border thickness so this fill stops short of the
-       corners, same technique voidborn's own top-mid layer uses — the
-       border-image's corner tile is the ONLY thing allowed to paint
-       there; a full-width fill here collided with it and produced an
-       ugly seam exactly at the corner (reported as "die Uebergaenge an
-       den Ecken sind schlecht"). */
-    left: var(--_art-th);
-    right: var(--_art-th);
+    /* Header band above the uniform rim: solid hull only. Stretching the
+       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
+       the top read as a different plate from the sides — corners looked
+       spliced and the bezel felt disconnected. Rim art is the border-image;
+       this layer only seals the taller nav strip with the same hull. */
+    left: 0;
+    right: 0;
     top: 0;
     height: var(--fr-ot);
     clip-path: var(--fr-shape);
     background-color: #060202;
-    background-image: url('../assets/ui/kronax-topstrip.svg?v=16');
-    background-repeat: repeat-x;
-    background-position: left top;
-    background-size: calc(32 * 5 * var(--u)) var(--fr-ot);
-    image-rendering: pixelated;
+    background-image: none;
+    border-radius: 0 !important;
+
 }
 .vf-bezel[data-faction="kronax"] .vf-fr::after {
     content: '';
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     pointer-events: none;
     box-sizing: border-box;
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #060202;
-    border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 32 round;
+    border-image: url('../assets/ui/kronax-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
     will-change: auto;
@@ -425,19 +457,19 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
 }
 /* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-kronax {
-    0%   { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=15'); }
-    7%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=15'); }
-    9%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=15'); }
-    10%  { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=15'); }
-    30%  { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=15'); }
-    31%  { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=15'); }
-    33%  { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=15'); }
-    34%  { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=15'); }
-    60%  { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=15'); }
-    61%  { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=15'); }
-    63%  { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=15'); }
-    64%  { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=15'); }
-    100% { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=15'); }
+    0%   { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=21'); }
+    7%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=21'); }
+    9%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=21'); }
+    10%  { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=21'); }
+    30%  { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=21'); }
+    31%  { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=21'); }
+    33%  { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=21'); }
+    34%  { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=21'); }
+    60%  { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=21'); }
+    61%  { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=21'); }
+    63%  { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=21'); }
+    64%  { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=21'); }
+    100% { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=21'); }
 }
 @media (prefers-reduced-motion: reduce) {
     .vf-bezel[data-faction="kronax"] .vf-fr::after,
@@ -445,7 +477,7 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
 }
 html[data-faction="kronax"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/kronax-bezel-art.svg?v=15') 32 round;
+    border-image: url('../assets/ui/kronax-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     padding: 0;
 }
@@ -453,7 +485,7 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
 /* ── Pirate: parted graphic (welded-scrap border-image), same mechanism.
    Deliberately lopsided corner notch echoes the existing 'scrap' silhouette
    (never symmetric-smooth — a bolted-on replacement plate). ── */
-.vf-bezel[data-faction="pirate"] { --_art-th: calc(var(--fr-ol) + 14 * var(--u)); --fr-bg-crop: 0; }
+.vf-bezel[data-faction="pirate"] { --_art-th: calc(var(--fr-ol) + 2 * var(--u)); --fr-bg-crop: 0; }
 .vf-bezel[data-faction="pirate"]::after { background: none !important; box-shadow: none !important; }
 #vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr > .vf-fr-p,
 #vf-bezel.vf-bezel[data-faction="pirate"] .vf-bezel-deco { display: none !important; }
@@ -473,34 +505,31 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
     position: absolute;
     z-index: 1;
     pointer-events: none;
-    /* Inset by the border thickness so this fill stops short of the
-       corners, same technique voidborn's own top-mid layer uses — the
-       border-image's corner tile is the ONLY thing allowed to paint
-       there; a full-width fill here collided with it and produced an
-       ugly seam exactly at the corner (reported as "die Uebergaenge an
-       den Ecken sind schlecht"). */
-    left: var(--_art-th);
-    right: var(--_art-th);
+    /* Header band above the uniform rim: solid hull only. Stretching the
+       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
+       the top read as a different plate from the sides — corners looked
+       spliced and the bezel felt disconnected. Rim art is the border-image;
+       this layer only seals the taller nav strip with the same hull. */
+    left: 0;
+    right: 0;
     top: 0;
     height: var(--fr-ot);
     clip-path: var(--fr-shape);
     background-color: #040503;
-    background-image: url('../assets/ui/pirate-topstrip.svg?v=16');
-    background-repeat: repeat-x;
-    background-position: left top;
-    background-size: calc(32 * 5 * var(--u)) var(--fr-ot);
-    image-rendering: pixelated;
+    background-image: none;
+    border-radius: 0 !important;
+
 }
 .vf-bezel[data-faction="pirate"] .vf-fr::after {
     content: '';
     position: absolute;
-    z-index: 2;
+    z-index: 4;
     pointer-events: none;
     box-sizing: border-box;
     inset: 0;
     clip-path: var(--fr-shape);
     border: var(--_art-th) solid #040503;
-    border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 32 round;
+    border-image: url('../assets/ui/pirate-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     animation: vf-bezel-live var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
     will-change: auto;
@@ -509,17 +538,17 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
 }
 /* Legacy keyframes kept for station/profile cards that still reference them. */
 @keyframes vf-bezel-art-creep-pirate {
-    0%   { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=16'); }
-    12%  { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=16'); }
-    13%  { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=16'); }
-    38%  { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=16'); }
-    39%  { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=16'); }
-    41%  { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=16'); }
-    42%  { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=16'); }
-    70%  { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=16'); }
-    71%  { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=16'); }
-    95%  { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=16'); }
-    100% { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=16'); }
+    0%   { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=21'); }
+    12%  { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=21'); }
+    13%  { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=21'); }
+    38%  { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=21'); }
+    39%  { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=21'); }
+    41%  { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=21'); }
+    42%  { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=21'); }
+    70%  { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=21'); }
+    71%  { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=21'); }
+    95%  { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=21'); }
+    100% { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=21'); }
 }
 @media (prefers-reduced-motion: reduce) {
     .vf-bezel[data-faction="pirate"] .vf-fr::after,
@@ -527,25 +556,16 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
 }
 html[data-faction="pirate"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/pirate-bezel-art.svg?v=16') 32 round;
+    border-image: url('../assets/ui/pirate-bezel-art.svg?v=21') 16 round;
     image-rendering: pixelated;
     padding: 0;
 }
 
-/* border-image on 96×96 (viewBox 48) bezel SVGs can paint past the CSS border
-   box into the screen opening. Clip ::after to the metal band so sides/bottom
-   never cover the glass. Voidborn keeps its intentional vine bite (--_vine-ov). */
-.vf-bezel[data-faction="machine"] .vf-fr::after,
-.vf-bezel[data-faction="terran"] .vf-fr::after,
-.vf-bezel[data-faction="kronax"] .vf-fr::after,
-.vf-bezel[data-faction="pirate"] .vf-fr::after {
-    --_open-hole: linear-gradient(#000 0 0) var(--fr-ol) var(--fr-ot) /
-        calc(100% - var(--fr-ol) - var(--fr-or))
-        calc(100% - var(--fr-ot) - var(--fr-ob)) no-repeat;
-    -webkit-mask: var(--_open-hole), linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: var(--_open-hole) exclude, linear-gradient(#000 0 0);
-}
+/* No open-hole mask on metal rims: art-th is only fr-ol+2u (flush), so the
+   border barely kisses the gutter. The previous mask punched from
+   fr-ot+inset and interacted badly with border-image — top/side rim in the
+   header band fell back to flat hull and corners looked disconnected. */
+
 
 /* Rim life without image swaps: occasional stepped brightness on the single
    border-image, plus a slow crawl on the top-strip fill (::before). */
@@ -566,11 +586,7 @@ html[data-faction="pirate"] body .game-container .game-canvas-container > .game-
     0%   { background-position: 0 0; }
     100% { background-position: calc(32 * 5 * var(--u)) 0; }
 }
-.vf-bezel[data-faction="voidborn"]::before,
-.vf-bezel[data-faction="machine"]::before,
-.vf-bezel[data-faction="terran"]::before,
-.vf-bezel[data-faction="kronax"]::before,
-.vf-bezel[data-faction="pirate"]::before {
+.vf-bezel[data-faction="voidborn"]::before {
     animation: vf-bezel-strip-crawl 28s linear infinite;
 }
 html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation: none; }

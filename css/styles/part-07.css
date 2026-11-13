@@ -1714,7 +1714,9 @@ button.hs-shop-ctrl.active.nav-focused {
     font-weight: bold;
     text-transform: uppercase;
     box-sizing: border-box;
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 2px) calc(100% - 8px), calc(100% - 2px) calc(100% - 6px), calc(100% - 4px) calc(100% - 6px), calc(100% - 4px) calc(100% - 4px), calc(100% - 6px) calc(100% - 4px), calc(100% - 6px) calc(100% - 2px), calc(100% - 8px) calc(100% - 2px), calc(100% - 8px) 100%, 0 100%, 0 8px, 2px 8px, 2px 6px, 4px 6px, 4px 4px, 6px 4px, 6px 2px, 8px 2px);
+    /* Softer round (was 8px chamfer staircase). */
+    clip-path: inset(0 round 16px);
+    border-radius: 16px;
     transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
     flex: 0 0 auto;
 }

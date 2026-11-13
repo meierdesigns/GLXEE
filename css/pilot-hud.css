@@ -39,15 +39,15 @@
     --ph-dither-b: color-mix(in srgb, var(--ph-accent) 22%, #000);
     --ph-tab-a: color-mix(in srgb, var(--hull-lit, #5a6479) 80%, #fff 10%);
     --ph-tab-b: var(--hull, #333a4a);
-    --ph-tab-cut: 0;        /* corner cut of the tab (faction shape) */
-    --ph-tab-round: 0;
+    --ph-tab-cut: 0;        /* hard 45° chamfer — keep 0 so round reads */
+    --ph-tab-round: 18;     /* stepped soft corner (pixel staircase, not CSS arc) */
 }
 /* Per-faction frame character (matches the bezel silhouettes). */
-.vf-bezel[data-faction="terran"]   { --ph-tab-a: color-mix(in srgb, var(--gold, #c9a24a) 45%, var(--hull-lit)); --ph-tab-cut: 6; }
-.vf-bezel[data-faction="kronax"]   { --ph-tab-cut: 10; --ph-rim-top: 9; --ph-rim-side: 5; }
-.vf-bezel[data-faction="voidborn"] { --ph-tab-round: 14; }
-.vf-bezel[data-faction="pirate"]   { --ph-tab-a: color-mix(in srgb, var(--bone, #cdc7a4) 40%, var(--hull-lit)); --ph-tab-cut: 4; }
-.vf-bezel[data-faction="machine"]  { --ph-tab-a: color-mix(in srgb, var(--ph-accent) 25%, var(--hull-lit)); --ph-rim-top: 6; }
+.vf-bezel[data-faction="terran"]   { --ph-tab-a: color-mix(in srgb, var(--gold, #c9a24a) 45%, var(--hull-lit)); --ph-tab-round: 18; }
+.vf-bezel[data-faction="kronax"]   { --ph-tab-round: 18; --ph-rim-top: 9; --ph-rim-side: 5; }
+.vf-bezel[data-faction="voidborn"] { --ph-tab-round: 22; }
+.vf-bezel[data-faction="pirate"]   { --ph-tab-a: color-mix(in srgb, var(--bone, #cdc7a4) 40%, var(--hull-lit)); --ph-tab-round: 16; }
+.vf-bezel[data-faction="machine"]  { --ph-tab-a: color-mix(in srgb, var(--ph-accent) 25%, var(--hull-lit)); --ph-rim-top: 6; --ph-tab-round: 16; }
 
 /* ---- shared screen frame ---------------------------------------------- */
 .vf-pilot-screen {
@@ -63,9 +63,43 @@
     white-space: nowrap;
     font-family: 'Silkscreen', var(--ui-font-family);
     color: var(--color-text, #fff);
-    outline: calc(var(--ph-line) * var(--bz-u)) solid var(--ph-accent);
-    outline-offset: calc(-1 * var(--ph-line) * var(--bz-u));
+    /* Stepped corner tokens for ::before/::after (host stays unclipped so the
+       crest can hang past the plate). */
+    --c: calc(var(--ph-tab-cut) * var(--bz-u));
+    --r: calc(var(--ph-tab-round) * var(--bz-u));
+    --r1: calc(var(--r) * 0.25);
+    --r2: calc(var(--r) * 0.5);
+    --r3: calc(var(--r) * 0.75);
+    /* 4-step pixel round per corner (2-step read as a hard 45° cut). */
+    --ph-round-poly: polygon(
+        var(--r) 0,
+        calc(100% - var(--r)) 0,
+        calc(100% - var(--r3)) var(--r1),
+        calc(100% - var(--r2)) var(--r2),
+        calc(100% - var(--r1)) var(--r3),
+        100% var(--r),
+        100% calc(100% - var(--r)),
+        calc(100% - var(--r1)) calc(100% - var(--r3)),
+        calc(100% - var(--r2)) calc(100% - var(--r2)),
+        calc(100% - var(--r3)) calc(100% - var(--r1)),
+        calc(100% - var(--r)) 100%,
+        var(--r) 100%,
+        var(--r3) calc(100% - var(--r1)),
+        var(--r2) calc(100% - var(--r2)),
+        var(--r1) calc(100% - var(--r3)),
+        0 calc(100% - var(--r)),
+        0 var(--r),
+        var(--r1) var(--r3),
+        var(--r2) var(--r2),
+        var(--r3) var(--r1)
+    );
+    /* Accent rim lives on ::before (clipped) — host outline stays sharp under
+       data-vf-gv-corners which forces border-radius:0 !important. */
+    outline: none;
 }
+/* display:flex above beats the UA [hidden] rule — without this the empty
+   resource screen stays as a blank framed square next to NO SIGNAL. */
+.vf-pilot-screen[hidden] { display: none !important; }
 /* black display inside, pixel-dither rim around it (above the tab, below content) */
 .vf-pilot-screen::before {
     content: '';
@@ -77,6 +111,9 @@
     border-style: solid;
     border-color: transparent;
     border-width: calc(var(--ph-rim-top) * var(--bz-u)) calc(var(--ph-rim-side) * var(--bz-u)) calc(var(--ph-rim-side) * var(--bz-u));
+    clip-path: var(--ph-round-poly);
+    /* Orange screen rim follows the stepped round (outline ignored clip-path). */
+    box-shadow: inset 0 0 0 calc(var(--ph-line) * var(--bz-u)) var(--ph-accent);
     background:
         linear-gradient(#000 0 0) padding-box,
         conic-gradient(var(--ph-dither-a) 25%, var(--ph-dither-b) 0 50%, var(--ph-dither-a) 0 75%, var(--ph-dither-b) 0) 0 0 / calc(6 * var(--bz-u)) calc(6 * var(--bz-u)) border-box;
@@ -91,21 +128,9 @@
     pointer-events: none;
     border: calc(var(--ph-line) * var(--bz-u)) solid var(--ph-accent);
     border-bottom-color: transparent;
-    /* Corner is cut (--ph-tab-cut, straight 45°) or rounded (--ph-tab-round). A CSS
-       border-radius arc through the hard pixel-dither checker (conic-gradient below)
-       anti-aliases across the tile grid and reads as broken/muddy pixels at the corner —
-       same issue the voidborn vine corner had (screen-frame.css --fr-shape-voidborn
-       comment). Fixed the same way: a stepped polygon staircase instead of a curve, so
-       every edge is axis-aligned and lands crisp against the checker tiles. */
-    --c: calc(var(--ph-tab-cut) * var(--bz-u));
-    --r: calc(var(--ph-tab-round) * var(--bz-u));
-    --r2: calc(var(--r) * 0.5);
-    clip-path: polygon(
-        var(--c) 0, calc(100% - var(--c)) 0,
-        calc(100% - var(--r)) 0, calc(100% - var(--r2)) var(--r2), 100% var(--r),
-        100% 100%, 0 100%,
-        0 var(--r), var(--r2) var(--r2), var(--r) 0
-    );
+    /* Corner is cut (--ph-tab-cut) and/or rounded (--ph-tab-round) via stepped
+       polygon — CSS border-radius arcs muddy the dither checker. */
+    clip-path: var(--ph-round-poly);
     background:
         linear-gradient(var(--ph-hull) 0 0) padding-box,
         conic-gradient(var(--ph-tab-a) 25%, var(--ph-tab-b) 0 50%, var(--ph-tab-a) 0 75%, var(--ph-tab-b) 0) 0 0 / calc(8 * var(--bz-u)) calc(8 * var(--bz-u));
@@ -116,6 +141,12 @@
     left: calc(var(--ph-left) * var(--bz-u));
     width: calc(var(--ph-plate-w) * var(--bz-u));
     padding-left: calc(82 * var(--bz-u));
+}
+/* Logged-out: no crest — drop the crest gutter and shrink to the label. */
+.vf-pilot-plate:has(.vf-pilot-empty) {
+    width: calc(220 * var(--bz-u));
+    padding-left: calc(var(--ph-res-pad) * var(--bz-u));
+    padding-right: calc(var(--ph-res-pad) * var(--bz-u));
 }
 .vf-pilot-name {
     flex: 1 1 auto;

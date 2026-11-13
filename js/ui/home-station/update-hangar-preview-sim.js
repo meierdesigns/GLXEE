@@ -106,8 +106,8 @@ extendClass(HomeStationUI, {
             if (bm && fireModel.weaponConfig) {
                 // Same routing as in game: the ALL key fires every slot.
                 const allKey = this.hangarPreviewAllKey(shipId);
-                // shotScale sizes shots to the close-up before they are
-                // fitted to the (already close-up sized) gun barrels.
+                // shotScale only speeds shots for the close-up; size follows
+                // the (already close-up sized) gun barrels inside shootWithShipWeapon.
                 fired = bm.shootWithShipWeapon(p, Date.now(), {
                     fireKey: demoKey === allKey ? 'all' : demoKey,
                     shotScale: k

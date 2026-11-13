@@ -320,6 +320,13 @@ extendClass(ProfileSelectionManager, {
         fill('weapon', ir && ir.weaponImgHtml ? ir.weaponImgHtml(wid, 40, '', false) : '',
             name + stats, meta && meta.weaponNote);
         if (this.renderFactionTabsRich) { try { this.renderFactionTabsRich(id, meta); } catch (e) { /* keep the plain facts */ } }
+        this.renderFactionFocus(id, meta);
+    },
+    /** Rough stat focuses + preferred / bonus weapons under the lore card. */
+    renderFactionFocus(id, meta) {
+        const el = this.overlay && this.overlay.querySelector('[data-faction-focus]');
+        if (!el || !this.buildFactionFocusHtml) return;
+        el.innerHTML = this.buildFactionFocusHtml(id, meta);
     },
     /** Faction palette + frame shape on one dialog box. */
     applyFactionVars(box, id, after) {

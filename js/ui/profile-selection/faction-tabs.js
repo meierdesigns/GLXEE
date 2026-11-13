@@ -12,6 +12,94 @@ extendClass(ProfileSelectionManager, {
         pirate:   { damage: 3, defense: 2, speed: 3, evasion: 3, economy: 5, level: 'MEDIUM · OPPORTUNIST' },
         machine:  { damage: 3, defense: 5, speed: 2, evasion: 2, economy: 4, level: 'MEDIUM · GRINDER' }
     },
+    /** HTML for the focus strip under lore: top stats + preferred / affinity weapons. */
+    buildFactionFocusHtml(id, meta, ratings) {
+        const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+        const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
+        const R = ratings || (this.FACTION_RATINGS && this.FACTION_RATINGS[id]) || (this.FACTION_RATINGS && this.FACTION_RATINGS.terran) || null;
+        const statDefs = [
+            ['damage', 'DAMAGE', 'statDamage'],
+            ['defense', 'DEFENSE', 'statArmor'],
+            ['speed', 'SPEED', 'statSpeed'],
+            ['evasion', 'EVASION', 'ability_evasion_boost'],
+            ['economy', 'ECONOMY', 'navCoin']
+        ];
+        let focusKeys = [];
+        let focusLabels = [];
+        if (R) {
+            const ranked = statDefs
+                .map(([k, label]) => ({ k, label, n: Number(R[k]) || 0 }))
+                .sort((a, b) => b.n - a.n);
+            const top = ranked[0] && ranked[0].n;
+            // Highlight from 3/5 up — mid ratings should already read as a strength.
+            const focused = ranked.filter((s) => s.n >= 3 || (top < 3 && s.n >= top)).slice(0, 3);
+            if (ranked.every((s) => s.n === ranked[0].n)) {
+                focusLabels = ['BALANCED'];
+                focusKeys = [];
+            } else {
+                focusLabels = focused.map((s) => s.label);
+                focusKeys = focused.map((s) => s.k);
+            }
+        }
+        const bars = R ? statDefs.map(([k, label, iconKey]) => {
+            const n = Math.max(0, Math.min(5, Number(R[k]) || 0));
+            const isFocus = focusKeys.indexOf(k) >= 0 || n >= 3;
+            const cells = Array.from({ length: 5 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
+            const ico = ir && iconKey
+                ? String(ir.imgHtml(iconKey, 28, 'pff-stat-ico') || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                : '';
+            return `<span class="pff-stat${isFocus ? ' is-focus' : ''}" title="${label} ${n}/5">` +
+                `<span class="pff-stat-ico-wrap" aria-hidden="true">${ico || `<b>${label}</b>`}</span>` +
+                `<span class="pff-cells">${cells}</span></span>`;
+        }).join('') : '';
+        const preferred = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons)
+            ? factionShipStyles.getFactionDefaultWeapons(id) : [];
+        const affinity = (wcm && wcm.getFactionWeaponAffinity) ? wcm.getFactionWeaponAffinity(id) : [];
+        const weaponChip = (wid, bonus) => {
+            const w = wcm && wcm.getWeapon ? wcm.getWeapon(wid) : null;
+            const label = String((w && w.name) || wid).replace(/_/g, ' ').toUpperCase();
+            const ico = ir && ir.weaponImgHtml
+                ? String(ir.weaponImgHtml(wid, 28, '', false) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                : '';
+            return `<span class="pff-weapon${bonus ? ' is-bonus' : ''}" title="${label}${bonus ? ' · +20% DMG' : ''}">${ico}<b>${label}</b>${bonus ? '<em>+20%</em>' : ''}</span>`;
+        };
+        // Preferred stays preferred (no +20% badge here); affinity extras fill BONUS.
+        // Same two-row cluster for every faction so the block height never jumps.
+        const preferredHtml = preferred.map((wid) => weaponChip(wid, false)).join('')
+            || '<span class="pff-empty">—</span>';
+        const bonusIds = affinity.filter((wid) => preferred.indexOf(wid) === -1);
+        const bonusHtml = (bonusIds.length ? bonusIds : preferred).map((wid) => weaponChip(wid, true)).join('')
+            || '<span class="pff-empty">—</span>';
+        // Faction weapon unlocks (e.g. pirate CHAIN on Spread): show in preview before you buy them.
+        const ownedWeapons = preferred.concat(affinity.filter((w) => preferred.indexOf(w) === -1));
+        const unlockTracks = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs
+            && economyConfig.itemUpgradeTrackDefs.weapons)
+            ? economyConfig.itemUpgradeTrackDefs.weapons : {};
+        const unlockChips = Object.keys(unlockTracks).map((track) => {
+            const def = unlockTracks[track];
+            if (!def || !def.weaponIds || !def.weaponIds.length) return '';
+            const hits = def.weaponIds.filter((wid) => ownedWeapons.indexOf(wid) !== -1);
+            if (!hits.length) return '';
+            const names = hits.map((wid) => {
+                const w = wcm && wcm.getWeapon ? wcm.getWeapon(wid) : null;
+                return String((w && w.name) || wid).replace(/_/g, ' ').toUpperCase();
+            }).join(' · ');
+            const tip = `${def.desc || def.label} · on ${names}`;
+            return `<span class="pff-unlock" title="${tip}"><b>${def.label}</b><em>${names}</em><small>${def.desc || ''}</small></span>`;
+        }).filter(Boolean).join('');
+        const unlockHtml = unlockChips
+            || '<span class="pff-empty">—</span>';
+        const styleLine = (meta && meta.playstyle) ? `<p class="pff-style">${meta.playstyle}</p>` : '';
+        const level = R && R.level ? `<span class="pff-level">${R.level}</span>` : '';
+        return `${styleLine}` +
+            `<div class="pff-row"><span class="pff-label">FOCUS</span><span class="pff-chips">${focusLabels.map((t) => `<span class="pff-chip">${t}</span>`).join('')}${level}</span></div>` +
+            `<div class="pff-bars">${bars}</div>` +
+            `<div class="pff-weapons-cluster">` +
+            `<div class="pff-row pff-weapons-row"><span class="pff-label">PREFERRED</span><span class="pff-weapons">${preferredHtml}</span></div>` +
+            `<div class="pff-row pff-weapons-row"><span class="pff-label">BONUS +20%</span><span class="pff-weapons">${bonusHtml}</span></div>` +
+            `<div class="pff-row pff-weapons-row pff-unlock-row"><span class="pff-label">UNLOCK</span><span class="pff-weapons pff-unlocks">${unlockHtml}</span></div>` +
+            `</div>`;
+    },
     /** Segmented pixel bar: `n` of `max` cells lit, icon + label on the left, value text on the right. */
     pfxBar(label, iconKey, n, max, valueText) {
         const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
@@ -132,7 +220,7 @@ extendClass(ProfileSelectionManager, {
                 ${this.pfxBar('ECONOMY', 'resScrap', R.economy, 5, R.economy + '/5')}</div>
             <div class="pfx-foot"><span class="pfx-foot-label">DIFFICULTY</span><b>${R.level}</b></div></div>`;
 
-        // WEAPON: the faction's starting weapon with its numbers.
+        // WEAPON: the faction's starting weapon with its numbers + unlockable traits.
         const ids = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons ? factionShipStyles.getFactionDefaultWeapons(id) : [];
         const wid = ids[0] || 'laser', w = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager.getWeapon(wid) : null;
         const wp = panel('weapon');
@@ -142,6 +230,24 @@ extendClass(ProfileSelectionManager, {
             if ((w.bulletCount || 1) > 1) tags.push((w.bulletCount) + ' SHOTS');
             if (w.spreadAngle) tags.push('SPREAD');
             if (w.waveAmp) tags.push('WAVERING');
+            const affinity = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getFactionWeaponAffinity)
+                ? weaponConfigManager.getFactionWeaponAffinity(id) : [];
+            const owned = ids.concat(affinity.filter((x) => ids.indexOf(x) === -1));
+            const unlockTracks = (typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeTrackDefs
+                && economyConfig.itemUpgradeTrackDefs.weapons)
+                ? economyConfig.itemUpgradeTrackDefs.weapons : {};
+            const unlockCards = Object.keys(unlockTracks).map((track) => {
+                const def = unlockTracks[track];
+                if (!def || !def.weaponIds || !def.weaponIds.length) return '';
+                const hits = def.weaponIds.filter((x) => owned.indexOf(x) !== -1);
+                if (!hits.length) return '';
+                const names = hits.map((x) => {
+                    const ww = weaponConfigManager.getWeapon ? weaponConfigManager.getWeapon(x) : null;
+                    return String((ww && ww.name) || x).replace(/_/g, ' ').toUpperCase();
+                }).join(' · ');
+                return `<div class="pfx-unlock-card"><span class="pfx-unlock-label">${def.label}</span>` +
+                    `<b>${names}</b><small>${def.desc || ''}</small></div>`;
+            }).filter(Boolean).join('');
             wp.innerHTML = `<div class="pfx pfx-weapon">
                 <div class="pfx-head"><span class="pfx-head-ico">${ir && ir.weaponImgHtml ? ir.weaponImgHtml(wid, 40, '', false) : ''}</span>
                     <span class="pfx-head-text"><small>STARTING WEAPON</small><b>${String(w.name || wid).toUpperCase()}</b></span>
@@ -150,7 +256,9 @@ extendClass(ProfileSelectionManager, {
                 <div class="pfx-bars">${this.pfxBar('DAMAGE', 'statDamage', Math.min(5, w.damage / 8), 5, w.damage)}
                     ${this.pfxBar('FIRE RATE', 'statSpeed', Math.min(5, rate), 5, rate.toFixed(1) + '/S')}
                     ${this.pfxBar('PROJECTILE', 'statSpeed', Math.min(5, w.speed / 4), 5, w.speed)}
-                    ${this.pfxBar('ENERGY', 'statEnergy', Math.max(1, 5 - w.energyCost / 2), 5, w.energyCost + ' / SHOT')}</div></div>`;
+                    ${this.pfxBar('ENERGY', 'statEnergy', Math.max(1, 5 - w.energyCost / 2), 5, w.energyCost + ' / SHOT')}</div>` +
+                (unlockCards ? `<div class="pfx-unlocks"><span class="pfx-group-label">UNLOCKABLE</span>${unlockCards}</div>` : '') +
+                `</div>`;
         }
 
         // ALLIES: who fights beside them and who stands against them.

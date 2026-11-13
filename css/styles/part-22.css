@@ -1285,14 +1285,15 @@ html body .profile-selection-name-mode.is-pilot-step .profile-pilot-controls {
     align-self: stretch !important;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
     box-sizing: border-box;
 }
 html body .profile-selection-name-mode.is-pilot-step .pp-grid {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-height: 0;
-    max-height: 100% !important;
+    max-height: none !important;
     max-width: 100%;
     width: auto;
     overflow: visible !important;
@@ -1301,6 +1302,34 @@ html body .profile-selection-name-mode.is-pilot-step .pp-grid {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+}
+/* BACKDROP + ANIMATION on the normal pilot create screen (not only Face Editor). */
+html body .profile-selection-name-mode.is-pilot-step .pp-motion {
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: min(100%, calc(6 * var(--pp-tile, 72px) + 5 * var(--pp-gap, 4px)));
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, #000);
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl {
+    padding: 6px 8px;
+}
+html body .onboarding-overlay .pp-motion {
+    flex: 0 0 auto;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 40%, #000);
 }
 /* 6+6+4 square tiles. --pp-tile is set in px by fitPilotPicks() (no cqw/cqh — works in all browsers). */
 html body .profile-selection-name-mode.is-pilot-step .pp-picks {

@@ -8,13 +8,40 @@
 const voxelPortrait = (() => {
     const entries = new Set();
     let timer = 0;
-    const lookOf = (look) => (typeof look === 'string' ? { faction: look, v: 0 } : (look || { faction: 'terran', v: 0 }));
+    const lookOf = (look) => {
+        if (typeof look === 'string') return { faction: look, v: 0, bga: 2 };
+        const o = look || { faction: 'terran', v: 0 };
+        return {
+            faction: o.faction || 'terran',
+            v: o.v | 0,
+            bgv: (o.bgv != null) ? (o.bgv | 0) : undefined,
+            bga: (o.bga != null) ? (o.bga | 0) : 2
+        };
+    };
+    const presetOf = (look) => {
+        const p = VXP.preset(look.faction, look.v);
+        if (look.bgv != null) p.bgv = look.bgv | 0;
+        return p;
+    };
+    const BGA_SPEED = (typeof heroPortrait !== 'undefined' && heroPortrait.BGA_SPEED)
+        ? heroPortrait.BGA_SPEED
+        : [0, 0.35, 1, 1.85, 2.8];
+    const animOf = (look) => {
+        const i = ((look && look.bga != null ? look.bga : 2) | 0);
+        return BGA_SPEED[((i % BGA_SPEED.length) + BGA_SPEED.length) % BGA_SPEED.length];
+    };
     const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 
     // Painted art: one sheet per faction (4x4 cells) or single numbered files; resolves to a drawer or null.
     const loadImg = (src) => new Promise((res) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => res(null); im.src = src; });
-    const cache = {};
-    const img = (src) => cache[src] || (cache[src] = loadImg(src));
+    let cache = {};
+    let cacheBust = 0;
+    const img = (src) => {
+        const key = src + (cacheBust ? ('#b' + cacheBust) : '');
+        if (cache[key]) return cache[key];
+        const busted = cacheBust ? (src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=' + cacheBust) : src;
+        return (cache[key] = loadImg(busted));
+    };
     async function painted(f, v) {
         if (typeof factionPacks === 'undefined') return null;
         await factionPacks.ready;
@@ -25,6 +52,27 @@ const voxelPortrait = (() => {
         const name = 'portraits/' + String(v + 1).padStart(2, '0') + '.png';
         if (factionPacks.has(f, name)) { const im = await img(factionPacks.url(f, name)); if (im) return { img: im, sx: 0, sy: 0, w: im.width, h: im.height }; }
         return null;
+    }
+    /** Drop painted image cache and re-apply overrides on live canvases (after Asset-Gen accept). */
+    function invalidatePainted() {
+        cache = {};
+        cacheBust = Date.now();
+        for (const e of entries) {
+            if (!e.canvas || !e.canvas.isConnected) continue;
+            e.painted = false;
+            e.art = null;
+            e.head = null;
+            e.lastK = null;
+            let look = null;
+            try { look = JSON.parse(e.canvas.dataset.look); } catch (err) { look = null; }
+            look = lookOf(look);
+            if (e.nobg) { draw(e, false); continue; }
+            painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT).then((a) => {
+                if (!e.canvas.isConnected) return;
+                if (a) drawPainted(e, a);
+                else draw(e, false);
+            });
+        }
     }
     function drawPainted(e, a) {
         e.painted = true;
@@ -66,7 +114,8 @@ const voxelPortrait = (() => {
         if (!e.head) e.head = [null, null];
         if (!e.head[k]) e.head[k] = VXP.build(e.preset, e.accent, blink, true, e.state, HEAD_PAD);
         if (!e.img) e.img = e.ctx.createImageData(VXP.W, VXP.H);
-        const t = reduceMotion() ? 0 : (performance.now() - e.t0) / 1000;
+        const spd = (e.animSpeed != null) ? e.animSpeed : 1;
+        const t = (reduceMotion() || spd <= 0) ? 0 : ((performance.now() - e.t0) / 1000) * spd;
         const head = e.head[k], dst = e.img.data;
         const bg = e.nobg ? new Uint8ClampedArray(VXP.W * VXP.H * 4) : VXP.background(e.preset.faction, t, e.accent, e.preset.bgv);
         // In the portrait picker the selected tile shows the full, brighter backdrop and the others a subdued one
@@ -111,13 +160,41 @@ const voxelPortrait = (() => {
         if ('mozImageSmoothingEnabled' in ctx) ctx.mozImageSmoothingEnabled = false;
         if ('webkitImageSmoothingEnabled' in ctx) ctx.webkitImageSmoothingEnabled = false;
         if ('msImageSmoothingEnabled' in ctx) ctx.msImageSmoothingEnabled = false;
-        const e = { canvas, ctx, preset: VXP.preset(look.faction, look.v), accent: canvas.dataset.accent || null, next: performance.now() + 1500 + Math.random() * 3500, coarse: canvas.dataset.coarse === '1', nobg: nobg, state: Math.max(0, Math.min(4, parseInt(canvas.dataset.state, 10) || 0)), blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true };
+        const e = {
+            canvas, ctx, preset: presetOf(look), accent: canvas.dataset.accent || null,
+            next: performance.now() + 1500 + Math.random() * 3500,
+            coarse: canvas.dataset.coarse === '1', nobg: nobg,
+            state: Math.max(0, Math.min(4, parseInt(canvas.dataset.state, 10) || 0)),
+            blinkUntil: 0, t0: performance.now() - Math.random() * 4000, vis: true,
+            animSpeed: animOf(look), bga: look.bga
+        };
         canvas.__vx = e;
         entries.add(e);
         if (io) io.observe(canvas);
         draw(e, false);
         (nobg ? Promise.resolve(null) : painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT)).then((a) => { if (a && canvas.isConnected) drawPainted(e, a); });
         if (!timer) timer = requestAnimationFrame(loop);
+    }
+    /** Live-update face / backdrop / animation without remounting the canvas. */
+    function setLook(canvas, look) {
+        const e = canvas && canvas.__vx;
+        if (!e) return;
+        look = lookOf(look);
+        try { canvas.dataset.look = JSON.stringify(look); } catch (err) { /* ignore */ }
+        e.preset = presetOf(look);
+        e.animSpeed = animOf(look);
+        e.bga = look.bga;
+        e.head = null;
+        e.lastK = null;
+        e.painted = false;
+        e.art = null;
+        draw(e, false);
+        if (!e.nobg) {
+            painted(look.faction, ((look.v | 0) % VXP.COUNT + VXP.COUNT) % VXP.COUNT).then((a) => {
+                if (!e.canvas.isConnected) return;
+                if (a) drawPainted(e, a);
+            });
+        }
     }
     // rAF (not setInterval): stays in sync with the compositor across Chrome / Firefox / Safari / Edge.
     let lastTick = 0;
@@ -176,5 +253,5 @@ const voxelPortrait = (() => {
     if (typeof document !== 'undefined') {
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observe); else observe();
     }
-    return { canvasHtml, register, scan, draw, setState };
+    return { canvasHtml, register, scan, draw, setState, setLook, invalidatePainted };
 })();

@@ -1078,6 +1078,7 @@ be reviewed or reverted independently.
 | 74I | Screen soundtrack type | DevMode Soundtrack Editor type `screen` (Start Screen + Title Fanfare); new Start Screen Hauptmelodie |
 | 74J | Galaxy map smoother | Bake suns to one sprite, fewer flow frames/twinkles, lighter spin/nebula debounce, paint contain + PERF ANIM gate |
 | 74K | Orbit fleet fire + flight | Hero-planet backdrop fleets shoot per faction; per-faction flightProfiles for orbit craft |
+| 74L | Pilot backdrop animation | Configurable animated portrait backdrop (bgv) + motion speed (bga) on CREATE YOUR PILOT, Bezel TOOLS, and Face Editor |
 
 The wave commit convention is:
 

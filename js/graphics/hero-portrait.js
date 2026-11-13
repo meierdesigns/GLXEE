@@ -29,9 +29,12 @@ const heroPortrait = (() => {
         { w: 3.6, h: 1.9, sl: 0.0, ir: 1.7, lid: 0.5 }, { w: 4.2, h: 1.3, sl: 0.35, ir: 1.5, lid: 0.8 }, { w: 3.2, h: 2.4, sl: -0.15, ir: 2.0, lid: 0.3 },
         { w: 4.0, h: 1.6, sl: -0.3, ir: 1.6, lid: 0.9 }, { w: 3.0, h: 1.5, sl: 0.2, ir: 1.4, lid: 0.6 }, { w: 4.4, h: 2.1, sl: 0.1, ir: 1.9, lid: 0.4 }
     ];
-        const OPTIONS = { v: 16, gender: 7, skin: 5, headW: 5, headL: 5, jaw: 5, chin: 5, cheek: 5, noseS: 5, hair: 10, hairCol: 7, hairc: 7, eye: 6, face: 5, nose: 5, mouth: 4, brow: 3, scar: 4, beard: 4, gear: 3 };
-    const LABELS = { v: 'PORTRAIT', gender: 'GENDER', skin: 'SKIN', headW: 'FACE WIDTH', headL: 'FACE LENGTH', jaw: 'JAW', chin: 'CHIN', cheek: 'CHEEKBONES', noseS: 'NOSE SIZE', hair: 'HELMET', hairCol: 'PAINT', hairc: 'HAIR COLOUR', eye: 'EYES', face: 'EYEWEAR', nose: 'FIXTURE', mouth: 'MASK', brow: 'BROW', scar: 'SCAR', beard: 'BEARD', gear: 'GEAR' };
+        const OPTIONS = { v: 16, bgv: 32, bga: 5, gender: 7, skin: 5, headW: 5, headL: 5, jaw: 5, chin: 5, cheek: 5, noseS: 5, hair: 10, hairCol: 7, hairc: 7, eye: 6, face: 5, nose: 5, mouth: 4, brow: 3, scar: 4, beard: 4, gear: 3 };
+    const LABELS = { v: 'PORTRAIT', bgv: 'BACKDROP', bga: 'ANIMATION', gender: 'GENDER', skin: 'SKIN', headW: 'FACE WIDTH', headL: 'FACE LENGTH', jaw: 'JAW', chin: 'CHIN', cheek: 'CHEEKBONES', noseS: 'NOSE SIZE', hair: 'HELMET', hairCol: 'PAINT', hairc: 'HAIR COLOUR', eye: 'EYES', face: 'EYEWEAR', nose: 'FIXTURE', mouth: 'MASK', brow: 'BROW', scar: 'SCAR', beard: 'BEARD', gear: 'GEAR' };
+    /** Backdrop motion multipliers for bga 0..4 (OFF … TURBO). */
+    const BGA_SPEED = [0, 0.35, 1, 1.85, 2.8];
     const NAMES = {
+        bga: ['OFF', 'SLOW', 'NORMAL', 'FAST', 'TURBO'],
         headW: ['NARROW', 'SLIM', 'NORMAL', 'BROAD', 'WIDE'], headL: ['SHORT', 'COMPACT', 'NORMAL', 'LONG', 'VERY LONG'], jaw: ['SOFT', 'SLIM', 'NORMAL', 'STRONG', 'HEAVY'],
         chin: ['RECEDING', 'SMALL', 'NORMAL', 'PRONOUNCED', 'JUTTING'], cheek: ['FLAT', 'SOFT', 'NORMAL', 'HIGH', 'SHARP'], noseS: ['TINY', 'SMALL', 'NORMAL', 'LARGE', 'HUGE'],
         gender: ['MALE', 'MASCULINE', 'SOFT MALE', 'NEUTRAL', 'SOFT FEMALE', 'FEMININE', 'FEMALE'], hairc: ['BLACK', 'BROWN', 'CHESTNUT', 'BLONDE', 'GREY', 'WHITE', 'RED'],
@@ -62,7 +65,12 @@ const heroPortrait = (() => {
     }
     function randomLook(faction, seed) {
         const r = seeded(seed == null ? Math.floor(Math.random() * 1e9) : seed);
-        const look = { faction: faction || 'terran', v: Math.floor(r() * 16) };
+        const look = {
+            faction: faction || 'terran',
+            v: Math.floor(r() * 16),
+            bgv: Math.floor(r() * OPTIONS.bgv),
+            bga: 1 + Math.floor(r() * 3) // SLOW..FAST — not OFF/TURBO by default
+        };
         if (typeof VXP !== 'undefined') return look;
         Object.keys(OPTIONS).forEach((k) => { look[k] = Math.floor(r() * OPTIONS[k]); });
         if (look.faction !== 'voidborn') { look.face = 0; look.nose = 0; look.mouth = 0; look.gear = 0; look.brow = 1; ['headW', 'headL', 'jaw', 'chin', 'cheek', 'noseS'].forEach((k) => { delete look[k]; }); }
@@ -85,6 +93,19 @@ const heroPortrait = (() => {
         if (o.gender == null) o.gender = o.sex === 1 ? 6 : 0;
         delete o.sex;
         if (o.v == null) o.v = (((o.skin || 0) * 3 + (o.hair || 0) * 5 + (o.eye || 0) * 7 + (o.gender || 0)) % 16 + 16) % 16;
+        o.v = ((o.v | 0) % 16 + 16) % 16;
+        // Animated faction backdrop seed — independent of face index.
+        if (o.bgv == null) {
+            if (typeof VXP !== 'undefined' && VXP.preset) {
+                o.bgv = ((VXP.preset(o.faction || 'terran', o.v).bgv | 0) % OPTIONS.bgv + OPTIONS.bgv) % OPTIONS.bgv;
+            } else {
+                o.bgv = ((o.v * 7 + 3) % OPTIONS.bgv + OPTIONS.bgv) % OPTIONS.bgv;
+            }
+        } else {
+            o.bgv = ((o.bgv | 0) % OPTIONS.bgv + OPTIONS.bgv) % OPTIONS.bgv;
+        }
+        if (o.bga == null) o.bga = 2; // NORMAL
+        else o.bga = ((o.bga | 0) % OPTIONS.bga + OPTIONS.bga) % OPTIONS.bga;
         ['headW', 'headL', 'jaw', 'chin', 'cheek', 'noseS'].forEach((k) => { if (o[k] == null) o[k] = 2; });
         return o;
     }
@@ -518,22 +539,29 @@ const heroPortrait = (() => {
 
     // Voxel portrait renderer with an SVG pixel fallback.
     function html(look, accent, opts) {
-        const lk = typeof look === 'string' ? heroLook(look) : (look || heroLook('terran'));
-        if (typeof voxelPortrait !== 'undefined') return voxelPortrait.canvasHtml({ faction: lk.faction, v: normalize(lk).v }, accent, opts);
+        const lk = normalize(typeof look === 'string' ? heroLook(look) : (look || heroLook('terran')));
+        if (typeof voxelPortrait !== 'undefined') {
+            return voxelPortrait.canvasHtml({ faction: lk.faction, v: lk.v, bgv: lk.bgv, bga: lk.bga }, accent, opts);
+        }
         return svgHtml(lk, accent);
     }
     const data = { SPECIES, PAINTS, HAIRS, EYE_COLS, EYE_SHAPES, GLOWS };
 
-    // The editor shows only the main choices; the rest (face-shape sliders, eyewear, mask, fixture, gear) stay neutral.
+    // Voxel: face + backdrop + animation speed. SVG fallback: classic feature sliders.
     const SIMPLE = ['gender', 'skin', 'hair', 'hairc', 'eye', 'beard', 'scar'], SIMPLE_VOID = ['hair', 'skin', 'hairCol', 'nose', 'beard', 'face'];
-    const keysFor = (look) => (typeof VXP !== 'undefined' ? ['v'] : isVoid(look) ? SIMPLE_VOID : SIMPLE);
+    const keysFor = (look) => (typeof VXP !== 'undefined' ? ['v', 'bgv', 'bga'] : isVoid(look) ? SIMPLE_VOID : SIMPLE);
     const labelFor = (k, look) => (isVoid(look) && VOID[k] ? VOID[k][0] : LABELS[k]);
     const valueName = (k, v, look) => {
         const vn = isVoid(look) && VOID[k] ? VOID[k][1] : null;
         if (vn) return vn[v];
         if (k === 'v') return String(v + 1).padStart(2, '0') + ' / 16';
+        if (k === 'bgv') return String((v | 0) + 1).padStart(2, '0') + ' / ' + OPTIONS.bgv;
         return NAMES[k] ? NAMES[k][v] : String(v + 1);
     };
-    return { html, svgHtml, data, normalize, randomLook, heroLook, cycle, OPTIONS, LABELS, keysFor, labelFor, valueName };
+    const animSpeed = (bga) => {
+        const i = ((bga | 0) % BGA_SPEED.length + BGA_SPEED.length) % BGA_SPEED.length;
+        return BGA_SPEED[i];
+    };
+    return { html, svgHtml, data, normalize, randomLook, heroLook, cycle, OPTIONS, LABELS, NAMES, BGA_SPEED, keysFor, labelFor, valueName, animSpeed };
 })();
 if (typeof module !== 'undefined') module.exports = heroPortrait;

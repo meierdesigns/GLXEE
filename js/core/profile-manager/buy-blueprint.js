@@ -234,12 +234,20 @@ extendClass(ProfileManager, {
         if (typeof factionShipStyles !== 'undefined' && factionShipStyles.applyDocumentFactionTheme) {
             factionShipStyles.applyDocumentFactionTheme(profile.faction);
         }
+        try {
+            window.dispatchEvent(new CustomEvent('vf-pilot-changed'));
+            window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync'));
+        } catch (e) { /* ignore */ }
         return true;
     },
 
     logout() {
         this.activeProfileId = null;
         this.save();
+        try {
+            window.dispatchEvent(new CustomEvent('vf-pilot-changed'));
+            window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync'));
+        } catch (e) { /* ignore */ }
     },
 
     getGalaxyProgress(galaxyId) {

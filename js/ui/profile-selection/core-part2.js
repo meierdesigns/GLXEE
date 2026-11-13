@@ -22,7 +22,9 @@ extendClass(ProfileSelectionManager, {
             brow: 'M1 4h4v1h2V4h4v2h-4V5H5v1H1z',
             scar: 'M8 1h2v2H9v2H8v2H7v2H6v2H4v-2h1V8h1V6h1V4h1z',
             beard: 'M2 2h8v4H9v3H8v1H4V9H3V6H2z',
-            gear: 'M5 1h2v2h2V2h1v1h-1v2h2v2h-2v2h1v1H9V9H7v2H5V9H3v1H2V9h1V7H1V5h2V3H2V2h1v1h2zM5 5v2h2V5z'
+            gear: 'M5 1h2v2h2V2h1v1h-1v2h2v2h-2v2h1v1H9V9H7v2H5V9H3v1H2V9h1V7H1V5h2V3H2V2h1v1h2zM5 5v2h2V5z',
+            bgv: 'M1 2h10v8H1zM2 3v6h8V3zM3 4h2v1H3zM7 4h2v1H7zM2 8h8v1H2z',
+            bga: 'M2 2h2v8H2zM5 4h2v6H5zM8 3h2v7H8z'
         };
         return `<svg class="pp-ico" viewBox="0 0 12 12" width="22" height="22" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[k] || paths.skin}"/></svg>`;
     },
@@ -35,12 +37,19 @@ extendClass(ProfileSelectionManager, {
         if (keys.indexOf(o.lookKey) < 0) o.lookKey = keys[0];
         const pick = () => `<div class="pp-picks" role="listbox" aria-label="Portrait">` + [13, 10, 0, 15, 5, 2, 8, 6, 7, 12, 11, 1, 14, 4, 3, 9].map((i) =>
             `<button type="button" class="pp-pick${i === o.look.v ? ' selected' : ''}" data-pp-pick="${i}" data-build="${typeof VXP !== 'undefined' ? VXP.preset(o.look.faction, i).build : 0}" tabindex="-1" aria-label="Portrait ${i + 1}" aria-selected="${i === o.look.v}">` +
-            (typeof voxelPortrait !== 'undefined' ? voxelPortrait.canvasHtml({ faction: o.look.faction, v: i }, this.pilotAccent(), { coarse: true }) : '') + '</button>').join('') + '</div>';
+            (typeof voxelPortrait !== 'undefined' ? voxelPortrait.canvasHtml({ faction: o.look.faction, v: i, bgv: o.look.bgv, bga: o.look.bga }, this.pilotAccent(), { coarse: true }) : '') + '</button>').join('') + '</div>';
         const ctlSlider = (k) => `<div class="pp-ctl${k === o.lookKey ? ' active' : ''}" data-pp-key="${k}">` +
             `<span class="pp-name">${this.pilotLookIconHtml(k)}<span>${heroPortrait.labelFor(k, o.look)}</span></span>` +
             `<input type="range" class="pp-slider" data-pp-slider min="0" max="${heroPortrait.OPTIONS[k] - 1}" step="1" value="${o.look[k]}" tabindex="-1" aria-label="${heroPortrait.labelFor(k, o.look)}">` +
             `<b class="pp-val">${heroPortrait.valueName(k, o.look[k], o.look)}</b></div>`;
-        const ctl = (k) => (k === 'v' && typeof voxelPortrait !== 'undefined' ? pick() : ctlSlider(k));
+        const faceKeys = keys.filter((k) => k === 'v');
+        const motionKeys = keys.filter((k) => k === 'bgv' || k === 'bga');
+        const otherKeys = keys.filter((k) => k !== 'v' && k !== 'bgv' && k !== 'bga');
+        const faceHtml = faceKeys.map((k) => (k === 'v' && typeof voxelPortrait !== 'undefined' ? pick() : ctlSlider(k))).join('');
+        const motionHtml = motionKeys.length
+            ? `<div class="pp-motion" aria-label="Backdrop and animation">${motionKeys.map(ctlSlider).join('')}</div>`
+            : '';
+        const otherHtml = otherKeys.map(ctlSlider).join('');
         return `<div class="profile-start-row" data-start-row="pilot">
                     <span class="profile-start-label">PILOT</span>
                     <div class="profile-pilot-card">
@@ -48,7 +57,8 @@ extendClass(ProfileSelectionManager, {
                             <div class="profile-pilot-portrait" id="psPortrait">${heroPortrait.html(o.look, this.pilotAccent())}</div>
                         </div>
                         <div class="profile-pilot-controls">
-                            <div class="pp-grid">${keys.map(ctl).join('')}</div>
+                            <div class="pp-grid">${faceHtml}${otherHtml}</div>
+                            ${motionHtml}
                         </div>
                     </div>
                 </div>`;
@@ -72,8 +82,12 @@ extendClass(ProfileSelectionManager, {
         const gap = 4;
         const cols = 6;
         const rows = 3;
+        // Reserve room for BACKDROP / ANIMATION so the face grid never eats them.
+        const motion = host.querySelector('.pp-motion');
+        const motionH = motion ? Math.ceil(motion.getBoundingClientRect().height) : 0;
+        const availH = Math.max(80, host.clientHeight - motionH - (motionH ? 10 : 0));
         const tw = (host.clientWidth - gap * (cols - 1)) / cols;
-        const th = (host.clientHeight - gap * (rows - 1)) / rows;
+        const th = (availH - gap * (rows - 1)) / rows;
         if (!(tw > 0) || !(th > 0)) return;
         const tile = Math.max(28, Math.floor(Math.min(tw, th)));
         picks.style.setProperty('--pp-tile', tile + 'px');
@@ -133,11 +147,21 @@ extendClass(ProfileSelectionManager, {
         const o = this._startOpts;
         const box = this.overlay && this.overlay.querySelector('#psPortrait');
         if (!box || !o || !o.look) return;
+        o.look = heroPortrait.normalize(o.look);
         box.innerHTML = heroPortrait.html(o.look, this.pilotAccent());
         this.overlay.querySelectorAll('.pp-pick').forEach((b) => {
             const on = Number(b.getAttribute('data-pp-pick')) === o.look.v;
             b.classList.toggle('selected', on);
             b.setAttribute('aria-selected', on ? 'true' : 'false');
+            const canvas = b.querySelector('canvas.vx-portrait');
+            if (canvas && typeof voxelPortrait !== 'undefined' && voxelPortrait.setLook) {
+                voxelPortrait.setLook(canvas, {
+                    faction: o.look.faction,
+                    v: Number(b.getAttribute('data-pp-pick')) || 0,
+                    bgv: o.look.bgv,
+                    bga: o.look.bga
+                });
+            }
         });
         this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
             const k = el.getAttribute('data-pp-key');

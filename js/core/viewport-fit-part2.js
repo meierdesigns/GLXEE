@@ -331,6 +331,33 @@
             };
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(legacy); else legacy();
         }
+        else if (d.lkBase) {
+            if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.cycleSecondBaseColor) {
+                colorPaletteSystem.cycleSecondBaseColor(d.lkBase === 'prev' ? -1 : 1, { persist: true, apply: true });
+                fillFxPlate();
+            }
+        }
+        else if (d.lkGray) {
+            if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.setGlobalLook) {
+                colorPaletteSystem.setGlobalLook({ saturation: d.lkGray === 'ON' ? 0 : 100 });
+                fillFxPlate();
+            }
+        }
+        else if (d.lkBorder) { ui.setBorderWeight(d.lkBorder); }
+        else if (d.lkIndicator) { ui.setIndicatorWeight(d.lkIndicator); }
+        else if (d.toolsAction) {
+            setFxOpen(false);
+            if (d.toolsAction === 'startupSound' && typeof startupSoundEditorUI !== 'undefined') startupSoundEditorUI.show();
+            else if (d.toolsAction === 'soundtrackEditor' && typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            else if (d.toolsAction === 'factionCommand' && typeof factionCommandUI !== 'undefined' && factionCommandUI.show) factionCommandUI.show();
+            else if (d.toolsAction === 'faceEditor' && typeof startScreenManager !== 'undefined') {
+                if (startScreenManager.openFaceEditor) startScreenManager.openFaceEditor();
+                else startScreenManager.openAssetGenerator({ typeId: 'portrait' });
+            }
+            else if (d.toolsAction === 'assetGen' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator(null);
+            else if (d.toolsAction === 'assetGenFaction' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
+            else if (d.toolsAction === 'assetGenFactionShips' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
+        }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
         else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }
         else if (d.pfSway) setPerf('sway', d.pfSway);
@@ -472,6 +499,56 @@
             return;
         }
     }
+    /** Bezel TOOLS → PILOT PORTRAIT: sync backdrop / animation everywhere. */
+    function applyPilotPortraitMotion(opts) {
+        const o = opts || {};
+        try {
+            if (o.bgv != null) localStorage.setItem('vf_asset_gen_portrait_bgv_v1', String(o.bgv | 0));
+            if (o.bga != null) localStorage.setItem('vf_asset_gen_portrait_bga_v1', String(o.bga | 0));
+        } catch (err) { /* ignore */ }
+        if (typeof assetGenUI !== 'undefined' && assetGenUI) {
+            if (o.bgv != null) {
+                if (assetGenUI.setPortraitBgv) assetGenUI.setPortraitBgv(o.bgv | 0);
+                else assetGenUI.portraitBgv = o.bgv | 0;
+            }
+            if (o.bga != null) {
+                if (assetGenUI.setPortraitBga) assetGenUI.setPortraitBga(o.bga | 0);
+                else assetGenUI.portraitBga = o.bga | 0;
+            }
+        }
+        if (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) {
+            const p = profileManager.getActiveProfile();
+            if (p) {
+                p.portrait = Object.assign({}, p.portrait || {});
+                if (o.bgv != null) p.portrait.bgv = o.bgv | 0;
+                if (o.bga != null) p.portrait.bga = o.bga | 0;
+                if (profileManager.save) profileManager.save();
+            }
+        }
+        if (typeof profileSelectionManager !== 'undefined'
+            && profileSelectionManager._startOpts
+            && profileSelectionManager._startOpts.look) {
+            if (o.bgv != null) profileSelectionManager._startOpts.look.bgv = o.bgv | 0;
+            if (o.bga != null) profileSelectionManager._startOpts.look.bga = o.bga | 0;
+            if (profileSelectionManager.refreshPilotRow) profileSelectionManager.refreshPilotRow();
+        }
+        if (typeof onboardingManager !== 'undefined' && onboardingManager._pilotLook) {
+            if (o.bgv != null) onboardingManager._pilotLook.bgv = o.bgv | 0;
+            if (o.bga != null) onboardingManager._pilotLook.bga = o.bga | 0;
+            if (onboardingManager.refreshPilotUi) onboardingManager.refreshPilotUi();
+        }
+        if (typeof voxelPortrait !== 'undefined' && voxelPortrait.setLook) {
+            document.querySelectorAll('canvas.vx-portrait').forEach(function (c) {
+                let look = {};
+                try { look = JSON.parse(c.dataset.look || '{}') || {}; } catch (err) { look = {}; }
+                if (o.bgv != null) look.bgv = o.bgv | 0;
+                if (o.bga != null) look.bga = o.bga | 0;
+                voxelPortrait.setLook(c, look);
+            });
+        }
+        try { window.dispatchEvent(new CustomEvent('vf-pilot-changed')); } catch (err) { /* ignore */ }
+    }
+
     function onFxInput(e) {
         const inp = e.target;
         if (inp.classList && inp.classList.contains('vf-fx-zoom-in')) {
@@ -484,6 +561,7 @@
         // (partial hosted ZIP load) — they only need volumeControlsManager.
         const sl0 = inp.dataset && inp.dataset.sl;
         const audioOnly = (sl0 && String(sl0).indexOf('au:') === 0)
+            || (sl0 && String(sl0).indexOf('pp:') === 0)
             || (inp.dataset && inp.dataset.voiceCh != null);
         if (!ui && !audioOnly) return;
         if (inp.dataset.frColor) {
@@ -566,7 +644,24 @@
         if (!inp.dataset.sl) return;
         const parts = inp.dataset.sl.split(':');
         const v = +inp.value, min = +inp.min, max = +inp.max;
-        inp.style.setProperty('--look-fill', ((v - min) / (max - min) * 100) + '%');
+        inp.style.setProperty('--look-fill', ((v - min) / Math.max(1, max - min) * 100) + '%');
+        // DevMode pilot portrait backdrop / animation (Bezel TOOLS).
+        if (parts[0] === 'pp') {
+            const out = inp.nextElementSibling;
+            if (parts[1] === 'bgv') {
+                if (out && out.tagName === 'OUTPUT') {
+                    out.textContent = String((v | 0) + 1).padStart(2, '0') + ' / 32';
+                }
+                applyPilotPortraitMotion({ bgv: v | 0 });
+            } else if (parts[1] === 'bga') {
+                const names = (typeof heroPortrait !== 'undefined' && heroPortrait.NAMES && heroPortrait.NAMES.bga)
+                    ? heroPortrait.NAMES.bga
+                    : ['OFF', 'SLOW', 'NORMAL', 'FAST', 'TURBO'];
+                if (out && out.tagName === 'OUTPUT') out.textContent = names[v | 0] || String(v);
+                applyPilotPortraitMotion({ bga: v | 0 });
+            }
+            return;
+        }
         // Voice rows: next sibling is <select>, not <output> — never wipe the dropdown.
         if (!(parts[0] === 'au' && (parts[1] === 'jungle' || parts[1] === 'theme' || parts[1] === 'bpm' || parts[1] === 'speed'))) {
             const out = (inp.classList && inp.classList.contains('vf-fx-voice-vol')
@@ -587,6 +682,11 @@
         else if (parts[0] === 'ss') { if (ui) ui.setShotSpeedPct(parts[1], v); }
         else if (parts[0] === 'df') {
             if (typeof difficultyConfigManager !== 'undefined') { const patch = {}; patch[parts[1]] = v; difficultyConfigManager.setProfile(difficultyConfigManager.current, patch); }
+        }
+        else if (parts[0] === 'lk') {
+            if (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.setGlobalLook) {
+                colorPaletteSystem.setGlobalLook({ [parts[1]]: v });
+            }
         }
         else if (parts[0] === 'fr') {
             const frame = document.getElementById('vf-bezel');

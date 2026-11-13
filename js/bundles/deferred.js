@@ -146,7 +146,9 @@ var vfCssVar = (() => {
         }
         // Profiles wizard needs portraits (shipped in station bundle).
         if (s === 'profiles' || s === 'onboarding') return ['station', 'profiles'];
-        if (s === 'ingame' || s === 'endscreen') return ['combat', 'station'];
+        // Endscreen needs galaxy for the outcome globe (planetIconHtml).
+        if (s === 'ingame') return ['combat', 'station'];
+        if (s === 'endscreen') return ['combat', 'station', 'galaxy'];
         // Settings/credits only need station when a pilot hub is underneath.
         // Do NOT fold asset-gen / theme-editor into this — that skipped the editors
         // bundle on reload, so Face Editor never came back after refresh.
@@ -20546,9 +20548,37 @@ extendClass(GameControlSystem, {
         if (isAmbush) {
             const shipType = this.getOutcomeEnemyShipType(level, cfg);
             icon = `<canvas class="outcome-ambush-ship" width="320" height="320" data-enemy-type="${shipType}" aria-hidden="true"></canvas>`;
-        } else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
+        } else {
             // Victory and defeat share the wide layout with the large globe.
-            icon = galaxyMapManager.planetIconHtml(pid, 620, true);
+            // Prefer galaxyMapManager (spin + light); fall back to planetSVGManager
+            // when the galaxy bundle is not loaded yet (endscreen refresh / combat-only).
+            if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
+                icon = galaxyMapManager.planetIconHtml(pid, 620, true) || '';
+            }
+            if (!icon && typeof planetSVGManager !== 'undefined') {
+                if ((!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length)
+                    && planetSVGManager.init) {
+                    planetSVGManager.init();
+                }
+                if (cfg && planetSVGManager.registerFromConfig) {
+                    planetSVGManager.registerFromConfig(cfg);
+                }
+                const detail = 8;
+                const svg = planetSVGManager.getPlanetSVGDetailed
+                    ? planetSVGManager.getPlanetSVGDetailed(pid, detail)
+                    : (planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(pid) : '');
+                if (svg && planetSVGManager.planetSvgToImg) {
+                    const conv = planetSVGManager.planetSvgToImg(svg);
+                    const px = 620;
+                    const big = px * conv.scale;
+                    const off = -(big - px) / 2;
+                    if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
+                    icon = `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${pid}|${detail}" data-planet-px="${px}">` +
+                        `<img class="gm-planet-img" src="${conv.url}" alt="" draggable="false" style="width:${big}px;height:${big}px;left:${off}px;top:${off}px"></span>`;
+                } else if (svg) {
+                    icon = `<span class="gm-planet-icon">${svg}</span>`;
+                }
+            }
         }
 
         let steps = '';
@@ -20590,24 +20620,33 @@ extendClass(GameControlSystem, {
     /** Puts / refreshes the stepper block right after `anchor`. */
     applyOutcomeStepper(anchor, result) {
         if (!anchor || !anchor.parentNode) return;
-        let box = anchor.parentNode.querySelector(':scope > .outcome-progress');
-        if (!box) {
-            box = document.createElement('div');
-            box.className = 'outcome-progress';
-            anchor.insertAdjacentElement('afterend', box);
-        }
-        box.dataset.result = result;
-        box.innerHTML = this.renderOutcomeStepperHtml(result);
-        box.hidden = !box.innerHTML;
-        box.classList.toggle('is-ambush', !!(box.querySelector('canvas.outcome-ambush-ship')));
-        if (this.paintOutcomeAmbushShip) this.paintOutcomeAmbushShip(box);
-        // Combat parks planet spin; restart so the outcome globe turns again.
-        if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
-            if (planetSVGManager._spinTimer) {
-                clearInterval(planetSVGManager._spinTimer);
-                planetSVGManager._spinTimer = null;
+        const paint = () => {
+            if (!anchor || !anchor.parentNode) return;
+            let box = anchor.parentNode.querySelector(':scope > .outcome-progress');
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'outcome-progress';
+                anchor.insertAdjacentElement('afterend', box);
             }
-            planetSVGManager.startPlanetSpin();
+            box.dataset.result = result;
+            box.innerHTML = this.renderOutcomeStepperHtml(result);
+            box.hidden = !box.innerHTML;
+            box.classList.toggle('is-ambush', !!(box.querySelector('canvas.outcome-ambush-ship')));
+            if (this.paintOutcomeAmbushShip) this.paintOutcomeAmbushShip(box);
+            // Combat parks planet spin; restart so the outcome globe turns again.
+            if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
+                if (planetSVGManager._spinTimer) {
+                    clearInterval(planetSVGManager._spinTimer);
+                    planetSVGManager._spinTimer = null;
+                }
+                planetSVGManager.startPlanetSpin();
+            }
+        };
+        paint();
+        // Galaxy bundle may still be loading on endscreen restore — refresh globe once ready.
+        if (typeof ensureVfGalaxy === 'function'
+            && (typeof vfGalaxyReady !== 'function' || !vfGalaxyReady())) {
+            ensureVfGalaxy(() => paint());
         }
     }
 });
@@ -50075,29 +50114,44 @@ var OnboardingManager = class OnboardingManager {
                 </div>`;
             bar = this.barHtml('CONTINUE', '↑ ↓ Feature | ← → Change | R Randomize | ENTER Continue | ESC Back', true);
         } else if (this.step === 'name') {
+            const psm = this.syncPilotToPsm();
             const crest = this.ensurePilotLook() && typeof heroPortrait !== 'undefined'
                 ? `<span class="profile-name-crest onboarding-name-portrait" id="obNamePortrait">${heroPortrait.html(this._pilotLook, this.pilotAccent())}</span>`
                 : `<span class="profile-name-crest">${this.getFactionEmblemHtml(this._pendingFaction, 48)}</span>`;
+            const kitCol = (psm && psm.renderKitListHtml) ? psm.renderKitListHtml() : '';
+            const loadout = (psm && psm.renderLoadoutHtml) ? psm.renderLoadoutHtml() : '';
+            const kitInfo = (psm && psm.renderKitInfoHtml) ? psm.renderKitInfoHtml() : '';
             body = `
-                <div class="profile-selection-content onboarding-content onboarding-panel onboarding-name-panel">
+                <div class="profile-selection-content onboarding-content onboarding-panel onboarding-name-panel profile-selection-name-mode is-name-step">
                     <h2 class="profile-selection-title">PILOT CALLSIGN</h2>
-                    <p class="onboarding-hint">ENTER YOUR NAME</p>
+                    <p class="onboarding-hint">ENTER YOUR NAME · PICK A START PROFILE</p>
                     <div class="profile-name-row onboarding-name-row">
                         ${crest}
                         <input type="text" class="profile-name-input" id="obNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>
                     </div>
+                    <div class="profile-start-main onboarding-pilot-kit-main">
+                        ${kitCol}
+                        <div class="profile-faction-preview">
+                            <div class="profile-faction-ship-wrap">
+                                <canvas class="profile-faction-ship" width="320" height="224" aria-label="Starter hull preview"></canvas>
+                            </div>
+                            <div class="profile-kit-ship"></div>
+                            <div class="profile-loadout">${loadout}</div>
+                            <div class="profile-kit-info">${kitInfo}</div>
+                        </div>
+                    </div>
                 </div>`;
-            bar = this.barHtml('CONFIRM', 'ENTER Confirm | ESC Back', true);
+            bar = this.barHtml('CONFIRM', '↑ ↓ Profile | ENTER Confirm | ESC Back', true);
         } else {
             body = `
                 <div class="profile-selection-content onboarding-content onboarding-panel onboarding-ship-panel">
                     <h2 class="profile-selection-title">SHIP ASSEMBLY</h2>
-                    <p class="onboarding-hint">SET THE STYLE AND POSITION OF YOUR STARTER HULL</p>
+                    <p class="onboarding-hint">YOUR STARTER HULL · OPEN THE HANGAR TO FIT MODULES</p>
                     <div class="onboarding-ship-wrap">
-                        <canvas class="onboarding-ship-canvas" width="300" height="200"></canvas>
+                        <canvas class="profile-faction-ship onboarding-ship-canvas" width="320" height="224" aria-label="Starter hull preview"></canvas>
                     </div>
-                    <p class="onboarding-ship-stats">DRAG AREAS TO POSITION · SELECT HULL STYLE IN THE COMPONENT TREE</p>
-                    <p class="hs-status">SCRAP FIGHTER READY</p>
+                    <div class="profile-kit-ship"></div>
+                    <p class="hs-status">READY FOR HANGAR</p>
                 </div>`;
             bar = this.barHtml('OPEN HANGAR', 'ENTER Continue | ESC Back', true);
         }
@@ -50160,12 +50214,15 @@ var OnboardingManager = class OnboardingManager {
         const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
         if (!psm) return null;
         this.ensurePilotLook();
+        // Treat as create-wizard so kit/inventory + ship preview use start-hull paths.
+        psm.mode = 'create';
         psm.pendingFaction = this._pendingFaction;
         psm._startOpts = Object.assign({}, psm._startOpts || {}, {
             faction: this._pendingFaction,
             look: this._pilotLook,
             lookKey: this._pilotLookKey
         });
+        if (!psm._startOpts.areas) psm._startOpts.areas = {};
         psm.overlay = this.overlay;
         return psm;
     }
@@ -50347,10 +50404,11 @@ var OnboardingManager = class OnboardingManager {
                     input.placeholder = meta.hero.name.slice(0, 16);
                 }
             }
+            this.bindPilotKit();
         }
 
         if (this.step === 'scrap') {
-            this.renderScrapPreview();
+            this.bindShipPreview();
         }
 
         this._keyHandler = (e) => {
@@ -50429,6 +50487,16 @@ var OnboardingManager = class OnboardingManager {
                 }
                 return;
             }
+            if (this.step === 'name' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')
+                && !(e.target && e.target.id === 'obNameInput')) {
+                e.preventDefault();
+                const chips = Array.from(this.overlay.querySelectorAll('[data-start-opt="kit"]'));
+                if (!chips.length) return;
+                const cur = chips.findIndex((b) => b.classList.contains('selected'));
+                const next = chips[(Math.max(0, cur) + (e.key === 'ArrowDown' ? 1 : chips.length - 1)) % chips.length];
+                if (next) next.click();
+                return;
+            }
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 this.advance();
@@ -50469,8 +50537,12 @@ var OnboardingManager = class OnboardingManager {
             profileManager.setActive(p.id);
             if (this._pilotLook) {
                 p.portrait = Object.assign({}, this._pilotLook);
-                if (profileManager.save) profileManager.save();
             }
+            const psm = this.syncPilotToPsm();
+            if (psm && psm.applyStartOptions) {
+                try { psm.applyStartOptions(p); } catch (e) { /* continue */ }
+            }
+            if (profileManager.save) profileManager.save();
             this._pendingName = p.name;
             this.step = 'scrap';
             this.createUI();
@@ -50487,29 +50559,42 @@ var OnboardingManager = class OnboardingManager {
         if (typeof this.onComplete === 'function') this.onComplete();
     }
 
-    renderScrapPreview() {
-        const canvas = this.overlay.querySelector('.onboarding-ship-canvas');
-        if (!canvas) return;
-        let ship = null;
-        if (typeof shipConfigManager !== 'undefined') {
-            ship = shipConfigManager.getMergedModel('player_scrap');
-        }
-        if (!ship) {
-            ship = {
-                id: 'player_scrap',
-                name: 'Scrap Fighter',
-                modelClass: 'starfighter',
-                width: 20,
-                height: 16
-            };
-        }
-        ship = Object.assign({}, ship, { faction: this._pendingFaction });
-        if (typeof shipRenderer !== 'undefined' && shipRenderer.renderShipPreview) {
-            shipRenderer.renderShipPreview(canvas, ship, 1.5);
-        } else if (typeof combinedSelectionManager !== 'undefined' &&
-            combinedSelectionManager.renderShipPreview) {
-            combinedSelectionManager.renderShipPreview(canvas, ship, 1.5);
-        }
+    /** START PROFILE + inventory under the callsign (pilot) step. */
+    bindPilotKit() {
+        const psm = this.syncPilotToPsm();
+        if (!psm || !this.overlay) return;
+        if (!psm._startOpts) psm._startOpts = {};
+        psm._startOpts.faction = this._pendingFaction;
+        psm.pendingFaction = this._pendingFaction;
+        if (psm.currentKit) psm.currentKit();
+        this.overlay.querySelectorAll('[data-start-opt="kit"]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                psm._startOpts.kit = btn.getAttribute('data-value');
+                psm._startOpts.ship = psm.kitShipId ? psm.kitShipId(psm._startOpts.kit) : psm._startOpts.ship;
+                psm._startOpts.storyPathId = null;
+                this.overlay.querySelectorAll('[data-start-opt="kit"]').forEach((b) => {
+                    const on = b === btn;
+                    b.classList.toggle('selected', on);
+                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+                });
+                const loadout = this.overlay.querySelector('.profile-loadout');
+                if (loadout && psm.renderLoadoutHtml) loadout.innerHTML = psm.renderLoadoutHtml();
+                const kitInfo = this.overlay.querySelector('.profile-kit-info');
+                if (kitInfo && psm.renderKitInfoHtml) kitInfo.innerHTML = psm.renderKitInfoHtml();
+                if (psm.renderFactionShipPreview) psm.renderFactionShipPreview(this._pendingFaction);
+                if (psm.renderKitShipInfo) psm.renderKitShipInfo();
+            });
+        });
+        if (psm.renderFactionShipPreview) psm.renderFactionShipPreview(this._pendingFaction);
+        if (psm.renderKitShipInfo) psm.renderKitShipInfo();
+    }
+
+    /** Ship step: preview the kit hull already chosen with the pilot. */
+    bindShipPreview() {
+        const psm = this.syncPilotToPsm();
+        if (!psm || !this.overlay) return;
+        if (psm.renderFactionShipPreview) psm.renderFactionShipPreview(this._pendingFaction);
+        if (psm.renderKitShipInfo) psm.renderKitShipInfo();
     }
 }
 

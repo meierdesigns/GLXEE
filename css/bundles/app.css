@@ -15591,7 +15591,6 @@ html body .onboarding-overlay > .onboarding-homeworld-site.profile-selection-con
     box-shadow: none !important;
     background: transparent !important;
 }
-html body .onboarding-overlay > .onboarding-name-panel,
 html body .onboarding-overlay > .onboarding-ship-panel {
     flex: 1 1 auto !important;
     width: min(720px, 92%) !important;
@@ -15599,6 +15598,28 @@ html body .onboarding-overlay > .onboarding-ship-panel {
     margin: 16px auto !important;
     padding: 24px !important;
     align-self: center !important;
+}
+html body .onboarding-overlay > .onboarding-name-panel {
+    flex: 1 1 auto !important;
+    align-self: stretch !important;
+    width: auto !important;
+    max-width: none !important;
+    margin: 12px 16px !important;
+    padding: 16px 18px !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+html body .onboarding-overlay > .onboarding-name-panel > .profile-selection-title,
+html body .onboarding-overlay > .onboarding-name-panel > .onboarding-hint,
+html body .onboarding-overlay > .onboarding-name-panel > .onboarding-name-row {
+    flex: 0 0 auto;
+}
+html body .onboarding-overlay > .onboarding-name-panel > .onboarding-pilot-kit-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 html body .onboarding-overlay > .onboarding-pilot-panel {
     flex: 1 1 auto !important;
@@ -22100,16 +22121,26 @@ html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip
 }
 .hs-equip-inv {
     display: flex;
-    flex-direction: column;
-    gap: 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 12px;
     min-width: 0;
     min-height: 0;
 }
+.hs-equip-inv > .hs-panel-storage {
+    flex: 0 1 auto;
+    width: max-content;
+    max-width: 100%;
+    box-sizing: border-box;
+}
 .hs-equip-inv .hs-panel-storage .hs-row {
     overflow: auto;
-    max-height: min(38vh, 320px);
+    max-height: min(42vh, 360px);
     padding: 4px 2px 8px;
     box-sizing: border-box;
+    width: max-content;
+    max-width: 100%;
 }
 .hs-equip-inv .hs-storage-grid {
     flex-shrink: 0;
@@ -28534,11 +28565,15 @@ html body .game-over .outcome-progress {
     gap: 10px;
     width: 100%;
     min-height: 0;
+    flex: 0 0 auto;
     padding-top: 108px;
+    justify-content: flex-start;
 }
 html body .game-over .outcome-progress > .outcome-planet-icon {
     width: 168px;
     height: 168px;
+    top: 0;
+    transform: translateX(-50%);
 }
 html body .game-over .outcome-planet-text strong {
     font-size: var(--font-h2);
@@ -34034,17 +34069,17 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-action
 .profile-list-item .profile-list-emblem { margin-right: 22px !important; }
 .profile-list-item .profile-list-name { padding-left: 8px; }
 
-/* Victory / defeat: planet behind; name on lower half; stepper further below. */
+/* Victory / defeat: planet centred in the freiraum; name / stepper above it. */
 .outcome-progress {
     position: relative; display: flex; flex-direction: column; align-items: center;
-    min-height: 360px; padding-top: 188px; gap: 22px; overflow: visible;
-    justify-content: flex-start;
+    min-height: 220px; padding-top: 0; gap: 12px; overflow: visible;
+    justify-content: center; flex: 1 1 auto;
 }
 .outcome-planet { gap: 6px; flex-direction: column; justify-content: center; position: relative; z-index: 1; }
 .outcome-progress > .outcome-planet-icon {
-    position: absolute; left: 50%; top: 0; z-index: 0; pointer-events: none;
-    width: 320px; height: 320px; margin: 0;
-    transform: translateX(-50%);
+    position: absolute; left: 50%; top: 50%; z-index: 0; pointer-events: none;
+    width: min(420px, 48vh); height: min(420px, 48vh); margin: 0;
+    transform: translate(-50%, -50%);
 }
 .outcome-planet-text { gap: 4px; }
 .outcome-progress > .outcome-stepper,
@@ -35967,13 +36002,14 @@ html body .victory-screen .victory-title { margin-bottom: 4px; }
 html body .victory-screen .victory-stage { margin-top: 4px; }
 html body .victory-screen .victory-stage { display: none !important; }
 html body .victory-screen .outcome-progress {
-    margin: 0 auto; gap: 22px; width: 100%; min-height: 360px; padding-top: 188px;
+    margin: 0 auto; gap: 12px; width: 100%; min-height: 220px; padding-top: 0;
+    flex: 1 1 auto; justify-content: center;
 }
 html body .victory-screen .outcome-planet { width: 100%; height: auto; }
 html body .victory-screen .outcome-progress > .outcome-planet-icon {
-    position: absolute; inset: auto; left: 50%; top: 0;
-    width: 320px; height: 320px;
-    transform: translateX(-50%);
+    position: absolute; inset: auto; left: 50%; top: 50%;
+    width: min(420px, 48vh); height: min(420px, 48vh);
+    transform: translate(-50%, -50%);
     align-items: center; justify-content: center;
 }
 html body .victory-screen .outcome-progress > .outcome-planet-icon > * { transform: none; opacity: 1; width: 100%; height: 100%; }
@@ -38353,9 +38389,8 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     letter-spacing: 2px; white-space: nowrap; cursor: pointer;
 }
 .hs-bay-invtoggle:hover { background: var(--color-primary); color: #05060a; }
-/* Panel sized to the shared storage grid's width, but stretched to the full
-   height of the bay stage — was height:auto, leaving dead space below a grid
-   shorter than the stage (and no room to show the STATION section below SHIP). */
+/* Bay inventory: hug each grid, place SHIP + STATION side-by-side when they fit —
+   was one ultra-wide column with dead space beside the narrower grid. */
 .hs-bay-inv {
     position: absolute; top: 0; left: 0; right: auto; bottom: 0; z-index: 4;
     display: flex; flex-direction: column; align-items: stretch;
@@ -38366,16 +38401,38 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     --cs: 56px;
 }
 .hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 0; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
+.hs-bay-inv-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px;
+    flex: 0 0 auto;
+    min-width: 0;
+}
+.hs-bay-inv-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: max-content;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px 8px;
+    background: color-mix(in srgb, var(--color-primary) 5%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
 .hs-bay-inv-group-label {
     flex: 0 0 auto;
     font-size: 11px;
     letter-spacing: 2px;
     opacity: 0.7;
-    margin: 0 -8px 4px;
-    padding: 10px 8px 0;
-    background: #0a0912;
+    margin: 0 0 6px;
+    padding: 0;
+    background: transparent;
 }
 .hs-bay-inv-group-label:first-of-type { margin-top: 0; }
+html body .hs-bay-inv .hs-bay-inv-group .hs-storage-grid.hs-pick-grid {
+    align-self: stretch;
+}
 .hs-bay-inv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
 html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
 .hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }
@@ -39450,30 +39507,86 @@ html body .victory-screen .victory-content {
     html body .victory-screen .victory-content { animation: none; }
 }
 html body .victory-screen .victory-content > * { margin-top: 0 !important; margin-bottom: 0 !important; }
-html body .victory-screen .outcome-progress { padding-top: 200px; min-height: 0; gap: 12px; }
-html body .victory-screen .outcome-progress > .outcome-planet-icon { width: 500px; height: 500px; top: -118px; }
+html body .victory-screen .outcome-progress {
+    flex: 1 1 auto;
+    min-height: 220px;
+    padding-top: 0;
+    gap: 10px;
+    justify-content: center;
+    overflow: visible;
+}
+html body .victory-screen .outcome-progress > .outcome-planet-icon {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(420px, 48vh);
+    height: min(420px, 48vh);
+    margin: 0;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+    pointer-events: none;
+}
 html body :is(.victory-screen, .game-over) .outcome-planet-icon .gm-planet-icon { filter: brightness(0.5) saturate(0.8) contrast(0.95) !important; }
-html body .victory-screen .outcome-progress > :is(.outcome-planet, .outcome-stepper, .outcome-status) { zoom: 1.15; }
+html body .victory-screen .outcome-progress > :is(.outcome-planet, .outcome-stepper, .outcome-status) {
+    position: relative;
+    z-index: 1;
+    zoom: 1.15;
+}
 html body :is(.victory-screen, .game-over) :is(.victory-title, .victory-subtitle) { zoom: 1.2; }
 html body .victory-screen .victory-header { position: relative; z-index: 1; }
 html body .victory-screen .victory-body {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch;
+    flex: 0 0 auto !important;
     gap: 10px !important;
     grid-template-columns: none !important;
 }
-html body .victory-screen :is(.victory-loot, .victory-buttons) { width: 100% !important; max-width: none !important; min-height: 0 !important; height: auto !important; }
-html body .victory-screen .victory-loot { display: flex; align-items: center; gap: 16px; padding: 8px 14px !important; }
-html body .victory-screen .victory-loot-title { flex: none; margin: 0 !important; }
-html body .victory-screen .victory-loot-list {
+html body .victory-screen .victory-panels {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 18px !important;
-    flex: 1 1 auto;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 16px !important;
+    width: 100% !important;
+}
+html body .victory-screen :is(.victory-loot, .victory-loadout) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+html body .victory-screen .victory-buttons { width: 100% !important; max-width: none !important; min-height: 0 !important; height: auto !important; }
+html body .victory-screen .victory-loot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 14px !important; }
+html body .victory-screen .victory-loadout {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 14px !important;
+    max-height: none;
+    overflow: visible !important;
+}
+html body .victory-screen .victory-loadout-bags {
+    display: flex;
+    width: max-content;
+    max-width: 100%;
+    overflow: visible;
+}
+html body .victory-screen .victory-loadout-col {
+    width: max-content;
+}
+html body .victory-screen .victory-loot-title { flex: none; margin: 0 !important; }
+html body .victory-screen .victory-loot-list {
+    display: block !important;
+    width: max-content !important;
+    max-width: 100%;
+    flex: none !important;
 }
 html body .victory-screen .victory-loot-row {
     display: inline-flex !important;
@@ -39520,11 +39633,10 @@ html body .outcome-planet-icon.has-atmo::before {
     html body .outcome-planet-icon.has-atmo::before { animation: none; }
 }
 
-/* Victory: title above the planet (both were z-index 1, the later planet won); planet raster centred on its
-   box so the atmosphere rings sit around the globe; no navigation hint. */
+/* Victory: title above the planet; globe centred in the flex freiraum; no navigation hint. */
 html body .victory-screen .victory-header { position: relative; z-index: 3 !important; }
 html body .victory-screen .outcome-progress { z-index: 1; }
-html body .victory-screen .outcome-planet-icon .gm-planet-icon { position: relative; overflow: visible; }
+html body .victory-screen .outcome-planet-icon .gm-planet-icon { position: relative; overflow: visible; width: 100%; height: 100%; }
 html body .victory-screen .outcome-planet-icon .gm-planet-img {
     position: absolute !important;
     left: 50% !important;
@@ -39534,15 +39646,9 @@ html body .victory-screen .outcome-planet-icon .gm-planet-img {
 }
 html body .victory-screen .victory-instructions { display: none !important; }
 
-/* Victory title / subtitle: lower and bigger (the planet block moves up the same amount, so the height stays). */
-html body .victory-screen .victory-header { padding-top: 34px !important; }
+html body .victory-screen .victory-header { padding-top: 12px !important; }
 html body .victory-screen .victory-title { zoom: 1.6 !important; }
 html body .victory-screen .victory-subtitle { zoom: 1.4 !important; }
-html body .victory-screen .outcome-progress { padding-top: 150px; }
-html body .victory-screen .outcome-progress > .outcome-planet-icon { top: -150px; }
-/* Planet name / stepper / status and everything below sit 50px higher; the planet itself stays put. */
-html body .victory-screen .outcome-progress { padding-top: 100px; }
-html body .victory-screen .outcome-progress > .outcome-planet-icon { top: -100px; }
 
 /* Victory modal: breathing room at the bottom. */
 html body .victory-screen .victory-content { padding-bottom: 30px !important; }
@@ -39569,7 +39675,6 @@ html body .victory-screen .victory-button:is(.selected, :hover, :focus-visible) 
 
 /* Resources: no heading, each entry is the icon with its amount underneath. */
 html body .victory-screen .victory-loot-title { display: none !important; }
-html body .victory-screen .victory-loot-list { justify-content: center !important; }
 html body .victory-screen .victory-loot-row { flex-direction: column !important; gap: 4px; }
 /* Amount as tall as the resource icon (38px box). */
 html body .victory-screen .victory-loot-amount { font-size: 38px !important; line-height: 1 !important; }
@@ -40696,15 +40801,15 @@ html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-shield {
     white-space: nowrap;
 }
 
-/* Victory panel: fill the glass; stats / loot / buttons stretch across the full width. */
+/* Victory panel: fill the glass; planet freiraum grows; loot/ship hug their grids. */
 html body .victory-screen .victory-content {
     width: 100% !important;
     max-width: none !important;
     height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
-    justify-content: space-between !important;
-    gap: 14px !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
     padding-left: 28px !important;
     padding-right: 28px !important;
 }
@@ -40745,24 +40850,30 @@ html body .victory-screen .victory-stats .stat-value {
 }
 html body .victory-screen .victory-body {
     width: 100% !important;
-    flex: 1 1 auto !important;
+    flex: 0 0 auto !important;
     justify-content: flex-end !important;
     gap: 12px !important;
+    margin-top: auto;
 }
 html body .victory-screen .victory-loot {
-    width: 100% !important;
+    width: auto !important;
     box-sizing: border-box;
     min-height: 0 !important;
     padding: 12px 10px !important;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
 }
+html body .victory-screen .victory-loadout {
+    width: auto !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+}
 html body .victory-screen .victory-loot-list {
-    display: flex !important;
-    width: 100% !important;
-    justify-content: stretch !important;
-    align-items: stretch !important;
-    gap: 10px !important;
+    display: block !important;
+    width: max-content !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    gap: 0 !important;
     flex-wrap: nowrap !important;
+    flex: none !important;
 }
 html body .victory-screen .victory-loot-row {
     flex: 1 1 0 !important;

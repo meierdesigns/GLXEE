@@ -1088,6 +1088,7 @@ be reviewed or reverted independently.
 | 74S | Shot flight fix | Rim shots no longer culled at x<0; VOXEL draw uses continuous pixelExact so beams stop freezing mid-lane |
 | 74T | Victory outcome chrome | Outcome stepper/panels refresh; victory freiraum planet layout; endscreen loads galaxy for globe |
 | 74U | Onboarding hangar layout | Onboarding name/pilot panel layout; bay inventory ship+station side-by-side hug grids |
+| 74V | Deferred bundle rebuild | Rebuild deferred + CSS app packs for shot flight, victory chrome, onboarding/hangar (74S–74U) |
 
 The wave commit convention is:
 

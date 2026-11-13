@@ -1215,14 +1215,18 @@ extendClass(GameControlSystem, {
         const existingBtns = victoryOverlay
             ? victoryOverlay.querySelectorAll('.victory-button').length
             : 0;
-        // Rebuild when missing, or when stale HTML lacks the shop button.
+        // Rebuild when missing, stale HTML lacks the shop button, or panels still
+        // use the old flex:1/width:0 stretch (empty freiräume beside the grids).
+        const stalePanels = !!(victoryOverlay
+            && victoryOverlay.querySelector('.victory-panels[style*="width:100%"], #victoryLoot[style*="width:0"], #victoryLoadout[style*="width:0"]'));
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
             || !document.getElementById('victoryLootCredits')
             || !document.getElementById('victoryLoadoutList')
             || existingBtns !== 3
             || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
-            || !victoryOverlay.querySelector('.victory-button[data-action="shop"]');
+            || !victoryOverlay.querySelector('.victory-button[data-action="shop"]')
+            || stalePanels;
         if (!victoryOverlay) {
             victoryOverlay = document.createElement('div');
             victoryOverlay.id = 'victoryOverlay';
@@ -1253,8 +1257,8 @@ extendClass(GameControlSystem, {
                     </div>
 
                     <div class="victory-body">
-                        <div class="victory-panels" style="display:flex !important;flex-direction:row !important;width:100% !important;gap:12px !important;align-items:stretch !important;">
-                            <div class="victory-loot" id="victoryLoot" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                        <div class="victory-panels">
+                            <div class="victory-loot" id="victoryLoot">
                                 <div class="victory-loot-title">
                                     <span>FOUND ITEMS</span>
                                     <span class="victory-loot-credits" id="victoryLootCredits"></span>
@@ -1262,7 +1266,7 @@ extendClass(GameControlSystem, {
                                 <div class="victory-loot-list" id="victoryLootList"></div>
                             </div>
 
-                            <div class="victory-loadout" id="victoryLoadout" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                            <div class="victory-loadout" id="victoryLoadout">
                                 <div class="victory-loot-title"><span>SHIP LOADOUT</span></div>
                                 <div class="victory-loadout-list" id="victoryLoadoutList"></div>
                             </div>
@@ -8030,6 +8034,7 @@ var BulletManager = class BulletManager {
         for (let i = this.bullets.length - 1; i >= 0; i--) {
             const bullet = this.bullets[i];
             const speedMultiplier = baseSpeedMultiplier * playerSpeed;
+            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 6;
             let bdx = 0;
             let bdy = 0;
 
@@ -8037,12 +8042,12 @@ var BulletManager = class BulletManager {
             if (bullet.type === 'wave_beam' && bullet.waveAmp) {
                 bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * speedMultiplier;
                 bdx = Math.sin(bullet.wavePhase) * bullet.waveAmp * speedMultiplier;
-                bdy = -bullet.speed * speedMultiplier;
-            } else if (bullet.angle !== undefined) {
-                bdx = Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
-                bdy = -Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
+                bdy = -spd * speedMultiplier;
+            } else if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
+                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
+                bdy = -Math.cos(bullet.angle) * spd * speedMultiplier;
             } else {
-                bdy = -bullet.speed * speedMultiplier;
+                bdy = -spd * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
             bullet.x += bdx;
@@ -8050,10 +8055,16 @@ var BulletManager = class BulletManager {
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
-            // Remove bullets that are off screen
-            // Get canvas width from game if available
+            // Cull only when the shot is fully off-screen. The pilot's guns can
+            // sit on the rim (player.x down to -halfW), so a fresh laser spawns
+            // with x ≈ -1.5 — culling on `x < 0` ate those shots instantly.
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
+            const bw = bullet.width || 0;
+            const bh = bullet.height || 0;
+            if (!isFinite(bullet.x) || !isFinite(bullet.y)
+                || bullet.y + bh < 0
+                || bullet.x + bw < 0
+                || bullet.x > canvasWidth) {
                 const last = this.bullets.length - 1;
                 if (i !== last) this.bullets[i] = this.bullets[last];
                 this.releaseBullet(this.bullets.pop());
@@ -8064,15 +8075,16 @@ var BulletManager = class BulletManager {
         for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
             const bullet = this.enemyBullets[i];
             const speedMultiplier = baseSpeedMultiplier * (bullet.isBossShot ? bossSpeed : enemySpeed);
+            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 5;
             let bdx = 0;
             let bdy = 0;
 
             // Handle angled enemy bullets (after reflection)
-            if (bullet.angle !== undefined) {
-                bdx = Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
-                bdy = Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
+            if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
+                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
+                bdy = Math.cos(bullet.angle) * spd * speedMultiplier;
             } else {
-                bdy = bullet.speed * speedMultiplier;
+                bdy = spd * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
             bullet.x += bdx;
@@ -8080,11 +8092,14 @@ var BulletManager = class BulletManager {
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
-            // Remove bullets that are off screen
-            // Get canvas dimensions from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
             const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
-            if (bullet.y > canvasHeight || bullet.x < 0 || bullet.x > canvasWidth) {
+            const bw = bullet.width || 0;
+            const bh = bullet.height || 0;
+            if (bullet.y > canvasHeight
+                || bullet.x + bw < 0
+                || bullet.x > canvasWidth
+                || bullet.y + bh < 0) {
                 const last = this.enemyBullets.length - 1;
                 if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
                 this.releaseBullet(this.enemyBullets.pop());
@@ -9111,7 +9126,7 @@ extendClass(BulletManager, {
             y: playerPosition.y,
             width: w,
             height: h,
-            speed: config.speed,
+            speed: (config && Number(config.speed) > 0) ? Number(config.speed) : 12,
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'laser_beam',
@@ -18514,13 +18529,14 @@ extendClass(CollisionManager, {
         const anyShot = shot1 || shot2;
         // Broadphase uses the full footprint so silhouette insets cannot drop a
         // glancing visual hit; confirmShotHit then tests the real hull mask.
+        // Shots draw on continuous pixel coords (no lattice snap) — match that.
         const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1, {
             ignoreInsets: anyShot && !shot1,
-            matchVoxelDraw: shot1
+            matchVoxelDraw: false
         });
         const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2, {
             ignoreInsets: anyShot && !shot2,
-            matchVoxelDraw: shot2
+            matchVoxelDraw: false
         });
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
@@ -19397,13 +19413,15 @@ var RenderManager = class RenderManager {
     /**
      * Hard fill on the shared combat lattice (VOXEL) or rounded fillRect (FLAT).
      * Used by bullets, particles, explosions, pickups, debris — every playfield FX.
+     * Pass `pixelExact` for shots: lattice-snapping their draw pos freezes them on
+     * screen whenever cell > per-frame travel (physics already flies continuous).
      */
-    fillCombatRect(ctx, x, y, w, h, color, alpha) {
+    fillCombatRect(ctx, x, y, w, h, color, alpha, pixelExact) {
         if (!ctx) return;
         const cell = this.getCombatVoxelCell();
         if (alpha != null) ctx.globalAlpha = alpha;
         if (color != null) ctx.fillStyle = color;
-        if (cell == null || !(cell > 0)) {
+        if (pixelExact || cell == null || !(cell > 0)) {
             ctx.fillRect(
                 Math.round(x), Math.round(y),
                 Math.max(1, Math.round(w)), Math.max(1, Math.round(h))
@@ -21480,8 +21498,10 @@ extendClass(RenderManager, {
         }
 
         const cell = this.getCombatVoxelCell();
-        const x = cell ? this.snapCombat(bullet.x, cell) : Math.floor(bullet.x);
-        const y = cell ? this.snapCombat(bullet.y, cell) : Math.floor(bullet.y);
+        // Continuous flight coords — never lattice-snap the draw origin (that
+        // froze beams mid-lane whenever cell > per-frame travel). Size may stay chunky.
+        const x = Math.floor(bullet.x);
+        const y = Math.floor(bullet.y);
         const w = cell ? this.quantizeCombatSize(bullet.width, cell) : Math.max(1, Math.ceil(bullet.width));
         const h = cell ? this.quantizeCombatSize(bullet.height, cell) : Math.max(1, Math.ceil(bullet.height));
 
@@ -21499,13 +21519,13 @@ extendClass(RenderManager, {
             ctx.fillStyle = glow;
             ctx.fillRect(x, y, w, h);
         }
-        this.fillCombatRect(ctx, x, y, w, h, bulletColor, 1);
+        this.fillCombatRect(ctx, x, y, w, h, bulletColor, 1, true);
         if (w >= 2 && h >= 3) {
             this.fillCombatRect(
                 ctx,
                 x + Math.floor(w / 4), y + (cell || 1),
                 Math.max(cell || 1, Math.ceil(w / 2)), Math.max(cell || 1, h - 2),
-                glow, 1
+                glow, 1, true
             );
         }
 
@@ -21526,7 +21546,7 @@ extendClass(RenderManager, {
         const hot = '#ffffff';
         const cell = this.getCombatVoxelCell();
         const rect = (rx, ry, rw, rh, c, a) => {
-            this.fillCombatRect(ctx, rx, ry, rw, rh, c, a == null ? 1 : a);
+            this.fillCombatRect(ctx, rx, ry, rw, rh, c, a == null ? 1 : a, true);
         };
         // Every shape stays inside the shot's own w×h box, so the drawn
         // shot is as big as the shot (which is sized to its gun's barrel).

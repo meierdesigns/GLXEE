@@ -194,26 +194,99 @@
         return el;
     }
 
-    // Volume dropdown under the mute key: MASTER + SOUNDS + MUSIC (child of <html>).
+    // Volume dropdown under the mute key: MUTE + MASTER + SOUNDS + MUSIC (child of <html>).
     function ensureVolPlate() {
         let el = document.getElementById('vf-vol');
-        if (el) return el;
-        el = document.createElement('div');
-        el.id = 'vf-vol';
-        el.className = 'vf-bezel-vol';
-        el.style.display = 'none';
         const row = function (id, key, label, aria) {
             return '<label class="vf-bezel-vol-row">' +
                 '<span>' + label + '</span>' +
                 '<input type="range" id="' + id + '" min="0" max="100" step="1" data-vol="' + key + '" aria-label="' + aria + '">' +
                 '<output></output></label>';
         };
+        const defaultMaster = function () {
+            return (typeof VFVolume !== 'undefined' && Number.isFinite(VFVolume.MASTER))
+                ? VFVolume.MASTER : 0.1;
+        };
+        const readPreMute = function () {
+            if (Number.isFinite(vfs._preMuteMaster) && vfs._preMuteMaster > 0) return vfs._preMuteMaster;
+            try {
+                const n = parseFloat(localStorage.getItem('vf_preMuteMaster'));
+                if (Number.isFinite(n) && n > 0) {
+                    vfs._preMuteMaster = Math.max(0, Math.min(1, n));
+                    return vfs._preMuteMaster;
+                }
+            } catch (e) { /* ignore */ }
+            return defaultMaster();
+        };
+        const writePreMute = function (v) {
+            const n = Math.max(0, Math.min(1, Number(v) || 0));
+            if (!(n > 0)) return;
+            vfs._preMuteMaster = n;
+            try { localStorage.setItem('vf_preMuteMaster', String(n)); } catch (e) { /* ignore */ }
+        };
+        const isPureMuted = function (mgr) {
+            if (!mgr) return false;
+            return mgr.getMasterVolume() <= 0;
+        };
+        const syncMuteBtn = function (btn, mgr) {
+            if (!btn) return;
+            const muted = isPureMuted(mgr);
+            btn.classList.toggle('is-muted', muted);
+            btn.textContent = muted ? 'UNMUTE' : 'MUTE';
+            btn.title = muted ? 'Unmute' : 'Mute';
+            btn.setAttribute('aria-label', btn.title);
+            btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
+        };
+        const togglePureMute = function (mgr) {
+            if (!mgr) return;
+            const cur = mgr.getMasterVolume();
+            if (cur <= 0) {
+                const restore = readPreMute();
+                mgr.setMasterVolume(restore > 0 ? restore : defaultMaster());
+            } else {
+                writePreMute(cur);
+                mgr.setMasterVolume(0);
+            }
+        };
+        const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+        const ensureMuteBtn = function (plate) {
+            let btn = plate.querySelector('#vfVolMuteBtn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'vf-bezel-vol-mute';
+                btn.id = 'vfVolMuteBtn';
+                btn.textContent = 'MUTE';
+                plate.insertBefore(btn, plate.firstChild);
+            }
+            if (btn.dataset.muteWired !== '1') {
+                btn.dataset.muteWired = '1';
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    togglePureMute(mgr);
+                    syncMuteBtn(btn, mgr);
+                    plate.dispatchEvent(new Event('vf-vol-sync'));
+                });
+                plate.addEventListener('vf-vol-sync', function () { syncMuteBtn(btn, mgr); });
+            }
+            syncMuteBtn(btn, mgr);
+            return btn;
+        };
+        if (el) {
+            ensureMuteBtn(el);
+            return el;
+        }
+        el = document.createElement('div');
+        el.id = 'vf-vol';
+        el.className = 'vf-bezel-vol';
+        el.style.display = 'none';
         el.innerHTML =
+            '<button type="button" class="vf-bezel-vol-mute" id="vfVolMuteBtn">MUTE</button>' +
             row('vfVolSlider', 'master', 'VOL', 'Master volume') +
             row('vfSoundSlider', 'sound', 'SND', 'Sounds volume') +
             row('vfMusicSlider', 'music', 'MUS', 'Music volume');
         document.documentElement.appendChild(el);
-        const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+        const muteBtn = ensureMuteBtn(el);
         const readPct = function (key) {
             if (!mgr) {
                 return key === 'master' ? 10 : key === 'sound' ? 50 : 65;
@@ -225,8 +298,10 @@
         const applyPct = function (key, pct) {
             if (!mgr) return;
             const v = Math.max(0, Math.min(100, pct)) / 100;
-            if (key === 'master') mgr.setMasterVolume(v);
-            else if (key === 'sound') mgr.setSoundVolume(v);
+            if (key === 'master') {
+                if (v > 0) writePreMute(v);
+                mgr.setMasterVolume(v);
+            } else if (key === 'sound') mgr.setSoundVolume(v);
             else if (key === 'music') mgr.setMusicVolume(v);
         };
         const syncRow = function (input) {
@@ -239,6 +314,7 @@
         };
         const sync = function () {
             el.querySelectorAll('input[data-vol]').forEach(syncRow);
+            syncMuteBtn(muteBtn, mgr);
         };
         sync();
         el.querySelectorAll('input[data-vol]').forEach(function (input) {
@@ -249,6 +325,7 @@
                 const out = input.nextElementSibling;
                 if (out) out.textContent = pct + '%';
                 applyPct(key, pct);
+                syncMuteBtn(muteBtn, mgr);
             });
             ['keydown', 'keyup'].forEach(function (t) {
                 input.addEventListener(t, function (e) { e.stopPropagation(); });
@@ -282,7 +359,9 @@
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     const MUTE_ON = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5c1.5 1 1.5 5 0 6M13 3c3 2.5 3 7.5 0 10"/>');
     const MUTE_OFF = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5l5 6M16 5l-5 6"/>');
-    Object.assign(NS, { MUTE_ON, MUTE_OFF });
+    // Music settings (Soundtrack Editor): note glyph.
+    const MUSIC_ICON = svg16('<circle cx="5" cy="12" r="2"/><circle cx="11" cy="10" r="2"/><path d="M7 12V3l6-1v8"/>');
+    Object.assign(NS, { MUTE_ON, MUTE_OFF, MUSIC_ICON });
     vfs.resOpen = false;
     vfs.fxOpen = false;
     vfs.volOpen = false;
@@ -626,21 +705,11 @@
         new MutationObserver(scheduleSilhouette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
         if (window.ResizeObserver) {
             const ro = new ResizeObserver(scheduleSilhouette);
-            ro.observe(document.body);
-            // The settle pass in viewport-fit-part4.js resizes #vf-bezel itself (CSS vars / canvas size)
-            // without necessarily changing <body>'s own box, so watch the frame directly too — otherwise
-            // the bake from before that pass stays in place forever (not just for one frame) once the
-            // frame's real W/H has moved on, and the objectBoundingBox clip path silently stretches to fit.
+            // Bezel size only — not body childList (menus/combat DOM thrash rebuilt the mask constantly).
             ro.observe(frame);
         }
-        // The rebuild itself adds / removes its own probe on <body>: ignoring that stops it re-triggering itself every frame.
-        new MutationObserver(function (recs) {
-            const other = recs.some(function (r) {
-                return Array.prototype.concat.call([], Array.prototype.slice.call(r.addedNodes), Array.prototype.slice.call(r.removedNodes)).some(function (n) { return n.id !== 'vfSilProbe'; });
-            });
-            if (other) scheduleSilhouette();
-        }).observe(document.body, { childList: true });
         window.addEventListener('resize', scheduleSilhouette);
+        window.addEventListener('vf-pilot-changed', scheduleSilhouette);
         scheduleSilhouette();
     })();
     function hex(c) {
@@ -708,11 +777,13 @@
 
     // Visual-settings sidebar (opened from the bezel tools, available on every screen):
     // tabs FX / VOXEL / VOXELPIXEL / FRAME / SIZES. In combat it pauses the game while open.
-    const FX_TABS = [['fx', 'FX'], ['voxel', 'VOXEL'], ['voxelpixel', 'VOXELPIXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG'], ['audio', 'AUDIO']];
+    const FX_TABS = [['fx', 'FX'], ['look', 'LOOK'], ['voxel', 'VOXEL'], ['voxelpixel', 'VOXELPIXEL'], ['frame', 'FACTIONS'], ['sizes', 'SIZES'], ['text', 'TEXT'], ['difficulty', 'DIFFICULTY'], ['perf', 'PERF'], ['debug', 'DEBUG'], ['audio', 'AUDIO'], ['tools', 'TOOLS']];
     // Remote key clusters: [caption, tab ids]; the plate lays them out two clusters per row.
-    const FX_CLUSTERS = [['DISPLAY', ['fx', 'voxel', 'voxelpixel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug', 'audio']]];
+    const FX_CLUSTERS = [['DISPLAY', ['fx', 'look', 'voxel', 'voxelpixel', 'frame']], ['LAYOUT', ['sizes', 'text']], ['GAME', ['difficulty']], ['SYSTEM', ['perf', 'debug', 'audio', 'tools']]];
     const FX_TAB_ICONS = {
         fx: svg16('<path d="M8 1v3M8 12v3M1 8h3M12 8h3M3 3l2 2M11 11l2 2M13 3l-2 2M5 11l-2 2"/>'),
+        look: svg16('<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/>'),
+        tools: svg16('<path d="M4 4l8 8M12 4l-8 8"/><rect x="2" y="2" width="12" height="12"/>'),
         voxel: svg16('<path d="M8 2l5 3v6l-5 3-5-3V5zM3 5l5 3 5-3M8 8v6"/>'),
         voxelpixel: svg16('<rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/>'),
         frame: svg16('<rect x="2" y="3" width="12" height="10"/><rect x="5" y="6" width="6" height="4"/>'),

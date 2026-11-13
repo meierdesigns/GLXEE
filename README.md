@@ -1072,6 +1072,7 @@ be reviewed or reverted independently.
 | 74C | Dead tab-drag stub | Remove unreachable `bindTabOrderEditing` body (console warning); refresh 1.14.12 ZIP |
 | 74D | Victory loot keep | Click/drag-jitter files found parts to ship; take 1 unit per cell; no auto-leave while cargo pending |
 | 74E | Victory loot RMB | RMB sells 1 part cell (not whole stack); ignore trailing button-2 click; ship grid grows so take stays visible; sell/loot notices |
+| 74F | Mute dropdown button | Pure MUTE/UNMUTE control in the bezel volume dropdown; restores prior master level |
 
 The wave commit convention is:
 

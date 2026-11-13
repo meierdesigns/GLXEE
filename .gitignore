@@ -76,3 +76,7 @@ GLXEE-V*.zip
 .import/
 assets/soundtracks/mod-templates/
 assets/soundtracks/mod-templates.zip
+
+# Local agent/debug scratch (not shipped)
+.tmp-perf/
+.tmp-screens/

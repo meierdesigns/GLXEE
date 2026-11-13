@@ -140,6 +140,16 @@ extendClass(StartScreenManager, {
                 && profileSelectionManager.createUI) {
                 profileSelectionManager.createUI();
             }
+            // First-run onboarding sits above a hidden start screen — remount so swatches /
+            // pilot chrome pick up DevMode without resetting the current step.
+            if (typeof onboardingManager !== 'undefined'
+                && onboardingManager.isVisible
+                && onboardingManager.createUI) {
+                onboardingManager.createUI();
+            }
+            try {
+                window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync'));
+            } catch (e) { /* ignore */ }
         };
         // Editors (layout / component / asset-gen) live in the lazy bundle.
         if (this.devMode && typeof ensureVfEditors === 'function') {
@@ -219,9 +229,20 @@ extendClass(StartScreenManager, {
     /** Hub after leave/quit: Station when profile loaded, else start menu. */
     returnToHub(options) {
         const opts = options || {};
-        if (this.hasActiveProfile() && typeof homeStationUI !== 'undefined') {
-            this.hide();
-            homeStationUI.show(opts);
+        if (this.hasActiveProfile()) {
+            const open = () => {
+                if (typeof homeStationUI === 'undefined') {
+                    this.show(Object.assign({}, opts, { forceMenu: true }));
+                    return;
+                }
+                this.hide();
+                homeStationUI.show(opts);
+            };
+            if (typeof homeStationUI === 'undefined' && typeof window.ensureVfStation === 'function') {
+                window.ensureVfStation(() => open());
+                return;
+            }
+            open();
             return;
         }
         this.show(Object.assign({}, opts, { forceMenu: true }));
@@ -279,17 +300,30 @@ extendClass(StartScreenManager, {
         }
 
         // Profile loaded → Station is the hub; fullscreen start menu only without profile.
-        if (!opts.forceMenu && this.hasActiveProfile() && typeof homeStationUI !== 'undefined') {
-            this.hide();
-            const startScreen = document.getElementById('startScreen');
-            if (startScreen) startScreen.classList.add('hidden');
-            homeStationUI.show({
-                skipPersist: opts.skipPersist,
-                tab: opts.tab,
-                shopCategory: opts.shopCategory,
-                onClose: opts.onClose
-            });
-            return;
+        if (!opts.forceMenu && this.hasActiveProfile()) {
+            const openStation = () => {
+                if (typeof homeStationUI === 'undefined') {
+                    this.show(Object.assign({}, opts, { forceMenu: true }));
+                    return;
+                }
+                this.hide();
+                const startScreen = document.getElementById('startScreen');
+                if (startScreen) startScreen.classList.add('hidden');
+                homeStationUI.show({
+                    skipPersist: opts.skipPersist,
+                    tab: opts.tab,
+                    shopCategory: opts.shopCategory,
+                    onClose: opts.onClose
+                });
+            };
+            if (typeof homeStationUI === 'undefined' && typeof window.ensureVfStation === 'function') {
+                window.ensureVfStation(() => openStation());
+                return;
+            }
+            if (typeof homeStationUI !== 'undefined') {
+                openStation();
+                return;
+            }
         }
 
         this.hideEmbedded();

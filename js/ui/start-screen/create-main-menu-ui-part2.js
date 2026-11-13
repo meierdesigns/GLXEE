@@ -7,41 +7,58 @@ extendClass(StartScreenManager, {
         const host = document.createElement('div');
         host.className = 'start-screen-profiles-host';
         content.appendChild(host);
-        if (typeof profileSelectionManager === 'undefined') return;
-        // The profile dialog itself, rendered inside the terminal screen.
-        const createNew = !!this._profilesCreate;
-        this._profilesCreate = false;
-        // Remount (e.g. DevMode toggle → createStartScreenUI) must keep the picked
-        // faction / step; show() would otherwise reset to the first faction.
-        const psm = profileSelectionManager;
-        if (!createNew && psm.isVisible && psm.mode === 'create' && psm.pendingFaction) {
-            psm._restoreSeed = {
-                pmode: 'create',
-                pstep: psm.createStep || 'faction',
-                pfaction: psm.pendingFaction,
-                pcreateOnly: !!psm._createOnly,
-                pname: psm._pilotName || '',
-                pstart: psm._startOpts || null
-            };
-        }
-        profileSelectionManager.show({
-            host,
-            create: createNew,
-            onClose: () => {
-                this.showProfiles = false;
-                const thenStart = this._profilesThenStart;
-                this._profilesThenStart = false;
-                if (thenStart && this.hasActiveProfile()) {
-                    this.returnToHub();
-                    return;
-                }
-                this.createStartScreenUI();
-                if (typeof menuStateManager !== 'undefined') menuStateManager.setScreen('start');
+        const run = () => {
+            if (typeof profileSelectionManager === 'undefined') return;
+            // The profile dialog itself, rendered inside the terminal screen.
+            const createNew = !!this._profilesCreate;
+            this._profilesCreate = false;
+            // Remount (e.g. DevMode toggle → createStartScreenUI) must keep the picked
+            // faction / step; show() would otherwise reset to the first faction.
+            const psm = profileSelectionManager;
+            if (!createNew && psm.isVisible && psm.mode === 'create' && psm.pendingFaction) {
+                psm._restoreSeed = {
+                    pmode: 'create',
+                    pstep: psm.createStep || 'faction',
+                    pfaction: psm.pendingFaction,
+                    pcreateOnly: !!psm._createOnly,
+                    pname: psm._pilotName || '',
+                    pstart: psm._startOpts || null
+                };
             }
-        });
+            profileSelectionManager.show({
+                host,
+                create: createNew,
+                onClose: () => {
+                    this.showProfiles = false;
+                    const thenStart = this._profilesThenStart;
+                    this._profilesThenStart = false;
+                    if (thenStart && this.hasActiveProfile()) {
+                        this.returnToHub();
+                        return;
+                    }
+                    this.createStartScreenUI();
+                    if (typeof menuStateManager !== 'undefined') menuStateManager.setScreen('start');
+                }
+            });
+        };
+        if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+            // Station first: portraits live in the station feature bundle.
+            const load = () => window.ensureVfProfiles(() => run());
+            if (typeof window.ensureVfStation === 'function') window.ensureVfStation(load);
+            else load();
+            return;
+        }
+        run();
     },
     openProfileCreate(factionId) {
         this.showProfiles = false;
+        if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+            const again = () => this.openProfileCreate(factionId);
+            const load = () => window.ensureVfProfiles(again);
+            if (typeof window.ensureVfStation === 'function') window.ensureVfStation(load);
+            else load();
+            return;
+        }
         if (typeof profileSelectionManager === 'undefined') return;
         this.hideEmbedded();
         profileSelectionManager.show({

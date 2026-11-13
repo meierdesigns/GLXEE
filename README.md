@@ -1079,6 +1079,7 @@ be reviewed or reverted independently.
 | 74J | Galaxy map smoother | Bake suns to one sprite, fewer flow frames/twinkles, lighter spin/nebula debounce, paint contain + PERF ANIM gate |
 | 74K | Orbit fleet fire + flight | Hero-planet backdrop fleets shoot per faction; per-faction flightProfiles for orbit craft |
 | 74L | Pilot backdrop animation | Configurable animated portrait backdrop (bgv) + motion speed (bga) on CREATE YOUR PILOT, Bezel TOOLS, and Face Editor |
+| 74M | DevMode Face Editor entry | Shift+C DevMode in onboarding; Settings/Bezel/PORTRAITS open Face Editor (Flux); Face Editor hosts in bezel glass |
 
 The wave commit convention is:
 

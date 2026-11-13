@@ -632,6 +632,8 @@ const hudLayoutEditor = (function () {
             // Profile overlay (js/core/input-handler/core.js) already toggles Shift+C itself;
             // firing again here flipped the mode straight back off.
             if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
+            // Onboarding has its own Shift+C handler (start screen is hidden there).
+            if (typeof onboardingManager !== 'undefined' && onboardingManager.isVisible) return;
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA') return;
             e.preventDefault();

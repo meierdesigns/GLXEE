@@ -181,14 +181,21 @@ extendClass(StartScreenManager, {
                 // menu) — same order as the START path: station first, then
                 // hide the start screen. If the switch fails in place
                 // (state of the previous pilot), a reload loads the new one.
-                try {
-                    if (typeof homeStationUI === 'undefined') throw new Error('no station');
-                    homeStationUI.show({ tab: 'station', menuTab: null, onClose: () => this.returnToHub() });
-                    this.hide();
-                    if (!homeStationUI.isVisible) throw new Error('station not shown');
-                } catch (err) {
-                    console.warn('[start] pilot switch fell back to reload:', err);
-                    location.reload();
+                const open = () => {
+                    try {
+                        if (typeof homeStationUI === 'undefined') throw new Error('no station');
+                        homeStationUI.show({ tab: 'station', menuTab: null, onClose: () => this.returnToHub() });
+                        this.hide();
+                        if (!homeStationUI.isVisible) throw new Error('station not shown');
+                    } catch (err) {
+                        console.warn('[start] pilot switch fell back to reload:', err);
+                        location.reload();
+                    }
+                };
+                if (typeof homeStationUI === 'undefined' && typeof window.ensureVfStation === 'function') {
+                    window.ensureVfStation(() => open());
+                } else {
+                    open();
                 }
             };
             const pilot = pm.getRecentProfiles(5).find((x) => x.id === row.getAttribute('data-profile-id'));
@@ -453,15 +460,25 @@ extendClass(StartScreenManager, {
                         if (!profile) return;
                         const idx = profiles.findIndex((x) => x.id === profile.id);
                         if (idx < 0) return;
-                        profileSelectionManager.show({
-                            onClose: () => {
-                                if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.createUI();
-                                else this.createStartScreenUI();
-                            }
-                        });
-                        profileSelectionManager.selectedIndex = idx;
-                        profileSelectionManager.mode = 'rename';
-                        profileSelectionManager.createUI();
+                        const openRename = () => {
+                            if (typeof profileSelectionManager === 'undefined') return;
+                            profileSelectionManager.show({
+                                onClose: () => {
+                                    if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) homeStationUI.createUI();
+                                    else this.createStartScreenUI();
+                                }
+                            });
+                            profileSelectionManager.selectedIndex = idx;
+                            profileSelectionManager.mode = 'rename';
+                            profileSelectionManager.createUI();
+                        };
+                        if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+                            const load = () => window.ensureVfProfiles(openRename);
+                            if (typeof window.ensureVfStation === 'function') window.ensureVfStation(load);
+                            else load();
+                        } else {
+                            openRename();
+                        }
                     });
                 }
                 if (del) {

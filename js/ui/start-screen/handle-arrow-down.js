@@ -98,14 +98,25 @@ extendClass(StartScreenManager, {
                 this.openAssetGenerator({ returnToSettings: true });
                 return true;
             }
-            if (this.embeddedMenuTab === 'profiles' && typeof profileSelectionManager !== 'undefined') {
-                this.hideEmbedded();
-                profileSelectionManager.show({
-                    onClose: () => {
-                        if (this.hasActiveProfile()) this.returnToHub();
-                        else this.show({ forceMenu: true });
-                    }
-                });
+            if (this.embeddedMenuTab === 'profiles') {
+                const openPs = () => {
+                    if (typeof profileSelectionManager === 'undefined') return;
+                    this.hideEmbedded();
+                    profileSelectionManager.show({
+                        onClose: () => {
+                            if (this.hasActiveProfile()) this.returnToHub();
+                            else this.show({ forceMenu: true });
+                        }
+                    });
+                };
+                if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+                    window.ensureVfProfiles(() => {
+                        if (typeof window.ensureVfStation === 'function') window.ensureVfStation(openPs);
+                        else openPs();
+                    });
+                } else {
+                    openPs();
+                }
                 return true;
             }
             return true;
@@ -233,6 +244,10 @@ extendClass(StartScreenManager, {
             this.openAssetGenerator(null);
             return;
         }
+        if (item.action === 'faceEditor' || item.action === 'assetGenPortrait') {
+            this.openFaceEditor();
+            return;
+        }
         if (item.action === 'assetGenFaction') {
             this.openAssetGenerator({ typeId: 'faction' });
             return;
@@ -258,7 +273,24 @@ extendClass(StartScreenManager, {
             return;
         }
         if (item.action === 'soundtrackEditor') {
-            if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            const open = () => {
+                if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            };
+            if (typeof soundtrackEditorUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(open);
+            } else {
+                open();
+            }
+            return;
+        }
+        if (item.action === 'openFxTab') {
+            const scope = window.vfFitScope;
+            if (scope && scope.vfs && scope.setFxOpen) {
+                scope.vfs.fxTab = item.fxTab;
+                try { localStorage.setItem(scope.FXTAB_KEY, item.fxTab); } catch (e) { /* ignore */ }
+                if (typeof settingsManager !== 'undefined' && settingsManager.hideSettings) settingsManager.hideSettings();
+                scope.setFxOpen(true);
+            }
             return;
         }
     },
@@ -274,6 +306,12 @@ extendClass(StartScreenManager, {
         } else if (typeof window.vfFitScope.fillFxPlate === 'function') {
             window.vfFitScope.fillFxPlate();
         }
+    },
+
+    /** DevMode Face Editor — Asset Gen PORTRAITS via Flux + ComfyUI. */
+    openFaceEditor(opts) {
+        const o = Object.assign({ typeId: 'portrait', returnToSettings: true }, opts || {});
+        this.openAssetGenerator(o);
     },
 
     openAssetGenerator(opts) {
@@ -293,13 +331,17 @@ extendClass(StartScreenManager, {
             const returnToSettings = o.returnToSettings !== false;
             if (o.typeId) {
                 assetGenUI.show({ typeId: o.typeId, returnToSettings: returnToSettings });
+                if (assetGenUI.syncEditorTitle) assetGenUI.syncEditorTitle();
                 if (assetGenUI.setStatus) {
-                    const label = (o.typeId === 'faction' || o.typeId === 'factionShip')
-                        ? 'FACTIONS'
-                        : String(o.typeId).toUpperCase();
+                    const isFace = o.typeId === 'portrait';
+                    const label = isFace
+                        ? 'FACE EDITOR'
+                        : ((o.typeId === 'faction' || o.typeId === 'factionShip')
+                            ? 'FACTIONS'
+                            : String(o.typeId).toUpperCase());
                     assetGenUI.setStatus(
                         ((returnToSettings || fromStationMenu) ? 'From Settings · ' : 'From Menu · ') +
-                        label + ' · Generate → Accept'
+                        label + (isFace ? ' · Flux + ComfyUI · LOAD EXAMPLE → GENERATE' : ' · Generate → Accept')
                     );
                 }
                 return;
@@ -308,6 +350,7 @@ extendClass(StartScreenManager, {
                 ? Object.assign({}, o.focusEntry, { returnToSettings: returnToSettings })
                 : { returnToSettings: returnToSettings };
             assetGenUI.show(focus);
+            if (assetGenUI.syncEditorTitle) assetGenUI.syncEditorTitle();
         };
         if (typeof ensureVfEditors === 'function') ensureVfEditors(run);
         else run();

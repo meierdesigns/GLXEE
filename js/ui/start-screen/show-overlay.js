@@ -261,14 +261,20 @@ extendClass(StartScreenManager, {
             }
         } else if (this.showProfiles) {
             this.createProfilesScreenUI(content);
-        } else if (this.showGalaxies && typeof galaxyViewer !== 'undefined') {
-            content.classList.add('start-screen-galaxies');
-            galaxyViewer.mount(content, {
-                onClose: () => {
-                    this.showGalaxies = false;
-                    this.createStartScreenUI();
-                }
-            });
+        } else if (this.showGalaxies) {
+            if (typeof galaxyViewer === 'undefined' && typeof window.ensureVfGalaxy === 'function') {
+                window.ensureVfGalaxy(() => this.createStartScreenUI());
+                return;
+            }
+            if (typeof galaxyViewer !== 'undefined') {
+                content.classList.add('start-screen-galaxies');
+                galaxyViewer.mount(content, {
+                    onClose: () => {
+                        this.showGalaxies = false;
+                        this.createStartScreenUI();
+                    }
+                });
+            }
         } else if (this.showCredits) {
             this.createCreditsUI(content);
         } else if (this.showFontMenu) {

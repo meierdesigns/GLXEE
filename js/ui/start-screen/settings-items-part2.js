@@ -175,6 +175,11 @@ extendClass(StartScreenManager, {
                 value: 'OPEN ›',
                 type: 'action',
                 action: 'soundtrackEditor'
+            }, {
+                name: 'Face Editor',
+                value: 'FLUX ›',
+                type: 'action',
+                action: 'faceEditor'
             }] : []),
             {
                 name: 'Faction Command',
@@ -204,6 +209,27 @@ extendClass(StartScreenManager, {
                 name: 'Bridge',
                 value: '…',
                 type: 'assetStatus'
+            },
+            {
+                name: 'Frame Style',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'openFxTab',
+                fxTab: 'frame'
+            },
+            {
+                name: 'Performance',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'openFxTab',
+                fxTab: 'perf'
+            },
+            {
+                name: 'Debug Info',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'openFxTab',
+                fxTab: 'debug'
             }
         ];
     },

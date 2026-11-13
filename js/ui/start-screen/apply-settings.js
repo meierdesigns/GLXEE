@@ -198,13 +198,22 @@ extendClass(StartScreenManager, {
             levelId = profileManager.getResumeLevelId(levelId) || levelId;
         }
 
-        if (typeof game !== 'undefined' && typeof game.startGame === 'function') {
-            game.startGame(levelId);
-        } else if (typeof planetSelectionManager !== 'undefined') {
-            planetSelectionManager.startPlanetGame(level);
-        } else {
-            console.error('No game start system available');
+        const go = () => {
+            if (typeof game !== 'undefined' && typeof game.startGame === 'function') {
+                game.startGame(levelId);
+            } else if (typeof planetSelectionManager !== 'undefined') {
+                planetSelectionManager.startPlanetGame(level);
+            } else {
+                console.error('No game start system available');
+            }
+        };
+        // Prefetch combat before the first fight frame.
+        if (typeof window.ensureVfCombat === 'function' && typeof window.vfCombatReady === 'function'
+            && !window.vfCombatReady()) {
+            window.ensureVfCombat(() => go());
+            return;
         }
+        go();
     },
 
     // Start game with selected ship

@@ -23,8 +23,11 @@ class LaunchCutsceneManager {
         this._style = 'lift';
         this._bits = null;
         this._keyHandler = null;
-        // Title holds long enough to read; card stays up through most of act.
-        this.durations = { title: 1600, act: 1400, exit: 700 };
+        this._dialogue = [];
+        this._dialogIndex = 0;
+        this._musicOwned = false;
+        // Title → dialogue lines → act → exit. Dialogue advances on timer or input.
+        this.durations = { title: 1400, dialog: 3200, act: 1600, exit: 700 };
     }
 
     isActive() { return !!this.active; }
@@ -48,6 +51,11 @@ class LaunchCutsceneManager {
         this._story = story || (profile && profile.storyPath) || null;
         this._style = this.resolveStyle(this._story, this._faction);
         this._bits = this._seedBits();
+        const pilotName = (profile && profile.name) || (story && story.pilotName) || 'YOU';
+        this._dialogue = (typeof VFStoryDialogue !== 'undefined' && VFStoryDialogue.forStory)
+            ? VFStoryDialogue.forStory(this._story, { faction: this._faction, pilotName: pilotName })
+            : [];
+        this._dialogIndex = 0;
         this._skipArmedAt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 500;
         this._buildOverlay();
         this._loadShipImage(shipId, this._faction);
@@ -57,6 +65,7 @@ class LaunchCutsceneManager {
             this._planet.mount(this.overlay);
             this._planet.el.classList.add('launch-cutscene-planet');
         }
+        this._startIntroMusic();
         this._startT = 0;
         this._phaseStartT = 0;
         this.setPhase('title');
@@ -78,6 +87,59 @@ class LaunchCutsceneManager {
         const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
         if (this._skipArmedAt && now < this._skipArmedAt) return;
         this._finish();
+    }
+
+    /** Advance one dialogue line, or finish dialogue → act. */
+    advanceDialogue() {
+        if (!this.active || this.phase !== 'dialog') return false;
+        if (this._dialogIndex < this._dialogue.length - 1) {
+            this._dialogIndex += 1;
+            this._phaseStartT = 0;
+            this._renderDialogCard();
+            return true;
+        }
+        this.setPhase('act');
+        this._renderDialogCard();
+        return true;
+    }
+
+    _startIntroMusic() {
+        this._musicOwned = false;
+        if (typeof soundManager === 'undefined' || !soundManager.musicEnabled) return;
+        try {
+            // Scene cue through SoundManager so role/tempo/STYLE update with the track.
+            if (soundManager.startStoryIntroMusic) {
+                this._musicOwned = !!soundManager.startStoryIntroMusic(this._faction);
+                return;
+            }
+            if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.play) return;
+            if (soundManager.ensureContext) soundManager.ensureContext();
+            if (soundManager._applyMusicScene) soundManager._applyMusicScene('intro', this._faction);
+            const keys = (soundManager.introTrackKeys)
+                ? soundManager.introTrackKeys(null, this._faction)
+                : ['intro:' + this._faction, 'intro', 'title-intro'];
+            const target = vfTrackerManager.firstPlayableKey
+                ? vfTrackerManager.firstPlayableKey(keys)
+                : (keys[0] || 'intro');
+            if (!target) return;
+            vfTrackerManager.play(target, null, {
+                fade: 0.95, fadeIn: 0.75, force: true, forceScene: true,
+                galaxyFaction: this._faction
+            });
+            this._musicOwned = true;
+        } catch (e) { this._musicOwned = false; }
+    }
+
+    _restoreMenuMusic() {
+        if (!this._musicOwned) return;
+        this._musicOwned = false;
+        try {
+            if (typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
+                // Hub scene after story intro — force menu role back on.
+                if (soundManager._applyMusicScene) soundManager._applyMusicScene('menu');
+                soundManager.startMenuMusic();
+            }
+        } catch (e) { /* ignore */ }
     }
 
     _seedBits() {
@@ -103,12 +165,13 @@ class LaunchCutsceneManager {
             '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
         }[ch]));
         const title = (this._story && this._story.title) || 'LAUNCH';
-        const blurb = (this._story && this._story.blurb) || '';
+        const blurb = (typeof VFStoryDialogue !== 'undefined' && VFStoryDialogue.plainBlurb)
+            ? VFStoryDialogue.plainBlurb(this._story)
+            : ((this._story && this._story.blurb) || '');
         this._titleText = String(title);
         this._blurbText = String(blurb);
-        card.innerHTML = `<div class="launch-cutscene-kicker">STORY</div>` +
-            `<div class="launch-cutscene-title">${esc(title)}</div>` +
-            (blurb ? `<div class="launch-cutscene-blurb">${esc(blurb)}</div>` : '');
+        this._escHtml = esc;
+        card.innerHTML = this._cardHtmlTitle();
         overlay.appendChild(card);
         this._card = card;
         const skipBtn = document.createElement('button');
@@ -117,6 +180,11 @@ class LaunchCutsceneManager {
         skipBtn.textContent = 'SKIP ▶';
         skipBtn.addEventListener('click', () => this.skip());
         overlay.appendChild(skipBtn);
+        const hint = document.createElement('div');
+        hint.className = 'launch-cutscene-hint';
+        hint.textContent = 'ENTER / CLICK · NEXT';
+        overlay.appendChild(hint);
+        this._hint = hint;
         // Body (not <html>): stay in the same stacking tree as #vf-bezel so the
         // hull band covers the rim; CSS clamps us to --fr-open-*.
         document.body.appendChild(overlay);
@@ -127,11 +195,27 @@ class LaunchCutsceneManager {
         this._syncSize();
         this._resizeHandler = () => this._syncSize();
         window.addEventListener('resize', this._resizeHandler);
+        this._clickHandler = (e) => {
+            if (!this.active) return;
+            if (e.target && e.target.closest && e.target.closest('.launch-cutscene-skip')) return;
+            if (this.phase === 'dialog') {
+                e.preventDefault();
+                this.advanceDialogue();
+            }
+        };
+        overlay.addEventListener('click', this._clickHandler);
         this._keyHandler = (e) => {
-            if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+            if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
                 this.skip();
+                return;
+            }
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.phase === 'dialog') this.advanceDialogue();
+                else if (this.phase === 'title' || this.phase === 'act' || this.phase === 'exit') this.skip();
             }
         };
         setTimeout(() => {
@@ -139,6 +223,47 @@ class LaunchCutsceneManager {
             document.addEventListener('keydown', this._keyHandler, true);
             this._keyHandlerBound = true;
         }, 0);
+    }
+
+    _cardHtmlTitle() {
+        const esc = this._escHtml || ((s) => String(s || ''));
+        return `<div class="launch-cutscene-kicker">STORY</div>` +
+            `<div class="launch-cutscene-title">${esc(this._titleText)}</div>` +
+            (this._blurbText ? `<div class="launch-cutscene-blurb">${esc(this._blurbText)}</div>` : '');
+    }
+
+    _cardHtmlDialog(line, index, total) {
+        const esc = this._escHtml || ((s) => String(s || ''));
+        const who = esc(line && line.who);
+        const text = esc(line && line.text);
+        const step = `${index + 1}/${total}`;
+        return `<div class="launch-cutscene-kicker">TRANSMISSION · ${esc(step)}</div>` +
+            `<div class="launch-cutscene-speaker">${who}</div>` +
+            `<div class="launch-cutscene-line">${text}</div>` +
+            `<div class="launch-cutscene-title-mini">${esc(this._titleText)}</div>`;
+    }
+
+    _renderDialogCard() {
+        if (!this._card) return;
+        if (this.phase === 'title') {
+            this._card.innerHTML = this._cardHtmlTitle();
+            if (this._hint) this._hint.style.opacity = '0.35';
+            return;
+        }
+        if (this.phase === 'dialog' && this._dialogue.length) {
+            const line = this._dialogue[this._dialogIndex] || this._dialogue[0];
+            this._card.innerHTML = this._cardHtmlDialog(line, this._dialogIndex, this._dialogue.length);
+            if (this._hint) this._hint.style.opacity = '1';
+            return;
+        }
+        // Act / exit: keep last line dim, or fall back to synopsis.
+        if (this._dialogue.length) {
+            const line = this._dialogue[Math.min(this._dialogIndex, this._dialogue.length - 1)];
+            this._card.innerHTML = this._cardHtmlDialog(line, Math.min(this._dialogIndex, this._dialogue.length - 1), this._dialogue.length);
+        } else {
+            this._card.innerHTML = this._cardHtmlTitle();
+        }
+        if (this._hint) this._hint.style.opacity = '0';
     }
 
     _syncSize() {
@@ -218,17 +343,38 @@ class LaunchCutsceneManager {
         const dur = this.durations[this.phase] || 0;
         const p = Math.min(1, dur ? elapsed / dur : 1);
         if (this._card) {
-            // Keep title readable for title + most of act; fade only late in exit.
             let op = 0;
             if (this.phase === 'title') op = Math.min(1, p * 3);
-            else if (this.phase === 'act') op = p < 0.75 ? 1 : 1 - (p - 0.75) / 0.25;
+            else if (this.phase === 'dialog') {
+                // Fresh line fade-in each beat.
+                op = Math.min(1, Math.max(0.35, p * 4));
+            } else if (this.phase === 'act') op = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
             else op = Math.max(0, 1 - p * 2);
             this._card.style.opacity = String(op);
         }
-        this._draw(p);
+        // During title/dialog the ship holds the idle pose (p≈0).
+        const drawP = (this.phase === 'act' || this.phase === 'exit') ? p : 0;
+        this._draw(drawP);
         if (elapsed >= dur) {
-            if (this.phase === 'title') this.setPhase('act');
-            else if (this.phase === 'act') this.setPhase('exit');
+            if (this.phase === 'title') {
+                if (this._dialogue.length) {
+                    this._dialogIndex = 0;
+                    this.setPhase('dialog');
+                    this._renderDialogCard();
+                } else {
+                    this.setPhase('act');
+                    this._renderDialogCard();
+                }
+            } else if (this.phase === 'dialog') {
+                if (this._dialogIndex < this._dialogue.length - 1) {
+                    this._dialogIndex += 1;
+                    this._phaseStartT = 0;
+                    this._renderDialogCard();
+                } else {
+                    this.setPhase('act');
+                    this._renderDialogCard();
+                }
+            } else if (this.phase === 'act') this.setPhase('exit');
             else if (this.phase === 'exit') this._finish();
         }
     }
@@ -288,7 +434,7 @@ class LaunchCutsceneManager {
         const cx = W * 0.5, cy = H * 0.56;
         let sx = cx, sy = cy, scale = 1, alpha = 1, rot = 0, glow = 0.4, extras = null;
         const ease = (t) => t * t;
-        if (ph === 'title') {
+        if (ph === 'title' || ph === 'dialog') {
             sy = cy + 8; scale = 0.95; glow = 0.25;
         } else if (st === 'hunt' || st === 'raid') {
             if (ph === 'act') {
@@ -379,7 +525,9 @@ class LaunchCutsceneManager {
         const st = this._style;
         const bitMode = st === 'hunt' || st === 'raid' || st === 'trial' ? 'ash'
             : (st === 'rift' ? 'rift' : (st === 'compile' ? 'grid' : (st === 'escort' || st === 'patrol' ? 'streak' : 'ash')));
-        if (this.phase !== 'title' || p > 0.2) this._drawBits(c, accent, bitMode, p + (this.phase === 'exit' ? 1 : 0));
+        if ((this.phase !== 'title' && this.phase !== 'dialog') || p > 0.2) {
+            this._drawBits(c, accent, bitMode, p + (this.phase === 'exit' ? 1 : 0));
+        }
 
         if (st === 'rift' || (this._pose && false)) { /* ring drawn with pose extras */ }
         const pose = this._pose(this.phase === 'title' ? 0 : p);
@@ -586,6 +734,7 @@ class LaunchCutsceneManager {
     }
 
     _finish() {
+        this._restoreMenuMusic();
         this._cleanup();
         const cb = this._onDone;
         this._onDone = null;
@@ -603,13 +752,20 @@ class LaunchCutsceneManager {
         }
         this._keyHandler = null;
         this._keyHandlerBound = false;
+        if (this.overlay && this._clickHandler) {
+            this.overlay.removeEventListener('click', this._clickHandler);
+        }
+        this._clickHandler = null;
         if (this._planet) { this._planet.unmount(); this._planet = null; }
         if (this.overlay && this.overlay.parentNode) this.overlay.parentNode.removeChild(this.overlay);
         this.overlay = null;
         this.canvas = null;
         this.ctx = null;
         this._card = null;
+        this._hint = null;
         this._story = null;
+        this._dialogue = [];
+        this._dialogIndex = 0;
         this._titleText = '';
         this._blurbText = '';
         this._bits = null;

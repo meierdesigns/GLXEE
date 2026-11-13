@@ -20,6 +20,9 @@ extendClass(ProfileSelectionManager, {
         const kitIcon = kit.icon || 'kitStandardIssue';
         const paths = this.currentStoryPaths();
         const path = this.currentStoryPath();
+        const storyBlurb = (p) => (typeof VFStoryDialogue !== 'undefined' && VFStoryDialogue.plainBlurb)
+            ? VFStoryDialogue.plainBlurb(p)
+            : String((p && p.blurb) || '');
         const gid = String(o.galaxy || '').toLowerCase();
         const bound = this.bindStoryMissionsToPlanets(path, gid);
         // Keep a start planet for applyStartOptions (first story mission's planet).
@@ -27,12 +30,12 @@ extendClass(ProfileSelectionManager, {
         const n = Math.max(1, paths.length);
         const pathList = paths.map((p) => `
             <button type="button" class="profile-story-card${p.id === path.id ? ' selected' : ''}"
-                data-story-id="${p.id}" tabindex="-1" title="${p.blurb}">
+                data-story-id="${p.id}" tabindex="-1" title="${storyBlurb(p)}">
                 <span class="profile-story-card-art">${this.storyIconHtml(p.icon, 96)}</span>
                 <span class="profile-story-card-text">
                     <span class="profile-story-card-title">${p.title}</span>
                     <span class="profile-story-card-meta">${(p.missions || []).length} MISSION${(p.missions || []).length === 1 ? '' : 'S'}</span>
-                    <span class="profile-story-card-blurb">${p.blurb}</span>
+                    <span class="profile-story-card-blurb">${storyBlurb(p)}</span>
                 </span>
             </button>`).join('');
         const kindLabel = (m) => {
@@ -76,7 +79,7 @@ extendClass(ProfileSelectionManager, {
                             <span class="profile-story-detail-art">${this.storyIconHtml(path.icon, 72)}</span>
                             <div class="profile-story-detail-copy">
                                 <h3 class="profile-story-detail-title">${path.title}</h3>
-                                <p class="profile-story-detail-blurb">${path.blurb}</p>
+                                <p class="profile-story-detail-blurb">${storyBlurb(path)}</p>
                             </div>
                         </div>
                         <ol class="profile-story-missions" aria-label="Missions">${missionRows}</ol>

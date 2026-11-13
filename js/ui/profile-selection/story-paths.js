@@ -16,23 +16,23 @@ extendClass(ProfileSelectionManager, {
         return {
             // —— TERRAN ——
             standard_issue: [
-                P('lane_duty', 'LANE DUTY', 'Concord escort work: keep Lane 9 open and the ration convoys moving.', 'kitFleetCharter', [
+                P('lane_duty', 'LANE DUTY', 'Escort Concord ration convoys and keep Lane 9 open.', 'kitFleetCharter', [
                     M('ld1', 'ESCORT RUN', 'escort', 'EASY'),
                     M('ld2', 'QUOTA CHECK', 'patrol', 'EASY'),
                     M('ld3', 'CURFEW SWEEP', 'clear', 'NORMAL')
                 ], 'escort'),
-                P('first_commission', 'FIRST COMMISSION', 'Your first signed orders. Prove the lottery did not waste a hull.', 'kitStandardIssue', [
+                P('first_commission', 'FIRST COMMISSION', 'Fly your first signed orders and prove the lottery did not waste a hull.', 'kitStandardIssue', [
                     M('fc1', 'BRIEFING FIRE', 'patrol', 'EASY'),
                     M('fc2', 'LEDGER CLEAR', 'clear', 'NORMAL')
                 ], 'lift')
             ],
             fleet_charter: [
-                P('patrol_wing', 'PATROL WING', 'Navy commission: fast intercepts along the Concord border lanes.', 'kitFleetCharter', [
+                P('patrol_wing', 'PATROL WING', 'Join a navy wing for fast intercepts along the Concord border.', 'kitFleetCharter', [
                     M('pw1', 'WING FORMATION', 'patrol', 'EASY'),
                     M('pw2', 'INTERCEPT CALL', 'hunt', 'NORMAL'),
                     M('pw3', 'BORDER LOCK', 'clear', 'NORMAL')
                 ]),
-                P('convoy_charter', 'CONVOY CHARTER', 'Ride shotgun on high-value Concord freight.', 'kitHaulerThief', [
+                P('convoy_charter', 'CONVOY CHARTER', 'Ride shotgun on high-value Concord freight and break ambushes.', 'kitHaulerThief', [
                     M('cc1', 'FREIGHT ESCORT', 'escort', 'EASY'),
                     M('cc2', 'AMBUSH BREAK', 'defend', 'HARD')
                 ]),
@@ -43,12 +43,12 @@ extendClass(ProfileSelectionManager, {
                 ])
             ],
             engineer_corps: [
-                P('dockyard_call', 'DOCKYARD CALL', 'Yard duty: salvage, repair runs, and hull recovery under fire.', 'kitEngineerCorps', [
+                P('dockyard_call', 'DOCKYARD CALL', 'Salvage parts, tow hulls, and defend the yard under fire.', 'kitEngineerCorps', [
                     M('dc1', 'PARTS RUN', 'salvage', 'EASY'),
                     M('dc2', 'HULL TOW', 'escort', 'NORMAL'),
                     M('dc3', 'YARD DEFENSE', 'defend', 'HARD')
                 ]),
-                P('hull_recovery', 'HULL RECOVERY', 'Pull wrecks out of contested lanes before scavengers do.', 'kitScavenger', [
+                P('hull_recovery', 'HULL RECOVERY', 'Pull wrecks out of contested lanes before scavengers claim them.', 'kitScavenger', [
                     M('hr1', 'WRECK MARK', 'salvage', 'NORMAL'),
                     M('hr2', 'CLAIM JUMP', 'clear', 'HARD')
                 ])
@@ -59,11 +59,11 @@ extendClass(ProfileSelectionManager, {
                     M('pr2', 'STRESS LANE', 'clear', 'HARD'),
                     M('pr3', 'SIGN-OFF DUEL', 'hunt', 'HARD')
                 ]),
-                P('weapon_trial', 'WEAPON TRIAL', 'Field-test Concord prototypes against real targets.', 'statWeapon', [
+                P('weapon_trial', 'WEAPON TRIAL', 'Field-test Concord prototype weapons against live targets.', 'statWeapon', [
                     M('wt1', 'RANGE CLEAR', 'clear', 'EASY'),
                     M('wt2', 'FIELD TRIAL', 'hunt', 'NORMAL')
                 ]),
-                P('black_box', 'BLACK BOX', 'Recover failed test data from a vanished prototype wing.', 'kitEchoDeep', [
+                P('black_box', 'BLACK BOX', 'Trace a vanished test wing and recover its black-box data.', 'kitEchoDeep', [
                     M('bb1', 'SIGNAL TRACE', 'patrol', 'NORMAL'),
                     M('bb2', 'BOX RECOVERY', 'salvage', 'HARD'),
                     M('bb3', 'COVER STORY', 'clear', 'HARD')
@@ -71,23 +71,23 @@ extendClass(ProfileSelectionManager, {
             ],
             // —— KRONAX ——
             clan_blood: [
-                P('blood_trial', 'BLOOD TRIAL', 'Earn your first scar. The pack watches.', 'kitClanBlood', [
+                P('blood_trial', 'BLOOD TRIAL', 'Prove yourself to the Kronax pack: survive, kill, and earn your first scar.', 'kitClanBlood', [
                     M('bt1', 'UNARMED LAUNCH', 'patrol', 'EASY'),
                     M('bt2', 'SCAR MARK', 'hunt', 'NORMAL'),
                     M('bt3', 'PACK RANK', 'clear', 'HARD')
                 ], 'lift'),
-                P('pack_hunt', 'PACK HUNT', 'Run with the hunt-line. The slow are left for the ash.', 'kitRaiderPack', [
+                P('pack_hunt', 'PACK HUNT', 'Run with the hunt-line and cull the slow across the ash belt.', 'kitRaiderPack', [
                     M('ph1', 'ASH CHASE', 'hunt', 'EASY'),
                     M('ph2', 'CULL RUN', 'clear', 'NORMAL')
                 ], 'hunt')
             ],
             warlord_tithe: [
-                P('ore_tribute', 'ORE TRIBUTE', 'Collect the warlord\'s due from conquered mines.', 'kitWarlordTithe', [
+                P('ore_tribute', 'ORE TRIBUTE', 'Collect the warlord\'s ore tithe from conquered mines.', 'kitWarlordTithe', [
                     M('ot1', 'MINE TOLL', 'patrol', 'NORMAL'),
                     M('ot2', 'TITHE ESCORT', 'escort', 'HARD'),
                     M('ot3', 'REFUSAL BREAK', 'clear', 'HARD')
                 ]),
-                P('mine_takeover', 'MINE TAKEOVER', 'Seize a rival seam and strip it for the clan.', 'kitHarvester', [
+                P('mine_takeover', 'MINE TAKEOVER', 'Seize a rival mine seam and hold it for the clan.', 'kitHarvester', [
                     M('mt1', 'SEAM RAID', 'raid', 'NORMAL'),
                     M('mt2', 'HOLD THE PIT', 'defend', 'HARD')
                 ]),
@@ -98,7 +98,7 @@ extendClass(ProfileSelectionManager, {
                 ])
             ],
             raider_pack: [
-                P('first_raid', 'FIRST RAID', 'Loot from early strikes. Speed is law.', 'kitRaiderPack', [
+                P('first_raid', 'FIRST RAID', 'Strike for loot on your first raid — speed is law.', 'kitRaiderPack', [
                     M('fr1', 'SUPPLY STRIKE', 'raid', 'EASY'),
                     M('fr2', 'LOOT RUN', 'salvage', 'NORMAL'),
                     M('fr3', 'EXTRACTION', 'escort', 'NORMAL')
@@ -109,7 +109,7 @@ extendClass(ProfileSelectionManager, {
                 ])
             ],
             duelist: [
-                P('arena_path', 'ARENA PATH', 'Born to fight: climb the claw arenas.', 'kitDuelist', [
+                P('arena_path', 'ARENA PATH', 'Climb the claw arenas from first blood to champion call.', 'kitDuelist', [
                     M('ap1', 'FIRST BLOOD', 'hunt', 'EASY'),
                     M('ap2', 'RING CLEAR', 'clear', 'NORMAL'),
                     M('ap3', 'CHAMPION CALL', 'hunt', 'HARD')
@@ -118,7 +118,7 @@ extendClass(ProfileSelectionManager, {
                     M('ch1', 'OPEN CHALLENGE', 'hunt', 'NORMAL'),
                     M('ch2', 'RIVAL CLAW', 'hunt', 'HARD')
                 ]),
-                P('honor_duel', 'HONOR DUEL', 'One hull. One foe. No pack to hide behind.', 'kitDuelist', [
+                P('honor_duel', 'HONOR DUEL', 'Fight alone: one hull, one foe, no pack to hide behind.', 'kitDuelist', [
                     M('hd1', 'DUEL MARK', 'hunt', 'HARD'),
                     M('hd2', 'ASH DUEL', 'hunt', 'EXPERT'),
                     M('hd3', 'BANNER CLAIM', 'clear', 'EXPERT')
@@ -126,54 +126,54 @@ extendClass(ProfileSelectionManager, {
             ],
             // —— VOIDBORN ——
             void_drifter: [
-                P('cold_drift', 'COLD DRIFT', 'Wander the dark between stars. Leave no warm name behind.', 'kitVoidDrifter', [
+                P('cold_drift', 'COLD DRIFT', 'Wander the dark between stars and erase every warm name you leave.', 'kitVoidDrifter', [
                     M('cd1', 'SILENT ENTRY', 'patrol', 'EASY'),
                     M('cd2', 'NAME ERASE', 'clear', 'NORMAL'),
                     M('cd3', 'COLD RING', 'hunt', 'NORMAL')
                 ]),
-                P('nameless_lane', 'NAMELESS LANE', 'A lane that was never logged. Make sure it stays that way.', 'kitEchoDeep', [
+                P('nameless_lane', 'NAMELESS LANE', 'Keep an unlogged lane blank — no witnesses, no records.', 'kitEchoDeep', [
                     M('nl1', 'BLANK LOG', 'patrol', 'NORMAL'),
                     M('nl2', 'WITNESS CUT', 'hunt', 'HARD')
                 ])
             ],
             rift_seeker: [
-                P('rift_opening', 'RIFT OPENING', 'Find the pale ring and step through first.', 'kitRiftSeeker', [
+                P('rift_opening', 'RIFT OPENING', 'Find the pale rift ring and be the first to step through.', 'kitRiftSeeker', [
                     M('ro1', 'RING SIGNAL', 'patrol', 'EASY'),
                     M('ro2', 'FOLD ENTRY', 'clear', 'NORMAL'),
                     M('ro3', 'ECHO ANSWER', 'hunt', 'HARD')
                 ], 'rift'),
-                P('echo_chase', 'ECHO CHASE', 'Hunt the voices assembled from dead crews.', 'kitEchoDeep', [
+                P('echo_chase', 'ECHO CHASE', 'Hunt voices assembled from dead crews and silence them.', 'kitEchoDeep', [
                     M('ec1', 'VOICE TRACE', 'hunt', 'NORMAL'),
                     M('ec2', 'CREW SILENCE', 'clear', 'HARD')
                 ], 'hunt'),
-                P('fold_hunt', 'FOLD HUNT', 'Something crossed the fold. Bring it back — or erase it.', 'kitAscendant', [
+                P('fold_hunt', 'FOLD HUNT', 'Track something that crossed the fold — recover it or erase it.', 'kitAscendant', [
                     M('fh1', 'FOLD WAKE', 'patrol', 'NORMAL'),
                     M('fh2', 'HUNT BETWEEN', 'hunt', 'HARD'),
                     M('fh3', 'CLOSE THE RING', 'clear', 'EXPERT')
                 ], 'rift')
             ],
             echo_deep: [
-                P('drowned_fleet', 'DROWNED FLEET', 'Salvage from a fleet the void already subtracted.', 'kitEchoDeep', [
+                P('drowned_fleet', 'DROWNED FLEET', 'Salvage a fleet the void already subtracted.', 'kitEchoDeep', [
                     M('df1', 'DEEP MARK', 'salvage', 'NORMAL'),
                     M('df2', 'HULL ECHO', 'salvage', 'HARD'),
                     M('df3', 'FLEET QUIET', 'clear', 'HARD')
                 ]),
-                P('salvage_deep', 'SALVAGE DEEP', 'Pull crystal and ore from drowned wrecks before they forget they existed.', 'kitScavenger', [
+                P('salvage_deep', 'SALVAGE DEEP', 'Pull crystal and ore from drowned wrecks before they vanish.', 'kitScavenger', [
                     M('sd1', 'CRYSTAL DREDGE', 'salvage', 'EASY'),
                     M('sd2', 'DEEP CLAIM', 'defend', 'NORMAL')
                 ])
             ],
             ascendant: [
-                P('void_answer', 'VOID ANSWER', 'The void answers. Prove you were worth the call.', 'kitAscendant', [
+                P('void_answer', 'VOID ANSWER', 'Answer the void\'s call and prove you were worth contacting.', 'kitAscendant', [
                     M('va1', 'FIRST FOLD', 'patrol', 'NORMAL'),
                     M('va2', 'ANSWER FIRE', 'hunt', 'HARD'),
                     M('va3', 'ASCEND MARK', 'clear', 'EXPERT')
                 ]),
-                P('ring_crossing', 'RING CROSSING', 'Cross the pale ring and return with a name still intact.', 'kitRiftSeeker', [
+                P('ring_crossing', 'RING CROSSING', 'Cross the pale ring and return with your name still intact.', 'kitRiftSeeker', [
                     M('rc1', 'RING APPROACH', 'escort', 'NORMAL'),
                     M('rc2', 'CROSSING', 'clear', 'HARD')
                 ]),
-                P('subtraction', 'SUBTRACTION', 'They do not conquer. They subtract. Learn the doctrine.', 'kitVoidDrifter', [
+                P('subtraction', 'SUBTRACTION', 'Learn Voidborn doctrine: they do not conquer — they subtract.', 'kitVoidDrifter', [
                     M('su1', 'CENSUS CUT', 'clear', 'HARD'),
                     M('su2', 'BLANK THE LOG', 'hunt', 'HARD'),
                     M('su3', 'SIX WAS HERE', 'clear', 'EXPERT')
@@ -181,7 +181,7 @@ extendClass(ProfileSelectionManager, {
             ],
             // —— PIRATE ——
             scavenger: [
-                P('scrap_haul', 'SCRAP HAUL', 'Patched wreck, heap of scrap — earn the next weld.', 'kitScavenger', [
+                P('scrap_haul', 'SCRAP HAUL', 'Strip wrecks for scrap until you can afford the next weld.', 'kitScavenger', [
                     M('sh1', 'YARD PICK', 'salvage', 'EASY'),
                     M('sh2', 'WRECK STRIP', 'salvage', 'NORMAL'),
                     M('sh3', 'DOCK FEE', 'patrol', 'NORMAL')
@@ -192,35 +192,35 @@ extendClass(ProfileSelectionManager, {
                 ])
             ],
             smuggler: [
-                P('black_run', 'BLACK RUN', 'Fast ship, dirty credits — keep the Chain Market fed.', 'kitSmuggler', [
+                P('black_run', 'BLACK RUN', 'Smuggle dirty cargo for the Chain Market and dodge customs.', 'kitSmuggler', [
                     M('br1', 'SHADOW LANE', 'escort', 'EASY'),
                     M('br2', 'CUSTOMS BREAK', 'raid', 'NORMAL'),
                     M('br3', 'DROP POINT', 'patrol', 'NORMAL')
                 ]),
-                P('chain_market', 'CHAIN MARKET', 'Debt, people, and hulls change hands. Make your cut.', 'kitHaulerThief', [
+                P('chain_market', 'CHAIN MARKET', 'Cut deals in debt, people, and hulls — take your percentage.', 'kitHaulerThief', [
                     M('cm1', 'MARKET INTRO', 'patrol', 'EASY'),
                     M('cm2', 'DEBT COLLECT', 'hunt', 'NORMAL'),
                     M('cm3', 'AUCTION GUARD', 'defend', 'HARD')
                 ]),
-                P('dock_debt', 'DOCK DEBT', 'Magpie\'s dock wants payment. In hulls or in blood.', 'kitBrigand', [
+                P('dock_debt', 'DOCK DEBT', 'Pay Magpie\'s dock in hulls or blood before the books close.', 'kitBrigand', [
                     M('dd1', 'DEBT NOTICE', 'patrol', 'NORMAL'),
                     M('dd2', 'PAYMENT RAID', 'raid', 'HARD'),
                     M('dd3', 'CLEAR THE BOOKS', 'clear', 'HARD')
                 ])
             ],
             brigand: [
-                P('stolen_guns', 'STOLEN GUNS', 'Assault frame, extra mount — put both to work.', 'kitBrigand', [
+                P('stolen_guns', 'STOLEN GUNS', 'Put a stolen assault frame and extra mount to work.', 'kitBrigand', [
                     M('sg1', 'GUN TEST', 'patrol', 'EASY'),
                     M('sg2', 'BOARDING RUN', 'raid', 'NORMAL'),
                     M('sg3', 'PRIZE HULL', 'salvage', 'HARD')
                 ]),
-                P('boarding_path', 'BOARDING PATH', 'Take ships whole. Sell the crews. Keep the guns.', 'kitRaiderPack', [
+                P('boarding_path', 'BOARDING PATH', 'Board ships whole, sell the crews, keep the guns.', 'kitRaiderPack', [
                     M('bp1', 'SOFT BOARD', 'raid', 'NORMAL'),
                     M('bp2', 'HARD BOARD', 'raid', 'HARD')
                 ])
             ],
             hauler_thief: [
-                P('hijack_hold', 'HIJACK HOLD', 'A freighter hull with loaded holds — now make it yours for good.', 'kitHaulerThief', [
+                P('hijack_hold', 'HIJACK HOLD', 'Steal a freighter\'s hold and make the hull yours for good.', 'kitHaulerThief', [
                     M('hh1', 'HOLD LOCK', 'raid', 'NORMAL'),
                     M('hh2', 'CREW DUMP', 'clear', 'HARD'),
                     M('hh3', 'REPAINT RUN', 'escort', 'NORMAL')
@@ -229,7 +229,7 @@ extendClass(ProfileSelectionManager, {
                     M('cf1', 'HOT LOAD', 'escort', 'EASY'),
                     M('cf2', 'FENCE DROP', 'patrol', 'NORMAL')
                 ]),
-                P('freighter_take', 'FREIGHTER TAKE', 'Another haul. Another mutiny waiting. Stay ahead of both.', 'kitHaulerThief', [
+                P('freighter_take', 'FREIGHTER TAKE', 'Mark another freighter, take the hold, watch for mutiny.', 'kitHaulerThief', [
                     M('ft1', 'TARGET MARK', 'patrol', 'NORMAL'),
                     M('ft2', 'TAKE THE HOLD', 'raid', 'HARD'),
                     M('ft3', 'MUTINY WATCH', 'defend', 'HARD')
@@ -237,23 +237,23 @@ extendClass(ProfileSelectionManager, {
             ],
             // —— MACHINE ——
             boot_sequence: [
-                P('first_compile', 'FIRST COMPILE', 'Fresh unit. Spare parts. Prove the boot did not fail.', 'kitBootSequence', [
+                P('first_compile', 'FIRST COMPILE', 'Boot as a fresh Machine unit and pass every diagnostic.', 'kitBootSequence', [
                     M('fc1', 'DIAGNOSTIC', 'patrol', 'EASY'),
                     M('fc2', 'UNIT TEST', 'clear', 'EASY'),
                     M('fc3', 'DEPLOY', 'patrol', 'NORMAL')
                 ], 'compile'),
-                P('diagnostic_run', 'DIAGNOSTIC RUN', 'The Collective audits every new hull. Pass or be recycled.', 'kitScoutUnit', [
+                P('diagnostic_run', 'DIAGNOSTIC RUN', 'Survive the Collective audit — pass, or be recycled.', 'kitScoutUnit', [
                     M('dr1', 'SELF CHECK', 'patrol', 'EASY'),
                     M('dr2', 'FIELD AUDIT', 'clear', 'NORMAL')
                 ], 'compile')
             ],
             harvester: [
-                P('ore_audit', 'ORE AUDIT', 'Resource drone: fill the holds, feed the forges.', 'kitHarvester', [
+                P('ore_audit', 'ORE AUDIT', 'Scan seams, fill holds, and feed the forges.', 'kitHarvester', [
                     M('oa1', 'SEAM SCAN', 'patrol', 'EASY'),
                     M('oa2', 'ORE SWEEP', 'salvage', 'NORMAL'),
                     M('oa3', 'FORGE DROP', 'escort', 'NORMAL')
                 ]),
-                P('feedstock_sweep', 'FEEDSTOCK SWEEP', 'Whatever lives nearby is feedstock. Optimise the yield.', 'kitHarvester', [
+                P('feedstock_sweep', 'FEEDSTOCK SWEEP', 'Reclaim nearby life as feedstock for the forges.', 'kitHarvester', [
                     M('fs1', 'POPULATION SCAN', 'patrol', 'NORMAL'),
                     M('fs2', 'RECLAIM', 'clear', 'HARD')
                 ]),
@@ -264,27 +264,27 @@ extendClass(ProfileSelectionManager, {
                 ])
             ],
             scout_unit: [
-                P('recon_sweep', 'RECON SWEEP', 'Fast recon frame. Map what the war-line needs next.', 'kitScoutUnit', [
+                P('recon_sweep', 'RECON SWEEP', 'Map contacts for the war-line and bring the route home.', 'kitScoutUnit', [
                     M('rs1', 'GRID PING', 'patrol', 'EASY'),
                     M('rs2', 'CONTACT LOG', 'hunt', 'NORMAL'),
                     M('rs3', 'ROUTE HOME', 'escort', 'NORMAL')
                 ]),
-                P('signal_trace', 'SIGNAL TRACE', 'A rogue signal on the lattice. Find it. End it.', 'kitRiftSeeker', [
+                P('signal_trace', 'SIGNAL TRACE', 'Trace a rogue lattice signal and end it.', 'kitRiftSeeker', [
                     M('st1', 'TRACE START', 'patrol', 'NORMAL'),
                     M('st2', 'SIGNAL KILL', 'hunt', 'HARD')
                 ])
             ],
             combat_protocol: [
-                P('war_routine', 'WAR ROUTINE', 'War routine loaded. Execute until the objective agrees.', 'kitCombatProtocol', [
+                P('war_routine', 'WAR ROUTINE', 'Load war routine and fire until the objective agrees.', 'kitCombatProtocol', [
                     M('wr1', 'PROTOCOL START', 'patrol', 'NORMAL'),
                     M('wr2', 'PRESSURE FIRE', 'clear', 'HARD'),
                     M('wr3', 'OBJECTIVE MET', 'hunt', 'HARD')
                 ]),
-                P('assimilate', 'ASSIMILATE', 'Wire the useful. Recycle the rest. Leave agreeing silence.', 'kitBootSequence', [
+                P('assimilate', 'ASSIMILATE', 'Wire what is useful. Recycle the rest.', 'kitBootSequence', [
                     M('as1', 'AUDIT PASS', 'patrol', 'NORMAL'),
                     M('as2', 'WIRE IN', 'clear', 'HARD')
                 ]),
-                P('zero_dissent', 'ZERO DISSENT', 'Node Zero has calculated surplus. Remove it.', 'kitCombatProtocol', [
+                P('zero_dissent', 'ZERO DISSENT', 'Node Zero marked surplus life — remove it.', 'kitCombatProtocol', [
                     M('zd1', 'SURPLUS MARK', 'hunt', 'HARD'),
                     M('zd2', 'REASSIGN', 'clear', 'HARD'),
                     M('zd3', 'SILENCE HOLD', 'defend', 'EXPERT')

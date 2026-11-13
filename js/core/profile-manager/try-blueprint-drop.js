@@ -184,19 +184,25 @@ extendClass(ProfileManager, {
         return this.getSellValue(economyConfig.getPartCost(bp.kind, bp.item));
     },
 
-    /** Sells one still-pending cargo part/blueprint stack directly — it never touches
-     *  station/ship storage. `asBlueprint` sells from profile.cargo.blueprints, otherwise
-     *  from profile.cargo.parts. */
-    sellCargoPart(key, asBlueprint) {
+    /** Sells still-pending cargo parts/blueprints directly — never touches station/ship
+     *  storage. `asBlueprint` sells from profile.cargo.blueprints, otherwise from
+     *  profile.cargo.parts. `amount` defaults to the full stack; pass 1 for one
+     *  victory-grid cell (parts render one unit per cell). */
+    sellCargoPart(key, asBlueprint, amount) {
         const profile = this.getActiveProfile();
         if (!profile) return { ok: false, reason: 'NO PROFILE' };
         this.ensureEconomyDefaults(profile);
         const bucket = asBlueprint ? profile.cargo.blueprints : (profile.cargo.parts || {});
-        const n = bucket[key] || 0;
-        if (n <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const available = bucket[key] || 0;
+        if (available <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const n = amount == null
+            ? available
+            : Math.max(1, Math.min(available, Math.round(Number(amount) || 1)));
         const unitValue = this.getCargoPartSellValue(key);
         const credits = unitValue * n;
-        delete bucket[key];
+        const left = available - n;
+        if (left > 0) bucket[key] = left;
+        else delete bucket[key];
         if (credits > 0) this.addCredits(credits, true);
         this.save();
         return { ok: true, credits: credits, amount: n };

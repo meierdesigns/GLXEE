@@ -623,6 +623,18 @@ extendClass(HomeStationUI, {
                 };
             }
         }
+        // Victory screen: grow rows so looted parts stay visible when the hangar
+        // bay is already full (otherwise take looks like the item just vanished).
+        if (opts.growToFit) {
+            const used = cells.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+            const capacity = grid.cols * grid.rows;
+            if (used > capacity) {
+                grid = {
+                    cols: grid.cols,
+                    rows: Math.max(grid.rows, Math.ceil(used / Math.max(1, grid.cols)))
+                };
+            }
+        }
         // opts.extraGridClass: the hangar bay-inventory grid (physical-item.js bayInventoryHtml)
         // calls this same function for its item set/positions/grid size — one source of truth —
         // and tags the result with its own class for CSS/selector hooks (.hs-pick-grid) that

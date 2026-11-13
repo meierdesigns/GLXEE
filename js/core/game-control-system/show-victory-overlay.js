@@ -282,8 +282,9 @@ extendClass(GameControlSystem, {
             const sellable = sellValue > 0 ? ' is-sellable' : '';
             const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
             const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
+            const unitSell = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0);
             const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
-                : (parsed ? `CLICK TO LOOT · DRAG TO SHIP · RIGHT-CLICK SELL · ${sellValue}c`
+                : (parsed ? `CLICK TO LOOT · DRAG TO SHIP · RIGHT-CLICK SELL 1 · ${unitSell}c`
                     : `CLICK TO SELL · ${sellValue}c`));
             const tip = tipLines.concat(actionLine.split('\n')).join('\n');
             return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
@@ -308,12 +309,22 @@ extendClass(GameControlSystem, {
             `</div>`;
     },
 
-    /** Sells one pending cargo stack (part or blueprint) and refreshes the panel. */
+    /** Sells pending cargo and refreshes the panel. Parts: one cell = one unit.
+     *  Blueprints stay stacked — one cell sells the whole ×N. */
     sellVictoryCargoItem(key, isBlueprint) {
         if (typeof profileManager === 'undefined' || !profileManager.sellCargoPart) return;
         this.cancelVictoryAutoReturn();
-        const res = profileManager.sellCargoPart(key, isBlueprint);
-        if (!res || !res.ok) return;
+        const amount = isBlueprint ? null : 1;
+        const res = profileManager.sellCargoPart(key, isBlueprint, amount);
+        if (!res || !res.ok) {
+            if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+                levelInfoManager.showLootNotice(res && res.reason ? res.reason : 'SELL FAILED');
+            }
+            return;
+        }
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('SOLD +' + (res.credits || 0) + 'c');
+        }
         this.updateVictoryStats();
     },
 
@@ -321,11 +332,24 @@ extendClass(GameControlSystem, {
     takeVictoryCargoItem(key) {
         if (typeof profileManager === 'undefined' || !profileManager.takeCargoPartToShip) return;
         const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
-        if (!shipId) return;
+        if (!shipId) {
+            if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+                levelInfoManager.showLootNotice('NO ACTIVE SHIP');
+            }
+            return;
+        }
         this.cancelVictoryAutoReturn();
         // One cell = one unit (grid renders each found part separately).
         const res = profileManager.takeCargoPartToShip(shipId, key, 1);
-        if (!res || !res.ok) return;
+        if (!res || !res.ok) {
+            if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+                levelInfoManager.showLootNotice(res && res.reason ? res.reason : 'LOOT FAILED');
+            }
+            return;
+        }
+        if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            levelInfoManager.showLootNotice('STORED ON SHIP');
+        }
         this.updateVictoryStats();
     },
 
@@ -336,7 +360,11 @@ extendClass(GameControlSystem, {
         const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
         const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
         if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
-        const shipGrid = homeStationUI.renderShipStorage(profile, shipId, { tipAction: false }) || '';
+        // growToFit: looted parts must stay visible even when the hangar bay is already full.
+        const shipGrid = homeStationUI.renderShipStorage(profile, shipId, {
+            tipAction: false,
+            growToFit: true
+        }) || '';
         return `<div class="victory-loadout-bags">` +
             `<div class="victory-loadout-col"><h3 class="victory-loadout-col-title">SHIP</h3>${shipGrid}</div>` +
             `</div>`;
@@ -476,6 +504,9 @@ extendClass(GameControlSystem, {
         if (!list || list.dataset.sellBound) return;
         list.dataset.sellBound = '1';
         list.addEventListener('click', (event) => {
+            // Right-click on a <button> can still fire a trailing click (button 2) after
+            // contextmenu/pointerdown sell — reject it or the part vanishes without a real loot.
+            if (event.button !== 0) return;
             const btn = event.target.closest('.victory-loot-cell');
             if (!btn) return;
             event.preventDefault();
@@ -490,12 +521,21 @@ extendClass(GameControlSystem, {
             if (!btn.classList.contains('is-sellable')) return;
             this.sellVictoryCargoItem(btn.dataset.cargoKey, isBlueprint);
         });
-        list.addEventListener('contextmenu', (event) => {
+        // Sell on pointerdown (button 2), not contextmenu alone: same pattern as the
+        // hangar storage grid — acting before the browser's trailing button-2 click
+        // keeps sell from racing a fake loot/take that then looks like "just gone".
+        list.addEventListener('pointerdown', (event) => {
+            if (event.button !== 2) return;
             const btn = event.target.closest('.victory-loot-cell.is-sellable');
             if (!btn) return;
             event.preventDefault();
             event.stopPropagation();
             this.sellVictoryCargoItem(btn.dataset.cargoKey, btn.dataset.cargoBlueprint === '1');
+        });
+        list.addEventListener('contextmenu', (event) => {
+            if (!event.target.closest('.victory-loot-cell')) return;
+            event.preventDefault();
+            event.stopPropagation();
         });
     },
 

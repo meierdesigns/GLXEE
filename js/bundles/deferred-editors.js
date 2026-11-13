@@ -31,6 +31,7 @@ var AssetGenRegistry = class AssetGenRegistry {
         if (o.faction != null) out.faction = o.faction;
         if (o.enemyClass != null) out.enemyClass = o.enemyClass;
         if (o.kind != null) out.kind = o.kind;
+        if (o.variant != null) out.variant = o.variant;
         if (o.segment != null) out.segment = o.segment;
         if (o.parentShip != null) out.parentShip = o.parentShip;
         if (o.mirrorOf != null) out.mirrorOf = o.mirrorOf;
@@ -108,9 +109,40 @@ var AssetGenRegistry = class AssetGenRegistry {
                     + ", industrial wreckage or engineered structure, "
                     + "mechanical layered silhouette, grayscale only, no text"
                 );
+            case "portrait":
+                return this.portraitPrompt(id);
             default:
                 return name + " game sprite, grayscale only";
         }
+    }
+
+    /** Faction + variant prompt for a painted pilot portrait (color pixel art). */
+    portraitPrompt(id) {
+        const raw = String(id || "");
+        const m = raw.match(/^portrait-([a-z]+)-(\d{2})$/i);
+        const faction = m ? m[1].toLowerCase() : "terran";
+        const idx = m ? (parseInt(m[2], 10) - 1) : 0;
+        const traits = {
+            terran: "human terran fleet pilot, disciplined military helmet, clean armor collar, stern expression",
+            kronax: "brutal kronax raider pilot, serrated helmet crest, claw-motif visor, aggressive stare",
+            voidborn: "ancient voidborn pilot, hollow alien eyes, crescent helm apertures, eerie calm",
+            pirate: "salvage pirate pilot, mismatched junk helm plates, scavenged goggles, wry grin",
+            machine: "machine-cult pilot, circuit-etched faceplate, glowing optic slits, precise android look"
+        };
+        const trait = traits[faction] || (faction + " sci-fi pilot");
+        const variants = [
+            "young", "scarred", "veteran", "narrow face", "broad jaw", "short crew cut",
+            "long hair under helm", "visor down", "visor up", "asymmetric paint",
+            "battle-worn", "fresh recruit", "cyber implant", "tattooed cheek",
+            "heavy brow", "slim features"
+        ];
+        const v = variants[((idx % variants.length) + variants.length) % variants.length];
+        return (
+            "color pixel-art bust portrait of a " + trait
+            + ", variant " + v + ", head and shoulders only, solid magenta background #FF00FF, "
+            + "crisp pixels, limited palette, match the art style of the reference image, "
+            + "game UI portrait, no text, no UI"
+        );
     }
 
     /** Prompt for a hull segment (front/center/back/wing). Wings are painted once and mirrored. */
@@ -150,6 +182,7 @@ var AssetGenRegistry = class AssetGenRegistry {
 
     getTypes() {
         return [
+            { id: "portrait", label: "PORTRAITS" },
             { id: "mount", label: "MOUNTS" },
             { id: "icon", label: "ICONS" },
             { id: "ability", label: "ABILITIES" },
@@ -187,6 +220,8 @@ var AssetGenRegistry = class AssetGenRegistry {
                 return this.listPlanets();
             case "obstacle":
                 return this.listObstacles();
+            case "portrait":
+                return this.listPortraits();
             default:
                 return [];
         }
@@ -543,6 +578,31 @@ extendClass(AssetGenRegistry, {
         return ["scout", "assault", "heavy", "elite", "capital"];
     },
 
+    listPortraits() {
+        const factions = this.factionIds();
+        const out = [];
+        factions.forEach((faction) => {
+            for (let i = 1; i <= 16; i++) {
+                const nn = String(i).padStart(2, "0");
+                const id = "portrait-" + faction + "-" + nn;
+                out.push(this.entry("portrait", id, {
+                    folder: "factions/" + faction + "/portraits",
+                    fileId: nn,
+                    size: 96,
+                    targetPath: "assets/factions/" + faction + "/portraits/" + nn + ".png",
+                    filenamePrefix: "portraits/vf_" + faction,
+                    spriteKey: id,
+                    label: String(faction).toUpperCase() + " · " + nn,
+                    promptSuffix: this.portraitPrompt(id),
+                    faction: faction,
+                    kind: "portrait",
+                    variant: i - 1
+                }));
+            }
+        });
+        return out;
+    },
+
     listFactions() {
         return this.factionIds().map((id) => {
             const key = (typeof factionShipStyles !== "undefined" && factionShipStyles.emblemKey)
@@ -787,16 +847,25 @@ var AssetGenClient = class AssetGenClient {
         const prompt = (opts.prompt != null && String(opts.prompt).trim())
             ? String(opts.prompt).trim()
             : (entry.promptSuffix || "");
+        const mode = opts.mode || (entry && entry.type === "portrait" ? "portrait" : "sprite");
         const body = {
             prompt: prompt,
             filenamePrefix: entry.filenamePrefix,
             size: opts.size != null ? Number(opts.size) : (entry.size || 64),
             genSize: opts.genSize != null ? Number(opts.genSize) : 512,
-            steps: opts.steps != null ? Number(opts.steps) : 4
+            steps: opts.steps != null ? Number(opts.steps) : 4,
+            mode: mode
         };
         if (opts.prependStyle === false) body.prependStyle = false;
-        if (opts.colors != null) body.colors = Math.max(2, Math.min(15, Number(opts.colors) || 15));
+        if (opts.colors != null) {
+            const maxC = mode === "portrait" ? 48 : 15;
+            body.colors = Math.max(2, Math.min(maxC, Number(opts.colors) || (mode === "portrait" ? 24 : 15)));
+        }
         if (opts.bgColor) body.bgColor = String(opts.bgColor);
+        if (opts.referenceDataUrl) body.referenceDataUrl = String(opts.referenceDataUrl);
+        if (opts.referencePath) body.referencePath = String(opts.referencePath);
+        if (opts.outWidth != null) body.outWidth = Number(opts.outWidth);
+        if (opts.outHeight != null) body.outHeight = Number(opts.outHeight);
         const seedVal = opts.seed != null ? opts.seed : seed;
         if (seedVal != null && seedVal !== "") body.seed = Number(seedVal);
         if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
@@ -2093,6 +2162,9 @@ var AssetGenUI = class AssetGenUI {
         this.checkedIds = new Set();
         this.stagingId = null;
         this.previewDataUrl = null;
+        this.portraitReferenceDataUrl = null;
+        this.portraitBgv = this.loadPortraitBgv();
+        this.portraitBga = this.loadPortraitBga();
         this.busy = false;
         this.statusText = "";
         this.mainTab = "library"; // library | settings
@@ -2227,9 +2299,12 @@ var AssetGenUI = class AssetGenUI {
             bridgePort = String(new URL(bridge).port || "8787");
         } catch (e) { /* keep */ }
         const comfyPort = this.renderSettings.comfyPort || 6767;
-        hint.textContent =
-            "Menu → ASSETS · Settings → ASSETS · # toggle · multi-select + GENERATE · Esc close · Bridge :" +
-            bridgePort + " · ComfyUI :" + comfyPort;
+        const face = this.isPortraitLibrary && this.isPortraitLibrary();
+        hint.textContent = face
+            ? "DevMode Face Editor · LOAD EXAMPLE → GENERATE / GENERATE ALL · Esc close · Bridge :" +
+                bridgePort + " · ComfyUI :" + comfyPort
+            : "Menu → ASSETS · Settings → ASSETS · # toggle · multi-select + GENERATE · Esc close · Bridge :" +
+                bridgePort + " · ComfyUI :" + comfyPort;
     }
 
     applyClientConfig() {
@@ -2301,6 +2376,8 @@ var AssetGenUI = class AssetGenUI {
             this.renderDetail();
             this.renderSettingsPanel();
             this.syncPanelVisibility();
+            if (this.syncPortraitChrome) this.syncPortraitChrome();
+            else if (this.syncEditorTitle) this.syncEditorTitle();
             if (!skipPersist) this.persistMenuState();
             return;
         }
@@ -2311,6 +2388,8 @@ var AssetGenUI = class AssetGenUI {
         this.renderDetail();
         this.renderSettingsPanel();
         this.syncPanelVisibility();
+        if (this.syncPortraitChrome) this.syncPortraitChrome();
+        else if (this.syncEditorTitle) this.syncEditorTitle();
         if (!opts || !(opts.type && opts.id)) this.refreshHealth();
         if (!skipPersist) this.persistMenuState();
         if (typeof VFBgMouseParallax !== "undefined" && VFBgMouseParallax.refresh) {
@@ -2387,7 +2466,7 @@ extendClass(AssetGenUI, {
             this.overlay.parentNode && this.overlay.parentNode.removeChild(this.overlay);
         }
         const root = document.createElement("div");
-        root.className = "ag-overlay";
+        root.className = "ag-overlay vf-glass";
         root.innerHTML = `
 <div class="ag-panel">
   <h2 class="ag-title">ASSET GENERATOR · FLUX2</h2>
@@ -2398,12 +2477,45 @@ extendClass(AssetGenUI, {
   </div>
   <div class="ag-body">
     <div class="ag-library" id="agLibraryPane">
-      <div class="ag-row ag-types" id="agTypes"></div>
+      <div class="ag-row ag-types" id="agTypes">
+        <label class="ag-types-label" for="agTypeSelect">TYPE</label>
+        <select id="agTypeSelect" class="ag-type-select" aria-label="Asset type"></select>
+      </div>
       <div class="ag-col">
         <div class="ag-list-wrap">
           <div class="ag-faction-chrome" id="agFactionChrome" hidden>
             <div class="ag-faction-tabs" id="agFactionTabs"></div>
             <input type="search" class="ag-faction-filter" id="agFactionFilter" placeholder="FILTER SHIPS…" autocomplete="off">
+          </div>
+          <div class="ag-portrait-chrome" id="agPortraitChrome" hidden>
+            <div class="ag-portrait-ref">
+              <div class="ag-label">REFERENCE (style for all faces)</div>
+              <div class="ag-portrait-ref-row">
+                <div class="ag-portrait-ref-preview" id="agPortraitRefPreview">(none)</div>
+                <div class="ag-portrait-ref-actions">
+                  <input type="file" id="agPortraitRefFile" accept="image/png,image/jpeg,image/webp" hidden>
+                  <button type="button" id="agPortraitRefPick">LOAD EXAMPLE</button>
+                  <button type="button" id="agPortraitRefClear">CLEAR</button>
+                  <button type="button" id="agPortraitGenerateAll">GENERATE ALL</button>
+                </div>
+              </div>
+              <p class="ag-portrait-hint">One example image → Flux img2img → replaces every checked / all portraits under assets/factions/*/portraits/</p>
+            </div>
+            <div class="ag-portrait-bg">
+              <div class="ag-label">ANIMATED BACKDROP (preview)</div>
+              <div class="ag-portrait-bg-row">
+                <input type="range" id="agPortraitBgv" min="0" max="31" step="1" value="0" aria-label="Animated backdrop">
+                <b class="ag-portrait-bg-val" id="agPortraitBgvVal">01 / 32</b>
+                <button type="button" id="agPortraitBgvRand" title="Random backdrop">RND</button>
+              </div>
+              <div class="ag-label">ANIMATION</div>
+              <div class="ag-portrait-bg-row">
+                <input type="range" id="agPortraitBga" min="0" max="4" step="1" value="2" aria-label="Backdrop animation speed">
+                <b class="ag-portrait-bg-val" id="agPortraitBgaVal">NORMAL</b>
+              </div>
+              <p class="ag-portrait-hint">Backdrop + motion speed — same controls as Pilot create (BACKDROP / ANIMATION).</p>
+            </div>
+            <div class="ag-faction-tabs" id="agPortraitFactionTabs"></div>
           </div>
           <div class="ag-toolbar">
             <label title="Select all / none">
@@ -2478,25 +2590,29 @@ extendClass(AssetGenUI, {
             });
         });
 
-        const types = root.querySelector("#agTypes");
-        (assetGenRegistry.getTypes() || []).forEach((t) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.textContent = t.label;
-            btn.dataset.type = t.id;
-            if (t.id === this.typeId) btn.classList.add("ag-on");
-            btn.addEventListener("click", () => {
-                this.typeId = this.normalizeTypeId(t.id);
+        const typeSelect = root.querySelector("#agTypeSelect");
+        if (typeSelect) {
+            (assetGenRegistry.getTypes() || []).forEach((t) => {
+                const opt = document.createElement("option");
+                opt.value = t.id;
+                opt.textContent = t.label;
+                if (t.id === this.typeId) opt.selected = true;
+                typeSelect.appendChild(opt);
+            });
+            typeSelect.addEventListener("change", () => {
+                this.typeId = this.normalizeTypeId(typeSelect.value);
                 this.selectedId = null;
                 this.checkedIds = new Set();
                 this.clearStaging();
                 this.renderTypes();
+                this.syncPortraitChrome();
+                this.syncFactionChrome();
+                this.syncEditorTitle && this.syncEditorTitle();
                 this.renderList();
                 this.renderDetail();
                 this.persistMenuState();
             });
-            types.appendChild(btn);
-        });
+        }
 
         root.querySelector("#agSelectAll").addEventListener("change", (e) => {
             const on = !!e.target.checked;
@@ -2521,6 +2637,39 @@ extendClass(AssetGenUI, {
         root.querySelector("#agGenerate").addEventListener("click", () => this.onGenerate());
         root.querySelector("#agGenerateChecked").addEventListener("click", () => this.onGenerateChecked());
         root.querySelector("#agAccept").addEventListener("click", () => this.onAccept());
+        const refPick = root.querySelector("#agPortraitRefPick");
+        const refFile = root.querySelector("#agPortraitRefFile");
+        const refClear = root.querySelector("#agPortraitRefClear");
+        const refAll = root.querySelector("#agPortraitGenerateAll");
+        if (refPick && refFile) {
+            refPick.addEventListener("click", () => refFile.click());
+            refFile.addEventListener("change", () => this.onPortraitReferenceFile(refFile));
+        }
+        if (refClear) refClear.addEventListener("click", () => this.clearPortraitReference());
+        if (refAll) refAll.addEventListener("click", () => this.onGenerateAllPortraits());
+        const bgvSl = root.querySelector("#agPortraitBgv");
+        const bgvRnd = root.querySelector("#agPortraitBgvRand");
+        const bgaSl = root.querySelector("#agPortraitBga");
+        if (bgvSl) {
+            bgvSl.value = String(this.portraitBgv | 0);
+            bgvSl.addEventListener("input", () => {
+                this.setPortraitBgv(Number(bgvSl.value) || 0);
+            });
+        }
+        if (bgvRnd) {
+            bgvRnd.addEventListener("click", () => {
+                const n = (typeof heroPortrait !== "undefined" && heroPortrait.OPTIONS && heroPortrait.OPTIONS.bgv)
+                    ? heroPortrait.OPTIONS.bgv
+                    : 32;
+                this.setPortraitBgv(Math.floor(Math.random() * n));
+            });
+        }
+        if (bgaSl) {
+            bgaSl.value = String(this.portraitBga | 0);
+            bgaSl.addEventListener("input", () => {
+                this.setPortraitBga(Number(bgaSl.value) || 0);
+            });
+        }
         root.querySelector("#agDiscard").addEventListener("click", () => {
             this.clearStaging();
             this.setStatus("Discarded.");
@@ -2581,9 +2730,10 @@ extendClass(AssetGenUI, {
 
     renderTypes() {
         if (!this.overlay) return;
-        this.overlay.querySelectorAll("#agTypes button").forEach((btn) => {
-            btn.classList.toggle("ag-on", btn.dataset.type === this.typeId);
-        });
+        const sel = this.overlay.querySelector("#agTypeSelect");
+        if (!sel) return;
+        const id = this.normalizeTypeId(this.typeId);
+        if (sel.value !== id) sel.value = id;
     },
 
     updateSelectAllState() {
@@ -2601,6 +2751,10 @@ extendClass(AssetGenUI, {
 
     isFactionLibrary() {
         return this.typeId === "faction";
+    },
+
+    isPortraitLibrary() {
+        return this.typeId === "portrait";
     },
 });
 
@@ -2629,6 +2783,10 @@ extendClass(AssetGenUI, {
         if (this.isFactionLibrary() && typeof assetGenRegistry !== "undefined"
             && assetGenRegistry.listFactionLibrary) {
             return assetGenRegistry.listFactionLibrary();
+        }
+        if (this.isPortraitLibrary && this.isPortraitLibrary()
+            && typeof assetGenRegistry !== "undefined" && assetGenRegistry.listPortraits) {
+            return assetGenRegistry.listPortraits();
         }
         return (typeof assetGenRegistry !== "undefined" && assetGenRegistry.list)
             ? (assetGenRegistry.list(this.typeId) || [])
@@ -2663,6 +2821,9 @@ extendClass(AssetGenUI, {
 
     visibleLibraryEntries() {
         if (this.isFactionLibrary()) return this.filteredFactionEntries();
+        if (this.isPortraitLibrary && this.isPortraitLibrary() && this.filteredPortraitEntries) {
+            return this.filteredPortraitEntries();
+        }
         return this.libraryEntriesForType();
     },
 
@@ -2672,6 +2833,7 @@ extendClass(AssetGenUI, {
         if (!chrome) return;
         const on = this.isFactionLibrary();
         chrome.hidden = !on;
+        if (this.syncPortraitChrome) this.syncPortraitChrome();
         if (!on) return;
         this.renderFactionTabs();
         const filterEl = this.overlay.querySelector("#agFactionFilter");
@@ -2839,8 +3001,9 @@ extendClass(AssetGenUI, {
             });
 
             const thumb = document.createElement("div");
-            thumb.className = "ag-thumb";
-            this.drawThumbInto(thumb, entry, 28);
+            const face = entry.type === "portrait" || entry.kind === "portrait";
+            thumb.className = "ag-thumb" + (face ? " ag-thumb-face" : "");
+            this.drawThumbInto(thumb, entry, face ? 72 : 28);
             thumb.addEventListener("mouseenter", () => this.showHoverZoom(thumb, entry));
             thumb.addEventListener("mouseleave", () => this.hideHoverZoom());
 
@@ -2874,6 +3037,225 @@ extendClass(AssetGenUI, {
         const byId = new Map();
         this.libraryEntriesForType().forEach((e) => byId.set(e.id, e));
         return [...this.checkedIds].map((id) => byId.get(id)).filter(Boolean);
+    },
+});
+
+
+/* --- js/ui/asset-gen-ui/portraits.js --- */
+"use strict";
+
+// AssetGenUI portrait batch (reference image → Flux → assets/factions/*/portraits/).
+extendClass(AssetGenUI, {
+    syncEditorTitle() {
+        if (!this.overlay) return;
+        const title = this.overlay.querySelector(".ag-title");
+        if (!title) return;
+        const face = this.isPortraitLibrary && this.isPortraitLibrary();
+        title.textContent = face ? "FACE EDITOR · FLUX + COMFYUI" : "ASSET GENERATOR · FLUX2";
+        this.updateHintPorts && this.updateHintPorts();
+    },
+
+    loadPortraitBgv() {
+        try {
+            const n = parseInt(localStorage.getItem("vf_asset_gen_portrait_bgv_v1"), 10);
+            if (Number.isFinite(n) && n >= 0) return n % 32;
+        } catch (e) { /* ignore */ }
+        return 0;
+    },
+
+    savePortraitBgv() {
+        try {
+            localStorage.setItem("vf_asset_gen_portrait_bgv_v1", String(this.portraitBgv | 0));
+        } catch (e) { /* ignore */ }
+    },
+
+    loadPortraitBga() {
+        try {
+            const n = parseInt(localStorage.getItem("vf_asset_gen_portrait_bga_v1"), 10);
+            if (Number.isFinite(n) && n >= 0) return n % 5;
+        } catch (e) { /* ignore */ }
+        return 2;
+    },
+
+    savePortraitBga() {
+        try {
+            localStorage.setItem("vf_asset_gen_portrait_bga_v1", String(this.portraitBga | 0));
+        } catch (e) { /* ignore */ }
+    },
+
+    setPortraitBgv(v) {
+        const n = (typeof heroPortrait !== "undefined" && heroPortrait.OPTIONS && heroPortrait.OPTIONS.bgv)
+            ? heroPortrait.OPTIONS.bgv
+            : 32;
+        this.portraitBgv = ((v | 0) % n + n) % n;
+        this.savePortraitBgv();
+        this.syncPortraitBgvChrome();
+        if (this.isPortraitLibrary && this.isPortraitLibrary()) {
+            this.renderList();
+            this.renderDetail();
+        }
+    },
+
+    setPortraitBga(v) {
+        const n = (typeof heroPortrait !== "undefined" && heroPortrait.OPTIONS && heroPortrait.OPTIONS.bga)
+            ? heroPortrait.OPTIONS.bga
+            : 5;
+        this.portraitBga = ((v | 0) % n + n) % n;
+        this.savePortraitBga();
+        this.syncPortraitBgvChrome();
+        if (this.isPortraitLibrary && this.isPortraitLibrary()) {
+            this.renderDetail();
+        }
+    },
+
+    syncPortraitBgvChrome() {
+        if (!this.overlay) return;
+        const sl = this.overlay.querySelector("#agPortraitBgv");
+        const val = this.overlay.querySelector("#agPortraitBgvVal");
+        const bgaSl = this.overlay.querySelector("#agPortraitBga");
+        const bgaVal = this.overlay.querySelector("#agPortraitBgaVal");
+        const n = (typeof heroPortrait !== "undefined" && heroPortrait.OPTIONS && heroPortrait.OPTIONS.bgv)
+            ? heroPortrait.OPTIONS.bgv
+            : 32;
+        if (sl) {
+            sl.max = String(n - 1);
+            if (Number(sl.value) !== (this.portraitBgv | 0)) sl.value = String(this.portraitBgv | 0);
+        }
+        if (val) {
+            val.textContent = String((this.portraitBgv | 0) + 1).padStart(2, "0") + " / " + n;
+        }
+        const bn = (typeof heroPortrait !== "undefined" && heroPortrait.OPTIONS && heroPortrait.OPTIONS.bga)
+            ? heroPortrait.OPTIONS.bga
+            : 5;
+        if (bgaSl) {
+            bgaSl.max = String(bn - 1);
+            if (Number(bgaSl.value) !== (this.portraitBga | 0)) bgaSl.value = String(this.portraitBga | 0);
+        }
+        if (bgaVal) {
+            const names = (typeof heroPortrait !== "undefined" && heroPortrait.NAMES && heroPortrait.NAMES.bga)
+                ? heroPortrait.NAMES.bga
+                : ["OFF", "SLOW", "NORMAL", "FAST", "TURBO"];
+            bgaVal.textContent = names[this.portraitBga | 0] || String(this.portraitBga | 0);
+        }
+    },
+
+    syncPortraitChrome() {
+        if (!this.overlay) return;
+        const chrome = this.overlay.querySelector("#agPortraitChrome");
+        if (!chrome) return;
+        const on = this.isPortraitLibrary && this.isPortraitLibrary();
+        chrome.hidden = !on;
+        this.overlay.classList.toggle("is-portraits", !!on);
+        this.syncEditorTitle();
+        if (!on) return;
+        this.renderPortraitFactionTabs();
+        this.renderPortraitReferencePreview();
+        this.syncPortraitBgvChrome();
+    },
+
+    renderPortraitFactionTabs() {
+        const host = this.overlay && this.overlay.querySelector("#agPortraitFactionTabs");
+        if (!host) return;
+        host.innerHTML = "";
+        const cats = ["all"].concat(this.factionIds());
+        cats.forEach((cat) => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.dataset.category = cat;
+            if (cat === (this.factionCategory || "all")) btn.classList.add("ag-on");
+            btn.textContent = cat === "all" ? "ALL" : this.factionLabel(cat);
+            const color = cat !== "all" ? this.factionColor(cat) : null;
+            if (color) {
+                btn.style.setProperty("--ag-faction-color", color);
+                btn.style.borderColor = color;
+                btn.style.color = color;
+            }
+            btn.addEventListener("click", () => {
+                this.factionCategory = cat;
+                this.saveFactionCategory();
+                this.selectedId = null;
+                this.clearStaging();
+                this.renderList();
+                this.renderDetail();
+                this.persistMenuState();
+            });
+            host.appendChild(btn);
+        });
+    },
+
+    filteredPortraitEntries() {
+        const all = (typeof assetGenRegistry !== "undefined" && assetGenRegistry.listPortraits)
+            ? assetGenRegistry.listPortraits()
+            : [];
+        const cat = this.factionCategory || "all";
+        if (cat === "all") return all;
+        return all.filter((e) => e.faction === cat);
+    },
+
+    renderPortraitReferencePreview() {
+        const box = this.overlay && this.overlay.querySelector("#agPortraitRefPreview");
+        if (!box) return;
+        box.innerHTML = "";
+        if (!this.portraitReferenceDataUrl) {
+            box.textContent = "(none)";
+            return;
+        }
+        const img = document.createElement("img");
+        img.alt = "Portrait reference";
+        img.src = this.portraitReferenceDataUrl;
+        box.appendChild(img);
+    },
+
+    onPortraitReferenceFile(input) {
+        const file = input && input.files && input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            this.portraitReferenceDataUrl = String(reader.result || "");
+            this.renderPortraitReferencePreview();
+            this.setStatus("Reference loaded · GENERATE ALL to replace portraits");
+        };
+        reader.onerror = () => this.setStatus("Failed to read reference image");
+        reader.readAsDataURL(file);
+    },
+
+    clearPortraitReference() {
+        this.portraitReferenceDataUrl = null;
+        const input = this.overlay && this.overlay.querySelector("#agPortraitRefFile");
+        if (input) input.value = "";
+        this.renderPortraitReferencePreview();
+        this.setStatus("Reference cleared");
+    },
+
+    requirePortraitReference() {
+        if (this.portraitReferenceDataUrl) return true;
+        this.setStatus("Load an example / reference image first (PORTRAITS → LOAD EXAMPLE)");
+        return false;
+    },
+
+    async onGenerateAllPortraits() {
+        if (!this.isPortraitLibrary() || this.busy) return;
+        if (!this.requirePortraitReference()) return;
+        let list = this.checkedEntries();
+        if (!list.length) list = this.visibleLibraryEntries();
+        if (!list.length) {
+            this.setStatus("No portraits to generate.");
+            return;
+        }
+        this.checkedIds = new Set(list.map((e) => e.id));
+        const prevAuto = this.renderSettings.autoAcceptBatch;
+        this.renderSettings.autoAcceptBatch = true;
+        try {
+            await this.onGenerateChecked();
+        } finally {
+            this.renderSettings.autoAcceptBatch = prevAuto;
+        }
+        if (typeof factionPacks !== "undefined" && factionPacks.reload) {
+            await factionPacks.reload();
+        }
+        if (typeof voxelPortrait !== "undefined" && voxelPortrait.invalidatePainted) {
+            voxelPortrait.invalidatePainted();
+        }
     },
 });
 
@@ -3005,7 +3387,8 @@ extendClass(AssetGenUI, {
 
     keepFactionColor(entry) {
         if (!entry) return false;
-        return entry.type === "factionShip" || entry.type === "faction"
+        return entry.type === "factionShip" || entry.type === "faction" || entry.type === "portrait"
+            || entry.kind === "portrait"
             || !!(entry.faction && (entry.kind === "ship" || entry.kind === "emblem"));
     },
 
@@ -3015,7 +3398,94 @@ extendClass(AssetGenUI, {
         const key = entry.spriteKey || entry.id;
         const px = Math.max(16, size || 28);
         const keepColor = this.keepFactionColor(entry);
-        const factionTint = keepColor ? this.factionColor(this.entryFactionId(entry)) : null;
+        const factionTint = keepColor && entry.type !== "portrait"
+            ? this.factionColor(this.entryFactionId(entry)) : null;
+
+        // 0) Portraits: painted PNG if present, else procedural voxel face (readable).
+        if (entry.type === "portrait" || entry.kind === "portrait") {
+            const aspect = (typeof VXP !== "undefined" && VXP.W && VXP.H)
+                ? (VXP.W / VXP.H)
+                : (96 / 108);
+            const h = px;
+            const w = Math.max(16, Math.round(px * aspect));
+            const drawProceduralFace = () => {
+                if (typeof VXP === "undefined" || !VXP.build || !VXP.preset) return false;
+                const faction = entry.faction || "terran";
+                let v = (entry.variant != null) ? Number(entry.variant) : NaN;
+                if (!Number.isFinite(v)) {
+                    const m = String(entry.id || entry.fileId || "").match(/(\d+)\s*$/);
+                    v = m ? (parseInt(m[1], 10) - 1) : 0;
+                }
+                const preset = VXP.preset(faction, v);
+                const bgv = (this.portraitBgv != null)
+                    ? (this.portraitBgv | 0)
+                    : (preset.bgv | 0);
+                preset.bgv = bgv;
+                const src = document.createElement("canvas");
+                src.width = VXP.W;
+                src.height = VXP.H;
+                const sctx = src.getContext("2d");
+                // Transparent head + faction animated backdrop (t=0 frame for thumbs).
+                const head = VXP.build(preset, null, false, true, 0);
+                const bg = (VXP.background)
+                    ? VXP.background(faction, 0, null, bgv)
+                    : null;
+                const img = sctx.createImageData(VXP.W, VXP.H);
+                const dst = img.data;
+                for (let i = 0; i < dst.length; i += 4) {
+                    const a = head[i + 3] / 255;
+                    if (bg) {
+                        dst[i] = head[i] * a + bg[i] * (1 - a);
+                        dst[i + 1] = head[i + 1] * a + bg[i + 1] * (1 - a);
+                        dst[i + 2] = head[i + 2] * a + bg[i + 2] * (1 - a);
+                        dst[i + 3] = 255;
+                    } else {
+                        dst[i] = head[i];
+                        dst[i + 1] = head[i + 1];
+                        dst[i + 2] = head[i + 2];
+                        dst[i + 3] = head[i + 3];
+                    }
+                }
+                sctx.putImageData(img, 0, 0);
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(src, 0, 0, w, h);
+                box.innerHTML = "";
+                box.appendChild(canvas);
+                return true;
+            };
+            if (entry.targetPath) {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext("2d");
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    box.innerHTML = "";
+                    box.appendChild(canvas);
+                };
+                img.onerror = () => { drawProceduralFace(); };
+                if (!drawProceduralFace()) {
+                    const miss = document.createElement("span");
+                    miss.textContent = "…";
+                    miss.style.color = "#888";
+                    box.appendChild(miss);
+                }
+                img.src = entry.targetPath + (entry.targetPath.indexOf("?") >= 0 ? "&" : "?") + "v=" + Date.now();
+            } else if (!drawProceduralFace()) {
+                const miss = document.createElement("span");
+                miss.textContent = "FACE";
+                miss.style.color = "#888";
+                miss.style.fontSize = Math.max(9, Math.floor(px / 6)) + "px";
+                box.appendChild(miss);
+            }
+            return;
+        }
 
         // 1) Loaded PNG override
         if (typeof spriteLoader !== "undefined" && spriteLoader.getSprite && spriteLoader.getSprite(key)) {
@@ -3275,7 +3745,30 @@ extendClass(AssetGenUI, {
         if (!box) return;
         box.innerHTML = "";
         if (!entry) return;
-        this.drawThumbInto(box, entry, Math.min(168, Math.max(48, (entry.size || 32) * 4)));
+        const isFace = !!(entry && (entry.type === "portrait" || entry.kind === "portrait"));
+        // Live voxel portrait so BACKDROP + ANIMATION play in CURRENT.
+        if (isFace && typeof voxelPortrait !== "undefined" && voxelPortrait.canvasHtml
+            && typeof VXP !== "undefined") {
+            let v = (entry.variant != null) ? Number(entry.variant) : NaN;
+            if (!Number.isFinite(v)) {
+                const m = String(entry.id || entry.fileId || "").match(/(\d+)\s*$/);
+                v = m ? (parseInt(m[1], 10) - 1) : 0;
+            }
+            const look = {
+                faction: entry.faction || "terran",
+                v: v,
+                bgv: this.portraitBgv | 0,
+                bga: this.portraitBga | 0
+            };
+            box.innerHTML = voxelPortrait.canvasHtml(look, null, null);
+            if (voxelPortrait.scan) voxelPortrait.scan(box);
+            // If a painted PNG exists it still wins via voxelPortrait.painted().
+            return;
+        }
+        const px = isFace
+            ? 256
+            : Math.min(168, Math.max(48, (entry.size || 32) * 4));
+        this.drawThumbInto(box, entry, px);
     },
 
     renderDetail() {
@@ -3290,6 +3783,7 @@ extendClass(AssetGenUI, {
         if (!gen) return;
         gen.innerHTML = "";
         if (this.previewDataUrl) {
+            const keepColor = entry && (entry.type === "portrait" || entry.kind === "portrait");
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement("canvas");
@@ -3298,7 +3792,7 @@ extendClass(AssetGenUI, {
                 const ctx = canvas.getContext("2d");
                 ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(img, 0, 0);
-                this.desaturateCanvas(canvas);
+                if (!keepColor) this.desaturateCanvas(canvas);
                 gen.innerHTML = "";
                 gen.appendChild(canvas);
             };
@@ -3481,15 +3975,24 @@ extendClass(AssetGenUI, {
             this.readSettingsFromForm();
         }
         const s = this.renderSettings;
+        const isPortrait = !!(entry && entry.type === "portrait");
         const size = (s.useEntrySize && entry && entry.size) ? entry.size : s.outSize;
         const opts = {
-            size: size,
+            size: isPortrait ? (entry.size || 96) : size,
             genSize: s.genSize,
             steps: s.steps,
-            prependStyle: s.prependStyle,
-            colors: s.colors != null ? s.colors : 15,
+            prependStyle: isPortrait ? false : s.prependStyle,
+            colors: isPortrait ? 24 : (s.colors != null ? s.colors : 15),
             bgColor: s.bgColor || "#FF00FF"
         };
+        if (isPortrait) {
+            opts.mode = "portrait";
+            opts.outWidth = 96;
+            opts.outHeight = 108;
+            if (this.portraitReferenceDataUrl) {
+                opts.referenceDataUrl = this.portraitReferenceDataUrl;
+            }
+        }
         if (s.seed !== "" && s.seed != null) opts.seed = Number(s.seed);
         if (promptOverride != null) opts.prompt = promptOverride;
         return opts;
@@ -3504,6 +4007,14 @@ extendClass(AssetGenUI, {
         if (typeof iconRenderer !== "undefined" && iconRenderer.clearCache) {
             iconRenderer.clearCache();
         }
+        if (entry && entry.type === "portrait") {
+            if (typeof factionPacks !== "undefined" && factionPacks.reload) {
+                await factionPacks.reload();
+            }
+            if (typeof voxelPortrait !== "undefined" && voxelPortrait.invalidatePainted) {
+                voxelPortrait.invalidatePainted(result.url);
+            }
+        }
         window.dispatchEvent(new CustomEvent("vf-asset-accepted", {
             detail: { entry: entry, path: result.path, url: result.url, key: key }
         }));
@@ -3513,6 +4024,7 @@ extendClass(AssetGenUI, {
     async onGenerate() {
         const entry = this.currentEntry();
         if (!entry || this.busy) return;
+        if (entry.type === "portrait" && !this.requirePortraitReference()) return;
         this.busy = true;
         this.setStatus("Generating via Flux2…");
         try {
@@ -3520,7 +4032,11 @@ extendClass(AssetGenUI, {
             const opts = this.buildGenerateOptions(entry, prompt);
             const result = await assetGenClient.generate(entry, opts);
             this.stagingId = result.stagingId;
-            this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+            if (entry.type === "portrait") {
+                this.previewDataUrl = result.previewDataUrl;
+            } else {
+                this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+            }
             this.setStatus("Ready · seed " + result.seed + " · Accept to apply");
             this.renderDetail();
             this.renderList();
@@ -3541,6 +4057,7 @@ extendClass(AssetGenUI, {
             this.setStatus("Check one or more assets first.");
             return;
         }
+        if (list.some((e) => e.type === "portrait") && !this.requirePortraitReference()) return;
         this.busy = true;
         const auto = !!this.renderSettings.autoAcceptBatch;
         let ok = 0;
@@ -3554,9 +4071,17 @@ extendClass(AssetGenUI, {
                 this.setStatus("Generating " + (i + 1) + "/" + list.length + " · " + entry.label);
                 try {
                     const opts = this.buildGenerateOptions(entry, entry.promptSuffix);
+                    // Unique seed per portrait slot when batch seed empty
+                    if ((opts.seed == null || opts.seed === "") && entry.type === "portrait") {
+                        opts.seed = (Date.now() + i * 9973) % 2147483647;
+                    }
                     const result = await assetGenClient.generate(entry, opts);
                     this.stagingId = result.stagingId;
-                    this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+                    if (entry.type === "portrait") {
+                        this.previewDataUrl = result.previewDataUrl;
+                    } else {
+                        this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+                    }
                     this.renderDetail();
                     if (auto) {
                         await this.acceptResult(entry, result.stagingId);
@@ -17721,6 +18246,734 @@ var hangarTestArena = new HangarTestArena();
 window.hangarTestArena = hangarTestArena;
 
 
+/* --- js/ui/soundtrack-editor.js --- */
+"use strict";
+
+// Soundtrack Editor (dev mode → Settings → Soundtrack Editor):
+// YouTube / local audio / vftrack JSON per screen·stage·enemy, plus planet
+// tracker library import/export for LLM-authored chiptune loops.
+// Kind `screen` owns start-screen Hauptmelodien (Start hub + Title fanfare).
+var SoundtrackEditorUI = class SoundtrackEditorUI {
+    constructor() {
+        this.selectedKind = 'screen';
+        this.selectedId = 'start';
+        this.customScreenEntriesKey = 'vf_soundtrack_screen_entries_v1';
+        this.ensureOverlay();
+    }
+
+    /** Devmode-added screen entries, persisted across reloads. */
+    loadCustomScreenEntries() {
+        try {
+            const raw = localStorage.getItem(this.customScreenEntriesKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    saveCustomScreenEntries(entries) {
+        try {
+            localStorage.setItem(this.customScreenEntriesKey, JSON.stringify(entries));
+        } catch (e) { /* storage unavailable or quota exceeded */ }
+    }
+
+    /** Screen-role tracks: id → library key + label. */
+    getScreenEntries() {
+        const defaults = [
+            { id: 'start', key: 'menu', label: 'START SCREEN' },
+            { id: 'title', key: 'title-intro', label: 'TITLE FANFARE' }
+        ];
+        return defaults.concat(this.loadCustomScreenEntries());
+    }
+
+    addScreenEntry() {
+        const label = window.prompt('Screentyp Name (z.B. CREDITS SCREEN):');
+        if (!label || !label.trim()) return;
+        const id = window.prompt('Screentyp ID (eindeutig, z.B. credits):', label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+        if (!id || !id.trim()) return;
+        const key = window.prompt('Library Key für diesen Screentyp (z.B. credits-theme):', id.trim());
+        if (!key || !key.trim()) return;
+        const entries = this.loadCustomScreenEntries();
+        const cleanId = id.trim();
+        if (this.getScreenEntries().some((e) => e.id === cleanId)) {
+            window.alert('ID bereits vorhanden.');
+            return;
+        }
+        entries.push({ id: cleanId, key: key.trim(), label: label.trim().toUpperCase() });
+        this.saveCustomScreenEntries(entries);
+        this.selectedKind = 'screen';
+        this.selectedId = cleanId;
+        this.render();
+    }
+
+    removeScreenEntry(id) {
+        const entries = this.loadCustomScreenEntries().filter((e) => e.id !== id);
+        this.saveCustomScreenEntries(entries);
+        if (this.selectedKind === 'screen' && this.selectedId === id) {
+            this.selectedKind = 'screen';
+            this.selectedId = 'start';
+        }
+        this.render();
+    }
+
+    screenLibraryKey(id) {
+        const hit = this.getScreenEntries().find((e) => e.id === id);
+        return hit ? hit.key : String(id || 'menu');
+    }
+
+    getStageIds() {
+        if (typeof levelManager !== 'undefined' && levelManager.getAllStageIds) {
+            try {
+                const ids = levelManager.getAllStageIds();
+                if (Array.isArray(ids) && ids.length) return ids;
+            } catch (e) { /* fall through */ }
+        }
+        return [];
+    }
+
+    getEnemyTypeIds() {
+        const ids = [];
+        if (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getTypeIds) {
+            try { ids.push(...enemyConfigManager.getTypeIds()); } catch (e) { /* ignore */ }
+        }
+        if (!ids.length && typeof planetConfigManager !== 'undefined' && planetConfigManager.availableEnemyTypes) {
+            ids.push(...planetConfigManager.availableEnemyTypes);
+        }
+        ids.push('boss');
+        return [...new Set(ids)];
+    }
+
+    getPlanetIds() {
+        return ['mars', 'jupiter', 'saturn', 'neptune', 'pluto',
+            'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'];
+    }
+
+    getFactionIds() {
+        if (typeof VFTrackerFactionCompose !== 'undefined') return VFTrackerFactionCompose.FACTIONS.slice();
+        return ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
+    }
+
+    getFactionCombatKeys() {
+        const out = [];
+        this.getPlanetIds().filter((p) => p.indexOf('boss') === -1).forEach((p) => {
+            this.getFactionIds().forEach((f) => {
+                out.push(p + ':' + f);
+                out.push(p + '-boss:' + f);
+            });
+        });
+        this.getFactionIds().forEach((f) => out.push('faction:' + f));
+        return out;
+    }
+
+    getEndingKeys() {
+        const out = ['victory', 'lose'];
+        this.getFactionIds().forEach((f) => {
+            out.push('victory:' + f);
+            out.push('lose:' + f);
+        });
+        return out;
+    }
+
+    ensureOverlay() {
+        if (document.getElementById('soundtrackEditorOverlay')) return;
+        const overlay = document.createElement('div');
+        overlay.id = 'soundtrackEditorOverlay';
+        overlay.className = 'difficulty-editor-overlay hidden';
+        overlay.innerHTML = `
+            <div class="difficulty-editor-panel">
+                <header class="difficulty-editor-header">
+                    <h2>SOUNDTRACK EDITOR</h2>
+                    <button type="button" class="pe-btn" id="steCurrentSelection"></button>
+                    <button type="button" class="de-close" id="steClose">×</button>
+                </header>
+                <div class="difficulty-editor-body">
+                    <aside class="difficulty-editor-nav">
+                        <div class="de-section-title">SCREEN</div>
+                        <div id="steScreenList"></div>
+                        <div class="de-section-title">MEDIA OVERRIDE</div>
+                        <div id="steMenuList"></div>
+                        <div class="de-section-title">PLANET TRACKER</div>
+                        <div id="stePlanetList"></div>
+                        <div class="de-section-title">PLANET × FACTION</div>
+                        <div id="steFactionList"></div>
+                        <div class="de-section-title">VICTORY / LOSE</div>
+                        <div id="steEndingList"></div>
+                        <div class="de-section-title">STAGES</div>
+                        <div id="steStageList"></div>
+                        <div class="de-section-title">ENEMY TYPES</div>
+                        <div id="steEnemyList"></div>
+                    </aside>
+                    <main class="difficulty-editor-controls" id="steControls"></main>
+                </div>
+                <footer class="difficulty-editor-footer">
+                    <button type="button" class="pe-btn" id="steBack">BACK</button>
+                </footer>
+            </div>`;
+        document.body.appendChild(overlay);
+        const q = (s) => overlay.querySelector(s);
+        q('#steClose').addEventListener('click', () => this.hide());
+        q('#steBack').addEventListener('click', () => this.hide());
+        q('#steCurrentSelection').addEventListener('click', () => {
+            const host = document.getElementById('steControls');
+            if (host) host.scrollIntoView({ block: 'nearest' });
+        });
+        overlay.addEventListener('keydown', (e) => {
+            if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
+                if (e.key === 'Escape') this.hide();
+                return;
+            }
+            e.stopPropagation();
+            if (e.key === 'Escape') this.hide();
+        });
+    }
+
+    renderNavButton(container, label, kind, id, hasMark, onRemove) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'de-profile-btn';
+        b.textContent = (hasMark ? '♪ ' : '') + label + (onRemove ? ' ×' : '');
+        if (kind === this.selectedKind && id === this.selectedId) b.classList.add('pe-primary');
+        b.addEventListener('click', (e) => {
+            if (onRemove && e.offsetX > b.clientWidth - 18) {
+                if (window.confirm('Screentyp "' + label + '" entfernen?')) onRemove();
+                return;
+            }
+            this.selectedKind = kind;
+            this.selectedId = id;
+            this.render();
+        });
+        container.appendChild(b);
+    }
+
+    show() {
+        this.ensureOverlay();
+        this._returnToSettings = !!(typeof startScreenManager !== 'undefined' && startScreenManager
+            && (startScreenManager.showSettings || startScreenManager.overlayMode || startScreenManager.embeddedMode));
+        if (typeof startScreenManager !== 'undefined' && startScreenManager) {
+            if (startScreenManager.overlayMode) startScreenManager.hideOverlay();
+            if (startScreenManager.embeddedMode) startScreenManager.hideEmbedded();
+        }
+        if (typeof settingsManager !== 'undefined' && settingsManager.hideSettings) settingsManager.hideSettings();
+        const overlay = document.getElementById('soundtrackEditorOverlay');
+        if (overlay.parentNode !== document.body) document.body.appendChild(overlay);
+        overlay.classList.remove('hidden');
+        this.render();
+    }
+
+    hide() {
+        const overlay = document.getElementById('soundtrackEditorOverlay');
+        if (overlay) overlay.classList.add('hidden');
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+        if (this._returnToSettings && typeof startScreenManager !== 'undefined' && startScreenManager) {
+            this._returnToSettings = false;
+            startScreenManager.showSettings = true;
+            startScreenManager.showCredits = false;
+            if (startScreenManager.hasActiveProfile && startScreenManager.hasActiveProfile()
+                && typeof homeStationUI !== 'undefined') {
+                if (!homeStationUI.isVisible) homeStationUI.show({ skipPersist: true });
+                startScreenManager.show({ asOverlay: true, showSettings: true });
+            } else {
+                startScreenManager.show({ forceMenu: true });
+            }
+        }
+    }
+
+    render() {
+        const screenList = document.getElementById('steScreenList');
+        const menuList = document.getElementById('steMenuList');
+        const planetList = document.getElementById('stePlanetList');
+        const factionList = document.getElementById('steFactionList');
+        const endingList = document.getElementById('steEndingList');
+        const stageList = document.getElementById('steStageList');
+        const enemyList = document.getElementById('steEnemyList');
+        if (screenList) screenList.innerHTML = '';
+        menuList.innerHTML = '';
+        planetList.innerHTML = '';
+        if (factionList) factionList.innerHTML = '';
+        if (endingList) endingList.innerHTML = '';
+        stageList.innerHTML = '';
+        enemyList.innerHTML = '';
+
+        const customScreenIds = this.loadCustomScreenEntries().map((e) => e.id);
+        this.getScreenEntries().forEach((entry) => {
+            const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[entry.key];
+            if (screenList) {
+                this.renderNavButton(screenList, entry.label, 'screen', entry.id, !!custom,
+                    customScreenIds.indexOf(entry.id) !== -1 ? () => this.removeScreenEntry(entry.id) : null);
+            }
+        });
+        if (screenList) {
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'de-profile-btn';
+            addBtn.textContent = '+ ADD SCREENTYP';
+            addBtn.addEventListener('click', () => this.addScreenEntry());
+            screenList.appendChild(addBtn);
+        }
+
+        const menuHas = typeof soundtrackConfigManager !== 'undefined'
+            && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getMenuTrack());
+        this.renderNavButton(menuList, 'Start Media', 'menu', 'menu', menuHas);
+
+        this.getPlanetIds().forEach((id) => {
+            const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
+            this.renderNavButton(planetList, id, 'planet', id, !!custom);
+        });
+        if (factionList) {
+            this.getFactionCombatKeys().forEach((id) => {
+                const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
+                this.renderNavButton(factionList, id, 'planet', id, !!custom);
+            });
+        }
+        if (endingList) {
+            this.getEndingKeys().forEach((id) => {
+                const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
+                this.renderNavButton(endingList, id, 'planet', id, !!custom);
+            });
+        }
+
+        this.getStageIds().forEach((id) => {
+            const has = typeof soundtrackConfigManager !== 'undefined'
+                && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getStageTrack(id));
+            this.renderNavButton(stageList, id, 'stage', id, has);
+        });
+        this.getEnemyTypeIds().forEach((id) => {
+            const has = typeof soundtrackConfigManager !== 'undefined'
+                && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getEnemyTrack(id));
+            this.renderNavButton(enemyList, id, 'enemy', id, has);
+        });
+
+        this._updateCurrentSelectionLabel();
+
+        const host = document.getElementById('steControls');
+        host.innerHTML = '';
+        if (!this.selectedId) {
+            const hint = document.createElement('p');
+            hint.className = 'ss-code-hint';
+            hint.textContent = 'SCREEN = start-screen Hauptmelodie. Planet×faction combat, then stage/enemy overrides.';
+            host.appendChild(hint);
+            return;
+        }
+        if (this.selectedKind === 'screen') this.renderScreenTracker(host, this.selectedId);
+        else if (this.selectedKind === 'planet') this.renderPlanetTracker(host, this.selectedId);
+        else this.renderOverrideEditor(host, this.selectedKind, this.selectedId);
+    }
+
+    /** Header button that always shows the currently selected nav entry. */
+    _updateCurrentSelectionLabel() {
+        const btn = document.getElementById('steCurrentSelection');
+        if (!btn) return;
+        if (!this.selectedId) {
+            btn.textContent = 'KEINE AUSWAHL';
+            return;
+        }
+        let label = this.selectedId;
+        if (this.selectedKind === 'screen') {
+            const entry = this.getScreenEntries().find((e) => e.id === this.selectedId);
+            if (entry) label = entry.label;
+        } else if (this.selectedKind === 'menu') {
+            label = 'START MEDIA';
+        } else if (this.selectedKind === 'stage') {
+            label = 'STAGE: ' + this.selectedId;
+        } else if (this.selectedKind === 'enemy') {
+            label = 'ENEMY: ' + this.selectedId;
+        } else if (this.selectedKind === 'planet') {
+            label = this.selectedId;
+        }
+        btn.textContent = 'AUSGEWÄHLT: ' + label;
+    }
+
+    _stopPreview() {
+        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof vfTrackerManager !== 'undefined') vfTrackerManager.stop();
+    }
+
+    _addTrackerTools(host, opts) {
+        const { getJson, setJson, libraryKey, title } = opts;
+
+        const section = document.createElement('div');
+        section.className = 'de-section-title';
+        section.textContent = title || 'VF TRACKER (.vftrack.json)';
+        host.appendChild(section);
+
+        const hint = document.createElement('p');
+        hint.className = 'ss-code-hint';
+        hint.textContent = 'Code / LLM authored chiptune. Import JSON from Gemini etc., or export + edit with assets/soundtracks/LLM_PROMPT.md';
+        host.appendChild(hint);
+
+        const ta = document.createElement('textarea');
+        ta.rows = 14;
+        ta.spellcheck = false;
+        ta.style.width = '100%';
+        ta.style.fontFamily = 'monospace';
+        ta.style.fontSize = '11px';
+        ta.value = getJson() || '';
+        ta.addEventListener('keydown', (e) => e.stopPropagation());
+        host.appendChild(ta);
+
+        const status = document.createElement('p');
+        status.className = 'ss-code-hint';
+        status.id = 'steTrackerStatus';
+        host.appendChild(status);
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'de-slider-row';
+
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'pe-btn pe-primary';
+        applyBtn.textContent = 'APPLY JSON';
+        applyBtn.addEventListener('click', () => {
+            try {
+                setJson(ta.value);
+                status.textContent = 'Applied.';
+                this.render();
+            } catch (e) {
+                status.textContent = 'Error: ' + (e && e.message ? e.message : e);
+            }
+        });
+
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'pe-btn';
+        previewBtn.textContent = 'PREVIEW';
+        previewBtn.addEventListener('click', () => {
+            try {
+                const data = JSON.parse(ta.value);
+                this._stopPreview();
+                if (typeof soundManager !== 'undefined' && soundManager.ensureContext) soundManager.ensureContext();
+                if (typeof vfTrackerManager !== 'undefined') {
+                    const bus = (typeof soundManager !== 'undefined' && soundManager.musicBusVolume)
+                        ? soundManager.musicBusVolume()
+                        : ((typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065);
+                    vfTrackerManager.setVolume(bus);
+                    vfTrackerManager.play('preview:' + (libraryKey || 'edit'), data);
+                    status.textContent = 'Playing preview…';
+                }
+            } catch (e) {
+                status.textContent = 'Error: ' + (e && e.message ? e.message : e);
+            }
+        });
+
+        const stopBtn = document.createElement('button');
+        stopBtn.type = 'button';
+        stopBtn.className = 'pe-btn';
+        stopBtn.textContent = 'STOP';
+        stopBtn.addEventListener('click', () => {
+            this._stopPreview();
+            status.textContent = 'Stopped.';
+        });
+
+        const exportBtn = document.createElement('button');
+        exportBtn.type = 'button';
+        exportBtn.className = 'pe-btn';
+        exportBtn.textContent = 'EXPORT';
+        exportBtn.addEventListener('click', () => {
+            try {
+                const compact = VFTrackerParse.toCompact(JSON.parse(ta.value));
+                const json = JSON.stringify(compact, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = (libraryKey || 'track') + '.vftrack.json';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+                status.textContent = 'Exported.';
+            } catch (e) {
+                status.textContent = 'Export error: ' + (e && e.message ? e.message : e);
+            }
+        });
+
+        const importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.className = 'pe-btn';
+        importBtn.textContent = 'IMPORT FILE';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.json,application/json,.vftrack.json';
+        fileInput.style.display = 'none';
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                ta.value = String(reader.result || '');
+                status.textContent = 'Loaded ' + file.name + ' — press APPLY JSON.';
+            };
+            reader.readAsText(file);
+        });
+        importBtn.addEventListener('click', () => fileInput.click());
+
+        const promptBtn = document.createElement('button');
+        promptBtn.type = 'button';
+        promptBtn.className = 'pe-btn';
+        promptBtn.textContent = 'COPY LLM PROMPT';
+        promptBtn.addEventListener('click', async () => {
+            const planet = libraryKey || this.selectedId || 'mars';
+            const prompt = this.buildLlmPrompt(planet);
+            try {
+                await navigator.clipboard.writeText(prompt);
+                status.textContent = 'LLM prompt copied.';
+            } catch (e) {
+                ta.value = prompt;
+                status.textContent = 'Clipboard blocked — prompt pasted into the editor.';
+            }
+        });
+
+        const resetBtn = document.createElement('button');
+        resetBtn.type = 'button';
+        resetBtn.className = 'pe-btn';
+        resetBtn.textContent = 'RESET DEFAULT';
+        resetBtn.addEventListener('click', () => {
+            setJson(null);
+            status.textContent = 'Reverted to built-in default.';
+            this.render();
+        });
+
+        btnRow.append(applyBtn, previewBtn, stopBtn, exportBtn, importBtn, promptBtn, resetBtn, fileInput);
+        host.appendChild(btnRow);
+    }
+
+    buildLlmPrompt(planet) {
+        const p = String(planet || 'mars');
+        return [
+            'You write chiptune tracker songs for GLXEE / VolleyFire.',
+            'Output ONLY valid JSON, format "vftrack" version 1. No markdown.',
+            '',
+            'Schema: format, version, meta{title,author,planet,notes}, bpm, rowsPerBeat:1,',
+            'rowsPerPattern:16, channels:4, instruments[{id,name,wave,volume,attack,decay,sustain,release,filter}],',
+            'patterns[{id, channels:["tok tok ..."]}], order:[0], loop:true.',
+            '',
+            'Each channels[i] has exactly 16 space-separated tokens.',
+            'Tokens: "." | "OFF" | "C-2:1" | "C-2:1:64" | "C#4:2:40" | "Eb3:3:32"',
+            'waves: sine|square|sawtooth|triangle|noise. Volume on notes 0-64.',
+            'ch0 bass, ch1 lead, ch2 arp, ch3 kick+hat. Sci-fi minor mood.',
+            '',
+            'Write a vftrack for planet "' + p + '". BPM 84-118. Title something thematic.',
+            'Return only the JSON object.'
+        ].join('\n');
+    }
+
+    renderPlanetTracker(host, planetId) {
+        const title = document.createElement('div');
+        title.className = 'de-section-title';
+        title.textContent = 'PLANET TRACKER: ' + planetId;
+        host.appendChild(title);
+
+        this._addTrackerTools(host, {
+            libraryKey: planetId,
+            title: 'VF TRACKER JSON',
+            getJson: () => {
+                if (typeof vfTrackerManager === 'undefined') return '';
+                return vfTrackerManager.exportJson(planetId) || '';
+            },
+            setJson: (text) => {
+                if (typeof vfTrackerManager === 'undefined') throw new Error('tracker manager missing');
+                if (text == null || String(text).trim() === '') {
+                    vfTrackerManager.setTrack(planetId, null);
+                    return;
+                }
+                vfTrackerManager.importJson(planetId, text);
+            }
+        });
+    }
+
+    /** Type `screen`: Start hub + Title fanfare Hauptmelodien (library keys menu / title-intro). */
+    renderScreenTracker(host, screenId) {
+        const entry = this.getScreenEntries().find((e) => e.id === screenId) || this.getScreenEntries()[0];
+        const key = entry.key;
+        const title = document.createElement('div');
+        title.className = 'de-section-title';
+        title.textContent = 'SCREEN · ' + entry.label + ' (' + key + ')';
+        host.appendChild(title);
+
+        const hint = document.createElement('p');
+        hint.className = 'ss-code-hint';
+        hint.textContent = screenId === 'title'
+            ? 'One-shot title fanfare before the Start Screen loop. Set loop:false in the JSON.'
+            : screenId === 'start'
+                ? 'Start Screen / Planet Select Hauptmelodie. Media override (YouTube / local) lives under MEDIA OVERRIDE.'
+                : 'Benutzerdefinierter Screentyp (Library Key "' + key + '"). Wiedergabe erfolgt nur, wenn dieser Key an entsprechender Stelle im Code abgespielt wird.';
+        host.appendChild(hint);
+
+        this._addTrackerTools(host, {
+            libraryKey: key,
+            title: 'VF TRACKER JSON · TYPE SCREEN',
+            getJson: () => {
+                if (typeof vfTrackerManager === 'undefined') return '';
+                return vfTrackerManager.exportJson(key) || '';
+            },
+            setJson: (text) => {
+                if (typeof vfTrackerManager === 'undefined') throw new Error('tracker manager missing');
+                if (text == null || String(text).trim() === '') {
+                    vfTrackerManager.setTrack(key, null);
+                } else {
+                    vfTrackerManager.importJson(key, text);
+                }
+                if (typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
+                    // Force title fanfare / hub to pick up the new screen track.
+                    if (screenId === 'title') soundManager._titleIntroDone = false;
+                    soundManager.startMenuMusic();
+                }
+            }
+        });
+    }
+
+    renderOverrideEditor(host, kind, id) {
+        const title = document.createElement('div');
+        title.className = 'de-section-title';
+        title.textContent = (kind === 'menu' ? 'START MEDIA OVERRIDE' : kind === 'stage' ? 'STAGE: ' + id : 'ENEMY TYPE: ' + id);
+        host.appendChild(title);
+
+        const getTrack = () => {
+            const t = kind === 'menu' ? soundtrackConfigManager.getMenuTrack()
+                : kind === 'stage' ? soundtrackConfigManager.getStageTrack(id)
+                : soundtrackConfigManager.getEnemyTrack(id);
+            return t || { youtubeUrl: '', localAudioData: '', localAudioName: '', trackerData: null };
+        };
+        const setTrack = (data) => {
+            if (kind === 'menu') soundtrackConfigManager.setMenuTrack(data);
+            else if (kind === 'stage') soundtrackConfigManager.setStageTrack(id, data);
+            else soundtrackConfigManager.setEnemyTrack(id, data);
+            if (kind === 'menu' && typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
+                soundManager.startMenuMusic();
+            }
+            this.render();
+        };
+
+        const track = getTrack();
+
+        const urlRow = document.createElement('div');
+        urlRow.className = 'de-slider-row';
+        const urlLabel = document.createElement('label');
+        urlLabel.textContent = 'YOUTUBE URL';
+        const urlInput = document.createElement('input');
+        urlInput.type = 'text';
+        urlInput.placeholder = 'https://youtu.be/...';
+        urlInput.value = track.youtubeUrl || '';
+        urlInput.spellcheck = false;
+        urlInput.addEventListener('keydown', (e) => e.stopPropagation());
+        urlInput.addEventListener('change', () => {
+            setTrack({
+                youtubeUrl: urlInput.value.trim(),
+                localAudioData: '',
+                localAudioName: '',
+                trackerData: null
+            });
+        });
+        urlRow.append(urlLabel, urlInput);
+        host.appendChild(urlRow);
+
+        const fileRow = document.createElement('div');
+        fileRow.className = 'de-slider-row';
+        const fileLabel = document.createElement('label');
+        fileLabel.textContent = 'LOCAL AUDIO';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'audio/*';
+        fileInput.addEventListener('change', () => {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                setTrack({
+                    youtubeUrl: '',
+                    localAudioData: reader.result,
+                    localAudioName: file.name,
+                    trackerData: null
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+        fileRow.append(fileLabel, fileInput);
+        host.appendChild(fileRow);
+
+        if (track.localAudioName) {
+            const fileNote = document.createElement('p');
+            fileNote.className = 'ss-code-hint';
+            fileNote.textContent = 'Current file: ' + track.localAudioName;
+            host.appendChild(fileNote);
+        }
+
+        const btnRow = document.createElement('div');
+        btnRow.className = 'de-slider-row';
+        const previewBtn = document.createElement('button');
+        previewBtn.type = 'button';
+        previewBtn.className = 'pe-btn';
+        previewBtn.textContent = 'PREVIEW MEDIA';
+        previewBtn.addEventListener('click', () => {
+            const t = getTrack();
+            this._stopPreview();
+            if (t.localAudioData && typeof localAudioManager !== 'undefined') {
+                localAudioManager.setVolume(0.3);
+                localAudioManager.play('preview:' + kind + ':' + id, t.localAudioData);
+            } else if (t.trackerData && typeof vfTrackerManager !== 'undefined') {
+                if (typeof soundManager !== 'undefined' && soundManager.ensureContext) soundManager.ensureContext();
+                vfTrackerManager.setVolume(0.35);
+                vfTrackerManager.play('preview:' + kind + ':' + id, t.trackerData);
+            } else if (t.youtubeUrl && typeof youtubeSoundtrackManager !== 'undefined') {
+                youtubeSoundtrackManager.setEnabled(true);
+                youtubeSoundtrackManager.setVolume(0.3);
+                youtubeSoundtrackManager.playUrl('preview:' + kind + ':' + id, t.youtubeUrl);
+            }
+        });
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'pe-btn';
+        clearBtn.textContent = 'CLEAR';
+        clearBtn.addEventListener('click', () => {
+            this._stopPreview();
+            setTrack(null);
+        });
+        btnRow.append(previewBtn, clearBtn);
+        host.appendChild(btnRow);
+
+        this._addTrackerTools(host, {
+            libraryKey: kind + '-' + id,
+            title: 'OR ASSIGN VF TRACKER JSON',
+            getJson: () => {
+                const t = getTrack();
+                if (!t.trackerData) return '';
+                try {
+                    return JSON.stringify(VFTrackerParse.toCompact(t.trackerData), null, 2);
+                } catch (e) {
+                    return JSON.stringify(t.trackerData, null, 2);
+                }
+            },
+            setJson: (text) => {
+                if (text == null || String(text).trim() === '') {
+                    const cur = getTrack();
+                    if (cur.youtubeUrl || cur.localAudioData) {
+                        setTrack({
+                            youtubeUrl: cur.youtubeUrl || '',
+                            localAudioData: cur.localAudioData || '',
+                            localAudioName: cur.localAudioName || '',
+                            trackerData: null
+                        });
+                    } else {
+                        setTrack(null);
+                    }
+                    return;
+                }
+                const data = VFTrackerParse.toCompact(JSON.parse(text));
+                setTrack({
+                    youtubeUrl: '',
+                    localAudioData: '',
+                    localAudioName: '',
+                    trackerData: data
+                });
+            }
+        });
+    }
+}
+
+var soundtrackEditorUI = new SoundtrackEditorUI();
+
+
 /* --- js/ui/hud-layout-editor.js --- */
 "use strict";
 
@@ -18356,6 +19609,8 @@ var hudLayoutEditor = (function () {
             // Profile overlay (js/core/input-handler/core.js) already toggles Shift+C itself;
             // firing again here flipped the mode straight back off.
             if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
+            // Onboarding has its own Shift+C handler (start screen is hidden there).
+            if (typeof onboardingManager !== 'undefined' && onboardingManager.isVisible) return;
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA') return;
             e.preventDefault();

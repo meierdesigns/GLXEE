@@ -66,38 +66,29 @@
         }
 
     </style>
-    <link rel="stylesheet" href="css/styles/part-01.css?v=vf-glass-19">
-    <link rel="stylesheet" href="css/styles/part-02.css?v=gecko-canvas-2">
-    <link rel="stylesheet" href="css/styles/part-03.css?v=voice-eq-2">
-    <link rel="stylesheet" href="css/styles/part-04.css?v=vf-glass-8">
-    <link rel="stylesheet" href="css/styles/part-05.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-06.css?v=split-2">
-    <link rel="stylesheet" href="css/styles/part-07.css?v=station-stores-1">
-    <link rel="stylesheet" href="css/styles/part-08.css?v=station-layout-1">
-    <link rel="stylesheet" href="css/styles/part-09.css?v=tip-noclip-1">
-    <link rel="stylesheet" href="css/styles/part-10.css?v=hud-clip-pad-4">
-    <link rel="stylesheet" href="css/styles/part-11.css?v=profiles-fit-1">
-    <link rel="stylesheet" href="css/styles/part-12.css?v=split-8">
-    <link rel="stylesheet" href="css/styles/part-13.css?v=equip-no-list-1">
-    <link rel="stylesheet" href="css/styles/part-14.css?v=profiles-fit-2">
-    <link rel="stylesheet" href="css/styles/part-15.css?v=inline-clip-1">
-    <link rel="stylesheet" href="css/styles/part-16.css?v=planet-bright-1">
-    <link rel="stylesheet" href="css/styles/part-17.css?v=go-fit-67c">
-    <link rel="stylesheet" href="css/styles/part-18.css?v=station-stores-1">
-    <link rel="stylesheet" href="css/styles/part-19.css?v=profiles-fit-2">
-    <link rel="stylesheet" href="css/styles/part-20.css?v=audio-stack-editor-1">
-    <link rel="stylesheet" href="css/styles/part-21.css?v=slot-dots-2">
-    <link rel="stylesheet" href="css/styles/part-22.css?v=faction-bar-flow-1">
-    <link rel="stylesheet" href="css/styles/part-23.css?v=iss-fit-bags">
-    <link rel="stylesheet" href="assets/factions/terran/gui.css?v=split-2">
-    <link rel="stylesheet" href="assets/factions/kronax/gui.css?v=split-2">
-    <link rel="stylesheet" href="assets/factions/voidborn/gui.css?v=vf-glass-25">
-    <link rel="stylesheet" href="assets/factions/pirate/gui.css?v=split-2">
-    <link rel="stylesheet" href="assets/factions/machine/gui.css?v=split-2">
-    <link rel="stylesheet" href="css/pilot-hud.css?v=26">
-    <link rel="stylesheet" href="css/screen-frame.css?v=23">
+    <!-- Critical first-paint: frame tokens + fonts. App CSS loads after paint (see vf-load-app-css). -->
+    <link rel="stylesheet" href="css/screen-frame.css?v=28">
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
-    <link rel="stylesheet" href="css/asset-gen-ui.css?v=pixel-1">
+    <link rel="stylesheet" href="css/pilot-hud.css?v=33">
+    <!-- Deferred app CSS: stamped by dev-server; media=print→all avoids render-block. -->
+    <link id="vf-app-css" rel="stylesheet" href="css/bundles/app.css?v=boot-perf-9" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="css/bundles/app.css?v=boot-perf-9"></noscript>
+    <script>
+    (function () {
+        window.vfLoadAppCss = function () {
+            var l = document.getElementById('vf-app-css');
+            if (l) l.media = 'all';
+        };
+        window.vfLoadEditorCss = function () {
+            if (document.getElementById('vf-editor-css')) return;
+            var l = document.createElement('link');
+            l.id = 'vf-editor-css';
+            l.rel = 'stylesheet';
+            l.href = 'css/asset-gen-ui.css?v=face-bezel-1';
+            (document.head || document.documentElement).appendChild(l);
+        };
+    })();
+    </script>
     <script src="js/core/stage-boot.js?v=boot-14"></script>
     <script src="js/core/boot-loader.js"></script>
     <script src="js/core/reload-keys.js?v=f4-4"></script>
@@ -428,6 +419,6 @@
             }
         });
     </script>
-<script defer src="js/bundles/deferred.js"></script>
+<script defer src="js/bundles/deferred-boot.js"></script>
 </body>
 </html>

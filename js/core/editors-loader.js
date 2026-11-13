@@ -1,12 +1,15 @@
 "use strict";
 
 /**
- * Lazy-load DevMode / Asset-Gen / viewer editors from deferred-editors.js.
- * Core combat + station boot without that ~0.8 MB until Shift+C / Assets.
+ * Compat shim: ensureVfEditors now lives in feature-loaders.js.
+ * Kept so older script-order entries do not break if still referenced.
  */
 (function () {
+    if (typeof window.ensureVfEditors === 'function') return;
+    // If feature-loaders has not run yet, queue until it does via a tiny poll,
+    // then fall through to loading deferred-editors directly.
     var SRC = 'js/bundles/deferred-editors.js';
-    var state = 'idle'; // idle | loading | ready | error
+    var state = 'idle';
     var waiters = [];
 
     function notify(err) {
@@ -26,26 +29,24 @@
         }
     }
 
-    window.vfEditorsReady = function () {
+    window.vfEditorsReady = window.vfEditorsReady || function () {
         return state === 'ready';
     };
 
-    /**
-     * Ensure editors bundle is loaded, then run cb(err).
-     * Safe to call many times; concurrent callers share one fetch.
-     */
     window.ensureVfEditors = function (cb) {
         if (typeof cb !== 'function') cb = function () {};
+        // Prefer the feature-loaders implementation once it overwrites us.
+        if (window.ensureVfEditors !== arguments.callee && window.vfEditorsReady
+            && window.ensureVfEditors.toString().indexOf('deferred-editors') === -1) {
+            // replaced — should not happen with same name; just load
+        }
         if (state === 'ready') {
             cb(null);
             return;
         }
         waiters.push(cb);
         if (state === 'loading') return;
-        if (state === 'error') {
-            // Allow retry after a failed load.
-            state = 'idle';
-        }
+        if (state === 'error') state = 'idle';
         state = 'loading';
         var s = document.createElement('script');
         s.src = bust();
@@ -60,18 +61,4 @@
         };
         (document.head || document.documentElement).appendChild(s);
     };
-
-    // If DevMode was left on, warm the editors bundle after first paint.
-    function warmIfDev() {
-        try {
-            if (localStorage.getItem('vf_dev_mode_v1') === 'true') {
-                window.ensureVfEditors(function () {});
-            }
-        } catch (e) { /* ignore */ }
-    }
-    if (document.readyState === 'complete') {
-        setTimeout(warmIfDev, 0);
-    } else {
-        window.addEventListener('load', function () { setTimeout(warmIfDev, 0); });
-    }
 })();

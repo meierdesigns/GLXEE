@@ -85,20 +85,41 @@ def file_stamp(path):
     """Cache-busting stamp of a file: mtime in milliseconds (whole seconds let two quick edits share one URL)."""
     return os.stat(path).st_mtime_ns // 1000000
 def rebuild_stale_bundle(root):
-    """index.html loads the prebuilt js/bundles/deferred.js: when a source file in it is newer, rebuild it,
-    otherwise edits silently keep running the old code."""
-    out = os.path.join(root, "js", "bundles", "deferred.js")
+    """Rebuild feature JS + CSS bundles when any source file is newer than the boot output."""
+    outs = [
+        os.path.join(root, "js", "bundles", "deferred-boot.js"),
+        os.path.join(root, "js", "bundles", "deferred.js"),
+    ]
+    out = next((p for p in outs if os.path.isfile(p)), None)
+    if not out:
+        return
     try:
         bundle_mt = os.stat(out).st_mtime_ns
         with open(out, "r", encoding="utf-8") as f:
             files = re.findall(r"/\* --- ([^*]+?) --- \*/", f.read())
-        stale = any(os.stat(os.path.join(root, p.split("?", 1)[0])).st_mtime_ns > bundle_mt for p in files)
+        # Also watch other feature bundle markers + CSS parts listed in index/app.css build.
+        for extra in (
+            "js/bundles/deferred-station.js",
+            "js/bundles/deferred-galaxy.js",
+            "js/bundles/deferred-profiles.js",
+            "js/bundles/deferred-combat.js",
+            "js/bundles/deferred-editors.js",
+        ):
+            ep = os.path.join(root, extra)
+            if os.path.isfile(ep):
+                with open(ep, "r", encoding="utf-8") as f:
+                    files.extend(re.findall(r"/\* --- ([^*]+?) --- \*/", f.read()))
+        stale = any(
+            os.stat(os.path.join(root, p.split("?", 1)[0])).st_mtime_ns > bundle_mt
+            for p in files
+        )
     except OSError:
         return
     if stale:
         import subprocess
         subprocess.run([sys.executable, os.path.join(root, "tools", "build-deferred-bundle.py")], cwd=root, check=False)
-        print("deferred.js was stale: rebuilt", flush=True)
+        subprocess.run([sys.executable, os.path.join(root, "tools", "build-css-bundle.py")], cwd=root, check=False)
+        print("feature bundles were stale: rebuilt", flush=True)
 
 
 DEFER_TAG = re.compile(r'<script\s+defer\s+src="([^"]+)"></script>')

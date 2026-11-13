@@ -49,6 +49,13 @@ class GameCore {
         if (typeof menuStateManager !== 'undefined') {
             this.showBootVeil(menuStateManager.get());
             if (window.vfBootLoader) window.vfBootLoader.setPhase('menu', 0.9);
+            // Prefetch feature bundles for the restored screen in parallel with boot work.
+            try {
+                if (typeof window.vfPrefetchMenuFeatures === 'function') window.vfPrefetchMenuFeatures();
+            } catch (e) { /* ignore */ }
+            try {
+                if (window.performance && performance.mark) performance.mark('game-init');
+            } catch (e) { /* ignore */ }
             setTimeout(() => {
                 Promise.resolve(this.restoreMenuWhenReady())
                     .catch((err) => console.error('[boot] menu restore failed:', err))
@@ -166,7 +173,20 @@ class GameCore {
         }
         if (window.vfBootLoader) window.vfBootLoader.setPhase('menu', 0.95);
 
+        // Feature bundles must be ready before restore touches station/galaxy/profiles/combat.
+        const st = menuStateManager.get() || {};
+        await new Promise((resolve) => {
+            if (typeof window.vfEnsureForScreen !== 'function') {
+                resolve();
+                return;
+            }
+            window.vfEnsureForScreen(st.screen, st.tab, function () { resolve(); });
+        });
+
         const restored = menuStateManager.restore();
+        try {
+            if (window.performance && performance.mark) performance.mark('menu-visible');
+        } catch (e) { /* ignore */ }
         if (!restored) {
             this.showStartScreen({ skipPersist: true });
             menuStateManager.setScreen('start');

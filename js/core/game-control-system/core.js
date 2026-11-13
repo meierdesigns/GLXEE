@@ -43,6 +43,21 @@ class GameControlSystem {
 
     // Game flow control
     startGame(levelId = 'mars') {
+        // Combat systems live in deferred-combat.js — block until loaded.
+        if (typeof window.vfCombatReady === 'function' && !window.vfCombatReady()) {
+            if (typeof window.ensureVfCombat === 'function') {
+                const self = this;
+                const id = levelId;
+                window.ensureVfCombat(function (err) {
+                    if (err) {
+                        console.error('[combat] bundle failed:', err);
+                        return;
+                    }
+                    self.startGame(id);
+                });
+                return true;
+            }
+        }
         this.cancelVictoryLootPhase();
         this.ensureActiveHangarShip();
 

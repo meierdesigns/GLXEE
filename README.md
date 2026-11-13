@@ -1083,6 +1083,7 @@ be reviewed or reverted independently.
 | 74N | Pirate chain slow | CHAIN unlock slows hit hulls briefly; scrap slug fan + item-track gates for pirate kit |
 | 74O | Story launch dialogue | Launch cutscene spoken beats via story-dialogue; path blurbs and mission copy refresh |
 | 74P | Station UI polish | Faction pick layout, bezel glass hosts, hangar/play chrome, Kronax frame soft round, pilot HUD empty plate |
+| 74Q | Feature bundle split | Split deferred.js into boot/station/galaxy/profiles/combat/editors; CSS app bundle; feature-loaders + cache keys |
 
 The wave commit convention is:
 

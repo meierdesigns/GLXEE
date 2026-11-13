@@ -110,9 +110,37 @@ extendClass(GameControlSystem, {
         if (isAmbush) {
             const shipType = this.getOutcomeEnemyShipType(level, cfg);
             icon = `<canvas class="outcome-ambush-ship" width="320" height="320" data-enemy-type="${shipType}" aria-hidden="true"></canvas>`;
-        } else if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
+        } else {
             // Victory and defeat share the wide layout with the large globe.
-            icon = galaxyMapManager.planetIconHtml(pid, 620, true);
+            // Prefer galaxyMapManager (spin + light); fall back to planetSVGManager
+            // when the galaxy bundle is not loaded yet (endscreen refresh / combat-only).
+            if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
+                icon = galaxyMapManager.planetIconHtml(pid, 620, true) || '';
+            }
+            if (!icon && typeof planetSVGManager !== 'undefined') {
+                if ((!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length)
+                    && planetSVGManager.init) {
+                    planetSVGManager.init();
+                }
+                if (cfg && planetSVGManager.registerFromConfig) {
+                    planetSVGManager.registerFromConfig(cfg);
+                }
+                const detail = 8;
+                const svg = planetSVGManager.getPlanetSVGDetailed
+                    ? planetSVGManager.getPlanetSVGDetailed(pid, detail)
+                    : (planetSVGManager.getPlanetSVG ? planetSVGManager.getPlanetSVG(pid) : '');
+                if (svg && planetSVGManager.planetSvgToImg) {
+                    const conv = planetSVGManager.planetSvgToImg(svg);
+                    const px = 620;
+                    const big = px * conv.scale;
+                    const off = -(big - px) / 2;
+                    if (planetSVGManager.startPlanetSpin) planetSVGManager.startPlanetSpin();
+                    icon = `<span class="gm-planet-icon gm-planet-icon-img" data-planet-spin="${pid}|${detail}" data-planet-px="${px}">` +
+                        `<img class="gm-planet-img" src="${conv.url}" alt="" draggable="false" style="width:${big}px;height:${big}px;left:${off}px;top:${off}px"></span>`;
+                } else if (svg) {
+                    icon = `<span class="gm-planet-icon">${svg}</span>`;
+                }
+            }
         }
 
         let steps = '';
@@ -154,24 +182,33 @@ extendClass(GameControlSystem, {
     /** Puts / refreshes the stepper block right after `anchor`. */
     applyOutcomeStepper(anchor, result) {
         if (!anchor || !anchor.parentNode) return;
-        let box = anchor.parentNode.querySelector(':scope > .outcome-progress');
-        if (!box) {
-            box = document.createElement('div');
-            box.className = 'outcome-progress';
-            anchor.insertAdjacentElement('afterend', box);
-        }
-        box.dataset.result = result;
-        box.innerHTML = this.renderOutcomeStepperHtml(result);
-        box.hidden = !box.innerHTML;
-        box.classList.toggle('is-ambush', !!(box.querySelector('canvas.outcome-ambush-ship')));
-        if (this.paintOutcomeAmbushShip) this.paintOutcomeAmbushShip(box);
-        // Combat parks planet spin; restart so the outcome globe turns again.
-        if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
-            if (planetSVGManager._spinTimer) {
-                clearInterval(planetSVGManager._spinTimer);
-                planetSVGManager._spinTimer = null;
+        const paint = () => {
+            if (!anchor || !anchor.parentNode) return;
+            let box = anchor.parentNode.querySelector(':scope > .outcome-progress');
+            if (!box) {
+                box = document.createElement('div');
+                box.className = 'outcome-progress';
+                anchor.insertAdjacentElement('afterend', box);
             }
-            planetSVGManager.startPlanetSpin();
+            box.dataset.result = result;
+            box.innerHTML = this.renderOutcomeStepperHtml(result);
+            box.hidden = !box.innerHTML;
+            box.classList.toggle('is-ambush', !!(box.querySelector('canvas.outcome-ambush-ship')));
+            if (this.paintOutcomeAmbushShip) this.paintOutcomeAmbushShip(box);
+            // Combat parks planet spin; restart so the outcome globe turns again.
+            if (typeof planetSVGManager !== 'undefined' && planetSVGManager.startPlanetSpin) {
+                if (planetSVGManager._spinTimer) {
+                    clearInterval(planetSVGManager._spinTimer);
+                    planetSVGManager._spinTimer = null;
+                }
+                planetSVGManager.startPlanetSpin();
+            }
+        };
+        paint();
+        // Galaxy bundle may still be loading on endscreen restore — refresh globe once ready.
+        if (typeof ensureVfGalaxy === 'function'
+            && (typeof vfGalaxyReady !== 'function' || !vfGalaxyReady())) {
+            ensureVfGalaxy(() => paint());
         }
     }
 });

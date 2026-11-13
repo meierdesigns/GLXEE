@@ -393,30 +393,86 @@ html body .victory-screen .victory-content {
     html body .victory-screen .victory-content { animation: none; }
 }
 html body .victory-screen .victory-content > * { margin-top: 0 !important; margin-bottom: 0 !important; }
-html body .victory-screen .outcome-progress { padding-top: 200px; min-height: 0; gap: 12px; }
-html body .victory-screen .outcome-progress > .outcome-planet-icon { width: 500px; height: 500px; top: -118px; }
+html body .victory-screen .outcome-progress {
+    flex: 1 1 auto;
+    min-height: 220px;
+    padding-top: 0;
+    gap: 10px;
+    justify-content: center;
+    overflow: visible;
+}
+html body .victory-screen .outcome-progress > .outcome-planet-icon {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: min(420px, 48vh);
+    height: min(420px, 48vh);
+    margin: 0;
+    transform: translate(-50%, -50%);
+    z-index: 0;
+    pointer-events: none;
+}
 html body :is(.victory-screen, .game-over) .outcome-planet-icon .gm-planet-icon { filter: brightness(0.5) saturate(0.8) contrast(0.95) !important; }
-html body .victory-screen .outcome-progress > :is(.outcome-planet, .outcome-stepper, .outcome-status) { zoom: 1.15; }
+html body .victory-screen .outcome-progress > :is(.outcome-planet, .outcome-stepper, .outcome-status) {
+    position: relative;
+    z-index: 1;
+    zoom: 1.15;
+}
 html body :is(.victory-screen, .game-over) :is(.victory-title, .victory-subtitle) { zoom: 1.2; }
 html body .victory-screen .victory-header { position: relative; z-index: 1; }
 html body .victory-screen .victory-body {
     display: flex !important;
     flex-direction: column !important;
     align-items: stretch;
+    flex: 0 0 auto !important;
     gap: 10px !important;
     grid-template-columns: none !important;
 }
-html body .victory-screen :is(.victory-loot, .victory-buttons) { width: 100% !important; max-width: none !important; min-height: 0 !important; height: auto !important; }
-html body .victory-screen .victory-loot { display: flex; align-items: center; gap: 16px; padding: 8px 14px !important; }
-html body .victory-screen .victory-loot-title { flex: none; margin: 0 !important; }
-html body .victory-screen .victory-loot-list {
+html body .victory-screen .victory-panels {
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: wrap;
-    justify-content: flex-start;
-    align-items: center;
-    gap: 18px !important;
-    flex: 1 1 auto;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 16px !important;
+    width: 100% !important;
+}
+html body .victory-screen :is(.victory-loot, .victory-loadout) {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    box-sizing: border-box !important;
+}
+html body .victory-screen .victory-buttons { width: 100% !important; max-width: none !important; min-height: 0 !important; height: auto !important; }
+html body .victory-screen .victory-loot { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 8px 14px !important; }
+html body .victory-screen .victory-loadout {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 14px !important;
+    max-height: none;
+    overflow: visible !important;
+}
+html body .victory-screen .victory-loadout-bags {
+    display: flex;
+    width: max-content;
+    max-width: 100%;
+    overflow: visible;
+}
+html body .victory-screen .victory-loadout-col {
+    width: max-content;
+}
+html body .victory-screen .victory-loot-title { flex: none; margin: 0 !important; }
+html body .victory-screen .victory-loot-list {
+    display: block !important;
+    width: max-content !important;
+    max-width: 100%;
+    flex: none !important;
 }
 html body .victory-screen .victory-loot-row {
     display: inline-flex !important;
@@ -463,11 +519,10 @@ html body .outcome-planet-icon.has-atmo::before {
     html body .outcome-planet-icon.has-atmo::before { animation: none; }
 }
 
-/* Victory: title above the planet (both were z-index 1, the later planet won); planet raster centred on its
-   box so the atmosphere rings sit around the globe; no navigation hint. */
+/* Victory: title above the planet; globe centred in the flex freiraum; no navigation hint. */
 html body .victory-screen .victory-header { position: relative; z-index: 3 !important; }
 html body .victory-screen .outcome-progress { z-index: 1; }
-html body .victory-screen .outcome-planet-icon .gm-planet-icon { position: relative; overflow: visible; }
+html body .victory-screen .outcome-planet-icon .gm-planet-icon { position: relative; overflow: visible; width: 100%; height: 100%; }
 html body .victory-screen .outcome-planet-icon .gm-planet-img {
     position: absolute !important;
     left: 50% !important;
@@ -477,15 +532,9 @@ html body .victory-screen .outcome-planet-icon .gm-planet-img {
 }
 html body .victory-screen .victory-instructions { display: none !important; }
 
-/* Victory title / subtitle: lower and bigger (the planet block moves up the same amount, so the height stays). */
-html body .victory-screen .victory-header { padding-top: 34px !important; }
+html body .victory-screen .victory-header { padding-top: 12px !important; }
 html body .victory-screen .victory-title { zoom: 1.6 !important; }
 html body .victory-screen .victory-subtitle { zoom: 1.4 !important; }
-html body .victory-screen .outcome-progress { padding-top: 150px; }
-html body .victory-screen .outcome-progress > .outcome-planet-icon { top: -150px; }
-/* Planet name / stepper / status and everything below sit 50px higher; the planet itself stays put. */
-html body .victory-screen .outcome-progress { padding-top: 100px; }
-html body .victory-screen .outcome-progress > .outcome-planet-icon { top: -100px; }
 
 /* Victory modal: breathing room at the bottom. */
 html body .victory-screen .victory-content { padding-bottom: 30px !important; }
@@ -512,7 +561,6 @@ html body .victory-screen .victory-button:is(.selected, :hover, :focus-visible) 
 
 /* Resources: no heading, each entry is the icon with its amount underneath. */
 html body .victory-screen .victory-loot-title { display: none !important; }
-html body .victory-screen .victory-loot-list { justify-content: center !important; }
 html body .victory-screen .victory-loot-row { flex-direction: column !important; gap: 4px; }
 /* Amount as tall as the resource icon (38px box). */
 html body .victory-screen .victory-loot-amount { font-size: 38px !important; line-height: 1 !important; }
@@ -1639,15 +1687,15 @@ html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-shield {
     white-space: nowrap;
 }
 
-/* Victory panel: fill the glass; stats / loot / buttons stretch across the full width. */
+/* Victory panel: fill the glass; planet freiraum grows; loot/ship hug their grids. */
 html body .victory-screen .victory-content {
     width: 100% !important;
     max-width: none !important;
     height: 100% !important;
     max-height: none !important;
     min-height: 0 !important;
-    justify-content: space-between !important;
-    gap: 14px !important;
+    justify-content: flex-start !important;
+    gap: 10px !important;
     padding-left: 28px !important;
     padding-right: 28px !important;
 }
@@ -1688,24 +1736,30 @@ html body .victory-screen .victory-stats .stat-value {
 }
 html body .victory-screen .victory-body {
     width: 100% !important;
-    flex: 1 1 auto !important;
+    flex: 0 0 auto !important;
     justify-content: flex-end !important;
     gap: 12px !important;
+    margin-top: auto;
 }
 html body .victory-screen .victory-loot {
-    width: 100% !important;
+    width: auto !important;
     box-sizing: border-box;
     min-height: 0 !important;
     padding: 12px 10px !important;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
 }
+html body .victory-screen .victory-loadout {
+    width: auto !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
+}
 html body .victory-screen .victory-loot-list {
-    display: flex !important;
-    width: 100% !important;
-    justify-content: stretch !important;
-    align-items: stretch !important;
-    gap: 10px !important;
+    display: block !important;
+    width: max-content !important;
+    justify-content: flex-start !important;
+    align-items: flex-start !important;
+    gap: 0 !important;
     flex-wrap: nowrap !important;
+    flex: none !important;
 }
 html body .victory-screen .victory-loot-row {
     flex: 1 1 0 !important;

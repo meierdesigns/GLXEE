@@ -28,14 +28,18 @@ extendClass(GameControlSystem, {
         const existingBtns = victoryOverlay
             ? victoryOverlay.querySelectorAll('.victory-button').length
             : 0;
-        // Rebuild when missing, or when stale HTML lacks the shop button.
+        // Rebuild when missing, stale HTML lacks the shop button, or panels still
+        // use the old flex:1/width:0 stretch (empty freiräume beside the grids).
+        const stalePanels = !!(victoryOverlay
+            && victoryOverlay.querySelector('.victory-panels[style*="width:100%"], #victoryLoot[style*="width:0"], #victoryLoadout[style*="width:0"]'));
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
             || !document.getElementById('victoryLootCredits')
             || !document.getElementById('victoryLoadoutList')
             || existingBtns !== 3
             || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
-            || !victoryOverlay.querySelector('.victory-button[data-action="shop"]');
+            || !victoryOverlay.querySelector('.victory-button[data-action="shop"]')
+            || stalePanels;
         if (!victoryOverlay) {
             victoryOverlay = document.createElement('div');
             victoryOverlay.id = 'victoryOverlay';
@@ -66,8 +70,8 @@ extendClass(GameControlSystem, {
                     </div>
 
                     <div class="victory-body">
-                        <div class="victory-panels" style="display:flex !important;flex-direction:row !important;width:100% !important;gap:12px !important;align-items:stretch !important;">
-                            <div class="victory-loot" id="victoryLoot" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                        <div class="victory-panels">
+                            <div class="victory-loot" id="victoryLoot">
                                 <div class="victory-loot-title">
                                     <span>FOUND ITEMS</span>
                                     <span class="victory-loot-credits" id="victoryLootCredits"></span>
@@ -75,7 +79,7 @@ extendClass(GameControlSystem, {
                                 <div class="victory-loot-list" id="victoryLootList"></div>
                             </div>
 
-                            <div class="victory-loadout" id="victoryLoadout" style="flex:1 1 0 !important;width:0 !important;min-width:0 !important;box-sizing:border-box !important;overflow-x:auto !important;">
+                            <div class="victory-loadout" id="victoryLoadout">
                                 <div class="victory-loot-title"><span>SHIP LOADOUT</span></div>
                                 <div class="victory-loadout-list" id="victoryLoadoutList"></div>
                             </div>

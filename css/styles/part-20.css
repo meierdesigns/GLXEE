@@ -1297,17 +1297,17 @@ html body .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .is-action
 .profile-list-item .profile-list-emblem { margin-right: 22px !important; }
 .profile-list-item .profile-list-name { padding-left: 8px; }
 
-/* Victory / defeat: planet behind; name on lower half; stepper further below. */
+/* Victory / defeat: planet centred in the freiraum; name / stepper above it. */
 .outcome-progress {
     position: relative; display: flex; flex-direction: column; align-items: center;
-    min-height: 360px; padding-top: 188px; gap: 22px; overflow: visible;
-    justify-content: flex-start;
+    min-height: 220px; padding-top: 0; gap: 12px; overflow: visible;
+    justify-content: center; flex: 1 1 auto;
 }
 .outcome-planet { gap: 6px; flex-direction: column; justify-content: center; position: relative; z-index: 1; }
 .outcome-progress > .outcome-planet-icon {
-    position: absolute; left: 50%; top: 0; z-index: 0; pointer-events: none;
-    width: 320px; height: 320px; margin: 0;
-    transform: translateX(-50%);
+    position: absolute; left: 50%; top: 50%; z-index: 0; pointer-events: none;
+    width: min(420px, 48vh); height: min(420px, 48vh); margin: 0;
+    transform: translate(-50%, -50%);
 }
 .outcome-planet-text { gap: 4px; }
 .outcome-progress > .outcome-stepper,

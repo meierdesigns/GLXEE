@@ -106,7 +106,9 @@
         }
         // Profiles wizard needs portraits (shipped in station bundle).
         if (s === 'profiles' || s === 'onboarding') return ['station', 'profiles'];
-        if (s === 'ingame' || s === 'endscreen') return ['combat', 'station'];
+        // Endscreen needs galaxy for the outcome globe (planetIconHtml).
+        if (s === 'ingame') return ['combat', 'station'];
+        if (s === 'endscreen') return ['combat', 'station', 'galaxy'];
         // Settings/credits only need station when a pilot hub is underneath.
         // Do NOT fold asset-gen / theme-editor into this — that skipped the editors
         // bundle on reload, so Face Editor never came back after refresh.

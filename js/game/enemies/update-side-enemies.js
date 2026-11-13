@@ -27,10 +27,11 @@ extendClass(EnemyManager, {
         }
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
-        let speedMul = (deltaTime || 16.67) / 16.67;
+        let baseSpeedMul = (deltaTime || 16.67) / 16.67;
         if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
-            speedMul *= beatSyncManager.getEnemySpeedMul();
+            baseSpeedMul *= beatSyncManager.getEnemySpeedMul();
         }
+        const chainMulOf = (target) => (this.getChainSlowMul ? this.getChainSlowMul(target) : 1);
         const bobY = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
             ? beatSyncManager.getEnemyBobOffset()
             : 0;
@@ -60,6 +61,7 @@ extendClass(EnemyManager, {
 
         for (let i = this.sideEnemies.length - 1; i >= 0; i--) {
             const e = this.sideEnemies[i];
+            const speedMul = baseSpeedMul * chainMulOf(e);
             if (e && e.hitFlashMs > 0) {
                 e.hitFlashMs = Math.max(0, e.hitFlashMs - deltaTime);
             }

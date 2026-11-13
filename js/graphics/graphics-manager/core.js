@@ -292,6 +292,8 @@ class GraphicsManager {
      * the single gun at the bottom centre.
      */
     drawEnemyGun(ctx, enemy) {
+        // Orbit / preview bakes: guns read as wide bars across the hull silhouette.
+        if (!enemy || enemy.skipGuns) return;
         const loader = this.shipAssetLoader;
         if (!loader || !loader.getWeaponTemplate || typeof bulletManager === 'undefined'
             || !bulletManager.getEnemyWeaponId) return;

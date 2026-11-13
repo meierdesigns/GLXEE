@@ -1077,6 +1077,7 @@ be reviewed or reverted independently.
 | 74H | Raid fleet map mark | RAID/HUNT missions show a minimal orbiting chevron fleet in space (like invasion battle pixels), not a plaque sign |
 | 74I | Screen soundtrack type | DevMode Soundtrack Editor type `screen` (Start Screen + Title Fanfare); new Start Screen Hauptmelodie |
 | 74J | Galaxy map smoother | Bake suns to one sprite, fewer flow frames/twinkles, lighter spin/nebula debounce, paint contain + PERF ANIM gate |
+| 74K | Orbit fleet fire + flight | Hero-planet backdrop fleets shoot per faction; per-faction flightProfiles for orbit craft |
 
 The wave commit convention is:
 

@@ -79,6 +79,7 @@ extendClass(EnemyManager, {
             speedMultiplier *= beatSyncManager.getEnemySpeedMul();
             bobY = beatSyncManager.getEnemyBobOffset() * 0.15;
         }
+        if (this.getChainSlowMul) speedMultiplier *= this.getChainSlowMul(this.enemy);
         this.seekCover(effectiveDeltaTime);
         let edx = this.enemy.speed * speedMultiplier;
         let edy = this.enemy.verticalSpeed * speedMultiplier + bobY;

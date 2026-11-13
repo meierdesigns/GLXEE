@@ -208,7 +208,7 @@ extendClass(CoreLevelManager, {
 
         if (typeof soundManager !== 'undefined' && soundManager.startPlanetAmbient) {
             if (soundManager.setStageContext) {
-                soundManager.setStageContext(planetId || 'mars', level.stageKey);
+                soundManager.setStageContext(planetId || 'mars', level.stageKey, level.stageKind);
             } else {
                 soundManager.startPlanetAmbient(planetId || 'mars');
             }

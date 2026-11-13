@@ -246,43 +246,79 @@ const VFTrackerDefaults = {
         );
     },
 
-    /** Planet Select / station hub — G-major lift: call G-B-D | tag E-D | home G. */
+    /**
+     * Start Screen / Planet Select hub — C-major call/answer (type `screen`).
+     * Call C-E-G | answer A-G-E | home C. Bright dock motif, not a combat hook.
+     */
     menu() {
         return this._track(
-            { title: 'Planet Select', planet: 'menu', notes: 'call G-B-D · tag E-D · home G' },
-            110,
+            { title: 'Start Screen', planet: 'menu', role: 'screen', notes: 'call C-E-G · answer A-G-E · home C' },
+            118,
             [
                 this._pat(0,
-                    'G-2:1:52 . G-2:1:36 . G-2:1:50 . D-2:1:40 . G-2:1:52 . G-2:1:36 . D-2:1:44 . D-2:1:32',
-                    'G-4:2:48 . B-4:2:36 . D-5:2:54 . E-5:2:42 . D-5:2:40 . B-4:2:34 . A-4:2:36 . G-4:2:46',
-                    'D-4:3:12 . . . G-4:3:10 . . . D-4:3:12 . . . B-3:3:08 . . .',
-                    'G-2:5:58 . A-4:4:12 . G-2:5:44 . A-4:4:08 G-2:5:56 . A-4:4:12 . G-2:5:40 A-4:4:06 . .'
+                    'C-2:1:54 . C-2:1:38 . C-2:1:52 . G-1:1:42 . C-2:1:54 . C-2:1:36 . G-1:1:46 . G-1:1:34',
+                    'C-5:2:50 . E-5:2:38 . G-5:2:56 . E-5:2:44 . A-4:2:42 . G-4:2:36 . E-4:2:40 . C-5:2:48',
+                    'G-4:3:14 . . . C-5:3:12 . . . G-4:3:14 . . . E-4:3:10 . . .',
+                    'C-2:5:60 . A-4:4:12 . C-2:5:46 . A-4:4:08 C-2:5:58 . A-4:4:12 . C-2:5:42 A-4:4:06 . .'
                 ),
                 this._pat(1,
-                    'E-2:1:48 . E-2:1:34 . E-2:1:46 . B-1:1:38 . E-2:1:48 . E-2:1:34 . B-1:1:40 . B-1:1:30',
-                    'E-4:2:44 . G-4:2:32 . B-4:2:50 . A-4:2:38 . B-4:2:36 . G-4:2:30 . F#4:2:32 . E-4:2:42',
-                    'B-3:3:10 . . . E-4:3:08 . . . B-3:3:10 . . . G-3:3:06 . . .',
-                    'E-2:5:54 . A-4:4:10 . E-2:5:40 . A-4:4:06 E-2:5:52 . A-4:4:10 . E-2:5:36 A-4:4:05 . .'
+                    'A-1:1:50 . A-1:1:34 . A-1:1:48 . E-1:1:40 . A-1:1:50 . A-1:1:34 . E-1:1:42 . E-1:1:32',
+                    'A-4:2:46 . C-5:2:34 . E-5:2:52 . C-5:2:40 . G-4:2:38 . E-4:2:32 . D-4:2:34 . A-4:2:44',
+                    'E-4:3:12 . . . A-4:3:10 . . . E-4:3:12 . . . C-4:3:08 . . .',
+                    'A-1:5:56 . A-4:4:10 . A-1:5:42 . A-4:4:06 A-1:5:54 . A-4:4:10 . A-1:5:38 A-4:4:05 . .'
                 ),
                 this._pat(2,
-                    'G-2:1:56 . G-2:1:40 . B-2:1:48 . D-2:1:44 . G-2:1:56 . G-2:1:38 . D-3:1:50 . B-2:1:36',
-                    'G-5:2:52 . B-5:2:40 . D-6:2:56 . E-6:2:44 . D-6:2:42 . B-5:2:36 . A-5:2:38 . G-5:2:48',
-                    'G-4:3:14 . D-4:3:08 . . G-4:3:12 . B-4:3:16 . D-4:3:08 . G-4:3:10 . D-4:3:06',
-                    'G-2:5:62 A-4:4:14 . A-4:4:08 G-2:5:48 . A-4:4:10 . G-2:5:58 A-4:4:12 . A-4:4:06 G-2:5:42 A-4:4:08 .'
+                    'C-2:1:58 . C-2:1:40 . E-2:1:50 . G-1:1:46 . C-2:1:58 . C-2:1:38 . G-2:1:52 . E-2:1:36',
+                    'C-6:2:54 . E-6:2:42 . G-6:2:58 . A-5:2:46 . G-5:2:44 . E-5:2:38 . C-5:2:40 . C-5:2:50',
+                    'C-5:3:16 . G-4:3:10 . . C-5:3:14 . E-5:3:18 . G-4:3:10 . C-5:3:12 . G-4:3:08',
+                    'C-2:5:64 A-4:4:14 . A-4:4:08 C-2:5:50 . A-4:4:10 . C-2:5:60 A-4:4:12 . A-4:4:06 C-2:5:44 A-4:4:08 .'
                 )
             ],
             [0, 0, 1, 0, 2, 1, 0, 0]
         );
     },
 
+    /**
+     * Global title-screen fanfare — one-shot cinematic open (type `screen`),
+     * slower and broader than the Start Screen hub loop (`menu`).
+     */
+    titleIntro() {
+        return this._track(
+            { title: 'Title Fanfare', planet: 'menu', role: 'screen', notes: 'cinematic swell · held call · resolve home' },
+            108,
+            [
+                this._pat(0,
+                    'C-2:1:40 . . . . . G-1:1:36 . . . . . C-2:1:44 . . .',
+                    'C-4:2:36 . . E-4:2:40 . . G-4:2:46 . . C-5:2:52 . . . E-5:2:48 .',
+                    '. . . . E-4:3:10 . . . G-4:3:12 . . . C-5:3:14 . . .',
+                    '. . . . . . . . . . . . . . . .'
+                ),
+                this._pat(1,
+                    'C-2:1:58 . . C-2:1:42 . G-2:1:50 . . C-3:1:54 . . G-2:1:46 . C-2:1:60 . . .',
+                    'G-5:2:54 . E-5:2:48 . C-5:2:52 . G-4:2:44 . C-6:2:62 . G-5:2:50 . E-5:2:46 . C-5:2:56',
+                    'C-5:3:16 . . G-4:3:12 . . E-4:3:14 . . C-5:3:18 . . G-4:3:12 . . .',
+                    '. . A-4:4:14 . . . A-4:4:16 . . . A-4:4:18 . . A-4:4:12 . .'
+                ),
+                this._pat(2,
+                    'C-2:1:64 . . . G-1:1:48 . . C-2:1:70 . . . . G-1:1:40 . C-2:1:72 . OFF .',
+                    'C-6:2:66 . . G-5:2:52 . E-5:2:48 . C-5:2:58 . . G-4:2:44 . C-4:2:64 . OFF .',
+                    'G-4:3:18 . E-4:3:14 . C-4:3:16 . . . . . . . . . . .',
+                    'C-2:5:70 . A-4:4:18 . . C-2:5:56 A-4:4:14 . . C-2:5:62 . . . . OFF .'
+                )
+            ],
+            [0, 1, 2],
+            false
+        );
+    },
+
     /** Lead-motif pitch names from planet combat P0 (Hauptmelodie DNA). */
-    _motifPitches(planetId) {
+    _motifPitches(planetId, galaxyId) {
         const id = this.normalizePlanetKey(planetId);
         let combat;
         if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id) && typeof this[id] === 'function') {
             combat = this[id]();
         } else if (typeof this.forPlanet === 'function') {
-            combat = this.forPlanet(id);
+            combat = this.forPlanet(id, galaxyId);
         } else {
             combat = this.mars();
         }
@@ -316,13 +352,19 @@ const VFTrackerDefaults = {
      * map = ambient orbit · victory = call/answer fanfare · lose = descending fade ·
      * shop = mid-tempo bazaar groove.
      */
-    _roleFromPlanet(planetId, role) {
+    _roleFromPlanet(planetId, role, galaxyId) {
         const id = this.normalizePlanetKey(planetId);
-        const m = this._motifPitches(id);
-        const a = m[0]; const b = m[1] || m[0]; const c = m[2] || m[0];
-        const d = m[3] || m[1] || m[0]; const e = m[4] || m[2] || m[0];
-        const f = m[5] || m[1] || m[0]; const g = m[6] || m[3] || m[0];
-        const h = m[7] || m[0];
+        const m = this._motifPitches(id, galaxyId);
+        // Procedural planets can share donor+key (40 remix slots) — salt the
+        // role arrangement so map/shop/victory hops never replay identical notes.
+        const salt = (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id))
+            ? 0
+            : (((this._hash32(String(galaxyId || '') + '|' + id + '|' + role) % 11) - 5) || 0);
+        const sh = (n) => (salt ? this._shiftNote(n, salt) : n);
+        const a = sh(m[0]); const b = sh(m[1] || m[0]); const c = sh(m[2] || m[0]);
+        const d = sh(m[3] || m[1] || m[0]); const e = sh(m[4] || m[2] || m[0]);
+        const f = sh(m[5] || m[1] || m[0]); const g = sh(m[6] || m[3] || m[0]);
+        const h = sh(m[7] || m[0]);
         const root = this._rootBass(a);
         const fifth = this._shiftNote(root, 7);
         const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
@@ -467,33 +509,95 @@ const VFTrackerDefaults = {
     },
 
     /** Galaxy map BGM — per-planet Hauptmelodie, soft arrangement. */
-    map(planetId) {
-        return this._roleFromPlanet(planetId || 'mars', 'map');
+    map(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'map', galaxyId);
+    },
+
+    /** Pure space / between-planets map ambience — no planet motif, galaxy-toned drone. */
+    mapVoid(galaxyId) {
+        const faction = (typeof VFTrackerFactionCompose !== 'undefined' && galaxyId
+            && typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
+            && planetConfigManager.getGalaxy(galaxyId))
+            ? planetConfigManager.getGalaxy(galaxyId).faction
+            : '';
+        const roots = {
+            terran: 'G-1', kronax: 'E-1', voidborn: 'B-1', pirate: 'D-1', machine: 'C-2'
+        };
+        const root = roots[faction] || 'A-1';
+        const fifth = this._shiftNote(root, 7) || root;
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        return this._track(
+            { title: 'Deep Space' + (faction ? ' · ' + faction : ''), planet: '', role: 'map-void',
+                notes: 'pure space drone, no planet motif' },
+            84,
+            [
+                this._pat(0,
+                    [tok(root, 1, 30), '.', '.', '.', '.', '.', '.', '.',
+                        tok(fifth, 1, 24), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(this._shiftNote(root, 12) || root, 3, 8), '.', '.', '.', '.', '.', '.', '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    this._emptyRow()
+                )
+            ],
+            [0, 0, 0, 0]
+        );
     },
 
     /** Victory screen — per-planet Hauptmelodie, lifted. */
-    victory(planetId) {
-        return this._roleFromPlanet(planetId || 'mars', 'victory');
+    victory(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'victory', galaxyId);
     },
 
     /** Lose screen — per-planet Hauptmelodie, sparse. */
-    lose(planetId) {
-        return this._roleFromPlanet(planetId || 'mars', 'lose');
+    lose(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'lose', galaxyId);
     },
 
     /** Resolve planet + role → raw track (ingame = combat loop). */
-    forRole(planetId, role) {
+    forRole(planetId, role, galaxyId) {
         const r = String(role || 'ingame').toLowerCase();
-        if (r === 'map') return this.map(planetId);
-        if (r === 'victory' || r === 'win') return this.victory(planetId);
-        if (r === 'lose' || r === 'defeat') return this.lose(planetId);
-        if (r === 'shop' || r === 'trade' || r === 'trader') return this.shop(planetId);
-        return this.forPlanet(planetId);
+        if (r === 'map') return this.map(planetId, galaxyId);
+        if (r === 'victory' || r === 'win') return this.victory(planetId, galaxyId);
+        if (r === 'lose' || r === 'defeat') return this.lose(planetId, galaxyId);
+        if (r === 'shop' || r === 'trade' || r === 'trader') return this.shop(planetId, galaxyId);
+        if (r === 'corridor' || r === 'tunnel') return this.corridor(planetId, galaxyId);
+        return this.forPlanet(planetId, galaxyId);
     },
 
     /** Victory / docked trader — per-planet bazaar Hauptmelodie. */
-    shop(planetId) {
-        return this._roleFromPlanet(planetId || 'mars', 'shop');
+    shop(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'shop', galaxyId);
+    },
+
+    /**
+     * Schlauchlevel / corridor stage — tense, claustrophobic variant of the
+     * planet motif: locked single-note pulse, no climax, tight dynamic range.
+     * Distinct mood from open combat (`ingame`) and boss (`boss`).
+     */
+    corridor(planetId, galaxyId) {
+        const id = this.normalizePlanetKey(planetId || 'mars');
+        const m = this._motifPitches(id, galaxyId);
+        const a = m[0];
+        const root = this._rootBass(a);
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        const patterns = [
+            this._pat(0,
+                [tok(root, 1, 40), '.', tok(root, 1, 40), '.', tok(root, 1, 32), '.', tok(root, 1, 40), '.',
+                    tok(root, 1, 40), '.', tok(root, 1, 32), '.', tok(root, 1, 40), '.', tok(root, 1, 28), '.'].join(' '),
+                [tok(a, 2, 26), '.', '.', '.', '.', '.', tok(a, 2, 20), '.',
+                    '.', '.', '.', '.', '.', '.', tok(a, 2, 24), '.'].join(' '),
+                this._emptyRow(),
+                [tok(root, 5, 36), '.', '.', tok('A-4', 4, 8), '.', '.', tok(root, 5, 30), '.',
+                    '.', '.', tok('A-4', 4, 6), '.', '.', '.', tok(root, 5, 26), '.'].join(' ')
+            )
+        ];
+        return this._track(
+            { title: 'Corridor · ' + id, planet: id, role: 'corridor', notes: 'Schlauchlevel: locked pulse, no climax' },
+            118,
+            patterns,
+            [0, 0, 0, 0]
+        );
     },
 
     /**
@@ -650,7 +754,7 @@ const VFTrackerDefaults = {
      * Fallback boss for unknown / explored slugs: donor planet's boss Hauptmelodie
      * (keyed remix), never a combat-loop pressure clone.
      */
-    _bossFor(planetId, bpm) {
+    _bossFor(planetId, bpm, galaxyId) {
         const id = this.normalizePlanetKey
             ? this.normalizePlanetKey(planetId)
             : String(planetId || 'mars').toLowerCase();
@@ -662,11 +766,11 @@ const VFTrackerDefaults = {
                 return track;
             }
         }
-        const { primary } = this._donorPair ? this._donorPair(id) : { primary: 'mars' };
+        const { primary } = this._donorPair ? this._donorPair(id, galaxyId) : { primary: 'mars' };
         const key = primary + '-boss';
         if (typeof this[key] === 'function' && typeof this.remixPlanet === 'function') {
             // remixPlanet with boss:true pulls handcrafted boss DNA via _handcraftedRaw.
-            const remixed = this.remixPlanet(id, { boss: true });
+            const remixed = this.remixPlanet(id, { boss: true, galaxyId: galaxyId });
             if (bpm && remixed) remixed.bpm = bpm;
             return remixed;
         }
@@ -710,10 +814,16 @@ const VFTrackerDefaults = {
         };
     },
 
-    /** Stable primary + secondary handcrafted donors for any planet slug. */
-    _donorPair(planetId) {
+    /**
+     * Stable primary + secondary handcrafted donors for any planet slug.
+     * `galaxyId` (optional) folds into the hash seed so procedurally remixed
+     * planets sharing a galaxy tend toward a related donor/key/BPM family,
+     * while two planets with the same id in different galaxies diverge.
+     */
+    _donorPair(planetId, galaxyId) {
         const id = this.normalizePlanetKey(planetId);
-        const h = this._hash32(id);
+        const seed = galaxyId ? id + ':' + String(galaxyId).toLowerCase() : id;
+        const h = this._hash32(seed);
         const primary = this.PLANETS[h % this.PLANETS.length];
         let secondary = this.PLANETS[(h >>> 8) % this.PLANETS.length];
         if (secondary === primary) {
@@ -850,11 +960,13 @@ const VFTrackerDefaults = {
         const id = this.normalizePlanetKey(planetId);
         const boss = !!(opts && opts.boss);
         const intro = !!(opts && opts.intro);
-        const { primary, hash } = this._donorPair(id);
+        const { primary, hash } = this._donorPair(id, opts && opts.galaxyId);
         const a = VFTrackerParse.toCompact(this._handcraftedRaw(primary, { boss, intro }));
         const keyPool = [0, 2, -2, 3, -3, 5, -5, 7];
-        const key = keyPool[hash % keyPool.length];
-        const bpm = Math.max(110, Math.min(152, Number(a.bpm) + ((hash % 5) - 2)));
+        // Coarse key from low bits + micro salt from high bits so two planets
+        // that land on the same donor/key still diverge in pitch (map hops).
+        const key = keyPool[hash % keyPool.length] + (((hash >>> 16) % 11) - 5);
+        const bpm = Math.max(110, Math.min(152, Number(a.bpm) + ((hash % 5) - 2) + (((hash >>> 24) % 3) - 1)));
         const pad = (s) => VFTrackerParse.padChannelString(s, 16);
         const tx = (s, semi) => (semi ? VFTrackerParse.transposeChannelString(s, semi) : s);
 
@@ -875,7 +987,8 @@ const VFTrackerDefaults = {
         if (!order.length) order = intro ? [0, 1] : [0, 0, 1, 0, 2, 1, 0, 0];
         // Rotate form only — keep relative motif order (P0→P1→P2 development).
         if (order.length > 2) {
-            const rot = (hash % 2) * 2; // 0 or 2 — stay on phrase boundaries
+            const steps = Math.max(1, Math.floor(order.length / 2));
+            const rot = ((hash >>> 8) % steps) * 2; // phrase-boundary rotate
             order = order.slice(rot).concat(order.slice(0, rot));
             order = order.map((idx) => idx % Math.max(patterns.length, 1));
         }
@@ -904,7 +1017,7 @@ const VFTrackerDefaults = {
         return this._withLongForm(built, { boss: boss });
     },
 
-    forPlanet(planetId) {
+    forPlanet(planetId, galaxyId) {
         const raw = String(planetId || 'mars').toLowerCase();
         if (raw === 'intro' || raw.indexOf('intro:') === 0) {
             return this.intro(raw.split(':')[1] || 'mars');
@@ -922,12 +1035,12 @@ const VFTrackerDefaults = {
         } else if (this.isHandcraftedPlanet(id)) {
             if (wantBoss) {
                 const key = id + '-boss';
-                built = (typeof this[key] === 'function') ? this[key]() : this._bossFor(id, 128);
+                built = (typeof this[key] === 'function') ? this[key]() : this._bossFor(id, 128, galaxyId);
             } else if (typeof this[id] === 'function') {
                 built = this[id]();
             }
         }
-        if (!built) built = this.remixPlanet(id, { boss: wantBoss });
+        if (!built) built = this.remixPlanet(id, { boss: wantBoss, galaxyId: galaxyId });
         // Combat / boss loops get the long form; roles already returned above.
         return this._withLongForm(built, { boss: wantBoss });
     },
@@ -935,7 +1048,7 @@ const VFTrackerDefaults = {
     allKeys() {
         const planets = this.PLANETS || ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
         const keys = [
-            'menu', 'intro', 'map', 'victory', 'lose', 'shop',
+            'menu', 'intro', 'title-intro', 'map', 'map-void', 'victory', 'lose', 'shop',
             'mars', 'jupiter', 'saturn', 'neptune', 'pluto',
             'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'
         ];
@@ -945,6 +1058,7 @@ const VFTrackerDefaults = {
             keys.push('lose:' + p);
             keys.push('shop:' + p);
             keys.push('ingame:' + p);
+            keys.push('corridor:' + p);
         });
         return keys;
     }

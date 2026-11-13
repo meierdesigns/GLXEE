@@ -4,10 +4,12 @@
 // vftrack / YouTube / drone. Priority: enemy type > stage > planet:faction track.
 // setStageContext also resolves the hostile faction for composition.
 extendClass(SoundManager, {
-    setStageContext(planetId, stageId) {
+    setStageContext(planetId, stageId, stageKind) {
         this._musicContextActive = true;
         this._currentPlanetId = planetId;
         this._currentStageId = stageId || null;
+        // 'transit' = Schlauchlevel (corridor run) mood; otherwise combat/boss as before.
+        this._currentStageKind = stageKind || null;
         this._currentHostileFaction = this._resolveHostileFaction(planetId);
         const ambientKey = 'ambient:' + (planetId || 'mars')
             + ':' + (stageId || '')
@@ -149,6 +151,9 @@ extendClass(SoundManager, {
             : String(planetId || 'mars').toLowerCase().split('-')[0];
         const stage = String(stageId || this._currentStageId || '').toLowerCase();
         const boss = stage === 'boss' || stage === 'b';
+        const transit = !boss && (opts && opts.stageKind
+            ? opts.stageKind === 'transit'
+            : this._currentStageKind === 'transit');
         const faction = String(factionId || this._currentHostileFaction || '').toLowerCase();
         const preferOnly = !!(opts && opts.preferOnly);
         const keys = [];
@@ -160,6 +165,15 @@ extendClass(SoundManager, {
             keys.push(id + '-boss');
             if (!preferOnly) {
                 // Last-resort only — never used for "already playing" keep.
+                if (faction) keys.push(id + ':' + faction);
+                keys.push(id);
+            }
+            return keys;
+        }
+        // Schlauchlevel: tense locked-pulse corridor mood, not the open combat loop.
+        if (transit) {
+            keys.push('corridor:' + id);
+            if (!preferOnly) {
                 if (faction) keys.push(id + ':' + faction);
                 keys.push(id);
             }
@@ -307,6 +321,7 @@ extendClass(SoundManager, {
         this._musicContextActive = false;
         this._currentPlanetId = null;
         this._currentStageId = null;
+        this._currentStageKind = null;
         this._currentHostileFaction = null;
         this._activeEnemyTypes = [];
         this._activeEnemyTypesKey = null;

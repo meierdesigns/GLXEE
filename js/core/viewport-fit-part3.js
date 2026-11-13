@@ -3,7 +3,7 @@
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
@@ -122,7 +122,10 @@
         badge.style.top = topPct + '%';
         badge.style.transform = 'translate(-100%, -50%) translateX(-12px)';
     }
-    setInterval(syncDevBadge, 500);
+    // Keep badge hide/show honest even if a toggle missed dispatching vf-bezel-tools-sync.
+    setInterval(function () {
+        try { syncDevBadge(); } catch (e) { /* ignore */ }
+    }, 2000);
 
     // Bezel tools (top strip): RES icon (opens the slider), fullscreen (every screen),
     // logout (station only). Fullscreen / logout mirror the real buttons.
@@ -143,6 +146,9 @@
                 vfs.volOpen = !vfs.volOpen;
                 btn.classList.toggle('is-open', vfs.volOpen);
                 placeVolPlate();
+            },
+            soundtrack: function () {
+                if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
             },
             fs: function () {
                 const src = document.querySelector('#vfFullscreenBtn') || document.querySelector('.home-station-overlay .hs-fullscreen-btn');
@@ -183,8 +189,8 @@
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
-            res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], fs: ['Fullscreen', FS_OFF],
-            fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
+            res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], soundtrack: ['Music settings', MUSIC_ICON],
+            fs: ['Fullscreen', FS_OFF], fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
         // only wires them. Built here as a fallback if the markup is missing.
@@ -198,7 +204,7 @@
                 btn.title = meta[key][0];
                 btn.setAttribute('aria-label', meta[key][0]);
                 btn.innerHTML = meta[key][1];
-                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit') btn.hidden = true;
+                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit' || key === 'soundtrack') btn.hidden = true;
                 tools.appendChild(btn);
             });
             frame.appendChild(tools);
@@ -244,6 +250,20 @@
             else tools.appendChild(muteBtn);
             tools.dataset.wired = '0';
         }
+        // Older saves / markup without the soundtrack key: inject it just after mute.
+        if (!tools.querySelector('[data-tool="soundtrack"]') && meta.soundtrack) {
+            const stBtn = document.createElement('button');
+            stBtn.type = 'button';
+            stBtn.dataset.tool = 'soundtrack';
+            stBtn.title = meta.soundtrack[0];
+            stBtn.setAttribute('aria-label', meta.soundtrack[0]);
+            stBtn.innerHTML = meta.soundtrack[1];
+            stBtn.hidden = true;
+            const muteSlot = tools.querySelector('[data-tool="mute"]');
+            if (muteSlot && muteSlot.nextSibling) tools.insertBefore(stBtn, muteSlot.nextSibling);
+            else tools.appendChild(stBtn);
+            tools.dataset.wired = '0';
+        }
         // Settings remote sits to the right of fullscreen (mute → fs → fx → logout).
         const fxSlot = tools.querySelector('[data-tool="fx"]');
         const fsAfter = tools.querySelector('[data-tool="fs"]');
@@ -287,6 +307,11 @@
                 muteBtn.title = isMuted ? 'Unmute' : 'Volume';
                 muteBtn.setAttribute('aria-label', muteBtn.title);
             }
+        }
+        const soundtrackBtn = q('soundtrack');
+        if (soundtrackBtn) {
+            const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+            soundtrackBtn.hidden = !devOn;
         }
         const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
         const fsBtn = q('fs');
@@ -347,21 +372,29 @@
         const resetBtn = q('reset');
         if (resetBtn) resetBtn.hidden = !nowEditing;
     }
-    // Watches the WHOLE document (childList/subtree/characterData) since the bezel's state can
-    // change from almost anywhere (login, fullscreen, a resource tick). Running syncBezelTools()
-    // straight from the callback meant every single mutation anywhere on the page — and a running
-    // game mutates DOM text/nodes constantly (health bars, counters, animations) — did a fresh
-    // round of querySelector lookups and getBoundingClientRect reads synchronously, often many
-    // times within one frame. Coalescing bursts into a single rAF-scheduled run keeps the bezel
-    // exactly as up to date (still before the next paint) for a fraction of the work.
+    // Event-driven bezel sync (no document-wide MutationObserver / 500ms poll).
+    // Callers dispatch `vf-bezel-tools-sync` after login, fullscreen, faction, or tool changes.
     let bezelToolsRaf = 0;
-    new MutationObserver(function () {
+    function scheduleBezelTools() {
         if (bezelToolsRaf) return;
-        bezelToolsRaf = requestAnimationFrame(function () { bezelToolsRaf = 0; syncBezelTools(); });
-    }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-    // Dev mode can flip without touching the DOM (e.g. Shift+C while in combat), so the layout
-    // key's visibility is also polled rather than relying solely on the mutation observer.
-    setInterval(syncBezelTools, 500);
+        bezelToolsRaf = requestAnimationFrame(function () {
+            bezelToolsRaf = 0;
+            syncBezelTools();
+            // Badge is independent of #vf-bezel (see syncDevBadge comment); keep it in
+            // lockstep when DevMode flips via Shift+C / vf-bezel-tools-sync.
+            syncDevBadge();
+        });
+    }
+    window.addEventListener('vf-bezel-tools-sync', scheduleBezelTools);
+    window.addEventListener('vf-pilot-changed', scheduleBezelTools);
+    window.addEventListener('resize', scheduleBezelTools);
+    document.addEventListener('fullscreenchange', scheduleBezelTools);
+    // Dev mode can flip without touching the DOM (e.g. Shift+C while in combat).
+    setInterval(function () {
+        try {
+            if (localStorage.getItem('vf_dev_mode_v1') === 'true') scheduleBezelTools();
+        } catch (e) { /* ignore */ }
+    }, 2000);
 
     // The slider plate (fixed pixel size, outside the scaled stage) unfolds to the
     // left of the tool buttons, inside the bezel's top strip.
@@ -485,6 +518,9 @@
             frame.appendChild(ress);
             pilotSig = '';
         }
+        // Always apply hidden — display:flex on .vf-pilot-screen must not leave an empty frame.
+        ress.hidden = !hud.res;
+        plate.classList.toggle('is-empty', !hud.res);
         if (sig !== pilotSig) {
             pilotSig = sig;
             plate.innerHTML = hud.plate;
@@ -493,7 +529,24 @@
         }
         syncPilotTuner(frame);
     }
-    setInterval(syncPilotPlate, 700);
+    window.addEventListener('vf-pilot-changed', function () { syncPilotPlate(); });
+    window.addEventListener('vf-bezel-tools-sync', function () { syncPilotPlate(); });
+    // One boot sync; further updates are event-driven (login/logout/faction).
+    // Slow refresh only while a pilot is active (resource counters on the plate).
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { syncPilotPlate(); }, { once: true });
+    } else {
+        setTimeout(syncPilotPlate, 0);
+    }
+    // Resource counters: refresh infrequently; login/logout/faction use vf-pilot-changed.
+    setInterval(function () {
+        try {
+            if (typeof profileManager !== 'undefined' && profileManager.getActiveProfile
+                && profileManager.getActiveProfile()) {
+                syncPilotPlate();
+            }
+        } catch (e) { /* ignore */ }
+    }, 5000);
 
     // Dev Mode HUD remote (second fernbedienung): tabs for outside-screen chrome + pilot/res screens.
     const PH_TUNE_KEY = 'vf_pilot_hud_tune_v1';

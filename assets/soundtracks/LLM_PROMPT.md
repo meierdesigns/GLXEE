@@ -96,16 +96,17 @@ Each **planet × role** owns a Hauptmelodie (pitch DNA). Playback **STYLE**
 articulation) — it must not invent a different hook.
 
 Roles per planet: **ingame** (combat), **map** (galaxy map), **victory**, **lose**.
-Hub **menu** stays a global Planet-Select motif.
+Type **screen** owns the global Start Screen hub (`menu`) and Title fanfare (`title-intro`).
 
 ## OST role map (inspiration only)
 
 | Key | VF GB analogue |
 |-----|----------------|
-| `menu` | Planet Select (hub) |
+| `menu` | Start Screen / Planet Select (type `screen`) |
+| `title-intro` | Title fanfare · one-shot (type `screen`, `loop: false`) |
 | `map:mars` | Galaxy map · Mars motif |
 | `ingame:mars` / `mars` | Main BGM / combat |
-| `intro:*` | Title (short fanfare, `loop: false`) |
+| `intro:*` | Mission intro (short fanfare, `loop: false`) |
 | `mars` / `jupiter` / `saturn` | Main BGM 1–3 flavours |
 | `neptune` / `pluto` | Colder / late Main BGM |
 | `*-boss` | Boss / Final Boss |
@@ -115,13 +116,14 @@ Hub **menu** stays a global Planet-Select motif.
 
 | Key | Use |
 |-----|-----|
+| `menu` | Start Screen hub · type `screen` |
+| `title-intro` | Title fanfare · type `screen` |
 | `mars` / `ingame:mars` / `mars-boss` | Ingame / boss Hauptmelodie |
 | `map:jupiter` | Galaxy map · Jupiter |
 | `mars:pirate` | Combat on Mars vs Pirate (melody stays Mars) |
 | `mars-boss:kronax` | Boss vs Kronax |
 | `faction:voidborn` | Faction theme fallback |
 | `intro:mars:pirate` | Mission intro |
-| `menu` | Station / title hub |
 | `victory:mars` / `lose:pluto` | End screens · planet melody |
 | `victory:pirate:mars` | Victory · Mars melody + Pirate skin |
 

@@ -279,6 +279,18 @@
                         fxSlider('VINE INSET', 'fr:vineInset', 0, 8, 1, st.vineInset != null ? st.vineInset : 2, '');
                 }
             })();
+        } else if (vfs.fxTab === 'look') {
+            const look = (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.getGlobalLook) ? colorPaletteSystem.getGlobalLook() : { brightness: 50, contrast: 68, saturation: 100 };
+            const secondBase = (typeof colorPaletteSystem !== 'undefined' && colorPaletteSystem.getSecondBaseColor) ? colorPaletteSystem.getSecondBaseColor() : '#FFFFFF';
+            h += '<div class="vf-fx-title">LOOK</div>' +
+                '<div class="vf-fx-row"><span>2ND BASE</span><span class="vf-fx-swatch" style="display:inline-block;width:16px;height:16px;border:1px solid #fff4;vertical-align:middle;background:' + secondBase + '"></span>' + fxSeg([['prev', '‹'], ['next', '›']], '', 'lk-base') + '</div>' +
+                fxSlider('BRIGHTNESS', 'lk:brightness', 0, 200, 5, Math.round(look.brightness), '%') +
+                fxSlider('CONTRAST', 'lk:contrast', 0, 200, 5, Math.round(look.contrast), '%') +
+                fxSlider('SATURATION', 'lk:saturation', 0, 200, 5, Math.round(look.saturation), '%') +
+                '<div class="vf-fx-row"><span>GRAYSCALE</span>' + fxSeg([['OFF', 'OFF'], ['ON', 'ON']], Math.round(look.saturation) === 0 ? 'ON' : 'OFF', 'lk-gray') + '</div>' +
+                '<div class="vf-fx-title">FRAME CHROME</div>' +
+                '<div class="vf-fx-row"><span>LINE WEIGHT</span>' + fxSeg(ui.getBorderWeightOptions().map(function (v) { return [v, v]; }), ui.borderWeight, 'lk-border') + '</div>' +
+                '<div class="vf-fx-row"><span>INDICATOR</span>' + fxSeg(ui.getIndicatorWeightOptions().map(function (v) { return [v, v]; }), ui.indicatorWeight, 'lk-indicator') + '</div>';
         } else if (vfs.fxTab === 'voxel') {
             h += '<div class="vf-fx-title">SHIPS</div>' +
                 '<div class="vf-fx-row"><span>SHIP RENDER</span>' + fxSeg(ui.getShipRenderStyleOptions().map(function (v) { return [v, v]; }), ui.shipRenderStyle, 'vx-ship') + '</div>' +
@@ -534,6 +546,44 @@
                     + '</div>';
             } else {
                 h += audioHtml;
+            }
+        } else if (vfs.fxTab === 'tools') {
+            const soundCode = (typeof startupSound !== 'undefined' && startupSound.toCode) ? startupSound.toCode() : '';
+            const menuUrl = (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.getMenuUrl) ? (youtubeSoundtrackManager.getMenuUrl() || '') : '';
+            h += '<div class="vf-fx-title">AUDIO ASSETS</div>' +
+                '<div class="vf-fx-row"><span>SOUND CODE</span><output>' + (soundCode || '—') + '</output></div>' +
+                '<div class="vf-fx-row"><span>MENU SOUNDTRACK</span><output>' + (menuUrl || '—') + '</output></div>' +
+                '<div class="vf-fx-row"><button type="button" data-tools-action="startupSound">STARTUP SOUND ›</button></div>' +
+                (fxDevModeOn() ? '<div class="vf-fx-row"><button type="button" data-tools-action="soundtrackEditor">SOUNDTRACK EDITOR ›</button></div>' : '') +
+                '<div class="vf-fx-title">EDITORS</div>' +
+                (fxDevModeOn() ? '<div class="vf-fx-row"><button type="button" data-tools-action="faceEditor">FACE EDITOR · FLUX ›</button></div>' : '') +
+                '<div class="vf-fx-row"><button type="button" data-tools-action="factionCommand">FACTION COMMAND ›</button></div>' +
+                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGen">ASSET GENERATOR ›</button></div>' +
+                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGenFaction">FACTION EMBLEMS ›</button></div>' +
+                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGenFactionShips">FACTION SHIPS ›</button></div>';
+            if (fxDevModeOn()) {
+                let ppBgv = 0, ppBga = 2;
+                try {
+                    const bv = parseInt(localStorage.getItem('vf_asset_gen_portrait_bgv_v1'), 10);
+                    const ba = parseInt(localStorage.getItem('vf_asset_gen_portrait_bga_v1'), 10);
+                    if (Number.isFinite(bv) && bv >= 0) ppBgv = bv % 32;
+                    if (Number.isFinite(ba) && ba >= 0) ppBga = ba % 5;
+                } catch (err) { /* ignore */ }
+                if (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) {
+                    const p = profileManager.getActiveProfile();
+                    if (p && p.portrait) {
+                        if (p.portrait.bgv != null) ppBgv = ((p.portrait.bgv | 0) % 32 + 32) % 32;
+                        if (p.portrait.bga != null) ppBga = ((p.portrait.bga | 0) % 5 + 5) % 5;
+                    }
+                }
+                const bgaNames = (typeof heroPortrait !== 'undefined' && heroPortrait.NAMES && heroPortrait.NAMES.bga)
+                    ? heroPortrait.NAMES.bga
+                    : ['OFF', 'SLOW', 'NORMAL', 'FAST', 'TURBO'];
+                h += '<div class="vf-fx-title">PILOT PORTRAIT</div>' +
+                    fxSlider('BACKDROP', 'pp:bgv', 0, 31, 1, ppBgv, '',
+                        String(ppBgv + 1).padStart(2, '0') + ' / 32') +
+                    fxSlider('ANIMATION', 'pp:bga', 0, 4, 1, ppBga, '',
+                        bgaNames[ppBga] || String(ppBga));
             }
         }
         h += '</div>';

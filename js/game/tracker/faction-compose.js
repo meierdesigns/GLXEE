@@ -122,7 +122,7 @@ const VFTrackerFactionCompose = {
         const boss = !!(opts && opts.boss);
         const faction = this.normalizeFaction(factionId) || 'pirate';
         const style = this.styleOf(faction);
-        const baseRaw = VFTrackerDefaults.forPlanet(boss ? (planet + '-boss') : planet);
+        const baseRaw = VFTrackerDefaults.forPlanet(boss ? (planet + '-boss') : planet, opts && opts.galaxyId);
         const compact = VFTrackerParse.toCompact(baseRaw);
         // Boss: push tempo + darker instrument skin so the chamber can't be
         // mistaken for the regular stage loop (even when DNA is related).
@@ -509,9 +509,10 @@ const VFTrackerFactionCompose = {
         return compact;
     },
 
-    resolveKey(key) {
+    resolveKey(key, opts) {
         const k = String(key || '').toLowerCase().trim();
         if (!k) return null;
+        const galaxyId = opts && opts.galaxyId ? String(opts.galaxyId).toLowerCase() : '';
 
         let         m = /^intro(?::([a-z0-9_-]+))?(?::([a-z0-9_-]+))?$/.exec(k);
         if (m) {
@@ -568,7 +569,7 @@ const VFTrackerFactionCompose = {
                     : m[1].split('-')[0])
                 : 'mars';
             if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.map) {
-                return VFTrackerDefaults.map(planet);
+                return VFTrackerDefaults.map(planet, galaxyId);
             }
             return null;
         }
@@ -581,7 +582,7 @@ const VFTrackerFactionCompose = {
                     : m[1].split('-')[0])
                 : 'mars';
             if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.forRole) {
-                return VFTrackerDefaults.forRole(planet, 'ingame');
+                return VFTrackerDefaults.forRole(planet, 'ingame', galaxyId);
             }
             return null;
         }

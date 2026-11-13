@@ -1,13 +1,76 @@
 "use strict";
 
 // Soundtrack Editor (dev mode → Settings → Soundtrack Editor):
-// YouTube / local audio / vftrack JSON per menu·stage·enemy, plus planet
+// YouTube / local audio / vftrack JSON per screen·stage·enemy, plus planet
 // tracker library import/export for LLM-authored chiptune loops.
+// Kind `screen` owns start-screen Hauptmelodien (Start hub + Title fanfare).
 class SoundtrackEditorUI {
     constructor() {
-        this.selectedKind = 'planet';
-        this.selectedId = 'mars';
+        this.selectedKind = 'screen';
+        this.selectedId = 'start';
+        this.customScreenEntriesKey = 'vf_soundtrack_screen_entries_v1';
         this.ensureOverlay();
+    }
+
+    /** Devmode-added screen entries, persisted across reloads. */
+    loadCustomScreenEntries() {
+        try {
+            const raw = localStorage.getItem(this.customScreenEntriesKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    saveCustomScreenEntries(entries) {
+        try {
+            localStorage.setItem(this.customScreenEntriesKey, JSON.stringify(entries));
+        } catch (e) { /* storage unavailable or quota exceeded */ }
+    }
+
+    /** Screen-role tracks: id → library key + label. */
+    getScreenEntries() {
+        const defaults = [
+            { id: 'start', key: 'menu', label: 'START SCREEN' },
+            { id: 'title', key: 'title-intro', label: 'TITLE FANFARE' }
+        ];
+        return defaults.concat(this.loadCustomScreenEntries());
+    }
+
+    addScreenEntry() {
+        const label = window.prompt('Screentyp Name (z.B. CREDITS SCREEN):');
+        if (!label || !label.trim()) return;
+        const id = window.prompt('Screentyp ID (eindeutig, z.B. credits):', label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-'));
+        if (!id || !id.trim()) return;
+        const key = window.prompt('Library Key für diesen Screentyp (z.B. credits-theme):', id.trim());
+        if (!key || !key.trim()) return;
+        const entries = this.loadCustomScreenEntries();
+        const cleanId = id.trim();
+        if (this.getScreenEntries().some((e) => e.id === cleanId)) {
+            window.alert('ID bereits vorhanden.');
+            return;
+        }
+        entries.push({ id: cleanId, key: key.trim(), label: label.trim().toUpperCase() });
+        this.saveCustomScreenEntries(entries);
+        this.selectedKind = 'screen';
+        this.selectedId = cleanId;
+        this.render();
+    }
+
+    removeScreenEntry(id) {
+        const entries = this.loadCustomScreenEntries().filter((e) => e.id !== id);
+        this.saveCustomScreenEntries(entries);
+        if (this.selectedKind === 'screen' && this.selectedId === id) {
+            this.selectedKind = 'screen';
+            this.selectedId = 'start';
+        }
+        this.render();
+    }
+
+    screenLibraryKey(id) {
+        const hit = this.getScreenEntries().find((e) => e.id === id);
+        return hit ? hit.key : String(id || 'menu');
     }
 
     getStageIds() {
@@ -72,11 +135,14 @@ class SoundtrackEditorUI {
             <div class="difficulty-editor-panel">
                 <header class="difficulty-editor-header">
                     <h2>SOUNDTRACK EDITOR</h2>
+                    <button type="button" class="pe-btn" id="steCurrentSelection"></button>
                     <button type="button" class="de-close" id="steClose">×</button>
                 </header>
                 <div class="difficulty-editor-body">
                     <aside class="difficulty-editor-nav">
-                        <div class="de-section-title">MENU</div>
+                        <div class="de-section-title">SCREEN</div>
+                        <div id="steScreenList"></div>
+                        <div class="de-section-title">MEDIA OVERRIDE</div>
                         <div id="steMenuList"></div>
                         <div class="de-section-title">PLANET TRACKER</div>
                         <div id="stePlanetList"></div>
@@ -99,6 +165,10 @@ class SoundtrackEditorUI {
         const q = (s) => overlay.querySelector(s);
         q('#steClose').addEventListener('click', () => this.hide());
         q('#steBack').addEventListener('click', () => this.hide());
+        q('#steCurrentSelection').addEventListener('click', () => {
+            const host = document.getElementById('steControls');
+            if (host) host.scrollIntoView({ block: 'nearest' });
+        });
         overlay.addEventListener('keydown', (e) => {
             if (e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) {
                 if (e.key === 'Escape') this.hide();
@@ -109,13 +179,17 @@ class SoundtrackEditorUI {
         });
     }
 
-    renderNavButton(container, label, kind, id, hasMark) {
+    renderNavButton(container, label, kind, id, hasMark, onRemove) {
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'de-profile-btn';
-        b.textContent = (hasMark ? '♪ ' : '') + label;
+        b.textContent = (hasMark ? '♪ ' : '') + label + (onRemove ? ' ×' : '');
         if (kind === this.selectedKind && id === this.selectedId) b.classList.add('pe-primary');
-        b.addEventListener('click', () => {
+        b.addEventListener('click', (e) => {
+            if (onRemove && e.offsetX > b.clientWidth - 18) {
+                if (window.confirm('Screentyp "' + label + '" entfernen?')) onRemove();
+                return;
+            }
             this.selectedKind = kind;
             this.selectedId = id;
             this.render();
@@ -158,12 +232,14 @@ class SoundtrackEditorUI {
     }
 
     render() {
+        const screenList = document.getElementById('steScreenList');
         const menuList = document.getElementById('steMenuList');
         const planetList = document.getElementById('stePlanetList');
         const factionList = document.getElementById('steFactionList');
         const endingList = document.getElementById('steEndingList');
         const stageList = document.getElementById('steStageList');
         const enemyList = document.getElementById('steEnemyList');
+        if (screenList) screenList.innerHTML = '';
         menuList.innerHTML = '';
         planetList.innerHTML = '';
         if (factionList) factionList.innerHTML = '';
@@ -171,9 +247,26 @@ class SoundtrackEditorUI {
         stageList.innerHTML = '';
         enemyList.innerHTML = '';
 
+        const customScreenIds = this.loadCustomScreenEntries().map((e) => e.id);
+        this.getScreenEntries().forEach((entry) => {
+            const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[entry.key];
+            if (screenList) {
+                this.renderNavButton(screenList, entry.label, 'screen', entry.id, !!custom,
+                    customScreenIds.indexOf(entry.id) !== -1 ? () => this.removeScreenEntry(entry.id) : null);
+            }
+        });
+        if (screenList) {
+            const addBtn = document.createElement('button');
+            addBtn.type = 'button';
+            addBtn.className = 'de-profile-btn';
+            addBtn.textContent = '+ ADD SCREENTYP';
+            addBtn.addEventListener('click', () => this.addScreenEntry());
+            screenList.appendChild(addBtn);
+        }
+
         const menuHas = typeof soundtrackConfigManager !== 'undefined'
             && soundtrackConfigManager.hasTrack(soundtrackConfigManager.getMenuTrack());
-        this.renderNavButton(menuList, 'Main Menu', 'menu', 'menu', menuHas);
+        this.renderNavButton(menuList, 'Start Media', 'menu', 'menu', menuHas);
 
         this.getPlanetIds().forEach((id) => {
             const custom = typeof vfTrackerManager !== 'undefined' && vfTrackerManager.library[id];
@@ -203,17 +296,44 @@ class SoundtrackEditorUI {
             this.renderNavButton(enemyList, id, 'enemy', id, has);
         });
 
+        this._updateCurrentSelectionLabel();
+
         const host = document.getElementById('steControls');
         host.innerHTML = '';
         if (!this.selectedId) {
             const hint = document.createElement('p');
             hint.className = 'ss-code-hint';
-            hint.textContent = 'Planet×faction combat, victory/lose, then stage/enemy overrides. Hostile faction comes from the planet.';
+            hint.textContent = 'SCREEN = start-screen Hauptmelodie. Planet×faction combat, then stage/enemy overrides.';
             host.appendChild(hint);
             return;
         }
-        if (this.selectedKind === 'planet') this.renderPlanetTracker(host, this.selectedId);
+        if (this.selectedKind === 'screen') this.renderScreenTracker(host, this.selectedId);
+        else if (this.selectedKind === 'planet') this.renderPlanetTracker(host, this.selectedId);
         else this.renderOverrideEditor(host, this.selectedKind, this.selectedId);
+    }
+
+    /** Header button that always shows the currently selected nav entry. */
+    _updateCurrentSelectionLabel() {
+        const btn = document.getElementById('steCurrentSelection');
+        if (!btn) return;
+        if (!this.selectedId) {
+            btn.textContent = 'KEINE AUSWAHL';
+            return;
+        }
+        let label = this.selectedId;
+        if (this.selectedKind === 'screen') {
+            const entry = this.getScreenEntries().find((e) => e.id === this.selectedId);
+            if (entry) label = entry.label;
+        } else if (this.selectedKind === 'menu') {
+            label = 'START MEDIA';
+        } else if (this.selectedKind === 'stage') {
+            label = 'STAGE: ' + this.selectedId;
+        } else if (this.selectedKind === 'enemy') {
+            label = 'ENEMY: ' + this.selectedId;
+        } else if (this.selectedKind === 'planet') {
+            label = this.selectedId;
+        }
+        btn.textContent = 'AUSGEWÄHLT: ' + label;
     }
 
     _stopPreview() {
@@ -413,10 +533,51 @@ class SoundtrackEditorUI {
         });
     }
 
+    /** Type `screen`: Start hub + Title fanfare Hauptmelodien (library keys menu / title-intro). */
+    renderScreenTracker(host, screenId) {
+        const entry = this.getScreenEntries().find((e) => e.id === screenId) || this.getScreenEntries()[0];
+        const key = entry.key;
+        const title = document.createElement('div');
+        title.className = 'de-section-title';
+        title.textContent = 'SCREEN · ' + entry.label + ' (' + key + ')';
+        host.appendChild(title);
+
+        const hint = document.createElement('p');
+        hint.className = 'ss-code-hint';
+        hint.textContent = screenId === 'title'
+            ? 'One-shot title fanfare before the Start Screen loop. Set loop:false in the JSON.'
+            : screenId === 'start'
+                ? 'Start Screen / Planet Select Hauptmelodie. Media override (YouTube / local) lives under MEDIA OVERRIDE.'
+                : 'Benutzerdefinierter Screentyp (Library Key "' + key + '"). Wiedergabe erfolgt nur, wenn dieser Key an entsprechender Stelle im Code abgespielt wird.';
+        host.appendChild(hint);
+
+        this._addTrackerTools(host, {
+            libraryKey: key,
+            title: 'VF TRACKER JSON · TYPE SCREEN',
+            getJson: () => {
+                if (typeof vfTrackerManager === 'undefined') return '';
+                return vfTrackerManager.exportJson(key) || '';
+            },
+            setJson: (text) => {
+                if (typeof vfTrackerManager === 'undefined') throw new Error('tracker manager missing');
+                if (text == null || String(text).trim() === '') {
+                    vfTrackerManager.setTrack(key, null);
+                } else {
+                    vfTrackerManager.importJson(key, text);
+                }
+                if (typeof soundManager !== 'undefined' && soundManager.startMenuMusic) {
+                    // Force title fanfare / hub to pick up the new screen track.
+                    if (screenId === 'title') soundManager._titleIntroDone = false;
+                    soundManager.startMenuMusic();
+                }
+            }
+        });
+    }
+
     renderOverrideEditor(host, kind, id) {
         const title = document.createElement('div');
         title.className = 'de-section-title';
-        title.textContent = (kind === 'menu' ? 'MAIN MENU' : kind === 'stage' ? 'STAGE: ' + id : 'ENEMY TYPE: ' + id);
+        title.textContent = (kind === 'menu' ? 'START MEDIA OVERRIDE' : kind === 'stage' ? 'STAGE: ' + id : 'ENEMY TYPE: ' + id);
         host.appendChild(title);
 
         const getTrack = () => {

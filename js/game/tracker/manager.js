@@ -25,6 +25,13 @@ class VFTrackerManager {
         /** Scene feel: tempo × user BPM, STYLE amount offset (combat intensity). */
         this._sceneTempoMul = 1;
         this._sceneStyleBoost = 0;
+        /** AUTO STYLE: scene/galaxy picks the melody-genre dropdown (default on). */
+        this._themeAuto = true;
+        this._autoThemeIndex = null;
+        try {
+            const ta = localStorage.getItem('vf_musicThemeAuto');
+            if (ta != null) this._themeAuto = ta !== '0';
+        } catch (e) { /* ignore */ }
         this.loadLibrary();
         /** Typical authored combat BPM — local-audio rate is musicBpm / this. */
         this.referenceBpm = 132;
@@ -99,6 +106,22 @@ class VFTrackerManager {
         }
     }
 
+    /** Galaxy id for a planet slug — drives procedural motif divergence. */
+    _planetGalaxyId(planetId) {
+        const id = String(planetId || '').toLowerCase();
+        if (!id) return '';
+        try {
+            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.configs) {
+                const cfg = planetConfigManager.configs[id];
+                if (cfg && cfg.galaxyId) return String(cfg.galaxyId).toLowerCase();
+            }
+            if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.galaxyId) {
+                return String(galaxyMapManager.galaxyId).toLowerCase();
+            }
+        } catch (e) { /* ignore */ }
+        return '';
+    }
+
     _builtInRaw(key) {
         const k = String(key || '');
         if (!k) return null;
@@ -107,21 +130,40 @@ class VFTrackerManager {
         if (k === 'menu' || k === 'station' || k === 'hub') {
             return VFTrackerDefaults.menu();
         }
+        if (k === 'title-intro') {
+            return VFTrackerDefaults.titleIntro ? VFTrackerDefaults.titleIntro() : VFTrackerDefaults.menu();
+        }
+        if (k === 'map-void' || k.indexOf('map-void:') === 0) {
+            const galaxyId = k.split(':')[1] || '';
+            return VFTrackerDefaults.mapVoid ? VFTrackerDefaults.mapVoid(galaxyId) : VFTrackerDefaults.menu();
+        }
         if (k === 'map' || k.indexOf('map:') === 0) {
-            if (typeof VFTrackerFactionCompose !== 'undefined') {
-                const composed = VFTrackerFactionCompose.resolveKey(k);
+            const planet = k.split(':')[1] || 'mars';
+            const galaxyId = this._planetGalaxyId(planet);
+            if (typeof VFTrackerFactionCompose !== 'undefined'
+                && VFTrackerFactionCompose.resolveKey) {
+                const composed = VFTrackerFactionCompose.resolveKey(k, { galaxyId: galaxyId });
                 if (composed) return composed;
             }
-            const planet = k.split(':')[1] || 'mars';
-            return VFTrackerDefaults.map ? VFTrackerDefaults.map(planet) : VFTrackerDefaults.menu();
+            return VFTrackerDefaults.map
+                ? VFTrackerDefaults.map(planet, galaxyId)
+                : VFTrackerDefaults.menu();
         }
         if (k === 'shop' || k.indexOf('shop:') === 0) {
             const planet = k.split(':')[1] || 'mars';
+            const galaxyId = this._planetGalaxyId(planet);
             return VFTrackerDefaults.shop
-                ? VFTrackerDefaults.shop(planet)
+                ? VFTrackerDefaults.shop(planet, galaxyId)
                 : (VFTrackerDefaults.forRole
-                    ? VFTrackerDefaults.forRole(planet, 'shop')
+                    ? VFTrackerDefaults.forRole(planet, 'shop', galaxyId)
                     : VFTrackerDefaults.menu());
+        }
+        if (k === 'corridor' || k.indexOf('corridor:') === 0) {
+            const planet = k.split(':')[1] || 'mars';
+            const galaxyId = this._planetGalaxyId(planet);
+            return VFTrackerDefaults.corridor
+                ? VFTrackerDefaults.corridor(planet, galaxyId)
+                : VFTrackerDefaults.forRole(planet, 'ingame', galaxyId);
         }
         if (k === 'ingame' || k.indexOf('ingame:') === 0) {
             if (typeof VFTrackerFactionCompose !== 'undefined') {
@@ -129,6 +171,8 @@ class VFTrackerManager {
                 if (composed) return composed;
             }
             const planet = k.split(':')[1] || 'mars';
+            const galaxySkin = this._galaxyDefaultSkin(planet, false);
+            if (galaxySkin) return galaxySkin;
             return VFTrackerDefaults.forRole
                 ? VFTrackerDefaults.forRole(planet, 'ingame')
                 : VFTrackerDefaults.forPlanet(planet);
@@ -168,9 +212,37 @@ class VFTrackerManager {
         if (k.indexOf(':') === -1 && /^[a-z][a-z0-9_]*(-boss)?$/.test(k)
             && k !== 'menu' && k !== 'intro' && k !== 'victory' && k !== 'lose'
             && k !== 'shop' && k !== 'faction' && k !== 'station' && k !== 'hub') {
+            const wantBoss = k.indexOf('boss') !== -1 || /-(?:boss|b)$/.test(k);
+            const basePlanet = VFTrackerDefaults.normalizePlanetKey(k);
+            const galaxySkin = this._galaxyDefaultSkin(basePlanet, wantBoss);
+            if (galaxySkin) return galaxySkin;
             return VFTrackerDefaults.forPlanet(k);
         }
         return null;
+    }
+
+    /**
+     * Galaxy-level default Faction skin for a procedurally generated planet
+     * with no explicit faction/stage override — milky_way's 5 handcrafted
+     * planets keep their authored sound untouched. Priority stays: active
+     * hostile faction (resolveKey above) > this galaxy default > plain motif.
+     */
+    _galaxyDefaultSkin(planetId, boss) {
+        if (typeof VFTrackerDefaults === 'undefined' || typeof VFTrackerFactionCompose === 'undefined') return null;
+        const id = VFTrackerDefaults.normalizePlanetKey(planetId);
+        if (VFTrackerDefaults.isHandcraftedPlanet && VFTrackerDefaults.isHandcraftedPlanet(id)) return null;
+        try {
+            if (typeof planetConfigManager === 'undefined' || !planetConfigManager.configs) return null;
+            const cfg = planetConfigManager.configs[id];
+            const galaxyId = cfg && cfg.galaxyId;
+            if (!galaxyId || !planetConfigManager.getGalaxy) return null;
+            const galaxy = planetConfigManager.getGalaxy(galaxyId);
+            const faction = galaxy && galaxy.faction;
+            if (!faction) return null;
+            return VFTrackerFactionCompose.composeCombat(id, faction, { boss: boss, galaxyId: galaxyId });
+        } catch (e) {
+            return null;
+        }
     }
 
     getTrack(key) {
@@ -212,10 +284,13 @@ class VFTrackerManager {
         const keys = new Set(VFTrackerDefaults.allKeys());
         keys.add('menu');
         keys.add('intro');
+        keys.add('title-intro');
         keys.add('map');
+        keys.add('map-void');
         keys.add('victory');
         keys.add('lose');
         keys.add('shop');
+        keys.add('corridor');
         ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => {
             keys.add('intro:' + p);
             keys.add('map:' + p);
@@ -223,7 +298,13 @@ class VFTrackerManager {
             keys.add('victory:' + p);
             keys.add('lose:' + p);
             keys.add('shop:' + p);
+            keys.add('corridor:' + p);
         });
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyIds) {
+            try {
+                planetConfigManager.getGalaxyIds().forEach((g) => keys.add('map-void:' + g));
+            } catch (e) { /* ignore */ }
+        }
         if (typeof VFTrackerFactionCompose !== 'undefined') {
             VFTrackerFactionCompose.FACTIONS.forEach((f) => {
                 keys.add('faction:' + f);
@@ -369,9 +450,10 @@ class VFTrackerManager {
 
     /**
      * Adapt heard tempo + STYLE intensity to the active scene.
-     * role: combat|boss|victory|lose|map|shop|menu|intro
+     * role: combat|boss|corridor|victory|lose|map|map-void|shop|menu|intro|title-intro
      * difficulty: easy|normal|hard (menu preset)
      * planetTier: 0..4 (EASY…NIGHTMARE planet curve)
+     * galaxyFaction: terran|kronax|voidborn|pirate|machine (drives AUTO STYLE pick)
      */
     setSceneFeel(opts) {
         const o = opts || {};
@@ -393,6 +475,11 @@ class VFTrackerManager {
                 tempoMul *= 1.05;
                 styleBoost += 0.1;
             }
+        } else if (role === 'corridor') {
+            // Schlauchlevel: tense but locked — faster pulse, less STYLE flourish.
+            tempoMul = 1.08;
+            styleBoost = -0.1;
+            if (tier != null) tempoMul *= 0.98 + tier * 0.02;
         } else if (role === 'victory') {
             tempoMul = 1.03;
             styleBoost = 0.06;
@@ -402,18 +489,28 @@ class VFTrackerManager {
         } else if (role === 'shop') {
             tempoMul = 0.92;
             styleBoost = -0.1;
+        } else if (role === 'map-void') {
+            // Pure Weltall: slower, sparsest STYLE of all scenes.
+            tempoMul = 0.82;
+            styleBoost = -0.22;
         } else if (role === 'map') {
             tempoMul = 0.9;
             styleBoost = -0.12;
-        } else if (role === 'intro') {
-            tempoMul = 1.02;
-            styleBoost = 0.04;
+        } else if (role === 'intro' || role === 'title-intro') {
+            // Cinematic open: slower pulse, more STYLE weight than the hub loop
+            // so a scene change is heard as a real music update, not a remix.
+            tempoMul = 0.88;
+            styleBoost = 0.16;
         } else {
             tempoMul = 1;
             styleBoost = 0;
         }
         this._sceneTempoMul = Math.max(0.75, Math.min(1.35, tempoMul));
         this._sceneStyleBoost = Math.max(-0.35, Math.min(0.45, styleBoost));
+        // AUTO STYLE: scene/galaxy picks the melody-genre dropdown too, unless
+        // the user has touched the STYLE select themselves (setThemeAuto(false)).
+        this._autoThemeIndex = this._autoThemeIndexFor(role, o.galaxyFaction);
+        if (this._themeAuto) this.setThemeIndex(this._autoThemeIndex);
         this._pushJungleToPlayers(this._effectiveJungleAmount());
         this._applyPlaybackTempo();
         return { tempoMul: this._sceneTempoMul, styleBoost: this._sceneStyleBoost };
@@ -421,6 +518,45 @@ class VFTrackerManager {
 
     clearSceneFeel() {
         return this.setSceneFeel({ role: 'menu' });
+    }
+
+    /**
+     * Default STYLE dropdown index per scene role (+ galaxy faction for
+     * combat/boss) when AUTO STYLE is on. Indices per VFTrackerThemes.list:
+     * 0 planet · 1 jungle_dnb · 2 minimal · 3 amen · 4 reese · 5 neuro ·
+     * 6 liquid · 7 dnb · 8 nightrun.
+     */
+    _autoThemeIndexFor(role, galaxyFaction) {
+        const r = String(role || 'menu').toLowerCase();
+        const factionIdx = { terran: 0, kronax: 5, voidborn: 6, pirate: 1, machine: 7 };
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1 : 8;
+        const clamp = (i) => Math.max(0, Math.min(max, i));
+        if (r === 'boss') return clamp(4);
+        if (r === 'corridor') return clamp(2);
+        if (r === 'map' || r === 'map-void') return clamp(6);
+        if (r === 'shop') return clamp(0);
+        if (r === 'victory') return clamp(1);
+        if (r === 'lose') return clamp(2);
+        // Hub stays on planet motif; story/title intros pull NIGHTRUN so the
+        // scene change is audible even when the fanfare motif overlaps menu DNA.
+        if (r === 'menu') return clamp(0);
+        if (r === 'intro' || r === 'title-intro') return clamp(8);
+        const f = String(galaxyFaction || '').toLowerCase();
+        if (f && factionIdx[f] != null) return clamp(factionIdx[f]);
+        return clamp(0);
+    }
+
+    /** AUTO STYLE on (default): scene/galaxy drives the melody-genre dropdown. */
+    setThemeAuto(on) {
+        this._themeAuto = !!on;
+        try { localStorage.setItem('vf_musicThemeAuto', this._themeAuto ? '1' : '0'); } catch (e) { /* ignore */ }
+        if (this._themeAuto && this._autoThemeIndex != null) this.setThemeIndex(this._autoThemeIndex);
+        return this._themeAuto;
+    }
+
+    getThemeAuto() {
+        return this._themeAuto !== false;
     }
 
     getThemeIndex() {
@@ -450,7 +586,9 @@ class VFTrackerManager {
      */
     _reassertMixerSettings() {
         if (typeof volumeControlsManager !== 'undefined') {
-            if (volumeControlsManager.getMusicTheme != null) {
+            if (this._themeAuto && this._autoThemeIndex != null) {
+                this.setThemeIndex(this._autoThemeIndex);
+            } else if (volumeControlsManager.getMusicTheme != null) {
                 this.setThemeIndex(volumeControlsManager.getMusicTheme());
             }
             if (volumeControlsManager.getJungleAmount != null) {
@@ -539,7 +677,18 @@ class VFTrackerManager {
     _fingerprint(track) {
         if (!track) return null;
         try {
-            return JSON.stringify(VFTrackerParse.toCompact(VFTrackerParse.normalize(track)));
+            const c = VFTrackerParse.toCompact(VFTrackerParse.normalize(track));
+            // Musical identity only — meta.title/planet must not force a restart
+            // when two keys resolve to the same notes (procedural map collisions).
+            return JSON.stringify({
+                bpm: c.bpm,
+                rowsPerBeat: c.rowsPerBeat,
+                rowsPerPattern: c.rowsPerPattern,
+                channels: c.channels,
+                patterns: c.patterns,
+                order: c.order,
+                loop: c.loop !== false
+            });
         } catch (e) {
             return null;
         }
@@ -553,8 +702,11 @@ class VFTrackerManager {
         const k = String(key || '').toLowerCase();
         if (!k) return 'combat';
         if (k === 'menu' || k === 'station' || k === 'hub') return 'menu';
+        if (k === 'title-intro') return 'title-intro';
+        if (k === 'map-void' || k.indexOf('map-void:') === 0) return 'map';
         if (k === 'map' || k.indexOf('map:') === 0) return 'map';
         if (k === 'shop' || k.indexOf('shop:') === 0) return 'shop';
+        if (k === 'corridor' || k.indexOf('corridor:') === 0) return 'corridor';
         if (k === 'intro' || k.indexOf('intro:') === 0) return 'intro';
         if (k === 'victory' || k.indexOf('victory:') === 0) return 'victory';
         if (k === 'lose' || k.indexOf('lose:') === 0) return 'lose';
@@ -654,15 +806,30 @@ class VFTrackerManager {
                 }
             }
         }
+        // Scene/role change → always refresh tempo + AUTO STYLE before the swap
+        // so the handoff is heard as a music update, not just a new pattern row.
+        if (!sameRole || (opts && opts.forceScene)) {
+            const galaxyFaction = (opts && opts.galaxyFaction)
+                || (typeof soundManager !== 'undefined' && soundManager._currentHostileFaction)
+                || '';
+            if (typeof soundManager !== 'undefined' && soundManager._applyMusicScene) {
+                soundManager._applyMusicScene(nextRole, galaxyFaction);
+            } else {
+                this.setSceneFeel({ role: nextRole, galaxyFaction: galaxyFaction });
+            }
+        }
         const ctx = (opts && opts.context)
             || (typeof soundManager !== 'undefined' && soundManager.ensureContext
                 ? soundManager.ensureContext() : null);
         if (!ctx) return false;
 
-        const fade = opts && opts.fade != null
+        const wasPlaying = this.player.isPlaying();
+        const roleChange = !sameRole && wasPlaying;
+        let fade = opts && opts.fade != null
             ? Math.max(0, Number(opts.fade) || 0)
             : this.crossfadeSeconds;
-        const wasPlaying = this.player.isPlaying();
+        // Audible scene handoff: role changes never sneak in under a tiny fade.
+        if (roleChange) fade = Math.max(fade, Math.min(1.25, Math.max(0.85, this.crossfadeSeconds * 0.75)));
         const hasOutgoing = !!(this._outgoing && this._outgoing.length);
         const doFade = fade > 0 && !(opts && opts.forceHard);
 
@@ -749,6 +916,33 @@ class VFTrackerManager {
         // wizard / station remounts call startMenuMusic often). play() still
         // swaps when the role or fingerprint differs (e.g. combat → menu).
         return this.play('menu');
+    }
+
+    /** Global, one-shot title-screen fanfare. `onDone` fires when it ends. */
+    playTitleIntro(onDone) {
+        if (typeof soundManager !== 'undefined' && soundManager._applyMusicScene) {
+            soundManager._applyMusicScene('title-intro');
+        } else {
+            this.setSceneFeel({ role: 'title-intro' });
+        }
+        return this.play('title-intro', null, {
+            fade: 0.55,
+            fadeIn: 0.85,
+            force: true,
+            forceScene: true,
+            onEnded: typeof onDone === 'function' ? onDone : undefined
+        });
+    }
+
+    /** Schlauchlevel / corridor stage mood — tense, locked-pulse variant. */
+    playCorridor(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('corridor:' + id);
+    }
+
+    /** Pure deep-space map ambience (no planet nearby) — optional galaxy tone. */
+    playMapVoid(galaxyId) {
+        return this.play(galaxyId ? 'map-void:' + String(galaxyId).toLowerCase() : 'map-void');
     }
 
     /** First library/default key that would actually play from `keys`. */

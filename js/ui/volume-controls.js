@@ -125,6 +125,11 @@ class VolumeControlsManager {
             };
             syncThemeOptions();
             themeSelect.addEventListener('change', (e) => {
+                // Manual pick overrides AUTO STYLE (scene/galaxy no longer
+                // switches the dropdown) until setThemeAuto(true) is called again.
+                if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setThemeAuto) {
+                    vfTrackerManager.setThemeAuto(false);
+                }
                 this.setMusicTheme(parseInt(e.target.value, 10));
                 this.updateUI();
             });

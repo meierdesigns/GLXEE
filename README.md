@@ -1075,6 +1075,7 @@ be reviewed or reverted independently.
 | 74F | Mute dropdown button | Pure MUTE/UNMUTE control in the bezel volume dropdown; restores prior master level |
 | 74G | Portrait Flux batch | Asset-Gen **PORTRAITS**: one reference image → Flux2 img2img → replace all `assets/factions/*/portraits/01–16.png`; bridge + workflows restored |
 | 74H | Raid fleet map mark | RAID/HUNT missions show a minimal orbiting chevron fleet in space (like invasion battle pixels), not a plaque sign |
+| 74I | Screen soundtrack type | DevMode Soundtrack Editor type `screen` (Start Screen + Title Fanfare); new Start Screen Hauptmelodie |
 
 The wave commit convention is:
 

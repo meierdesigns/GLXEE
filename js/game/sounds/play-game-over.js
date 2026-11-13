@@ -38,7 +38,7 @@ extendClass(SoundManager, {
     },
 
     /** Menu difficulty + planet tier for scene-feel (tempo / STYLE intensity). */
-    _musicSceneOpts(role) {
+    _musicSceneOpts(role, galaxyFaction) {
         const difficulty = (typeof difficultyConfigManager !== 'undefined'
             && difficultyConfigManager.current)
             ? String(difficultyConfigManager.current).toLowerCase()
@@ -51,12 +51,29 @@ extendClass(SoundManager, {
             && levelManager.currentLevel.planetTier != null) {
             planetTier = Number(levelManager.currentLevel.planetTier);
         }
-        return { role: role || 'menu', difficulty, planetTier };
+        return { role: role || 'menu', difficulty, planetTier, galaxyFaction: galaxyFaction || '' };
     },
 
-    _applyMusicScene(role) {
+    /** Galaxy faction for a planet id — drives AUTO STYLE's combat/boss genre pick. */
+    _galaxyFactionForPlanet(planetId) {
+        try {
+            if (typeof planetConfigManager === 'undefined' || !planetConfigManager.configs) return '';
+            const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+                ? VFTrackerDefaults.normalizePlanetKey(planetId)
+                : String(planetId || '').toLowerCase().split('-')[0];
+            const cfg = planetConfigManager.configs[id];
+            const galaxyId = cfg && cfg.galaxyId;
+            if (!galaxyId || !planetConfigManager.getGalaxy) return '';
+            const galaxy = planetConfigManager.getGalaxy(galaxyId);
+            return (galaxy && galaxy.faction) || '';
+        } catch (e) {
+            return '';
+        }
+    },
+
+    _applyMusicScene(role, galaxyFaction) {
         if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.setSceneFeel) return;
-        vfTrackerManager.setSceneFeel(this._musicSceneOpts(role));
+        vfTrackerManager.setSceneFeel(this._musicSceneOpts(role, galaxyFaction));
     },
 
     /** Looping victory / lose vftrack, biased by hostile faction (+ optional planet). */
@@ -256,7 +273,11 @@ extendClass(SoundManager, {
             if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             const stage = String(this._currentStageId || '').toLowerCase();
             const boss = stage === 'boss' || stage === 'b';
-            this._applyMusicScene(boss ? 'boss' : 'combat');
+            const transit = !boss && this._currentStageKind === 'transit';
+            this._applyMusicScene(
+                boss ? 'boss' : (transit ? 'corridor' : 'combat'),
+                this._galaxyFactionForPlanet(id)
+            );
             const played = vfTrackerManager.playFirst(combatKeys);
             if (played) {
                 this.clearPendingMusic();
@@ -395,6 +416,56 @@ extendClass(SoundManager, {
         }, 280);
     },
 
+    /**
+     * Border checkpoint between systems — "pure Weltall": no planet motif,
+     * galaxy-toned drone. Mirrors startMapMusic's debounce for arrow-hopping.
+     */
+    startMapVoidMusic(galaxyId) {
+        const gid = String(galaxyId || '').toLowerCase();
+        const key = gid ? 'map-void:' + gid : 'map-void';
+        this._pendingMapMusicId = key;
+        this.notePendingMusic('map', key);
+        if (!this.musicEnabled) return;
+        if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
+            && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (this._mapMusicTimer) {
+            try { clearTimeout(this._mapMusicTimer); } catch (e) { /* ignore */ }
+        }
+        this._mapMusicTimer = setTimeout(() => {
+            this._mapMusicTimer = null;
+            if (this._pendingMapMusicId !== key) return;
+            this._applyMapVoidMusic(gid);
+        }, 280);
+    },
+
+    _applyMapVoidMusic(galaxyId) {
+        const key = galaxyId ? 'map-void:' + galaxyId : 'map-void';
+        if (!this.musicEnabled) return;
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (!this.ensureContext()) return;
+        if (typeof vfTrackerManager === 'undefined') return;
+        const voidFaction = (galaxyId && typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy)
+            ? ((planetConfigManager.getGalaxy(galaxyId) || {}).faction || '')
+            : '';
+        this._applyMusicScene('map-void', voidFaction);
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        vfTrackerManager.setEnabled(true);
+        if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying(key)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playMapVoid && vfTrackerManager.playMapVoid(galaxyId)) {
+            this.clearPendingMusic();
+            return;
+        }
+        if (vfTrackerManager.playMenu) vfTrackerManager.playMenu();
+        this.clearPendingMusic();
+    },
+
     _applyMapMusic(planetId) {
         const id = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
             ? VFTrackerDefaults.normalizePlanetKey(planetId || 'mars')
@@ -411,7 +482,7 @@ extendClass(SoundManager, {
         }
         if (!this.ensureContext()) return;
         if (typeof vfTrackerManager === 'undefined') return;
-        this._applyMusicScene('map');
+        this._applyMusicScene('map', this._galaxyFactionForPlanet(id));
         if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
         if (vfTrackerManager.isPlaying && vfTrackerManager.isPlaying(key)) {
@@ -431,7 +502,58 @@ extendClass(SoundManager, {
         this.clearPendingMusic();
     },
 
+    /**
+     * Story launch cutscene BGM — one-shot intro fanfare skinned by faction.
+     * Always forces a scene-role music update (menu/hub → intro) so the
+     * cutscene handoff is heard, not just a soft remix of the hub loop.
+     */
+    startStoryIntroMusic(factionId) {
+        if (!this.musicEnabled) return false;
+        const faction = String(factionId || '').toLowerCase();
+        this.notePendingMusic('intro', faction ? ('intro:' + faction) : 'intro');
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.fadeOut) {
+            try { localAudioManager.fadeOut(); } catch (e) { /* ignore */ }
+        } else if (typeof localAudioManager !== 'undefined' && localAudioManager.stop) {
+            try { localAudioManager.stop(); } catch (e) { /* ignore */ }
+        }
+        if (!this.ensureContext()) return false;
+        if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager.play) return false;
+        this._applyMusicScene('intro', faction);
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        vfTrackerManager.setEnabled(true);
+        const keys = this.introTrackKeys
+            ? this.introTrackKeys(null, faction)
+            : (faction ? ['intro:' + faction, 'intro', 'title-intro'] : ['intro', 'title-intro']);
+        const target = vfTrackerManager.firstPlayableKey
+            ? vfTrackerManager.firstPlayableKey(keys)
+            : (keys[0] || 'intro');
+        if (!target) return false;
+        const ok = vfTrackerManager.play(target, null, {
+            fade: 0.95,
+            fadeIn: 0.75,
+            force: true,
+            forceScene: true,
+            galaxyFaction: faction
+        });
+        if (ok) this.clearPendingMusic();
+        return !!ok;
+    },
+
     startMenuMusic() {
+        // Global title fanfare — once per session, before the Planet Select
+        // hub loop takes over. Re-entrant: the onEnded callback below calls
+        // startMenuMusic() again, which skips this block (flag already set)
+        // and falls through to the normal menu logic.
+        if (!this._titleIntroDone) {
+            this._titleIntroDone = true;
+            if (this.musicEnabled && typeof vfTrackerManager !== 'undefined' && vfTrackerManager.playTitleIntro
+                && this.ensureContext && this.ensureContext()) {
+                vfTrackerManager.playTitleIntro(() => this.startMenuMusic());
+                return;
+            }
+        }
         // Embedded / open galaxy map owns the hub bus — don't yank it back to menu.
         if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible
             && this.startMapMusic) {

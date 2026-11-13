@@ -58,7 +58,7 @@ extendClass(AssetGenUI, {
             this.overlay.parentNode && this.overlay.parentNode.removeChild(this.overlay);
         }
         const root = document.createElement("div");
-        root.className = "ag-overlay";
+        root.className = "ag-overlay vf-glass";
         root.innerHTML = `
 <div class="ag-panel">
   <h2 class="ag-title">ASSET GENERATOR · FLUX2</h2>
@@ -69,12 +69,45 @@ extendClass(AssetGenUI, {
   </div>
   <div class="ag-body">
     <div class="ag-library" id="agLibraryPane">
-      <div class="ag-row ag-types" id="agTypes"></div>
+      <div class="ag-row ag-types" id="agTypes">
+        <label class="ag-types-label" for="agTypeSelect">TYPE</label>
+        <select id="agTypeSelect" class="ag-type-select" aria-label="Asset type"></select>
+      </div>
       <div class="ag-col">
         <div class="ag-list-wrap">
           <div class="ag-faction-chrome" id="agFactionChrome" hidden>
             <div class="ag-faction-tabs" id="agFactionTabs"></div>
             <input type="search" class="ag-faction-filter" id="agFactionFilter" placeholder="FILTER SHIPS…" autocomplete="off">
+          </div>
+          <div class="ag-portrait-chrome" id="agPortraitChrome" hidden>
+            <div class="ag-portrait-ref">
+              <div class="ag-label">REFERENCE (style for all faces)</div>
+              <div class="ag-portrait-ref-row">
+                <div class="ag-portrait-ref-preview" id="agPortraitRefPreview">(none)</div>
+                <div class="ag-portrait-ref-actions">
+                  <input type="file" id="agPortraitRefFile" accept="image/png,image/jpeg,image/webp" hidden>
+                  <button type="button" id="agPortraitRefPick">LOAD EXAMPLE</button>
+                  <button type="button" id="agPortraitRefClear">CLEAR</button>
+                  <button type="button" id="agPortraitGenerateAll">GENERATE ALL</button>
+                </div>
+              </div>
+              <p class="ag-portrait-hint">One example image → Flux img2img → replaces every checked / all portraits under assets/factions/*/portraits/</p>
+            </div>
+            <div class="ag-portrait-bg">
+              <div class="ag-label">ANIMATED BACKDROP (preview)</div>
+              <div class="ag-portrait-bg-row">
+                <input type="range" id="agPortraitBgv" min="0" max="31" step="1" value="0" aria-label="Animated backdrop">
+                <b class="ag-portrait-bg-val" id="agPortraitBgvVal">01 / 32</b>
+                <button type="button" id="agPortraitBgvRand" title="Random backdrop">RND</button>
+              </div>
+              <div class="ag-label">ANIMATION</div>
+              <div class="ag-portrait-bg-row">
+                <input type="range" id="agPortraitBga" min="0" max="4" step="1" value="2" aria-label="Backdrop animation speed">
+                <b class="ag-portrait-bg-val" id="agPortraitBgaVal">NORMAL</b>
+              </div>
+              <p class="ag-portrait-hint">Backdrop + motion speed — same controls as Pilot create (BACKDROP / ANIMATION).</p>
+            </div>
+            <div class="ag-faction-tabs" id="agPortraitFactionTabs"></div>
           </div>
           <div class="ag-toolbar">
             <label title="Select all / none">
@@ -149,25 +182,29 @@ extendClass(AssetGenUI, {
             });
         });
 
-        const types = root.querySelector("#agTypes");
-        (assetGenRegistry.getTypes() || []).forEach((t) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.textContent = t.label;
-            btn.dataset.type = t.id;
-            if (t.id === this.typeId) btn.classList.add("ag-on");
-            btn.addEventListener("click", () => {
-                this.typeId = this.normalizeTypeId(t.id);
+        const typeSelect = root.querySelector("#agTypeSelect");
+        if (typeSelect) {
+            (assetGenRegistry.getTypes() || []).forEach((t) => {
+                const opt = document.createElement("option");
+                opt.value = t.id;
+                opt.textContent = t.label;
+                if (t.id === this.typeId) opt.selected = true;
+                typeSelect.appendChild(opt);
+            });
+            typeSelect.addEventListener("change", () => {
+                this.typeId = this.normalizeTypeId(typeSelect.value);
                 this.selectedId = null;
                 this.checkedIds = new Set();
                 this.clearStaging();
                 this.renderTypes();
+                this.syncPortraitChrome();
+                this.syncFactionChrome();
+                this.syncEditorTitle && this.syncEditorTitle();
                 this.renderList();
                 this.renderDetail();
                 this.persistMenuState();
             });
-            types.appendChild(btn);
-        });
+        }
 
         root.querySelector("#agSelectAll").addEventListener("change", (e) => {
             const on = !!e.target.checked;
@@ -192,6 +229,39 @@ extendClass(AssetGenUI, {
         root.querySelector("#agGenerate").addEventListener("click", () => this.onGenerate());
         root.querySelector("#agGenerateChecked").addEventListener("click", () => this.onGenerateChecked());
         root.querySelector("#agAccept").addEventListener("click", () => this.onAccept());
+        const refPick = root.querySelector("#agPortraitRefPick");
+        const refFile = root.querySelector("#agPortraitRefFile");
+        const refClear = root.querySelector("#agPortraitRefClear");
+        const refAll = root.querySelector("#agPortraitGenerateAll");
+        if (refPick && refFile) {
+            refPick.addEventListener("click", () => refFile.click());
+            refFile.addEventListener("change", () => this.onPortraitReferenceFile(refFile));
+        }
+        if (refClear) refClear.addEventListener("click", () => this.clearPortraitReference());
+        if (refAll) refAll.addEventListener("click", () => this.onGenerateAllPortraits());
+        const bgvSl = root.querySelector("#agPortraitBgv");
+        const bgvRnd = root.querySelector("#agPortraitBgvRand");
+        const bgaSl = root.querySelector("#agPortraitBga");
+        if (bgvSl) {
+            bgvSl.value = String(this.portraitBgv | 0);
+            bgvSl.addEventListener("input", () => {
+                this.setPortraitBgv(Number(bgvSl.value) || 0);
+            });
+        }
+        if (bgvRnd) {
+            bgvRnd.addEventListener("click", () => {
+                const n = (typeof heroPortrait !== "undefined" && heroPortrait.OPTIONS && heroPortrait.OPTIONS.bgv)
+                    ? heroPortrait.OPTIONS.bgv
+                    : 32;
+                this.setPortraitBgv(Math.floor(Math.random() * n));
+            });
+        }
+        if (bgaSl) {
+            bgaSl.value = String(this.portraitBga | 0);
+            bgaSl.addEventListener("input", () => {
+                this.setPortraitBga(Number(bgaSl.value) || 0);
+            });
+        }
         root.querySelector("#agDiscard").addEventListener("click", () => {
             this.clearStaging();
             this.setStatus("Discarded.");
@@ -252,9 +322,10 @@ extendClass(AssetGenUI, {
 
     renderTypes() {
         if (!this.overlay) return;
-        this.overlay.querySelectorAll("#agTypes button").forEach((btn) => {
-            btn.classList.toggle("ag-on", btn.dataset.type === this.typeId);
-        });
+        const sel = this.overlay.querySelector("#agTypeSelect");
+        if (!sel) return;
+        const id = this.normalizeTypeId(this.typeId);
+        if (sel.value !== id) sel.value = id;
     },
 
     updateSelectAllState() {
@@ -272,5 +343,9 @@ extendClass(AssetGenUI, {
 
     isFactionLibrary() {
         return this.typeId === "faction";
+    },
+
+    isPortraitLibrary() {
+        return this.typeId === "portrait";
     },
 });

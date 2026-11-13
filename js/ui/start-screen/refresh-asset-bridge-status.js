@@ -143,20 +143,30 @@ extendClass(StartScreenManager, {
                     this.createStartScreenUI();
                     break;
                 }
-                if (typeof profileSelectionManager !== 'undefined') {
+                {
                     const reopen = this.isStationMenuContext();
-                    if (this.embeddedMode) this.hideEmbedded();
-                    else if (this.overlayMode) this.hideOverlay();
-                    else this.hide();
-                    profileSelectionManager.show({
-                        onClose: () => {
-                            if (reopen || this.hasActiveProfile()) {
-                                this.returnToHub();
-                            } else {
-                                this.show({ forceMenu: true });
+                    const openPs = () => {
+                        if (typeof profileSelectionManager === 'undefined') return;
+                        if (this.embeddedMode) this.hideEmbedded();
+                        else if (this.overlayMode) this.hideOverlay();
+                        else this.hide();
+                        profileSelectionManager.show({
+                            onClose: () => {
+                                if (reopen || this.hasActiveProfile()) {
+                                    this.returnToHub();
+                                } else {
+                                    this.show({ forceMenu: true });
+                                }
                             }
-                        }
-                    });
+                        });
+                    };
+                    if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+                        const load = () => window.ensureVfProfiles(openPs);
+                        if (typeof window.ensureVfStation === 'function') window.ensureVfStation(load);
+                        else load();
+                    } else if (typeof profileSelectionManager !== 'undefined') {
+                        openPs();
+                    }
                 }
                 break;
             case 'STATION':
@@ -200,11 +210,19 @@ extendClass(StartScreenManager, {
                         break;
                     }
                 }
-                if (typeof homeStationUI !== 'undefined') {
-                    homeStationUI.show({
-                        onClose: () => this.returnToHub()
-                    });
-                    this.hide();
+                {
+                    const openHs = () => {
+                        if (typeof homeStationUI === 'undefined') return;
+                        homeStationUI.show({
+                            onClose: () => this.returnToHub()
+                        });
+                        this.hide();
+                    };
+                    if (typeof homeStationUI === 'undefined' && typeof window.ensureVfStation === 'function') {
+                        window.ensureVfStation(openHs);
+                    } else {
+                        openHs();
+                    }
                 }
                 break;
             case 'SETTINGS':

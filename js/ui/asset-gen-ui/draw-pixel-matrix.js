@@ -124,7 +124,8 @@ extendClass(AssetGenUI, {
 
     keepFactionColor(entry) {
         if (!entry) return false;
-        return entry.type === "factionShip" || entry.type === "faction"
+        return entry.type === "factionShip" || entry.type === "faction" || entry.type === "portrait"
+            || entry.kind === "portrait"
             || !!(entry.faction && (entry.kind === "ship" || entry.kind === "emblem"));
     },
 
@@ -134,7 +135,94 @@ extendClass(AssetGenUI, {
         const key = entry.spriteKey || entry.id;
         const px = Math.max(16, size || 28);
         const keepColor = this.keepFactionColor(entry);
-        const factionTint = keepColor ? this.factionColor(this.entryFactionId(entry)) : null;
+        const factionTint = keepColor && entry.type !== "portrait"
+            ? this.factionColor(this.entryFactionId(entry)) : null;
+
+        // 0) Portraits: painted PNG if present, else procedural voxel face (readable).
+        if (entry.type === "portrait" || entry.kind === "portrait") {
+            const aspect = (typeof VXP !== "undefined" && VXP.W && VXP.H)
+                ? (VXP.W / VXP.H)
+                : (96 / 108);
+            const h = px;
+            const w = Math.max(16, Math.round(px * aspect));
+            const drawProceduralFace = () => {
+                if (typeof VXP === "undefined" || !VXP.build || !VXP.preset) return false;
+                const faction = entry.faction || "terran";
+                let v = (entry.variant != null) ? Number(entry.variant) : NaN;
+                if (!Number.isFinite(v)) {
+                    const m = String(entry.id || entry.fileId || "").match(/(\d+)\s*$/);
+                    v = m ? (parseInt(m[1], 10) - 1) : 0;
+                }
+                const preset = VXP.preset(faction, v);
+                const bgv = (this.portraitBgv != null)
+                    ? (this.portraitBgv | 0)
+                    : (preset.bgv | 0);
+                preset.bgv = bgv;
+                const src = document.createElement("canvas");
+                src.width = VXP.W;
+                src.height = VXP.H;
+                const sctx = src.getContext("2d");
+                // Transparent head + faction animated backdrop (t=0 frame for thumbs).
+                const head = VXP.build(preset, null, false, true, 0);
+                const bg = (VXP.background)
+                    ? VXP.background(faction, 0, null, bgv)
+                    : null;
+                const img = sctx.createImageData(VXP.W, VXP.H);
+                const dst = img.data;
+                for (let i = 0; i < dst.length; i += 4) {
+                    const a = head[i + 3] / 255;
+                    if (bg) {
+                        dst[i] = head[i] * a + bg[i] * (1 - a);
+                        dst[i + 1] = head[i + 1] * a + bg[i + 1] * (1 - a);
+                        dst[i + 2] = head[i + 2] * a + bg[i + 2] * (1 - a);
+                        dst[i + 3] = 255;
+                    } else {
+                        dst[i] = head[i];
+                        dst[i + 1] = head[i + 1];
+                        dst[i + 2] = head[i + 2];
+                        dst[i + 3] = head[i + 3];
+                    }
+                }
+                sctx.putImageData(img, 0, 0);
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.imageSmoothingEnabled = false;
+                ctx.drawImage(src, 0, 0, w, h);
+                box.innerHTML = "";
+                box.appendChild(canvas);
+                return true;
+            };
+            if (entry.targetPath) {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext("2d");
+                    ctx.imageSmoothingEnabled = false;
+                    ctx.drawImage(img, 0, 0, w, h);
+                    box.innerHTML = "";
+                    box.appendChild(canvas);
+                };
+                img.onerror = () => { drawProceduralFace(); };
+                if (!drawProceduralFace()) {
+                    const miss = document.createElement("span");
+                    miss.textContent = "…";
+                    miss.style.color = "#888";
+                    box.appendChild(miss);
+                }
+                img.src = entry.targetPath + (entry.targetPath.indexOf("?") >= 0 ? "&" : "?") + "v=" + Date.now();
+            } else if (!drawProceduralFace()) {
+                const miss = document.createElement("span");
+                miss.textContent = "FACE";
+                miss.style.color = "#888";
+                miss.style.fontSize = Math.max(9, Math.floor(px / 6)) + "px";
+                box.appendChild(miss);
+            }
+            return;
+        }
 
         // 1) Loaded PNG override
         if (typeof spriteLoader !== "undefined" && spriteLoader.getSprite && spriteLoader.getSprite(key)) {

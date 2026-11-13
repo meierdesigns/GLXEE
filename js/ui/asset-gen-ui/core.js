@@ -13,6 +13,9 @@ class AssetGenUI {
         this.checkedIds = new Set();
         this.stagingId = null;
         this.previewDataUrl = null;
+        this.portraitReferenceDataUrl = null;
+        this.portraitBgv = this.loadPortraitBgv();
+        this.portraitBga = this.loadPortraitBga();
         this.busy = false;
         this.statusText = "";
         this.mainTab = "library"; // library | settings
@@ -147,9 +150,12 @@ class AssetGenUI {
             bridgePort = String(new URL(bridge).port || "8787");
         } catch (e) { /* keep */ }
         const comfyPort = this.renderSettings.comfyPort || 6767;
-        hint.textContent =
-            "Menu → ASSETS · Settings → ASSETS · # toggle · multi-select + GENERATE · Esc close · Bridge :" +
-            bridgePort + " · ComfyUI :" + comfyPort;
+        const face = this.isPortraitLibrary && this.isPortraitLibrary();
+        hint.textContent = face
+            ? "DevMode Face Editor · LOAD EXAMPLE → GENERATE / GENERATE ALL · Esc close · Bridge :" +
+                bridgePort + " · ComfyUI :" + comfyPort
+            : "Menu → ASSETS · Settings → ASSETS · # toggle · multi-select + GENERATE · Esc close · Bridge :" +
+                bridgePort + " · ComfyUI :" + comfyPort;
     }
 
     applyClientConfig() {
@@ -221,6 +227,8 @@ class AssetGenUI {
             this.renderDetail();
             this.renderSettingsPanel();
             this.syncPanelVisibility();
+            if (this.syncPortraitChrome) this.syncPortraitChrome();
+            else if (this.syncEditorTitle) this.syncEditorTitle();
             if (!skipPersist) this.persistMenuState();
             return;
         }
@@ -231,6 +239,8 @@ class AssetGenUI {
         this.renderDetail();
         this.renderSettingsPanel();
         this.syncPanelVisibility();
+        if (this.syncPortraitChrome) this.syncPortraitChrome();
+        else if (this.syncEditorTitle) this.syncEditorTitle();
         if (!opts || !(opts.type && opts.id)) this.refreshHealth();
         if (!skipPersist) this.persistMenuState();
         if (typeof VFBgMouseParallax !== "undefined" && VFBgMouseParallax.refresh) {

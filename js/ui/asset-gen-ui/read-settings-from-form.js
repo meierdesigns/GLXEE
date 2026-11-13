@@ -54,15 +54,24 @@ extendClass(AssetGenUI, {
             this.readSettingsFromForm();
         }
         const s = this.renderSettings;
+        const isPortrait = !!(entry && entry.type === "portrait");
         const size = (s.useEntrySize && entry && entry.size) ? entry.size : s.outSize;
         const opts = {
-            size: size,
+            size: isPortrait ? (entry.size || 96) : size,
             genSize: s.genSize,
             steps: s.steps,
-            prependStyle: s.prependStyle,
-            colors: s.colors != null ? s.colors : 15,
+            prependStyle: isPortrait ? false : s.prependStyle,
+            colors: isPortrait ? 24 : (s.colors != null ? s.colors : 15),
             bgColor: s.bgColor || "#FF00FF"
         };
+        if (isPortrait) {
+            opts.mode = "portrait";
+            opts.outWidth = 96;
+            opts.outHeight = 108;
+            if (this.portraitReferenceDataUrl) {
+                opts.referenceDataUrl = this.portraitReferenceDataUrl;
+            }
+        }
         if (s.seed !== "" && s.seed != null) opts.seed = Number(s.seed);
         if (promptOverride != null) opts.prompt = promptOverride;
         return opts;
@@ -77,6 +86,14 @@ extendClass(AssetGenUI, {
         if (typeof iconRenderer !== "undefined" && iconRenderer.clearCache) {
             iconRenderer.clearCache();
         }
+        if (entry && entry.type === "portrait") {
+            if (typeof factionPacks !== "undefined" && factionPacks.reload) {
+                await factionPacks.reload();
+            }
+            if (typeof voxelPortrait !== "undefined" && voxelPortrait.invalidatePainted) {
+                voxelPortrait.invalidatePainted(result.url);
+            }
+        }
         window.dispatchEvent(new CustomEvent("vf-asset-accepted", {
             detail: { entry: entry, path: result.path, url: result.url, key: key }
         }));
@@ -86,6 +103,7 @@ extendClass(AssetGenUI, {
     async onGenerate() {
         const entry = this.currentEntry();
         if (!entry || this.busy) return;
+        if (entry.type === "portrait" && !this.requirePortraitReference()) return;
         this.busy = true;
         this.setStatus("Generating via Flux2…");
         try {
@@ -93,7 +111,11 @@ extendClass(AssetGenUI, {
             const opts = this.buildGenerateOptions(entry, prompt);
             const result = await assetGenClient.generate(entry, opts);
             this.stagingId = result.stagingId;
-            this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+            if (entry.type === "portrait") {
+                this.previewDataUrl = result.previewDataUrl;
+            } else {
+                this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+            }
             this.setStatus("Ready · seed " + result.seed + " · Accept to apply");
             this.renderDetail();
             this.renderList();
@@ -114,6 +136,7 @@ extendClass(AssetGenUI, {
             this.setStatus("Check one or more assets first.");
             return;
         }
+        if (list.some((e) => e.type === "portrait") && !this.requirePortraitReference()) return;
         this.busy = true;
         const auto = !!this.renderSettings.autoAcceptBatch;
         let ok = 0;
@@ -127,9 +150,17 @@ extendClass(AssetGenUI, {
                 this.setStatus("Generating " + (i + 1) + "/" + list.length + " · " + entry.label);
                 try {
                     const opts = this.buildGenerateOptions(entry, entry.promptSuffix);
+                    // Unique seed per portrait slot when batch seed empty
+                    if ((opts.seed == null || opts.seed === "") && entry.type === "portrait") {
+                        opts.seed = (Date.now() + i * 9973) % 2147483647;
+                    }
                     const result = await assetGenClient.generate(entry, opts);
                     this.stagingId = result.stagingId;
-                    this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+                    if (entry.type === "portrait") {
+                        this.previewDataUrl = result.previewDataUrl;
+                    } else {
+                        this.previewDataUrl = await this.dataUrlToGrayDataUrl(result.previewDataUrl) || result.previewDataUrl;
+                    }
                     this.renderDetail();
                     if (auto) {
                         await this.acceptResult(entry, result.stagingId);

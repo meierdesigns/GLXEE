@@ -40,15 +40,20 @@ const factionPacks = (() => {
         return Promise.race([Promise.all(list.map(warmSrc)).then(() => { done = true; if (window.vfLog) window.vfLog('load', 'warm ' + f + ' complete in ' + Math.round(performance.now() - t0) + 'ms'); }), new Promise((r) => setTimeout(() => { if (!done && window.vfLog) window.vfLog('load', 'warm ' + f + ' CAP HIT after ' + lim + 'ms: some art still loading'); r(); }, lim))]);
     }
 
-    async function listFiles() {
+    async function listFiles(preferLive) {
         // Manifests first (tools/build-faction-manifests.py): a plain static host then logs no 404 at all. Only without
         // any manifest does it ask the dev server (/__factions), which lists the folders live.
+        // preferLive: after Asset-Gen portrait accept, skip stale manifests and re-list from the dev server.
         const out = {}, ids = (typeof factionShipStyles !== 'undefined' && factionShipStyles.factions) || ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
+        const host = (typeof location !== 'undefined' && location.hostname) || '';
+        const localDev = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+        if (preferLive && localDev) {
+            const live = await getJson('/__factions');
+            if (live && typeof live === 'object') return live;
+        }
         await Promise.all(ids.map(async (f) => { const m = await getJson(BASE + f + '/manifest.json'); if (Array.isArray(m)) out[f] = m; }));
         if (Object.keys(out).length) return out;
         // /__factions is local-dev only — hosted builds (itch.io) stay on static manifests.
-        const host = (typeof location !== 'undefined' && location.hostname) || '';
-        const localDev = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
         return localDev ? ((await getJson('/__factions')) || out) : out;
     }
     function applyStyle(f, style) {
@@ -113,6 +118,20 @@ const factionPacks = (() => {
         resolve();
         document.dispatchEvent(new CustomEvent('vf-faction-packs-ready'));
     }
+    /** Re-read manifests / __factions and merge new portrait (and other) files without full page reload. */
+    async function reload() {
+        try {
+            const all = await listFiles(true);
+            await Promise.all(Object.keys(all).map(async (f) => {
+                files[f] = all[f];
+                if (has(f, 'faction.json')) cfg[f] = (await getJson(url(f, 'faction.json'))) || cfg[f] || {};
+            }));
+            document.dispatchEvent(new CustomEvent('vf-faction-packs-reloaded'));
+        } catch (e) {
+            if (window.console) console.warn('[factionPacks.reload]', e && e.message);
+        }
+    }
+
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
-    return { ready, has, url, warmFaction, config: (f) => cfg[f] || {}, files: (f) => (files[f] || []).slice() };
+    return { ready, has, url, warmFaction, reload, config: (f) => cfg[f] || {}, files: (f) => (files[f] || []).slice() };
 })();

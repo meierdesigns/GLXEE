@@ -22,6 +22,31 @@ extendClass(AssetGenRegistry, {
         return ["scout", "assault", "heavy", "elite", "capital"];
     },
 
+    listPortraits() {
+        const factions = this.factionIds();
+        const out = [];
+        factions.forEach((faction) => {
+            for (let i = 1; i <= 16; i++) {
+                const nn = String(i).padStart(2, "0");
+                const id = "portrait-" + faction + "-" + nn;
+                out.push(this.entry("portrait", id, {
+                    folder: "factions/" + faction + "/portraits",
+                    fileId: nn,
+                    size: 96,
+                    targetPath: "assets/factions/" + faction + "/portraits/" + nn + ".png",
+                    filenamePrefix: "portraits/vf_" + faction,
+                    spriteKey: id,
+                    label: String(faction).toUpperCase() + " · " + nn,
+                    promptSuffix: this.portraitPrompt(id),
+                    faction: faction,
+                    kind: "portrait",
+                    variant: i - 1
+                }));
+            }
+        });
+        return out;
+    },
+
     listFactions() {
         return this.factionIds().map((id) => {
             const key = (typeof factionShipStyles !== "undefined" && factionShipStyles.emblemKey)

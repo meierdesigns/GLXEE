@@ -825,8 +825,7 @@ details.settings-section[open] > .settings-style-body {
 }
 .profile-selection-name-mode .profile-modal-crest > * { width: 100%; height: 100%; }
 
-/* Name step: bigger galaxy card, compact ship box with the weapon icon. */
-.profile-selection-name-mode.is-name-step .profile-faction-preview-emblem { display: none; }
+/* Name step: bigger galaxy card, compact ship box; crest stays as ship badge. */
 .profile-selection-name-mode.is-name-step .profile-faction-preview {
     min-height: 0;
     max-width: 640px;
@@ -1539,3 +1538,25 @@ html .home-station-overlay .home-station-content .hs-body.hs-body-components {
 .hs-portrait-states .hs-portrait-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .hs-portrait-states .hs-portrait-card { display: flex; gap: 2px; padding: 3px; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(200, 160, 64, 0.35); }
 .hs-portrait-states .hs-portrait-card canvas { width: 72px; height: 81px; image-rendering: pixelated; }
+.hs-portrait-face-editor {
+    margin-bottom: 16px;
+    padding: 12px;
+    border: 1px solid rgba(200, 160, 64, 0.45);
+    background: rgba(0, 0, 0, 0.4);
+}
+.hs-portrait-face-actions { display: flex; gap: 8px; margin-top: 8px; }
+.hs-portrait-face-open {
+    appearance: none;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.06em;
+    padding: 8px 14px;
+    color: #f0d080;
+    background: rgba(200, 160, 64, 0.15);
+    border: 1px solid rgba(200, 160, 64, 0.7);
+}
+.hs-portrait-face-open:hover {
+    color: #fff2c0;
+    background: rgba(200, 160, 64, 0.28);
+}
+.hs-portrait-gallery { margin-top: 8px; }

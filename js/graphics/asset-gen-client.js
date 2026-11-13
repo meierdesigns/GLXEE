@@ -118,16 +118,25 @@ class AssetGenClient {
         const prompt = (opts.prompt != null && String(opts.prompt).trim())
             ? String(opts.prompt).trim()
             : (entry.promptSuffix || "");
+        const mode = opts.mode || (entry && entry.type === "portrait" ? "portrait" : "sprite");
         const body = {
             prompt: prompt,
             filenamePrefix: entry.filenamePrefix,
             size: opts.size != null ? Number(opts.size) : (entry.size || 64),
             genSize: opts.genSize != null ? Number(opts.genSize) : 512,
-            steps: opts.steps != null ? Number(opts.steps) : 4
+            steps: opts.steps != null ? Number(opts.steps) : 4,
+            mode: mode
         };
         if (opts.prependStyle === false) body.prependStyle = false;
-        if (opts.colors != null) body.colors = Math.max(2, Math.min(15, Number(opts.colors) || 15));
+        if (opts.colors != null) {
+            const maxC = mode === "portrait" ? 48 : 15;
+            body.colors = Math.max(2, Math.min(maxC, Number(opts.colors) || (mode === "portrait" ? 24 : 15)));
+        }
         if (opts.bgColor) body.bgColor = String(opts.bgColor);
+        if (opts.referenceDataUrl) body.referenceDataUrl = String(opts.referenceDataUrl);
+        if (opts.referencePath) body.referencePath = String(opts.referencePath);
+        if (opts.outWidth != null) body.outWidth = Number(opts.outWidth);
+        if (opts.outHeight != null) body.outHeight = Number(opts.outHeight);
         const seedVal = opts.seed != null ? opts.seed : seed;
         if (seedVal != null && seedVal !== "") body.seed = Number(seedVal);
         if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");

@@ -115,7 +115,30 @@ extendClass(AssetGenUI, {
         if (!box) return;
         box.innerHTML = "";
         if (!entry) return;
-        this.drawThumbInto(box, entry, Math.min(168, Math.max(48, (entry.size || 32) * 4)));
+        const isFace = !!(entry && (entry.type === "portrait" || entry.kind === "portrait"));
+        // Live voxel portrait so BACKDROP + ANIMATION play in CURRENT.
+        if (isFace && typeof voxelPortrait !== "undefined" && voxelPortrait.canvasHtml
+            && typeof VXP !== "undefined") {
+            let v = (entry.variant != null) ? Number(entry.variant) : NaN;
+            if (!Number.isFinite(v)) {
+                const m = String(entry.id || entry.fileId || "").match(/(\d+)\s*$/);
+                v = m ? (parseInt(m[1], 10) - 1) : 0;
+            }
+            const look = {
+                faction: entry.faction || "terran",
+                v: v,
+                bgv: this.portraitBgv | 0,
+                bga: this.portraitBga | 0
+            };
+            box.innerHTML = voxelPortrait.canvasHtml(look, null, null);
+            if (voxelPortrait.scan) voxelPortrait.scan(box);
+            // If a painted PNG exists it still wins via voxelPortrait.painted().
+            return;
+        }
+        const px = isFace
+            ? 256
+            : Math.min(168, Math.max(48, (entry.size || 32) * 4));
+        this.drawThumbInto(box, entry, px);
     },
 
     renderDetail() {
@@ -130,6 +153,7 @@ extendClass(AssetGenUI, {
         if (!gen) return;
         gen.innerHTML = "";
         if (this.previewDataUrl) {
+            const keepColor = entry && (entry.type === "portrait" || entry.kind === "portrait");
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement("canvas");
@@ -138,7 +162,7 @@ extendClass(AssetGenUI, {
                 const ctx = canvas.getContext("2d");
                 ctx.imageSmoothingEnabled = false;
                 ctx.drawImage(img, 0, 0);
-                this.desaturateCanvas(canvas);
+                if (!keepColor) this.desaturateCanvas(canvas);
                 gen.innerHTML = "";
                 gen.appendChild(canvas);
             };

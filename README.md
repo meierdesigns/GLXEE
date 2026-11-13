@@ -1073,6 +1073,7 @@ be reviewed or reverted independently.
 | 74D | Victory loot keep | Click/drag-jitter files found parts to ship; take 1 unit per cell; no auto-leave while cargo pending |
 | 74E | Victory loot RMB | RMB sells 1 part cell (not whole stack); ignore trailing button-2 click; ship grid grows so take stays visible; sell/loot notices |
 | 74F | Mute dropdown button | Pure MUTE/UNMUTE control in the bezel volume dropdown; restores prior master level |
+| 74G | Portrait Flux batch | Asset-Gen **PORTRAITS**: one reference image → Flux2 img2img → replace all `assets/factions/*/portraits/01–16.png`; bridge + workflows restored |
 
 The wave commit convention is:
 

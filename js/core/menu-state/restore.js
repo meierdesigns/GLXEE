@@ -162,8 +162,9 @@ extendClass(MenuStateManager, {
                     return true;
                 }
                 break;
-            case 'asset-gen':
-                if (typeof assetGenUI !== 'undefined') {
+            case 'asset-gen': {
+                const openAssetGen = () => {
+                    if (typeof assetGenUI === 'undefined') return false;
                     if (typeof startScreenManager !== 'undefined') {
                         if (s.returnToSettings !== false) {
                             startScreenManager.showSettings = true;
@@ -186,8 +187,15 @@ extendClass(MenuStateManager, {
                         skipPersist: true
                     });
                     return true;
+                };
+                if (openAssetGen()) return true;
+                // Editors bundle still loading — open once it lands (don't wipe menu state).
+                if (typeof window.ensureVfEditors === 'function') {
+                    window.ensureVfEditors(() => { openAssetGen(); });
+                    return true;
                 }
                 break;
+            }
             case 'credits':
                 if (typeof startScreenManager !== 'undefined') {
                     startScreenManager.showCredits = true;

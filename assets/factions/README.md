@@ -5,7 +5,7 @@ Alles, was zu einem Volk gehört, liegt in seinem Ordner. Dateien einfach hinein
 
 | Datei | Wirkung |
 |---|---|
-| `portraits.png` | 4×4-Raster mit 16 Pilotenporträts (Zellen gleich groß, zeilenweise 1–16). Oder einzeln: `portraits/01.png` … `16.png`. Ohne Dateien zeigt das Spiel den Generator. |
+| `portraits.png` | 4×4-Raster mit 16 Pilotenporträts (Zellen gleich groß, zeilenweise 1–16). Oder einzeln: `portraits/01.png` … `16.png`. Ohne Dateien zeigt das Spiel den Generator. Batch-Neuaufbau: Asset Generator → **PORTRAITS** → Beispielbild laden → **GENERATE ALL** (Flux img2img, schreibt `portraits/01–16.png` und aktualisiert `manifest.json`). |
 | `ships/<klasse>.png` | Gegner-Schiff des Volkes: `scout`, `assault`, `heavy`, `elite`, `capital`. Segmente optional: `scout-front.png`, `-center`, `-back`, `-wingLeft`, `-wingRight`, `-wing`. Auch `player-<name>.png` / `enemy-<name>.png` überschreiben das gleichnamige Schiff. |
 | `faction.json` → `style` | Schiffs-Style: `hull`, `edge`, `accent`, `engine` (Hex), `silhouette`, `anatomy` (`front/center/back/wing` je `x`,`y`), `wingVariants`, `defaultWeapons`, `prompt`, `styleStrength`. Nur angegebene Werte ersetzen die Standardwerte. |
 | `faction.json` → `gui.vars` | CSS-Variablen, die nur bei diesem Volk gelten, z. B. `"--color-primary": "#ff8a40"`. `{pack}` steht für den Ordnerpfad: `"--hs-bg": "url({pack}/ui/station.png)"`. |

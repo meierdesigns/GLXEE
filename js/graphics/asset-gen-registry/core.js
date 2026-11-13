@@ -28,6 +28,7 @@ class AssetGenRegistry {
         if (o.faction != null) out.faction = o.faction;
         if (o.enemyClass != null) out.enemyClass = o.enemyClass;
         if (o.kind != null) out.kind = o.kind;
+        if (o.variant != null) out.variant = o.variant;
         if (o.segment != null) out.segment = o.segment;
         if (o.parentShip != null) out.parentShip = o.parentShip;
         if (o.mirrorOf != null) out.mirrorOf = o.mirrorOf;
@@ -105,9 +106,40 @@ class AssetGenRegistry {
                     + ", industrial wreckage or engineered structure, "
                     + "mechanical layered silhouette, grayscale only, no text"
                 );
+            case "portrait":
+                return this.portraitPrompt(id);
             default:
                 return name + " game sprite, grayscale only";
         }
+    }
+
+    /** Faction + variant prompt for a painted pilot portrait (color pixel art). */
+    portraitPrompt(id) {
+        const raw = String(id || "");
+        const m = raw.match(/^portrait-([a-z]+)-(\d{2})$/i);
+        const faction = m ? m[1].toLowerCase() : "terran";
+        const idx = m ? (parseInt(m[2], 10) - 1) : 0;
+        const traits = {
+            terran: "human terran fleet pilot, disciplined military helmet, clean armor collar, stern expression",
+            kronax: "brutal kronax raider pilot, serrated helmet crest, claw-motif visor, aggressive stare",
+            voidborn: "ancient voidborn pilot, hollow alien eyes, crescent helm apertures, eerie calm",
+            pirate: "salvage pirate pilot, mismatched junk helm plates, scavenged goggles, wry grin",
+            machine: "machine-cult pilot, circuit-etched faceplate, glowing optic slits, precise android look"
+        };
+        const trait = traits[faction] || (faction + " sci-fi pilot");
+        const variants = [
+            "young", "scarred", "veteran", "narrow face", "broad jaw", "short crew cut",
+            "long hair under helm", "visor down", "visor up", "asymmetric paint",
+            "battle-worn", "fresh recruit", "cyber implant", "tattooed cheek",
+            "heavy brow", "slim features"
+        ];
+        const v = variants[((idx % variants.length) + variants.length) % variants.length];
+        return (
+            "color pixel-art bust portrait of a " + trait
+            + ", variant " + v + ", head and shoulders only, solid magenta background #FF00FF, "
+            + "crisp pixels, limited palette, match the art style of the reference image, "
+            + "game UI portrait, no text, no UI"
+        );
     }
 
     /** Prompt for a hull segment (front/center/back/wing). Wings are painted once and mirrored. */
@@ -147,6 +179,7 @@ class AssetGenRegistry {
 
     getTypes() {
         return [
+            { id: "portrait", label: "PORTRAITS" },
             { id: "mount", label: "MOUNTS" },
             { id: "icon", label: "ICONS" },
             { id: "ability", label: "ABILITIES" },
@@ -184,6 +217,8 @@ class AssetGenRegistry {
                 return this.listPlanets();
             case "obstacle":
                 return this.listObstacles();
+            case "portrait":
+                return this.listPortraits();
             default:
                 return [];
         }

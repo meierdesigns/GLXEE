@@ -22,6 +22,10 @@ extendClass(AssetGenUI, {
             && assetGenRegistry.listFactionLibrary) {
             return assetGenRegistry.listFactionLibrary();
         }
+        if (this.isPortraitLibrary && this.isPortraitLibrary()
+            && typeof assetGenRegistry !== "undefined" && assetGenRegistry.listPortraits) {
+            return assetGenRegistry.listPortraits();
+        }
         return (typeof assetGenRegistry !== "undefined" && assetGenRegistry.list)
             ? (assetGenRegistry.list(this.typeId) || [])
             : [];
@@ -55,6 +59,9 @@ extendClass(AssetGenUI, {
 
     visibleLibraryEntries() {
         if (this.isFactionLibrary()) return this.filteredFactionEntries();
+        if (this.isPortraitLibrary && this.isPortraitLibrary() && this.filteredPortraitEntries) {
+            return this.filteredPortraitEntries();
+        }
         return this.libraryEntriesForType();
     },
 
@@ -64,6 +71,7 @@ extendClass(AssetGenUI, {
         if (!chrome) return;
         const on = this.isFactionLibrary();
         chrome.hidden = !on;
+        if (this.syncPortraitChrome) this.syncPortraitChrome();
         if (!on) return;
         this.renderFactionTabs();
         const filterEl = this.overlay.querySelector("#agFactionFilter");
@@ -231,8 +239,9 @@ extendClass(AssetGenUI, {
             });
 
             const thumb = document.createElement("div");
-            thumb.className = "ag-thumb";
-            this.drawThumbInto(thumb, entry, 28);
+            const face = entry.type === "portrait" || entry.kind === "portrait";
+            thumb.className = "ag-thumb" + (face ? " ag-thumb-face" : "");
+            this.drawThumbInto(thumb, entry, face ? 72 : 28);
             thumb.addEventListener("mouseenter", () => this.showHoverZoom(thumb, entry));
             thumb.addEventListener("mouseleave", () => this.hideHoverZoom());
 

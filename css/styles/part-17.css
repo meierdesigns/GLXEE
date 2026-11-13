@@ -958,6 +958,41 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
     color: #d8d2c4;
     text-transform: none;
 }
+.launch-cutscene-speaker {
+    font-size: clamp(11px, 1.4vw, 13px);
+    letter-spacing: 0.22em;
+    color: var(--color-primary, #e8c56a);
+    margin-bottom: 8px;
+}
+.launch-cutscene-line {
+    font-size: clamp(14px, 2vw, 18px);
+    letter-spacing: 0.03em;
+    line-height: 1.4;
+    color: #f4f0e4;
+    text-transform: none;
+    min-height: 2.8em;
+}
+.launch-cutscene-title-mini {
+    margin-top: 12px;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    opacity: 0.55;
+    color: #d8d2c4;
+}
+.launch-cutscene-hint {
+    position: absolute;
+    left: 20px;
+    bottom: 22px;
+    z-index: 2;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    color: color-mix(in srgb, var(--color-primary, #e8c56a) 70%, transparent);
+    font-family: "Courier New", Courier, monospace;
+    text-transform: uppercase;
+    pointer-events: none;
+    opacity: 0.35;
+    transition: opacity 200ms ease;
+}
 
 /* STORY wizard step: full-width story tiles + mission strip. Type = stepper 18px. */
 .profile-story-step {
@@ -1348,6 +1383,22 @@ html body .game-over .game-over-content p {
     16% { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .gm-battle-px { animation: none; opacity: 0.6; fill: #ffb347; } }
+
+/* Raid/hunt mission: minimal chevron fleet in space around the planet. */
+.gm-fleet { pointer-events: none; }
+.gm-fleet-ship { opacity: 0.55; }
+.gm-fleet-ship path { fill: var(--fac, var(--color-primary)); }
+.gm-fleet-ship {
+    animation: gm-fleet-blink 2.8s steps(2, end) infinite;
+    animation-delay: var(--bd, 0s);
+}
+@keyframes gm-fleet-blink {
+    0%, 100% { opacity: 0.95; }
+    50%      { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .gm-fleet-ship { animation: none; opacity: 0.75; }
+}
 
 /* Start galaxy card: real planet sprites on a star field, readable text. */
 .profile-start-galaxy-map .stars rect { fill: #cfe4ff; }

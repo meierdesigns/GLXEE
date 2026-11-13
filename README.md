@@ -1074,6 +1074,7 @@ be reviewed or reverted independently.
 | 74E | Victory loot RMB | RMB sells 1 part cell (not whole stack); ignore trailing button-2 click; ship grid grows so take stays visible; sell/loot notices |
 | 74F | Mute dropdown button | Pure MUTE/UNMUTE control in the bezel volume dropdown; restores prior master level |
 | 74G | Portrait Flux batch | Asset-Gen **PORTRAITS**: one reference image → Flux2 img2img → replace all `assets/factions/*/portraits/01–16.png`; bridge + workflows restored |
+| 74H | Raid fleet map mark | RAID/HUNT missions show a minimal orbiting chevron fleet in space (like invasion battle pixels), not a plaque sign |
 
 The wave commit convention is:
 

@@ -10,88 +10,105 @@ extendClass(GalaxyMapManager, {
         if (typeof planetConfigManager === 'undefined' || !planetConfigManager.getGalaxySuns) return '';
         const suns = planetConfigManager.getGalaxySuns(this.galaxyId) || [];
         this.prepareSunDrift(W, H, pad);
+        // Parse #rrggbb once (canvas can't use CSS vars / color-mix).
+        const hexRgb = (hex, fallback) => {
+            const m = /^#([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+            if (!m) return fallback;
+            const n = parseInt(m[1], 16);
+            return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+        };
+        const bakeSun = (i, r, px, detail, color, glow) => {
+            // One pixelated sprite per sun (glow + disc + granulation). SVG rect
+            // strips per ring were hundreds of nodes and forced continuous
+            // animation repaints — the baked image keeps the look, not the cost.
+            const cell = Math.max(px, (2 * r * 2.6) / 96);
+            const n = Math.max(8, Math.round((2 * r * 2.6) / cell));
+            const octaves = Math.max(2, Math.min(4, 2 + Math.floor(Math.log2(Math.max(1, detail)))));
+            const skey = `${this.galaxyId}|${i}|${n}|${octaves}|${color}|${glow}`;
+            this._sunSurf = this._sunSurf || {};
+            let url = this._sunSurf[skey];
+            if (!url && typeof document !== 'undefined') {
+                const cv = document.createElement('canvas');
+                cv.width = n; cv.height = n;
+                const cx2 = cv.getContext('2d');
+                const img = cx2.createImageData(n, n);
+                const sunRgb = hexRgb(color, [255, 160, 64]);
+                const glowRgb = hexRgb(glow, [255, 120, 40]);
+                const hash = (x, y) => {
+                    let h = Math.imul(x * 374761393 + y * 668265263 + (i + 1) * 982451653, 1274126177);
+                    h = Math.imul(h ^ (h >>> 13), 1103515245);
+                    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+                };
+                const vnoise = (x, y) => {
+                    const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+                    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+                    return (hash(x0, y0) * (1 - u) + hash(x0 + 1, y0) * u) * (1 - v)
+                        + (hash(x0, y0 + 1) * (1 - u) + hash(x0 + 1, y0 + 1) * u) * v;
+                };
+                const half = n / 2;
+                const rCell = r / cell;
+                for (let yy = 0; yy < n; yy++) {
+                    for (let xx = 0; xx < n; xx++) {
+                        const dx = xx + 0.5 - half, dy = yy + 0.5 - half;
+                        const q = Math.hypot(dx, dy) / rCell;
+                        const k = (yy * n + xx) * 4;
+                        let rr = 0, gg = 0, bb = 0, aa = 0;
+                        if (q <= 2.6) {
+                            if (q > 1.0) {
+                                const t = q <= 1.7 ? 0.2 : 0.12 * (1 - (q - 1.7) / 0.9);
+                                rr = glowRgb[0]; gg = glowRgb[1]; bb = glowRgb[2];
+                                aa = Math.max(0, Math.round(255 * t));
+                            } else {
+                                const limb = 1 - q * 0.35;
+                                rr = Math.round(sunRgb[0] * limb);
+                                gg = Math.round(sunRgb[1] * limb);
+                                bb = Math.round(sunRgb[2] * limb);
+                                aa = 255;
+                                if (q < 0.72) {
+                                    rr = Math.round(rr * 0.4 + 255 * 0.6);
+                                    gg = Math.round(gg * 0.4 + 255 * 0.6);
+                                    bb = Math.round(bb * 0.4 + 255 * 0.6);
+                                }
+                                if (q < 0.38) { rr = gg = bb = 255; }
+                                let v = 0, amp = 0.5, f = 3, tot = 0;
+                                for (let o = 0; o < octaves; o++) {
+                                    v += vnoise(dx / rCell * f + 40 * i, dy / rCell * f) * amp;
+                                    tot += amp; amp *= 0.55; f *= 2;
+                                }
+                                v /= tot;
+                                if (v < 0.34) { rr = Math.round(rr * 0.55); gg = Math.round(gg * 0.55); bb = Math.round(bb * 0.55); }
+                                else if (v > 0.66) {
+                                    rr = Math.min(255, rr + 40);
+                                    gg = Math.min(255, gg + 40);
+                                    bb = Math.min(255, bb + 28);
+                                }
+                            }
+                        }
+                        img.data[k] = rr; img.data[k + 1] = gg; img.data[k + 2] = bb; img.data[k + 3] = aa;
+                    }
+                }
+                cx2.putImageData(img, 0, 0);
+                url = this._sunSurf[skey] = cv.toDataURL();
+                const keys = Object.keys(this._sunSurf);
+                if (keys.length > 24) delete this._sunSurf[keys[0]];
+            }
+            const side = n * cell;
+            return url
+                ? `<image class="gm-sun-sprite" href="${url}" x="${(-side / 2).toFixed(2)}" y="${(-side / 2).toFixed(2)}" width="${side.toFixed(2)}" height="${side.toFixed(2)}" preserveAspectRatio="none"/>`
+                : '';
+        };
         return suns.map((s, i) => {
             const pose = this._sunDrift[i];
             const at = this.sunDriftPos(pose, performance.now() / 1000);
             const r = pose.r;
-            // Circle quantised to square pixels of size p, as row strips.
-            const pixelCircle = (radius, p) => {
-                let out = '';
-                for (let dy = -radius; dy < radius; dy += p) {
-                    const mid = dy + p / 2;
-                    const half = Math.floor(Math.sqrt(Math.max(0, radius * radius - mid * mid)) / p) * p;
-                    if (half > 0) out += `<rect x="${-half}" y="${dy}" width="${half * 2}" height="${p}"/>`;
-                }
-                return out;
-            };
-            // Star pixels follow the zoom detail (planet pixel size, so the sun
-            // sharpens with the planets); glow rings stay a few steps coarser.
             const detail = this.getMapDetail ? this.getMapDetail() : 1;
-            // The sun is built from the map's one pixel (power-of-two step, same as the nebula cell).
             const px = 8 / Math.pow(2, Math.max(0, Math.round(Math.log2(8 / this.mapPixelUnitGlobal()))));
-            const gp = Math.max(px * 2, Math.round(r / 4) / detail);
-            const disc = pixelCircle(r, px);
-            // Limb darkening: a slightly smaller, brighter inner disc.
-            const inner = pixelCircle(Math.round(r * 0.72), px);
-            const core = pixelCircle(Math.round(r * 0.38), px);
-            // Surface: granulation + sunspots from layered value noise. Zooming in (finer px)
-            // adds octaves, so the star gains detail instead of just a smoother edge.
-            const hash = (x, y) => { let h = Math.imul(x * 374761393 + y * 668265263 + (i + 1) * 982451653, 1274126177); h = Math.imul(h ^ (h >>> 13), 1103515245); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-            const vnoise = (x, y) => {
-                const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
-                const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
-                return (hash(x0, y0) * (1 - u) + hash(x0 + 1, y0) * u) * (1 - v) + (hash(x0, y0 + 1) * (1 - u) + hash(x0 + 1, y0 + 1) * u) * v;
-            };
-            // The surface is painted once into a tiny canvas and shown as one pixelated <image>:
-            // thousands of SVG rects per sun repainted on every zoom frame were the slow part.
-            const sp = Math.max(px, (2 * r) / 90);
-            const octaves = Math.max(2, Math.min(5, 2 + Math.floor(Math.log2(Math.max(1, detail)))));
-            const n = Math.max(2, Math.ceil((2 * r) / sp));
-            let surface = '';
-            if (typeof document !== 'undefined') {
-                const skey = `${this.galaxyId}|${i}|${n}|${octaves}`;
-                this._sunSurf = this._sunSurf || {};
-                let url = this._sunSurf[skey];
-                if (!url) {
-                    const cv = document.createElement('canvas');
-                    cv.width = n; cv.height = n;
-                    const cx2 = cv.getContext('2d');
-                    const img = cx2.createImageData(n, n);
-                    for (let yy = 0; yy < n; yy++) {
-                        for (let xx = 0; xx < n; xx++) {
-                            const dx = (xx + 0.5) * sp - n * sp / 2, dy = (yy + 0.5) * sp - n * sp / 2;
-                            const q = Math.sqrt(dx * dx + dy * dy) / r;
-                            if (q > 0.98) continue;
-                            let v = 0, amp = 0.5, f = 3, tot = 0;
-                            for (let o = 0; o < octaves; o++) { v += vnoise(dx / r * f + 40 * i, dy / r * f) * amp; tot += amp; amp *= 0.55; f *= 2; }
-                            v /= tot;
-                            const k = (yy * n + xx) * 4;
-                            if (v < 0.34) { img.data[k] = img.data[k + 1] = img.data[k + 2] = 0; img.data[k + 3] = 41; }
-                            else if (v > 0.66) { img.data[k] = img.data[k + 1] = img.data[k + 2] = 255; img.data[k + 3] = 31; }
-                        }
-                    }
-                    cx2.putImageData(img, 0, 0);
-                    url = this._sunSurf[skey] = cv.toDataURL();
-                    const keys = Object.keys(this._sunSurf);
-                    if (keys.length > 24) delete this._sunSurf[keys[0]];
-                }
-                const side = n * sp;
-                surface = `<image href="${url}" x="${-side / 2}" y="${-side / 2}" width="${side}" height="${side}" preserveAspectRatio="none" style="image-rendering:pixelated;image-rendering:crisp-edges"/>`;
-            }
-            // No rays: the star itself animates (breathing body, flickering
-            // surface, pulsing glow) — see .gm-sun-body in styles.css.
             const delay = `animation-delay:${(-i * 1.7).toFixed(1)}s`;
+            const sprite = bakeSun(i, r, px, detail, s.color, s.glow);
             return `
                 <g class="gm-sun gm-sun-${s.kind}" data-sun="${i}" transform="translate(${at.x.toFixed(1)},${at.y.toFixed(1)})" style="--sun:${s.color};--sun-glow:${s.glow}">
                     <title>${s.kind.toUpperCase()} STAR</title>
-                    <g class="gm-sun-glow gm-sun-glow-outer" style="${delay}">${pixelCircle(Math.round(r * 2.6 / gp) * gp, gp)}</g>
-                    <g class="gm-sun-glow gm-sun-glow-inner" style="${delay}">${pixelCircle(Math.round(r * 1.7 / gp) * gp, gp)}</g>
-                    <g class="gm-sun-body" style="${delay}">
-                        <g class="gm-sun-disc">${disc}</g>
-                        <g class="gm-sun-inner" style="${delay}">${inner}</g>
-                        <g class="gm-sun-core" style="${delay}">${core}</g>
-                        <g class="gm-sun-surface" shape-rendering="crispEdges">${surface}</g>
-                    </g>
+                    <g class="gm-sun-body" style="${delay}">${sprite}</g>
                 </g>`;
         }).join('');
     },
@@ -220,7 +237,7 @@ extendClass(GalaxyMapManager, {
         if (o.run) {
             // Dashes are cells on the line's grid (like the packets), marched by F frames.
             const dash = width * 5, period = dash + width * 8;
-            const F = 16, dur = 1.2;
+            const F = 8, dur = 1.2;
             const cRad = Math.max(0.71, rad), gRad = Math.max(cRad + 0.71, rad * 2.4);
             const G = Math.ceil(gRad);
             const frame = (shift) => {
@@ -371,7 +388,8 @@ extendClass(GalaxyMapManager, {
             });
             // Packets are cells on the line's own grid (not vector strokes), so they share
             // its pixel size. The march is F pre-built frames shown one after another.
-            const F = 16;
+            // 8 frames (was 16): half the animated path nodes, still stepped/pixel-art.
+            const F = 8;
             const dur = o.traffic ? 5.4 : 3.2;
             const on = [];
             let acc = 0;
@@ -482,8 +500,9 @@ extendClass(GalaxyMapManager, {
         return out;
     },
     /**
-     * Sign / plaque on the planet of the pilot's chosen activeMission
-     * (hangar board or faction contract). Hover title carries the objective.
+     * Active mission mark on the target planet. Combat raids/hunts show a
+     * minimal fleet in space (same spirit as planetBattleSvg explosions on
+     * invaded worlds); other mission types keep a small icon pin + tooltip.
      */
     missionMarkerSvg(planetId, size) {
         if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return '';
@@ -498,26 +517,67 @@ extendClass(GalaxyMapManager, {
         const reward = Object.keys(m.reward || {}).map((k) =>
             m.reward[k] + ' ' + (k === 'credits' ? 'CR' : k.toUpperCase())).join(' · ');
         const objective = 'Complete the ' + String(m.type || 'mission').toLowerCase() + ' on ' + planet + '.';
-        const tip = ('ACTIVE MISSION · ' + type + ' · ' + planet
-            + ' — ' + objective
-            + (reward ? ' · REWARD ' + reward : '')).replace(/"/g, '');
+        const tipHead = type;
+        const tipBody = (planet + ' — ' + objective
+            + (reward ? '\nREWARD ' + reward : ''));
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
         const fStyle = m.factionId && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
             ? factionShipStyles.getFactionStyle(m.factionId) : null;
         const accent = (fStyle && fStyle.accent) || 'var(--color-primary)';
         const f = size / 2 + 10;
-        const label = type.length > 10 ? 'MISSION' : type;
-        return `<g class="gm-mission-mark" style="--fac:${accent}">` +
-            `<title>${tip}</title>` +
-            // Signboard above the planet (plaque + pole).
-            `<g class="gm-mission-sign" transform="translate(0,${-(f + 18)})">` +
-            `<rect class="gm-mission-sign-board" x="-46" y="-14" width="92" height="22"/>` +
-            `<rect class="gm-mission-sign-board-in" x="-44" y="-12" width="88" height="18"/>` +
-            `<line class="gm-mission-sign-pole" x1="0" y1="8" x2="0" y2="18"/>` +
-            `<text class="gm-mission-sign-label gm-vec-text" x="0" y="2">${label}</text>` +
-            `<g class="gm-stage-anchor gm-px-only" data-r="0" transform="translate(0,2)">${this.pixelTextGroup(label, 0, 0, 'middle')}</g>` +
-            `</g>` +
-            `<circle class="gm-mission-sign-dot" cx="0" cy="${-f}" r="3"/>` +
+        const icon = (typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml)
+            ? iconRenderer.imgHtml('navScroll', 12, 'gm-mission-mark-ico', accent, false)
+            : '';
+        const iconPin = (oy) =>
+            `<g class="gm-mission-sign" transform="translate(0,${oy})">` +
+            `<rect class="gm-mission-sign-board" x="-9" y="-9" width="18" height="18"/>` +
+            `<rect class="gm-mission-sign-board-in" x="-7" y="-7" width="14" height="14"/>` +
+            `<foreignObject class="gm-mission-sign-fo" x="-8" y="-8" width="16" height="16">` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-mission-sign-icon"` +
+            ` data-ui-tip-head="${esc(tipHead)}" data-ui-tip="${esc(tipBody)}"` +
+            ` aria-label="${esc(tipHead)}">${icon}</div></foreignObject>` +
             `</g>`;
+        const fleetType = (type === 'RAID' || type === 'HUNT');
+        if (fleetType) {
+            return `<g class="gm-mission-mark is-fleet" style="--fac:${accent}">` +
+                this.missionFleetSvg(planetId) +
+                iconPin(f + 14) +
+                `</g>`;
+        }
+        return `<g class="gm-mission-mark" style="--fac:${accent}">` +
+            iconPin(-(f + 14)) +
+            `<line class="gm-mission-sign-pole" x1="0" y1="${-(f + 5)}" x2="0" y2="${-f}"/>` +
+            `<circle class="gm-mission-sign-dot" cx="0" cy="${-f}" r="2.5"/>` +
+            `</g>`;
+    },
+    /**
+     * Tiny chevron fleet in space around a raid/hunt planet — outside the
+     * disc, seeded per planet, pulsing like the invasion battle pixels.
+     */
+    missionFleetSvg(planetId) {
+        const k = this.getMapObjectScale();
+        const cell = Math.max(1.5, (this.planetPixelSize ? this.planetPixelSize(planetId) : 2) * k);
+        const r = this.planetSurfaceRadius(planetId) * k;
+        let seed = 0xF1EE7;
+        for (const ch of String(planetId)) seed = (Math.imul(seed, 31) + ch.charCodeAt(0)) >>> 0;
+        const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 8) / 16777216;
+        const n = 5 + Math.floor(rnd() * 3);
+        let out = '<g class="gm-fleet" shape-rendering="crispEdges">';
+        for (let i = 0; i < n; i++) {
+            const a = rnd() * Math.PI * 2;
+            const d = r + cell * (2.2 + rnd() * 4.5);
+            const x = Math.cos(a) * d;
+            const y = Math.sin(a) * d;
+            // Nose along the orbit tangent so the pack reads as flying, not stuck.
+            const deg = (a * 180 / Math.PI) + 90 + (rnd() - 0.5) * 28;
+            const s = (0.55 + rnd() * 0.35) * Math.max(0.85, cell / 2);
+            const delay = (rnd() * 2.8).toFixed(2);
+            out += `<g class="gm-fleet-ship" transform="translate(${x.toFixed(2)},${y.toFixed(2)}) rotate(${deg.toFixed(1)}) scale(${s.toFixed(2)})" style="--bd:${delay}s">` +
+                `<path d="M0 -4 L3 3 L0 1.5 L-3 3 Z"/>` +
+                `</g>`;
+        }
+        return out + '</g>';
     },
 
     /** "UNDER ATTACK" marker on the planet of an active invasion (invasion-scenario.js). */

@@ -1080,6 +1080,7 @@ be reviewed or reverted independently.
 | 74K | Orbit fleet fire + flight | Hero-planet backdrop fleets shoot per faction; per-faction flightProfiles for orbit craft |
 | 74L | Pilot backdrop animation | Configurable animated portrait backdrop (bgv) + motion speed (bga) on CREATE YOUR PILOT, Bezel TOOLS, and Face Editor |
 | 74M | DevMode Face Editor entry | Shift+C DevMode in onboarding; Settings/Bezel/PORTRAITS open Face Editor (Flux); Face Editor hosts in bezel glass |
+| 74N | Pirate chain slow | CHAIN unlock slows hit hulls briefly; scrap slug fan + item-track gates for pirate kit |
 
 The wave commit convention is:
 

@@ -187,6 +187,9 @@ extendClass(ProfileManager, {
         if (this.ITEM_UPGRADE_BUCKETS.indexOf(b) === -1 || !id || !trackDefs || !trackDefs[track]) {
             return { ok: false, reason: 'INVALID' };
         }
+        if (economyConfig.itemTrackApplies && !economyConfig.itemTrackApplies(b, id, track)) {
+            return { ok: false, reason: 'INVALID' };
+        }
         if (!this._itemIsOwnedOrEquipped(p, b, id)) {
             return { ok: false, reason: 'NOT_OWNED' };
         }
@@ -329,7 +332,10 @@ extendClass(ProfileManager, {
                 damageMul: 1 + ramp(trackLevel('dmg'), 0.05, 0.02),
                 cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('rof'), 0.04, 0.015)),
                 rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015),
-                reflectiveShots: trackLevel('reflect') > 0
+                reflectiveShots: trackLevel('reflect') > 0,
+                chainSlow: trackLevel('chain') > 0
+                    && (typeof economyConfig === 'undefined' || !economyConfig.itemTrackApplies
+                        || economyConfig.itemTrackApplies('weapons', itemId, 'chain'))
             };
         }
         if (bucket === 'defenses') {

@@ -177,7 +177,15 @@ class EconomyConfig {
                 rof: { label: 'ROF', desc: '−Cooldown (rate of fire)', maxLevel: 5, costMul: 1.0 },
                 range: { label: 'RANGE', desc: '+Projectile speed', maxLevel: 5, costMul: 0.9 },
                 // Binary unlock: player shots from this weapon clash/redirect vs enemy shots.
-                reflect: { label: 'REFLECT', desc: 'Reflective shots (clash with enemy fire)', maxLevel: 1, costMul: 1.6 }
+                reflect: { label: 'REFLECT', desc: 'Reflective shots (clash with enemy fire)', maxLevel: 1, costMul: 1.6 },
+                // Pirate spread-family unlock: chain links cling to hulls and drag them down briefly.
+                chain: {
+                    label: 'CHAIN',
+                    desc: 'Chain shot: temporarily slows hit enemies',
+                    maxLevel: 1,
+                    costMul: 1.55,
+                    weaponIds: ['spread', 'burst']
+                }
             },
             defenses: {
                 capacity: { label: 'CAPACITY', desc: '+Shield / armor value', maxLevel: 5, costMul: 1.1 },
@@ -360,10 +368,23 @@ class EconomyConfig {
     }
 
     /** Cost to raise one specific item's track (weapons/defenses/abilities/energy) to nextLevel. */
+    /** Whether an EQUIPMENT track applies to this item (weapon-family gates like CHAIN). */
+    itemTrackApplies(bucket, itemId, track) {
+        const def = this.itemUpgradeTrackDefs[bucket] && this.itemUpgradeTrackDefs[bucket][track];
+        if (!def) return false;
+        if (!def.weaponIds || !def.weaponIds.length) return true;
+        const raw = String(itemId || '');
+        const defId = (typeof profileManager !== 'undefined' && profileManager.partDefId)
+            ? profileManager.partDefId(raw)
+            : raw.replace(/#\d+$/, '');
+        return def.weaponIds.indexOf(String(defId || '').toLowerCase()) !== -1;
+    }
+
     getItemTrackUpgradeCost(bucket, itemId, track, nextLevel) {
         const def = this.itemUpgradeTrackDefs[bucket] && this.itemUpgradeTrackDefs[bucket][track];
         const base = this.itemUpgradeCatBase[bucket];
         if (!def || !base) return null;
+        if (!this.itemTrackApplies(bucket, itemId, track)) return null;
         const lv = Math.max(1, Math.round(Number(nextLevel) || 1));
         if (lv > def.maxLevel) return null;
         const trackMul = Number(def.costMul) || 1;

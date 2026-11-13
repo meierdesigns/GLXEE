@@ -95,7 +95,9 @@ extendClass(HomeStationUI, {
         if (typeof economyConfig === 'undefined' || typeof profileManager === 'undefined') return '';
         const trackDefs = economyConfig.itemUpgradeTrackDefs[bucket];
         if (!trackDefs) return '';
-        const tracks = Object.keys(trackDefs).map((track) => this._renderItemTrackLine(bucket, id, track, trackDefs[track], profile)).join('');
+        const tracks = Object.keys(trackDefs)
+            .filter((track) => !economyConfig.itemTrackApplies || economyConfig.itemTrackApplies(bucket, id, track))
+            .map((track) => this._renderItemTrackLine(bucket, id, track, trackDefs[track], profile)).join('');
         return `<div class="hs-equip-detail">` +
             tracks +
             this._renderItemModeRow(bucket, id, profile) +

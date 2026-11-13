@@ -47,7 +47,10 @@ extendClass(HomeStationUI, {
             ? economyConfig.itemUpgradeTrackDefs[bucket]
             : null;
         const maxLevel = trackDefs
-            ? Object.keys(trackDefs).reduce((sum, t) => sum + (trackDefs[t].maxLevel || 5), 0)
+            ? Object.keys(trackDefs).reduce((sum, t) => {
+                if (economyConfig.itemTrackApplies && !economyConfig.itemTrackApplies(bucket, id, t)) return sum;
+                return sum + (trackDefs[t].maxLevel || 5);
+            }, 0)
             : ((typeof economyConfig !== 'undefined' && economyConfig.itemUpgradeMaxLevel) || 5);
         const kind = this._itemBucketKind(bucket);
         let onStation = false;

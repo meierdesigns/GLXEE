@@ -69,7 +69,7 @@ extendClass(PlanetConfigManager, {
                     lore: 'Magpie Renn has survived eleven mutinies by starting nine of them. Her flagship is welded from the hulls of every rival, with some of the rivals still aboard. In the Chain Market she sells debt, and the debt is always people.'
                 },
                 playstyle: 'Opportunist: wide coverage, salvage bonuses, chaos over precision.',
-                weaponNote: 'A fan of scrap slugs — hits something, every time.',
+                weaponNote: 'A fan of scrap slugs — unlockable chain shot slows whatever it hooks.',
                 icon: 'factionPirate',
                 homeGalaxy: 'scrap_belt',
                 traits: ['Debt slavery', 'Mutiny law', 'Wreck-cannibals'],

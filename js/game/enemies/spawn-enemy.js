@@ -319,6 +319,20 @@ extendClass(EnemyManager, {
         return side.health <= 0;
     },
 
+    /** Pirate CHAIN unlock: cling to a hull and drag it for a short window. */
+    applyChainSlow(target, durationMs) {
+        if (!target) return;
+        const ms = Math.max(400, Number(durationMs) || 1800);
+        target.chainSlowUntil = Math.max(Number(target.chainSlowUntil) || 0, Date.now() + ms);
+        target.chainSlowMul = 0.45;
+    },
+
+    getChainSlowMul(target) {
+        if (!target || !(Number(target.chainSlowUntil) > Date.now())) return 1;
+        const mul = Number(target.chainSlowMul);
+        return (mul > 0 && mul < 1) ? mul : 0.45;
+    },
+
     killEnemy() {
         // Instant kill cheat - kill enemy immediately
         if (this.enemy) {

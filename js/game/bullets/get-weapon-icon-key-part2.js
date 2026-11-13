@@ -79,33 +79,33 @@ extendClass(BulletManager, {
             }
             const firstNew = this.bullets.length;
             this.fireWeaponByType(slot.id, slot.position, cfg, false);
-            // Tag shots with their weapon so they render in its type colour.
-            // Shot size follows the slot size class: S 0.6×, M 1×, L 1.5× the
-            // weapon's base shot (at least 1 × 3 px, so S stays visible).
-            // Shot size: slot class (S/M/L) × Settings → Player Shots.
-            // Applied after spawn so clampBulletSize cannot crush the setting.
+            // Same size path as enemy shots: fit to the drawn gun barrel, then
+            // Settings → Player Shots. Mount frame × WEAPON_DRAW_SCALE (1.4) is
+            // the on-screen gun width; slot S/M/L is already in the mount size.
             const shotScale = Number(opts.shotScale) || 1;
-            const appearanceMul = (typeof uiAppearanceManager !== 'undefined'
-                && uiAppearanceManager.getShotSizeMul)
-                ? uiAppearanceManager.getShotSizeMul('player') : 1;
-            const sizeMul = ([0.6, 1, 1.5][slot.sizeLevel != null ? slot.sizeLevel : 1] || 1)
-                * (powerShot ? powerShot.size : 1)
-                * appearanceMul;
+            const gunW = Math.max(1, (slot.position && slot.position.width) || 4) * 1.4;
+            this.fitBulletsToBarrel(this.bullets, firstNew, gunW, slot.id);
+            this.applyShotSizeSetting(this.bullets, firstNew, 'player');
+            const powerSize = powerShot ? powerShot.size : 1;
             for (let i = firstNew; i < this.bullets.length; i++) {
                 const b = this.bullets[i];
                 b.weaponId = slot.id;
                 // Only weapons with EQUIPMENT → REFLECT purchased clash with enemy fire.
                 b.reflectiveShots = !!cfg.reflectiveShots;
+                // Spread-family CHAIN unlock: hits temporarily slow the target.
+                b.chainSlow = !!cfg.chainSlow;
                 // 0..1 brightness boost from the charge / beat bonus.
                 if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
                 if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
-                const cx = b.x + (b.width || 0) / 2;
-                // Keep fractional sizes so S→XXL stays visible (not snapped to 1–3).
-                b.width = Math.max(1, (b.width || 2) * sizeMul) * shotScale;
-                b.height = Math.max(3, (b.height || 8) * sizeMul) * shotScale;
+                if (powerSize !== 1) {
+                    const cx = b.x + (b.width || 0) / 2;
+                    b.width = Math.max(1, (b.width || 2) * powerSize);
+                    b.height = Math.max(3, (b.height || 8) * powerSize);
+                    b.x = cx - b.width / 2;
+                }
+                // Hangar close-up: mount width is already zoomed, so only speed
+                // needs shotScale (size comes from barrel fit).
                 if (shotScale !== 1) b.speed = (b.speed || 6) * shotScale;
-                if (b.lightRadius) b.lightRadius = Math.max(6, b.lightRadius * Math.sqrt(Math.max(0.3, appearanceMul)));
-                b.x = cx - b.width / 2;
             }
             if (slot.muzzle) this.addMuzzleFlash(slot, cfg);
             firedAny = true;

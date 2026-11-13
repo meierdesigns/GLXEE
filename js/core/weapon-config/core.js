@@ -30,7 +30,7 @@ class WeaponConfigManager {
             spread: this.makeWeapon({
                 id: 'spread',
                 name: 'Spread',
-                description: 'Fan of projectiles',
+                description: 'Fan of scrap slugs — unlockable chain shot slows targets',
                 iconKey: 'shotSpread',
                 damage: 6,
                 speed: 10,
@@ -38,12 +38,12 @@ class WeaponConfigManager {
                 energyCost: 4,
                 width: 2,
                 height: 7,
-                bulletCount: 3,
+                bulletCount: 2,
                 spreadAngle: 0.3,
                 lightRadius: 14,
                 lightIntensity: 0.7,
                 bulletType: 'spread_beam',
-                faction: 'terran'
+                faction: 'pirate'
             }),
             rapid: this.makeWeapon({
                 id: 'rapid',
@@ -132,7 +132,7 @@ class WeaponConfigManager {
             burst: this.makeWeapon({
                 id: 'burst',
                 name: 'Burst',
-                description: 'Short-range shotgun burst',
+                description: 'Short-range shotgun burst — unlockable chain shot slows targets',
                 iconKey: 'shotBurst',
                 damage: 5,
                 speed: 9,

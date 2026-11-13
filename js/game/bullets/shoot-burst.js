@@ -112,21 +112,23 @@ extendClass(BulletManager, {
 
     /**
      * Resize bullets added since `from` so their width matches the barrel of
-     * a gun `gunWidth` wide (proportions kept, centre kept). Shots only
-     * shrink to the barrel; `maxGrow` (> 1, from a bigger slot size) lets
-     * them grow up to that factor of their base size, never past the barrel.
+     * a gun `gunWidth` wide (proportions kept, centre kept). Grows or shrinks
+     * to the barrel; optional `maxGrow` caps growth vs the bullet's base size
+     * (still never past the barrel).
      */
     fitBulletsToBarrel(list, from, gunWidth, weaponId, maxGrow) {
         if (!(gunWidth > 0)) return;
-        // Floor at 2 px so Settings → Shot Size still has room to scale up/down.
-        const target = Math.max(2, gunWidth * this.getBarrelFraction(weaponId));
-        const grow = Math.max(1, Number(maxGrow) || 1);
+        const target = Math.max(1, gunWidth * this.getBarrelFraction(weaponId));
+        // Default: reach the barrel. Pass a number to cap growth (e.g. 1 = no grow).
+        const grow = maxGrow != null && Number(maxGrow) > 0
+            ? Math.max(0.3, Number(maxGrow))
+            : Infinity;
         for (let i = from; i < list.length; i++) {
             const b = list[i];
             const bw = b.width != null ? b.width : b.w;
             if (!(bw > 0)) continue;
             const s = Math.max(0.3, Math.min(grow, target / bw));
-            if (s === 1) continue;
+            if (Math.abs(s - 1) < 0.001) continue;
             const cx = b.x + bw / 2;
             const nw = Math.max(1, bw * s);
             if (b.width != null) {
@@ -295,19 +297,16 @@ extendClass(BulletManager, {
         }
 
         const cfg = Object.assign({}, weaponConfig);
-        const sideScale = enemy && enemy.weaponScale != null
-            ? Math.max(0.45, Math.min(1, Number(enemy.weaponScale) || 1)) : 1;
-        if (enemy && enemy.isSideEnemy) {
-            if (cfg.width != null) cfg.width *= sideScale;
-            if (cfg.height != null) cfg.height *= sideScale;
+        // Side craft size comes from getEnemyGunWidth → fitBulletsToBarrel
+        // (weaponScale), not from shrinking cfg here — fireWeaponByType clamps
+        // dims and would snap fractional escort shots back up.
+        if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
+            weaponConfigManager.clampWeaponShot(cfg);
         }
         // Side craft hit at half strength: escorts pressure, the champion is the threat.
         const damageMul = (enemy && enemy.damageMul != null ? enemy.damageMul : 1)
             * (enemy && enemy.isSideEnemy ? 0.5 : 1) * (dmgMul != null ? dmgMul : 1);
         if (cfg.damage != null) cfg.damage = Math.max(1, Math.round(Number(cfg.damage) * damageMul));
-        if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
-            weaponConfigManager.clampWeaponShot(cfg);
-        }
         const before = this.enemyBullets.length;
         this.fireWeaponByType(defaultWeapon, pos || enemy, cfg, true);
         // Tag with the weapon: drawn in its type colour and shape, like player shots.

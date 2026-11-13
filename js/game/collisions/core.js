@@ -232,6 +232,9 @@ class CollisionManager {
                     const sy = sides[j].y + sides[j].height / 2;
                     let damage = 10;
                     if (bullet && bullet.damage !== undefined) damage = bullet.damage;
+                    if (bullet && bullet.chainSlow && enemyManager.applyChainSlow) {
+                        enemyManager.applyChainSlow(sides[j]);
+                    }
                     bulletManager.removeBullet(i);
                     const killedByHit = enemyManager.damageSideEnemy
                         ? enemyManager.damageSideEnemy(sides[j], damage)
@@ -352,6 +355,10 @@ class CollisionManager {
                 }
                 if (game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.instantKill) {
                     damage = 999; // Instant kill
+                }
+
+                if (bullet && bullet.chainSlow && enemyManager.applyChainSlow) {
+                    enemyManager.applyChainSlow(enemy);
                 }
 
                 // Remove bullet after reading damage

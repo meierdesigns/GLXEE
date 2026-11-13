@@ -717,10 +717,10 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.12** rewrites planet Hauptmelodien, hardens Jungle / DnB kit ownership,
-raises BASS / LEAD / ARP / DRUMS to **300%** with live bus + instant revoice, and
-keeps note body when MUSIC BPM speeds up — on top of the 1.14.11 anatomy modal,
-hub gate, and hangar polish.
+Build **1.14.13** ships the DevMode Face Editor (Flux portraits), pilot backdrop /
+animation controls, orbit fleet fire + flightProfiles, victory loot RMB, mute,
+raid fleet marks, screen soundtracks, story dialogue, and split feature bundles —
+on top of the 1.14.12 melody / Jungle / voice work.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -1084,6 +1084,7 @@ be reviewed or reverted independently.
 | 74O | Story launch dialogue | Launch cutscene spoken beats via story-dialogue; path blurbs and mission copy refresh |
 | 74P | Station UI polish | Faction pick layout, bezel glass hosts, hangar/play chrome, Kronax frame soft round, pilot HUD empty plate |
 | 74Q | Feature bundle split | Split deferred.js into boot/station/galaxy/profiles/combat/editors; CSS app bundle; feature-loaders + cache keys |
+| 74R | Release 1.14.13 | Deploy ZIP `.claude/GLXEE-V1.14.13.zip` — Face Editor, pilot motion, orbit fire, loot/mute/map/audio, feature bundles (74C–74Q) |
 
 The wave commit convention is:
 

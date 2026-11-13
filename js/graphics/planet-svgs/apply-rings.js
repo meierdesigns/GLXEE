@@ -287,14 +287,13 @@ extendClass(PlanetSVGManager, {
         const haloW = Math.min(Math.max(5, k * 2.6), Math.max(1, n / 2 - r));
         const inner = r - rimW * 1.6;
         const outer = r + haloW;
-        // The halo's dither PATTERN (not its extent — that stays a true per-pixel radial falloff,
-        // see below) is sampled at a coarser spatial frequency than 1 pixel: a fine per-pixel
-        // bayer dither is the textbook way to fake a smooth gradient out of discrete tones, which
-        // is the opposite of a "pixely" look. A first attempt also block-quantized the EXTENT
-        // itself, which made the outer edge step in hard circular rings instead of fading —
-        // reported as "zu pixelig und rund abgeschnitten". Keeping extent per-pixel but the
-        // pattern phase chunkier avoids both.
-        const haloBlock = Math.max(1, Math.round(k * 0.5));
+        // Halo dither must match the disc's 1-cell shading grain — not feature scale `k`.
+        // `k`-sized Bayer blocks made the atmosphere read as huge checkers next to a finely
+        // lit sphere ("Planet und Atmosphäre nicht gleich pixelig") on hero/detail views.
+        const haloBlock = 1;
+        // Concentric band width in grid cells (not a fixed 4-way split of haloW): at high k
+        // a 4-ring split left ~haloW/4-cell slabs that still looked chunkier than the disc.
+        const ringStep = 2;
         const outer2 = outer * outer;
         const inner2 = inner > 0 ? inner * inner : -1;
         // Only pixels within this square can ever pass the ring/halo test below — this used to scan
@@ -337,28 +336,21 @@ extendClass(PlanetSVGManager, {
                     // (an earlier attempt) made the outer edge step in hard circular rings instead
                     // of fading — "rund abgeschnitten".
                     const fall = 1 - (d - r) / haloW; // 1 at the limb → 0 outside
-                    // Chunky texture sampled by RING (distance from the limb), not by an (x, y)
-                    // grid: a cartesian checkerboard doesn't follow the circle at all — it reads as
-                    // a cropped square pattern laid over a round shape, not a round one itself
-                    // ("nicht rund pixelig"). Alternating concentric rings is the classic pixel-art
-                    // "glow"/"bullseye" look and is round by construction.
-                    // Ring width is a FRACTION of haloW (not the absolute haloBlock pixel count): at
-                    // small k (galaxy-map planet icons, haloW only a few units wide), dividing by a
-                    // fixed haloBlock left only 1-2 rings total, so half the already-thin halo was
-                    // simply the "off" ring — reported as pixels missing on several sides. A fixed
-                    // ring COUNT instead of a fixed ring WIDTH keeps a handful of visible bands
-                    // regardless of how wide the halo itself is.
-                    const ringIdx = Math.floor(((r + haloW - d) / haloW) * 4);
+                    // Concentric rings (round by construction) + 1-cell Bayer — same grain as
+                    // buildBaseGrid's sphere dither. ringStep keeps bands thin at high detail.
+                    const ringIdx = Math.floor((outer - d) / ringStep);
                     const ringOn = ringIdx % 2 === 0;
                     const bix = Math.floor(x / haloBlock);
                     const biy = Math.floor(y / haloBlock);
                     const bth = bayer[(biy % 4) * 4 + (bix % 4)] / 16;
                     if (fall > 0.55) {
-                        // This inner part of the halo (closest to the disc) was a flat, untextured
-                        // solid fill — the smooth, perfectly round ring still visible even after
-                        // the outer fade was fixed to dither ("sehr runde Atmosphäre"). Alternating
-                        // concentric rings keeps it textured/pixely all the way to the disc.
-                        row[x] = ringOn === (lit > 0.5) ? 'atmoHaze' : 'atmoHazeFaint';
+                        // Inner halo: same chunky dither as the disc — leave gaps (null) on the
+                        // "off" phase so it isn't a flat two-tone fill that still reads smooth.
+                        if (ringOn === (lit > 0.5)) {
+                            row[x] = bth < 0.72 ? 'atmoHaze' : 'atmoHazeFaint';
+                        } else if (bth < 0.28) {
+                            row[x] = 'atmoHazeFaint';
+                        }
                     } else if (fall > 0) {
                         // Fading-out texture as discrete STEPPED density bands, each internally
                         // uniform, instead of a continuous per-pixel formula: a smooth function

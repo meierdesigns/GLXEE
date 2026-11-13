@@ -1076,6 +1076,7 @@ be reviewed or reverted independently.
 | 74G | Portrait Flux batch | Asset-Gen **PORTRAITS**: one reference image → Flux2 img2img → replace all `assets/factions/*/portraits/01–16.png`; bridge + workflows restored |
 | 74H | Raid fleet map mark | RAID/HUNT missions show a minimal orbiting chevron fleet in space (like invasion battle pixels), not a plaque sign |
 | 74I | Screen soundtrack type | DevMode Soundtrack Editor type `screen` (Start Screen + Title Fanfare); new Start Screen Hauptmelodie |
+| 74J | Galaxy map smoother | Bake suns to one sprite, fewer flow frames/twinkles, lighter spin/nebula debounce, paint contain + PERF ANIM gate |
 
 The wave commit convention is:
 

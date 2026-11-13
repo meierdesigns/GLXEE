@@ -422,6 +422,7 @@ extendClass(PlanetSVGManager, {
             this._spinCursor = (this._spinCursor + Math.max(1, updated || 1)) % Math.max(1, n);
         };
         // ~1.4 Hz: 60s axial turn still reads fine; lower decode/repaint cost on big maps.
-        this._spinTimer = setInterval(tick, 700);
+        // 900ms: fewer bake ticks on dense maps; featured cards still step every tick.
+        this._spinTimer = setInterval(tick, 900);
     }
 });

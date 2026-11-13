@@ -54,10 +54,12 @@ extendClass(GalaxyMapManager, {
                 selected ? 'selected' : '',
                 hovered ? 'hovered' : ''
             ].filter(Boolean).join(' ');
+            // Active-mission planets skip the SVG <title> so only the styled icon tip shows.
+            const missionHere = this.isActiveMissionPlanet ? this.isActiveMissionPlanet(n.planetId) : false;
             nodesHtml += `
                 <g class="gm-node ${stateClass}"
                    data-planet="${n.planetId}" data-size="${size}" transform="translate(${npt.x},${npt.y})">
-                    <title>${this.planetNodeTitle(n.planetId, unlocked)}</title>
+                    ${missionHere ? '' : `<title>${this.planetNodeTitle(n.planetId, unlocked)}</title>`}
                     <g class="gm-frame-slot" data-frame-r="${(this.planetSurfaceRadius(n.planetId) * this.getMapObjectScale()).toFixed(2)}">${this.selectionFrameSvg(frame, 12, 3)}</g>
                     <foreignObject class="gm-planet-lit${unlocked || devMode ? ' is-active' : ' is-locked'}" data-lit-x="${npt.x}" data-lit-y="${npt.y}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}">
                         ${(() => {
@@ -232,7 +234,7 @@ extendClass(GalaxyMapManager, {
             const delay = next();
             const s = big ? 2 * q : q;
             if (big) glow += sq(x - q, y, s + 2 * q, s) + sq(x, y - q, s, s + 2 * q);
-            if (twinkle && twinkles < 140) {
+            if (twinkle && twinkles < 48) {
                 twinkles++;
                 stars += `<rect class="gm-star-twinkle" x="${x}" y="${y}" width="${s}" height="${s}" style="animation-delay:${(-Math.floor(delay * 6) * 0.6).toFixed(1)}s"/>`;
             } else {

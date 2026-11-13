@@ -390,18 +390,20 @@ extendClass(GalaxyMapManager, {
             `<span class="galaxy-map-situation-sub">TAKE ONE AT THE HANGAR MISSION BOARD</span>` +
             `</div>`;
     },
-    /** Native <title> / tooltip text for a planet node (mission hint when chosen). */
-    planetNodeTitle(planetId, unlocked) {
-        if (!unlocked) return 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK';
-        const name = String(planetId || '').toUpperCase();
-        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return name;
+    /** True when this planet is the active-mission target (styled icon tip owns the hover). */
+    isActiveMissionPlanet(planetId) {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return false;
         const profile = profileManager.getActiveProfile();
         const m = profile && profile.activeMission;
-        if (!m || String(m.planetId) !== String(planetId)) return name;
-        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return name;
-        const type = String(m.type || 'MISSION').toUpperCase();
-        return name + ' · ACTIVE MISSION · ' + type + ' — Complete the '
-            + String(m.type || 'mission').toLowerCase() + ' here.';
+        if (!m || !m.planetId || String(m.planetId) !== String(planetId)) return false;
+        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return false;
+        return true;
+    },
+
+    /** Native <title> text for a planet node (no mission dump — that lives on the icon tip). */
+    planetNodeTitle(planetId, unlocked) {
+        if (!unlocked) return 'LOCKED · COMPLETE A CONNECTED PLANET TO UNLOCK';
+        return String(planetId || '').toUpperCase();
     },
 
     /** Hover tip for the navbar / ship-bar mission button. */

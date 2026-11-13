@@ -153,10 +153,10 @@ extendClass(GalaxyMapManager, {
                 const R = this._nebulaRegion;
                 if (R && (v[0] < R.x || v[1] < R.y || v[0] + v[2] > R.x + R.w || v[1] + v[3] > R.y + R.h)) {
                     clearTimeout(this._nebTimer);
-                    // Was 120ms — felt like the nebula lagged behind the camera.
+                    // Debounce nebula refine while panning (32ms thrashed; 90ms still tracks).
                     this._nebTimer = setTimeout(() => {
                         swapDetail(true);
-                    }, 32);
+                    }, 90);
                 }
                 return;
             }

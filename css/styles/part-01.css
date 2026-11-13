@@ -1,10 +1,10 @@
 
-/* Chosen mission: plaque/sign above the target planet. */
+/* Chosen mission: small icon pin above the target planet (type in tooltip). */
 .gm-mission-mark { pointer-events: none; shape-rendering: crispEdges; }
 .gm-mission-mark .gm-mission-sign-board {
     fill: #05060a;
     stroke: var(--fac, var(--color-primary));
-    stroke-width: 2;
+    stroke-width: 1.5;
 }
 .gm-mission-mark .gm-mission-sign-board-in {
     fill: color-mix(in srgb, var(--fac, var(--color-primary)) 22%, #05060a);
@@ -12,15 +12,29 @@
 }
 .gm-mission-mark .gm-mission-sign-pole {
     stroke: var(--fac, var(--color-primary));
-    stroke-width: 2;
+    stroke-width: 1.5;
 }
-.gm-mission-mark .gm-mission-sign-label {
-    fill: var(--fac, var(--color-primary));
-    font-size: var(--font-small);
-    font-weight: bold;
-    letter-spacing: 1.5px;
-    text-anchor: middle;
+.gm-mission-mark .gm-mission-sign-fo {
+    overflow: visible;
+    pointer-events: auto;
+}
+.gm-mission-mark .gm-mission-sign-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    cursor: help;
+    pointer-events: auto;
     animation: gm-mission-sign-pulse 1.4s steps(2, end) infinite;
+}
+.gm-mission-mark .gm-mission-sign-icon .gm-mission-mark-ico,
+.gm-mission-mark .gm-mission-sign-icon img {
+    width: 12px !important;
+    height: 12px !important;
+    image-rendering: pixelated;
+    display: block;
 }
 .gm-mission-mark .gm-mission-sign-dot {
     fill: var(--fac, var(--color-primary));
@@ -31,7 +45,7 @@
     50%      { opacity: 0.4; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .gm-mission-mark .gm-mission-sign-label,
+    .gm-mission-mark .gm-mission-sign-icon,
     .gm-mission-mark .gm-mission-sign-dot { animation: none; }
 }
 
@@ -77,6 +91,11 @@
 }
 
 /* Galaxy map space: black background + pixel starfield (galaxyStarsSvg). */
+.galaxy-map-area,
+.galaxy-map-area .gm-px-raster,
+.galaxy-map-area .galaxy-map-svg {
+    contain: layout paint;
+}
 .galaxy-map-area {
     background: #000 !important;
     position: relative;
@@ -155,8 +174,7 @@
     stroke: #efffff;
     stroke-linecap: butt;
     opacity: 0.95;
-    filter: drop-shadow(0 0 1px currentColor);
-    animation: gm-beam-flow 3.2s steps(16, end) infinite;
+    animation: gm-beam-flow 3.2s steps(8, end) infinite;
 }
 .gm-pxline .gm-pxline-flow-reverse {
     stroke: #78ffd2;
@@ -185,7 +203,7 @@
     from { stroke-dashoffset: var(--flow-from, 0px); }
     to { stroke-dashoffset: calc(var(--flow-from, 0px) - var(--flow-len)); }
 }
-/* Cell-built packets: one path per march frame, each visible for 1/16 of the cycle. */
+/* Cell-built packets: one path per march frame, each visible for 1/8 of the cycle. */
 .gm-pxline .gm-pxline-flow.gm-pxflow-cells {
     stroke: none;
     fill: #efffff;
@@ -199,7 +217,7 @@
 .gm-edge.gm-pxline.dim .gm-post-traffic.gm-pxflow-cells { fill: #a8d6d0; }
 @keyframes gm-pxflow-frame {
     0% { visibility: visible; }
-    6.25%, 100% { visibility: hidden; }
+    12.5%, 100% { visibility: hidden; }
 }
 @media (prefers-reduced-motion: reduce) {
     .gm-pxline .gm-pxline-flow.gm-pxflow-f0 { visibility: visible; }
@@ -261,42 +279,35 @@
     .gm-space .gm-stars .gm-star-twinkle { animation: none; }
 }
 
-/* Galaxy map suns (render-explore-controls.js galaxySunsSvg). */
-.gm-sun { pointer-events: none; }
-.gm-sun { shape-rendering: crispEdges; }
-.gm-sun .gm-sun-glow rect { fill: var(--sun-glow); }
-.gm-sun .gm-sun-glow-outer { opacity: 0.12; animation: gm-sun-glow 5s steps(5, end) infinite; }
-.gm-sun .gm-sun-glow-inner { opacity: 0.2; animation: gm-sun-glow 5s steps(5, end) infinite; }
-/* The star itself: slow breathing + flickering surface layers. */
+/* Galaxy map suns — one baked sprite (glow+disc); breathe only (no per-ring flicker). */
+.gm-sun { pointer-events: none; shape-rendering: crispEdges; }
+.gm-sun .gm-sun-sprite {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
 .gm-sun .gm-sun-body {
     transform-box: fill-box;
     transform-origin: center;
     animation: gm-sun-breathe 6s steps(6, end) infinite;
 }
-.gm-sun .gm-sun-inner { animation: gm-sun-flicker 2.3s steps(4, end) infinite; }
-.gm-sun .gm-sun-core { animation: gm-sun-flicker 1.7s steps(3, end) infinite reverse; }
 @keyframes gm-sun-breathe {
-    0%, 100% { transform: scale(1); }
-    50%      { transform: scale(1.04); }
-}
-@keyframes gm-sun-flicker {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.78; }
-}
-@keyframes gm-sun-glow {
-    0%, 100% { opacity: 0.12; }
-    50%      { opacity: 0.24; }
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.04); opacity: 0.92; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .gm-sun .gm-sun-body,
-    .gm-sun .gm-sun-inner,
-    .gm-sun .gm-sun-core,
-    .gm-sun .gm-sun-glow-outer,
-    .gm-sun .gm-sun-glow-inner { animation: none; }
+    .gm-sun .gm-sun-body { animation: none; }
 }
-.gm-sun .gm-sun-inner rect { fill: color-mix(in srgb, var(--sun) 60%, #fff); }
-.gm-sun .gm-sun-core rect { fill: #fff; opacity: 0.9; }
-.gm-sun .gm-sun-disc rect { fill: var(--sun); }
+html[data-vf-perf-anim="off"] .gm-sun .gm-sun-body,
+html[data-vf-perf-anim="off"] .gm-space .gm-stars .gm-star-twinkle,
+html[data-vf-perf-anim="off"] .gm-pxline .gm-pxline-flow {
+    animation: none !important;
+}
+html[data-vf-perf-anim="off"] .gm-pxline .gm-pxline-flow.gm-pxflow-cells:not(.gm-pxflow-f0) {
+    visibility: hidden !important;
+}
+html[data-vf-perf-anim="off"] .gm-pxline .gm-pxline-flow.gm-pxflow-f0 {
+    visibility: visible !important;
+}
 
 :root {
     --overlay-color: var(--color-primary);

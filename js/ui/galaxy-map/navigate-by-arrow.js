@@ -129,6 +129,10 @@ extendClass(GalaxyMapManager, {
         this.syncNodeHighlight();
         this.updateDetails();
         this.syncConfirmButton();
+        // Standing at a system border — "pure Weltall": no planet motif.
+        if (this.isVisible && typeof soundManager !== 'undefined' && soundManager.startMapVoidMusic) {
+            soundManager.startMapVoidMusic(this.galaxyId);
+        }
     },
     /** Border checkpoint art sized for the planet card. */
     borderCardSvg(openId) {
@@ -244,6 +248,14 @@ extendClass(GalaxyMapManager, {
         const skipCam = this._flight || (opts && opts.noCamera);
         if (!skipCam && this.frameSelectionCamera) this.frameSelectionCamera('follow');
         this.syncGamepadMapCursor && this.syncGamepadMapCursor();
+        // Deep-space posts = pure Weltall; orbiting posts follow the anchor planet motif.
+        if (this.isVisible && typeof soundManager !== 'undefined') {
+            if (post.deepSpace && soundManager.startMapVoidMusic) {
+                soundManager.startMapVoidMusic(this.galaxyId);
+            } else if (soundManager.startMapMusic) {
+                soundManager.startMapMusic(post.planetId);
+            }
+        }
     },
     dockAt(postId) {
         if (typeof this.onDock !== 'function') return;

@@ -130,7 +130,7 @@ extendClass(BulletManager, {
             y: playerPosition.y,
             width: w,
             height: h,
-            speed: config.speed,
+            speed: (config && Number(config.speed) > 0) ? Number(config.speed) : 12,
             damage: config.damage,
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'laser_beam',

@@ -197,13 +197,15 @@ class RenderManager {
     /**
      * Hard fill on the shared combat lattice (VOXEL) or rounded fillRect (FLAT).
      * Used by bullets, particles, explosions, pickups, debris — every playfield FX.
+     * Pass `pixelExact` for shots: lattice-snapping their draw pos freezes them on
+     * screen whenever cell > per-frame travel (physics already flies continuous).
      */
-    fillCombatRect(ctx, x, y, w, h, color, alpha) {
+    fillCombatRect(ctx, x, y, w, h, color, alpha, pixelExact) {
         if (!ctx) return;
         const cell = this.getCombatVoxelCell();
         if (alpha != null) ctx.globalAlpha = alpha;
         if (color != null) ctx.fillStyle = color;
-        if (cell == null || !(cell > 0)) {
+        if (pixelExact || cell == null || !(cell > 0)) {
             ctx.fillRect(
                 Math.round(x), Math.round(y),
                 Math.max(1, Math.round(w)), Math.max(1, Math.round(h))

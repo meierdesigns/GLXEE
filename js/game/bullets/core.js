@@ -279,6 +279,7 @@ class BulletManager {
         for (let i = this.bullets.length - 1; i >= 0; i--) {
             const bullet = this.bullets[i];
             const speedMultiplier = baseSpeedMultiplier * playerSpeed;
+            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 6;
             let bdx = 0;
             let bdy = 0;
 
@@ -286,12 +287,12 @@ class BulletManager {
             if (bullet.type === 'wave_beam' && bullet.waveAmp) {
                 bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * speedMultiplier;
                 bdx = Math.sin(bullet.wavePhase) * bullet.waveAmp * speedMultiplier;
-                bdy = -bullet.speed * speedMultiplier;
-            } else if (bullet.angle !== undefined) {
-                bdx = Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
-                bdy = -Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
+                bdy = -spd * speedMultiplier;
+            } else if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
+                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
+                bdy = -Math.cos(bullet.angle) * spd * speedMultiplier;
             } else {
-                bdy = -bullet.speed * speedMultiplier;
+                bdy = -spd * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
             bullet.x += bdx;
@@ -299,10 +300,16 @@ class BulletManager {
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
-            // Remove bullets that are off screen
-            // Get canvas width from game if available
+            // Cull only when the shot is fully off-screen. The pilot's guns can
+            // sit on the rim (player.x down to -halfW), so a fresh laser spawns
+            // with x ≈ -1.5 — culling on `x < 0` ate those shots instantly.
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            if (!isFinite(bullet.x) || !isFinite(bullet.y) || bullet.y < 0 || bullet.x < 0 || bullet.x > canvasWidth) {
+            const bw = bullet.width || 0;
+            const bh = bullet.height || 0;
+            if (!isFinite(bullet.x) || !isFinite(bullet.y)
+                || bullet.y + bh < 0
+                || bullet.x + bw < 0
+                || bullet.x > canvasWidth) {
                 const last = this.bullets.length - 1;
                 if (i !== last) this.bullets[i] = this.bullets[last];
                 this.releaseBullet(this.bullets.pop());
@@ -313,15 +320,16 @@ class BulletManager {
         for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
             const bullet = this.enemyBullets[i];
             const speedMultiplier = baseSpeedMultiplier * (bullet.isBossShot ? bossSpeed : enemySpeed);
+            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 5;
             let bdx = 0;
             let bdy = 0;
 
             // Handle angled enemy bullets (after reflection)
-            if (bullet.angle !== undefined) {
-                bdx = Math.sin(bullet.angle) * bullet.speed * speedMultiplier;
-                bdy = Math.cos(bullet.angle) * bullet.speed * speedMultiplier;
+            if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
+                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
+                bdy = Math.cos(bullet.angle) * spd * speedMultiplier;
             } else {
-                bdy = bullet.speed * speedMultiplier;
+                bdy = spd * speedMultiplier;
             }
             const px0 = bullet.x, py0 = bullet.y;
             bullet.x += bdx;
@@ -329,11 +337,14 @@ class BulletManager {
             bullet._sweepDx = bullet.x - px0;
             bullet._sweepDy = bullet.y - py0;
 
-            // Remove bullets that are off screen
-            // Get canvas dimensions from game if available
             const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
             const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
-            if (bullet.y > canvasHeight || bullet.x < 0 || bullet.x > canvasWidth) {
+            const bw = bullet.width || 0;
+            const bh = bullet.height || 0;
+            if (bullet.y > canvasHeight
+                || bullet.x + bw < 0
+                || bullet.x > canvasWidth
+                || bullet.y + bh < 0) {
                 const last = this.enemyBullets.length - 1;
                 if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
                 this.releaseBullet(this.enemyBullets.pop());

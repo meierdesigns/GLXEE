@@ -22,8 +22,10 @@ extendClass(RenderManager, {
         }
 
         const cell = this.getCombatVoxelCell();
-        const x = cell ? this.snapCombat(bullet.x, cell) : Math.floor(bullet.x);
-        const y = cell ? this.snapCombat(bullet.y, cell) : Math.floor(bullet.y);
+        // Continuous flight coords — never lattice-snap the draw origin (that
+        // froze beams mid-lane whenever cell > per-frame travel). Size may stay chunky.
+        const x = Math.floor(bullet.x);
+        const y = Math.floor(bullet.y);
         const w = cell ? this.quantizeCombatSize(bullet.width, cell) : Math.max(1, Math.ceil(bullet.width));
         const h = cell ? this.quantizeCombatSize(bullet.height, cell) : Math.max(1, Math.ceil(bullet.height));
 
@@ -41,13 +43,13 @@ extendClass(RenderManager, {
             ctx.fillStyle = glow;
             ctx.fillRect(x, y, w, h);
         }
-        this.fillCombatRect(ctx, x, y, w, h, bulletColor, 1);
+        this.fillCombatRect(ctx, x, y, w, h, bulletColor, 1, true);
         if (w >= 2 && h >= 3) {
             this.fillCombatRect(
                 ctx,
                 x + Math.floor(w / 4), y + (cell || 1),
                 Math.max(cell || 1, Math.ceil(w / 2)), Math.max(cell || 1, h - 2),
-                glow, 1
+                glow, 1, true
             );
         }
 
@@ -68,7 +70,7 @@ extendClass(RenderManager, {
         const hot = '#ffffff';
         const cell = this.getCombatVoxelCell();
         const rect = (rx, ry, rw, rh, c, a) => {
-            this.fillCombatRect(ctx, rx, ry, rw, rh, c, a == null ? 1 : a);
+            this.fillCombatRect(ctx, rx, ry, rw, rh, c, a == null ? 1 : a, true);
         };
         // Every shape stays inside the shot's own w×h box, so the drawn
         // shot is as big as the shot (which is sized to its gun's barrel).

@@ -287,13 +287,14 @@ extendClass(CollisionManager, {
         const anyShot = shot1 || shot2;
         // Broadphase uses the full footprint so silhouette insets cannot drop a
         // glancing visual hit; confirmShotHit then tests the real hull mask.
+        // Shots draw on continuous pixel coords (no lattice snap) — match that.
         const b1 = this.getCollisionBounds(obj1, _collisionBoundsScratch1, {
             ignoreInsets: anyShot && !shot1,
-            matchVoxelDraw: shot1
+            matchVoxelDraw: false
         });
         const b2 = this.getCollisionBounds(obj2, _collisionBoundsScratch2, {
             ignoreInsets: anyShot && !shot2,
-            matchVoxelDraw: shot2
+            matchVoxelDraw: false
         });
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&

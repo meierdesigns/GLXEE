@@ -141,20 +141,29 @@ extendClass(ProfileSelectionManager, {
             if (card) this._ppFitRo.observe(card);
         }
     },
-    /** Re-render the portrait and feature values after a change. */
-    refreshPilotRow() {
-        this.savePilotState();
+    /** Live-update every vx-portrait canvas without remounting (keeps blink / backdrop phase). */
+    applyPilotLookCanvases() {
         const o = this._startOpts;
-        const box = this.overlay && this.overlay.querySelector('#psPortrait');
-        if (!box || !o || !o.look) return;
+        if (!o || !o.look || typeof voxelPortrait === 'undefined' || !voxelPortrait.setLook) return;
         o.look = heroPortrait.normalize(o.look);
-        box.innerHTML = heroPortrait.html(o.look, this.pilotAccent());
+        const main = this.overlay && this.overlay.querySelector('#psPortrait canvas.vx-portrait');
+        if (main) {
+            voxelPortrait.setLook(main, {
+                faction: o.look.faction,
+                v: o.look.v,
+                bgv: o.look.bgv,
+                bga: o.look.bga
+            });
+        } else {
+            const box = this.overlay && this.overlay.querySelector('#psPortrait');
+            if (box) box.innerHTML = heroPortrait.html(o.look, this.pilotAccent());
+        }
         this.overlay.querySelectorAll('.pp-pick').forEach((b) => {
             const on = Number(b.getAttribute('data-pp-pick')) === o.look.v;
             b.classList.toggle('selected', on);
             b.setAttribute('aria-selected', on ? 'true' : 'false');
             const canvas = b.querySelector('canvas.vx-portrait');
-            if (canvas && typeof voxelPortrait !== 'undefined' && voxelPortrait.setLook) {
+            if (canvas) {
                 voxelPortrait.setLook(canvas, {
                     faction: o.look.faction,
                     v: Number(b.getAttribute('data-pp-pick')) || 0,
@@ -163,6 +172,14 @@ extendClass(ProfileSelectionManager, {
                 });
             }
         });
+    },
+    /** Re-render the portrait and feature values after a change. */
+    refreshPilotRow() {
+        this.savePilotState();
+        const o = this._startOpts;
+        const box = this.overlay && this.overlay.querySelector('#psPortrait');
+        if (!box || !o || !o.look) return;
+        this.applyPilotLookCanvases();
         this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
             const k = el.getAttribute('data-pp-key');
             el.classList.toggle('active', k === o.lookKey);

@@ -108,11 +108,39 @@ extendClass(ProfileSelectionManager, {
      * Re-skin the dialog in the chosen faction's palette and show that
      * faction's ship, so picking a faction previews what the game becomes.
      */
-    applyPendingFactionLook() {
+    applyPendingFactionLook(force) {
         if (!this.overlay) return;
         const id = this.pendingFaction;
         if (typeof menuStateManager !== 'undefined' && this.mode === 'create') menuStateManager.save({ pfaction: id });
-        const box = this.overlay.querySelector('.profile-selection-name-mode');
+        const box = this.overlay.querySelector('.profile-selection-name-mode, .onboarding-homeworld-site, [data-faction-box]');
+        // Same faction already themed: fill the fresh DOM (createUI remounts) without
+        // cable swap / document theme restamp / backdrop repaint.
+        if (!force && this._appliedLookFaction === id) {
+            if (box) {
+                const style = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+                    ? factionShipStyles.getFactionStyle(id) : null;
+                if (style) {
+                    const accent = style.accent || '#c8d0d8';
+                    const hull = style.hull || '#7a8490';
+                    box.style.setProperty('--color-primary', accent);
+                    box.style.setProperty('--color-secondary', hull);
+                    box.style.setProperty('--color-border', hull);
+                    box.style.setProperty('--color-accent', accent);
+                    box.style.setProperty('--faction-color', accent);
+                    box.style.setProperty('--faction-accent', accent);
+                    box.style.setProperty('--faction-hull', hull);
+                    box.style.setProperty('--faction-edge', style.edge || '#2a3038');
+                    box.style.setProperty('--ui-border', accent);
+                    box.dataset.faction = id;
+                    if (this.overlay) {
+                        this.overlay.style.setProperty('--faction-color', accent);
+                        this.overlay.style.setProperty('--color-primary', accent);
+                    }
+                }
+            }
+            this.applyFactionContent(id);
+            return;
+        }
         // Backdrop, cables, colours and the dialog content all change in ONE step (inside the cable swap), not in three staggered phases.
         const content = () => {
             if (!this.overlay || this.pendingFaction !== id) { if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' skipped (newer pick)'); return; }                 // a newer pick replaced this one
@@ -120,6 +148,7 @@ extendClass(ProfileSelectionManager, {
             this._lookContentTimer = 0;
             const tC = performance.now();
             this.applyFactionContent(id);
+            this._appliedLookFaction = id;
             if (window.vfLog) window.vfLog('wizard', 'content for ' + id + ' rendered in ' + Math.round(performance.now() - tC) + 'ms');
         };
         if (window.vfLog) window.vfLog('wizard', 'pick ' + id);
@@ -190,6 +219,7 @@ extendClass(ProfileSelectionManager, {
         // Swap the hero planet here too, not the moment the faction is picked —
         // otherwise it changes a beat before the cable-swap-gated content above.
         if (this._heroPlanetBackdrop) this._heroPlanetBackdrop.setFaction(id);
+        this.refreshHomeworldLabel(id);
         // Crest / swatch art may still be arriving (iconRenderer / layout width): retry a few times.
         if (emblem && !emblem.querySelector('img')) {
             clearTimeout(this._emblemRetryTimer);
@@ -328,6 +358,27 @@ extendClass(ProfileSelectionManager, {
         if (!el || !this.buildFactionFocusHtml) return;
         el.innerHTML = this.buildFactionFocusHtml(id, meta);
     },
+    /** Crest + lore overlay on the homeworld stage (faction create step). */
+    refreshHomeworldLabel(id) {
+        const homeLabel = this.overlay && this.overlay.querySelector('.onboarding-homeworld-label');
+        if (!homeLabel) return;
+        const meta = typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta
+            ? planetConfigManager.getFactionMeta(id) : null;
+        const galaxy = String((meta && meta.homeGalaxy) || '').replace(/_/g, ' ').toUpperCase();
+        const name = this.getFactionLabel(id);
+        const sub = galaxy ? `HOMEWORLD · ${galaxy}` : 'HOMEWORLD';
+        const lore = (meta && meta.lore) || (name + ' fleets hold this homeworld.');
+        // Lore sits under the title on the stage — left dossier stays for focus chips.
+        const loreEl = this.overlay.querySelector('.onboarding-dossier-lore');
+        if (loreEl) loreEl.innerHTML = '';
+        homeLabel.innerHTML =
+            `<span class="onboarding-homeworld-crest">${this.getFactionEmblemHtml(id, 160)}</span>` +
+            `<span class="onboarding-homeworld-title">` +
+            `<b class="onboarding-homeworld-name">${name}</b>` +
+            `<small class="onboarding-homeworld-sub">${sub}</small>` +
+            `<p class="onboarding-homeworld-lore">${lore}</p>` +
+            `</span>`;
+    },
     /** Faction palette + frame shape on one dialog box. */
     applyFactionVars(box, id, after) {
         const style = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
@@ -342,11 +393,17 @@ extendClass(ProfileSelectionManager, {
             box.style.setProperty('--color-secondary', hull);
             box.style.setProperty('--color-border', hull);
             box.style.setProperty('--color-accent', accent);
+            box.style.setProperty('--faction-color', accent);
             box.style.setProperty('--faction-accent', accent);
             box.style.setProperty('--faction-hull', hull);
             box.style.setProperty('--faction-edge', style.edge || '#2a3038');
             // The dialog frame itself (border + glow) reads --ui-border.
             box.style.setProperty('--ui-border', accent);
+            // Homeworld stage CSS keys off the overlay for borders/glow.
+            if (this.overlay) {
+                this.overlay.style.setProperty('--faction-color', accent);
+                this.overlay.style.setProperty('--color-primary', accent);
+            }
             // Light "white" tone of this faction (text, interactables) — same rule
             // as the app-wide faction palette, scoped to this box.
             const light = (typeof themeContextManager !== 'undefined' && themeContextManager.lightenHex)
@@ -360,7 +417,7 @@ extendClass(ProfileSelectionManager, {
         // The screen bezel follows the faction while it is being chosen.
         const bz = document.getElementById('vf-bezel');
         if (!box.dataset.faction) paint(); // a freshly built dialog never shows unthemed
-        if (bz && box.classList.contains('profile-selection-name-mode')) {
+        if (bz && (box.classList.contains('profile-selection-name-mode') || box.classList.contains('onboarding-homeworld-site') || box.hasAttribute('data-faction-box'))) {
             bz.setAttribute('data-preview', '1');
             const applyBezel = () => {
                 paint();
@@ -370,8 +427,12 @@ extendClass(ProfileSelectionManager, {
                 bz.setAttribute('data-faction', id);
                 // The whole GUI (window background, cables, palette) follows the pick, not only the bezel. data-preview keeps it out of the saved snapshot.
                 if (typeof factionShipStyles !== 'undefined' && factionShipStyles.stampDocumentTheme) {
-                    document.documentElement.setAttribute('data-vf-faction', id);
-                    factionShipStyles.stampDocumentTheme(id);
+                    const root = document.documentElement;
+                    const sameTheme = root.getAttribute('data-vf-faction') === id && root.dataset.faction === id;
+                    if (!sameTheme) {
+                        root.setAttribute('data-vf-faction', id);
+                        factionShipStyles.stampDocumentTheme(id);
+                    }
                     if (typeof factionGui !== 'undefined') factionGui.sync(id);
                 }
                 if (!newer) {
@@ -464,6 +525,23 @@ extendClass(ProfileSelectionManager, {
             const lay = model.layout || {};
             const gunMods = (lay.modules || []).filter((m) => m && m.kind === 'weapon');
             const fs = loader.resolveModuleFactionStyle ? loader.resolveModuleFactionStyle(model) : undefined;
+            // SETUP kit switching must stay snappy: skip getImageData measure (full-canvas
+            // readback per gun) and draw straight from layout boxes.
+            if (inStart) {
+                loader.renderShip(ctx, model, ox, oy, scale, null, 0, { showThrusterGlow: true, allowColorMountSprites: true });
+                const boxes = gunMods.map((m) => ({
+                    x: ox + (Number(m.x) || 0) * scale,
+                    y: oy + (Number(m.y) || 0) * scale,
+                    w: Math.max(1, Math.round((Number(m.width) || 4) * scale)),
+                    h: Math.max(1, Math.round((m.height != null ? Number(m.height) : (Number(m.width) || 4)) * scale)),
+                    slot: Number(m.slotIndex) || 0
+                }));
+                this.previewWeaponBoxes(model).filter((b) => b.empty).forEach((b) => {
+                    boxes.push({ x: ox + b.x * scale, y: oy + b.y * scale, w: b.width * scale, h: b.height * scale, slot: b.slot });
+                });
+                this._previewDraw = { boxes };
+                return;
+            }
             // Solid pixels of one gun drawn alone: its bounds, with thin strays (soft shadow lips) trimmed away.
             const measure = (m) => {
                 const t2 = document.createElement('canvas');

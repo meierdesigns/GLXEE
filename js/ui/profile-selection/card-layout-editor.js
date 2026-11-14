@@ -331,11 +331,7 @@ const cardLayoutEditor = (function () {
         const header = document.createElement('div');
         header.className = 'cle-panel-header';
         header.innerHTML = '<span>FACTION CARD LAYOUT</span>';
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'cle-panel-close';
-        closeBtn.textContent = '✕';
-        closeBtn.addEventListener('click', closePanel);
+        const closeBtn = createCloseButton(closePanel, 'cle-panel-close');
         header.appendChild(closeBtn);
         panelEl.appendChild(header);
 
@@ -462,13 +458,40 @@ const cardLayoutEditor = (function () {
         document.head.appendChild(style);
     }
 
-    // Redundant with the CSS custom properties now driving the actual transform (see
-    // injectStyles), but harmless to keep as a fallback and still needed to re-sync the overlay
-    // and detect a torn-down card quickly rather than waiting out the 500ms tick.
-    function watchRebuilds() {
+    // Only watch the document while the faction card exists / is being edited —
+    // a permanent body MutationObserver + 500ms poll was pure main-thread tax in
+    // every other screen (station, combat, menus).
+    let rebuildMo = null;
+    let pollTimer = 0;
+    function watchRebuilds(on) {
         if (typeof MutationObserver === 'undefined') return;
-        const mo = new MutationObserver(() => { if (cardPresent()) applyAll(); });
-        mo.observe(document.body, { childList: true, subtree: true });
+        if (on) {
+            if (rebuildMo) return;
+            rebuildMo = new MutationObserver(() => { if (cardPresent()) applyAll(); });
+            rebuildMo.observe(document.body, { childList: true, subtree: true });
+        } else if (rebuildMo) {
+            rebuildMo.disconnect();
+            rebuildMo = null;
+        }
+    }
+
+    function setPolling(on) {
+        if (on) {
+            if (pollTimer) return;
+            watchRebuilds(true);
+            pollTimer = setInterval(tick, 500);
+            tick();
+        } else {
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = 0; }
+            watchRebuilds(false);
+            if (buttonEl) { buttonEl.remove(); buttonEl = null; }
+            if (isPanelOpen()) closePanel();
+        }
+    }
+
+    function syncWatch() {
+        // Editing chrome needs the poll; saved CSS vars already apply without it.
+        setPolling(isActive() && cardPresent());
     }
 
     function init() {
@@ -477,8 +500,9 @@ const cardLayoutEditor = (function () {
         // has ever built a card — the CSS rule is already live by the time anything matching these
         // selectors is first created, so it never has an untransformed first paint to "jump" from.
         applyAll();
-        watchRebuilds();
-        setInterval(tick, 500);
+        // Cheap presence check only — no body observer until DevMode + card are both live.
+        setInterval(syncWatch, 2000);
+        syncWatch();
     }
 
     if (document.readyState === 'loading') {

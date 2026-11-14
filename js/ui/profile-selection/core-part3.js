@@ -40,7 +40,7 @@ extendClass(ProfileSelectionManager, {
         const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : (galaxyStep ? 'CHOOSE YOUR GALAXY' : (missionStep ? 'CHOOSE YOUR STORY' : 'START SETUP'))));
         // Wizard progress: faction -> pilot -> setup -> galaxy -> story (same order the NEXT/BACK buttons walk).
         const stepIdx = pickFaction ? 0 : (pilotStep ? 1 : (galaxyStep ? 3 : (missionStep ? 4 : 2)));
-        const stepperHtml = create ? `<ol class="profile-stepper" aria-label="Step ${stepIdx + 1} of 5">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY'], ['mission', 'STORY']].map(([key, label], i) => `
+        const stepperHtml = create ? `<ol class="profile-stepper${pickFaction ? ' onboarding-stepper' : ''}" aria-label="Step ${stepIdx + 1} of 5">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY'], ['mission', 'STORY']].map(([key, label], i) => `
             <li class="profile-stepper-step${i < stepIdx ? ' is-done' : ''}${i === stepIdx ? ' is-current' : ''}"${i === stepIdx ? ' aria-current="step"' : ''}>
                 ${i < stepIdx ? `<button type="button" class="profile-stepper-btn" data-step-go="${key}" tabindex="-1" title="Back to ${label}">` : '<span class="profile-stepper-btn">'}
                 <span class="profile-stepper-dot">${ProfileSelectionManager.stepIconHtml(key)}</span><span class="profile-stepper-label">${label}</span>
@@ -65,10 +65,16 @@ extendClass(ProfileSelectionManager, {
         const previewHtml = create && !galaxyStep ? `
             <div class="profile-faction-info-row">
             <div class="profile-faction-preview">
-                <div class="profile-faction-ship-wrap">
-                    <canvas class="profile-faction-ship" width="${startStep ? 320 : 200}" height="${startStep ? 224 : 140}" aria-label="Faction ship preview"></canvas>
-                    ${startStep ? '' : '<span class="profile-faction-preview-emblem pfc-crest profile-faction-ship-badge"></span>'}
-                </div>
+                ${startStep
+                    ? `<div class="profile-setup-stage" aria-label="Faction homeworld">
+                    <div class="profile-faction-ship-wrap">
+                        <canvas class="profile-faction-ship" width="320" height="224" aria-label="Faction ship preview"></canvas>
+                    </div>
+                </div>`
+                    : `<div class="profile-faction-ship-wrap">
+                    <canvas class="profile-faction-ship" width="200" height="140" aria-label="Faction ship preview"></canvas>
+                    <span class="profile-faction-preview-emblem pfc-crest profile-faction-ship-badge"></span>
+                </div>`}
                 ${startStep ? '<div class="profile-kit-ship"></div>' : ''}
                 ${startStep ? '' : `<div class="profile-faction-preview-text pfc" data-pfc>
                     <strong class="profile-faction-preview-name pfc-name"></strong>
@@ -115,42 +121,77 @@ extendClass(ProfileSelectionManager, {
             : missionStep ? '↑ ↓ ← → Story | ENTER Start | ESC Back'
             : (create ? '↑ ↓ Row | ← → Change | ENTER Save | ESC Back' : 'ENTER Save | ESC Cancel');
         const missionHtml = missionStep ? this.renderMissionStepHtml() : '';
+        // Faction step: onboarding homeworld stage (no profile-selection-name-mode —
+        // that class caps width at ~420px and collapses the two-column stage).
+        const factionHomeHtml = pickFaction ? `
+            <div class="profile-selection-content onboarding-homeworld-site is-faction-homeworld" data-faction-box="1">
+                <div class="onboarding-homeworld-main onboarding-panel">
+                    <h2 class="profile-selection-title">${title}</h2>
+                    ${swatchesHtml}
+                    <div class="profile-faction-info-row onboarding-faction-preview">
+                        <div class="onboarding-faction-dossier onboarding-preview-card" role="note">
+                            <div class="profile-faction-lore-text onboarding-dossier-lore"></div>
+                            <div class="profile-faction-focus" data-faction-focus aria-label="Faction focus"></div>
+                        </div>
+                    </div>
+                </div>
+                <aside class="onboarding-homeworld-stage onboarding-panel" aria-label="Faction homeworld">
+                    <div class="onboarding-homeworld-label"></div>
+                </aside>
+            </div>` : '';
         setHtml(`
             ${stepperHtml}
+            ${pickFaction ? factionHomeHtml : `
             <div class="profile-selection-content profile-selection-floating profile-selection-name-mode${create && !pickFaction ? ' is-name-step' : ''}${pilotStep ? ' is-pilot-step' : ''}">
-                ${pickFaction || startStep || missionStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
-                ${pickFaction || missionStep ? '' : swatchesHtml + inputHtml}
-                ${create && !pickFaction && !missionStep ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
-                ${pickFaction ? swatchesHtml : ''}
+                ${startStep || missionStep ? '' : `<h2 class="profile-selection-title">${title}</h2>`}
+                ${missionStep ? '' : swatchesHtml + inputHtml}
+                ${create && !missionStep ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
                 ${startStep ? `<div class="profile-start-main">${this.renderKitListHtml()}${previewHtml}</div>` : (missionStep ? missionHtml : previewHtml)}
-            </div>
-            <div class="profile-selection-bar"><div class="profile-selection-actions">
+            </div>`}
+            <div class="profile-selection-bar${pickFaction ? ' onboarding-bar' : ''}"><div class="profile-selection-actions">
                 <button class="action-button secondary" id="psCancelMode">${btnIcon(secondary === 'BACK' ? 'back' : 'cancel')}${secondary}</button>
                 <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep || startStep || galaxyStep) ? 'next' : 'save')}${primary}</button>
             </div>
             <div class="profile-selection-instructions"><p>${hint}</p></div></div>
         `);
         if (!reuse) (this.host || document.body).appendChild(this.overlay);
+        // Reuse onboarding homeworld CSS while on the faction stage.
+        this.overlay.classList.toggle('onboarding-overlay', !!pickFaction);
         this.fitWizardBars();
         requestAnimationFrame(() => this.fitWizardBars());
         if (pilotStep) this.ensurePilotPicksFit();
-        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-            VFBgMouseParallax.refresh();
-        }
         const input = this.overlay.querySelector('#profileNameInput');
         if (input && this.mode === 'rename' && profiles[this.selectedIndex]) {
             input.value = profiles[this.selectedIndex].name;
         }
         if (input && create && this._pilotName) input.value = this._pilotName;
-        if (create) { this.applyPendingFactionLook(); this.warmFactionAssets(); }
-        // Animated hero planet behind the faction card (faction-pick step only, for now).
-        const heroPreviewEl = pickFaction ? this.overlay.querySelector('.profile-faction-preview') : null;
-        if (heroPreviewEl && typeof HeroPlanetBackdrop !== 'undefined') {
+        if (create) {
+            const factionChanged = this._appliedLookFaction !== this.pendingFaction;
+            this.applyPendingFactionLook(false);
+            this.warmFactionAssets();
+            // Parallax host rebind only when the faction (and thus backdrop art) changes.
+            if (factionChanged && typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
+                VFBgMouseParallax.refresh();
+            }
+        }
+        // Homeworld stage: faction pick pane, or SETUP centre (planet + orbit ships).
+        const homeStage = pickFaction
+            ? this.overlay.querySelector('.onboarding-homeworld-stage')
+            : (startStep ? this.overlay.querySelector('.profile-setup-stage') : null);
+        if (homeStage && typeof HeroPlanetBackdrop !== 'undefined') {
             if (!this._heroPlanetBackdrop) this._heroPlanetBackdrop = new HeroPlanetBackdrop();
+            if (this._heroPlanetBackdrop.setLayout) this._heroPlanetBackdrop.setLayout('stage');
             this._heroPlanetBackdrop.setFaction(this.pendingFaction);
-            this._heroPlanetBackdrop.mount(heroPreviewEl);
-            heroPreviewEl.classList.add('has-hero-planet');
+            const mountHome = () => {
+                if (!this.overlay || !homeStage.isConnected) return;
+                this._heroPlanetBackdrop.mount(homeStage);
+                homeStage.classList.add('has-hero-planet');
+                if (pickFaction) this.refreshHomeworldLabel(this.pendingFaction);
+                if (this._heroPlanetBackdrop.draw) this._heroPlanetBackdrop.draw(false);
+            };
+            requestAnimationFrame(() => requestAnimationFrame(mountHome));
         } else if (this._heroPlanetBackdrop) {
+            if (this._heroPlanetBackdrop.setLayout) this._heroPlanetBackdrop.setLayout('card');
             this._heroPlanetBackdrop.unmount();
         }
         if (input && create) {
@@ -208,7 +249,11 @@ extendClass(ProfileSelectionManager, {
                 this._startOpts.lookKey = k; this.refreshPilotRow();
             });
             const sl = el.querySelector('.pp-slider');
-            if (sl) sl.addEventListener('change', () => { clearTimeout(this._ppTimer); this._ppTimer = 0; this.refreshPilotRow(); });
+            if (sl) sl.addEventListener('change', () => {
+                clearTimeout(this._ppTimer);
+                this._ppTimer = 0;
+                this.refreshPilotRow();
+            });
             if (sl) sl.addEventListener('input', () => {
                 const o = this._startOpts;
                 o.lookKey = k;
@@ -216,9 +261,11 @@ extendClass(ProfileSelectionManager, {
                 this.savePilotState();
                 const val = el.querySelector('.pp-val');
                 if (val) val.textContent = heroPortrait.valueName(k, o.look[k], o.look);
-                if (this._ppTimer) return;
-                // Portrait redraw is heavy: coalesce to ~10/s while dragging.
-                this._ppTimer = setTimeout(() => { this._ppTimer = 0; this.refreshPilotRow(); }, 90);
+                // Live canvas update (no remount) so BACKDROP / ANIMATION react immediately.
+                if (this.applyPilotLookCanvases) this.applyPilotLookCanvases();
+                this.overlay.querySelectorAll('.pp-ctl').forEach((row) => {
+                    row.classList.toggle('active', row.getAttribute('data-pp-key') === k);
+                });
             });
         });
         this.overlay.querySelectorAll('[data-pp-pick]').forEach((b) => b.addEventListener('click', () => {
@@ -250,17 +297,36 @@ extendClass(ProfileSelectionManager, {
                 if (loadout) loadout.innerHTML = this.renderLoadoutHtml();
                 const kitInfo = group === 'kit' && this.overlay.querySelector('.profile-kit-info');
                 if (kitInfo) kitInfo.innerHTML = this.renderKitInfoHtml();
-                if (group === 'kit' || group === 'ship') { this.savePilotState && this.savePilotState(); this.renderFactionShipPreview(this.pendingFaction); }
+                if (group === 'kit' || group === 'ship') {
+                    // Coalesce ship redraw + session save so rapid kit clicks stay snappy.
+                    const fid = this.pendingFaction;
+                    if (this._kitShipRaf) cancelAnimationFrame(this._kitShipRaf);
+                    this._kitShipRaf = requestAnimationFrame(() => {
+                        this._kitShipRaf = 0;
+                        this.renderFactionShipPreview(fid);
+                        if (this.savePilotState) this.savePilotState();
+                    });
+                }
             });
         });
 
         const loadoutEl = this.overlay.querySelector('.profile-loadout');
-        // Hovering the ship preview outlines its weapon mounts.
-        this.overlay.addEventListener('mouseover', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship')) this.highlightPreviewWeapon(true); });
-        // WEAPONS slots in the sidebar: hovering one lights up its mount on the ship.
-        this.overlay.addEventListener('mouseover', (e) => { const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]'); if (w) this.highlightPreviewWeapon(true, Number(w.dataset.slot)); });
-        this.overlay.addEventListener('mouseout', (e) => { const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]'); if (w && !(e.relatedTarget && w.contains(e.relatedTarget))) this.highlightPreviewWeapon(false); });
-        this.overlay.addEventListener('mouseout', (e) => { if (e.target.closest && e.target.closest('.profile-faction-ship') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.profile-faction-ship'))) this.highlightPreviewWeapon(false); });
+        // Hover outlines: mouseenter/leave on the wrap (not bubbling mouseover on the whole overlay).
+        const shipWrap = this.overlay.querySelector('.profile-faction-ship-wrap') || this.overlay.querySelector('.profile-faction-ship');
+        if (shipWrap) {
+            shipWrap.addEventListener('mouseenter', () => this.highlightPreviewWeapon(true));
+            shipWrap.addEventListener('mouseleave', () => this.highlightPreviewWeapon(false));
+        }
+        if (loadoutEl) {
+            loadoutEl.addEventListener('mouseover', (e) => {
+                const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]');
+                if (w) this.highlightPreviewWeapon(true, Number(w.dataset.slot));
+            });
+            loadoutEl.addEventListener('mouseout', (e) => {
+                const w = e.target.closest && e.target.closest('.pk-weapon[data-slot]');
+                if (w && !(e.relatedTarget && w.contains(e.relatedTarget))) this.highlightPreviewWeapon(false);
+            });
+        }
         if (loadoutEl) loadoutEl.addEventListener('click', (e) => {
             const b = e.target.closest('[data-area]');
             if (!b || b.disabled) return;
@@ -277,7 +343,10 @@ extendClass(ProfileSelectionManager, {
         const pickIndex = (i) => {
             const ids = this.getFactionIds();
             const n = ids.length;
-            this.pendingFaction = ids[((i % n) + n) % n];
+            const next = ids[((i % n) + n) % n];
+            if (next === this.pendingFaction) return;
+            this.pendingFaction = next;
+            this._appliedLookFaction = null; // force theme + cable path for the new faction
             this.overlay.querySelectorAll('.profile-faction-swatch').forEach((el) => {
                 el.classList.toggle('selected', el.dataset.faction === this.pendingFaction);
             });
@@ -285,7 +354,7 @@ extendClass(ProfileSelectionManager, {
             if (startStep) { this.createUI(); return; }
             // Hero planet swap happens inside applyFactionContent (core-look.js), gated
             // the same way as the emblem/colors/lore so it doesn't jump ahead of them.
-            this.applyPendingFactionLook();
+            this.applyPendingFactionLook(true);
         };
         const confirm = () => {
             if (pickFaction || pilotStep || startStep || galaxyStep) {
@@ -322,6 +391,7 @@ extendClass(ProfileSelectionManager, {
                     if (btn.dataset.faction === this.pendingFaction) return;
                     const keepName = input ? input.value : this._pilotName;
                     this.pendingFaction = btn.dataset.faction;
+                    this._appliedLookFaction = null;
                     this._pilotName = keepName;
                     this.createUI();
                     return;

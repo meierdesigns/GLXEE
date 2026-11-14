@@ -48,7 +48,8 @@ class HeroPlanetBackdrop {
         const next = (mode === 'stage') ? 'stage' : 'card';
         if (next === this._layout) return;
         this._layout = next;
-        this._frameInterval = this._layout === 'stage' ? (1000 / 8) : (1000 / 16);
+        // Card peek used to run at 16fps with a 60Hz rAF gate — too hot on the main thread.
+        this._frameInterval = 1000 / 8;
         this._staticLayer = null;
         this._staticKey = '';
         this._planetLayer = null;
@@ -163,32 +164,50 @@ class HeroPlanetBackdrop {
     }
 
     _startLoop() {
-        if (this._raf) return;
+        if (this._raf || this._idleTimer) return;
         this._lastT = 0;
         this._accum = 0;
         this._visOk = true;
         this._visCheckAt = 0;
+        const schedule = (delay) => {
+            if (this._idleTimer) {
+                clearTimeout(this._idleTimer);
+                this._idleTimer = 0;
+            }
+            if (delay > 16) {
+                this._idleTimer = setTimeout(() => {
+                    this._idleTimer = 0;
+                    this._raf = requestAnimationFrame(tick);
+                }, delay);
+            } else {
+                this._raf = requestAnimationFrame(tick);
+            }
+        };
         const tick = (now) => {
+            this._raf = 0;
             if (!this.el.isConnected) {
-                this._raf = 0;
+                if (this._idleTimer) { clearTimeout(this._idleTimer); this._idleTimer = 0; }
                 return;
             }
-            this._raf = requestAnimationFrame(tick);
-            if (document.hidden) return;
+            if (document.hidden || document.documentElement.hasAttribute('data-vf-performance')) {
+                schedule(1000);
+                return;
+            }
             // Avoid getComputedStyle on the hot path — opacity fades are brief; skip only when display:none via offsetParent.
-            if (!this.el.offsetParent && this.el.style.position !== 'fixed') return;
-            // A fixed-step accumulator, not "now - lastT < interval, else lastT = now": that
-            // re-bases the clock to whatever imprecise moment rAF happened to fire, so the REAL
-            // gap between accepted draws drifted with rAF's own ~16ms granularity instead of
-            // staying a steady multiple of the interval — a continuous low-level stutter even
-            // once every frame was long cached and decode time was no longer a factor at all.
+            if (!this.el.offsetParent && this.el.style.position !== 'fixed') {
+                schedule(500);
+                return;
+            }
+            // Pace draws to _frameInterval without keeping a 60 Hz rAF chain alive.
             if (!this._lastT) this._lastT = now;
-            this._accum += now - this._lastT;
+            const wait = this._frameInterval - (now - this._lastT);
+            if (wait > 0) {
+                schedule(wait);
+                return;
+            }
             this._lastT = now;
-            if (this._accum < this._frameInterval) return;
-            // Never catch up with multiple paints — one draw per rAF max.
-            this._accum = Math.min(this._accum - this._frameInterval, this._frameInterval);
             this.draw(true);
+            schedule(this._frameInterval);
         };
         this._raf = requestAnimationFrame(tick);
     }
@@ -196,6 +215,10 @@ class HeroPlanetBackdrop {
     _stopLoop() {
         if (this._raf) cancelAnimationFrame(this._raf);
         this._raf = 0;
+        if (this._idleTimer) {
+            clearTimeout(this._idleTimer);
+            this._idleTimer = 0;
+        }
     }
 
     /**

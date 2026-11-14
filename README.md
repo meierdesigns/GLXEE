@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.14 · SHOT FLIGHT · OUTCOME CHROME · HANGAR LAYOUT       │
+│  BUILD           1.14.15 · FOUND LOOT · SHOT HANG · TRADER · WIZARD           │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,9 +717,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.14** keeps player shots flying (rim cull + continuous VOXEL draw),
-refreshes victory outcome chrome, and polishes onboarding / hangar bay layout —
-on top of the 1.14.13 Face Editor and feature-bundle work.
+Build **1.14.15** ships victory found-item UX (range tip → final roll, LMB/RMB),
+shot hang + Shot Behavior editor, planet trader overhaul, onboarding→wizard,
+station chrome, and asset-gen portraits — on top of the 1.14.14 shot-flight work.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -1147,5 +1147,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.14** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.15** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

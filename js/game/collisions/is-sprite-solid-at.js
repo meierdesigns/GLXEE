@@ -33,78 +33,65 @@ extendClass(CollisionManager, {
         return this.isSpriteSolidAt(obj, null, x, y);
     },
 
-    reflectBullet(bullet, obstacle) {
-        // Calculate bullet center and obstacle center
-        const bulletCenterX = bullet.x + bullet.width / 2;
-        const bulletCenterY = bullet.y + bullet.height / 2;
-        const obstacleCenterX = obstacle.x + obstacle.width / 2;
-        const obstacleCenterY = obstacle.y + obstacle.height / 2;
-
-        // Calculate collision point relative to obstacle center
-        const relativeX = bulletCenterX - obstacleCenterX;
-        const relativeY = bulletCenterY - obstacleCenterY;
-
-        // Determine which side of the obstacle was hit
-        const absX = Math.abs(relativeX);
-        const absY = Math.abs(relativeY);
-
-        if (absX > absY) {
-            // Hit left or right side - reflect horizontally
-            if (bullet.angle !== undefined) {
-                // For angled bullets, reverse the horizontal component
-                bullet.angle = -bullet.angle;
-            } else {
-                // For straight bullets, add horizontal movement
-                bullet.angle = Math.PI / 2; // 90 degrees
-                bullet.speed = Math.abs(bullet.speed);
-            }
+    /**
+     * Bounce math for optical mirrors: keep a little lateral kick, but always
+     * lock the new team's forward axis so beams never park mid-lane.
+     */
+    reflectShotOffObstacle(bullet, obstacle, asEnemy) {
+        const fallback = asEnemy ? 5 : 6;
+        const keepSpd = (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+            ? bulletManager.getBulletMoveSpeed(bullet, fallback)
+            : Math.abs(Number(bullet.speed) || fallback);
+        let vx = Number(bullet.vx);
+        let vy = Number(bullet.vy);
+        if (!(Math.hypot(vx, vy) > 0.05)) {
+            vx = Number(bullet._sweepDx) || 0;
+            vy = Number(bullet._sweepDy) || 0;
+        }
+        if (Math.hypot(vx, vy) < 0.05) {
+            vx = 0;
+            vy = asEnemy ? keepSpd : -keepSpd;
+        }
+        const tip = this.shotImpactXY(bullet);
+        const ocx = obstacle.x + obstacle.width / 2;
+        const ocy = obstacle.y + obstacle.height / 2;
+        const rx = tip.x - ocx;
+        const ry = tip.y - ocy;
+        let nx = 0;
+        let ny = 0;
+        if (Math.abs(rx) > Math.abs(ry)) nx = rx > 0 ? 1 : -1;
+        else ny = ry > 0 ? 1 : -1;
+        const dot = vx * nx + vy * ny;
+        vx -= 2 * dot * nx;
+        vy -= 2 * dot * ny;
+        const forward = asEnemy ? 1 : -1;
+        let lat = vx;
+        // Forward must dominate after a bounce.
+        if (Math.abs(vy) < keepSpd * 0.55 || Math.sign(vy || forward) !== Math.sign(forward)) {
+            lat = Math.max(-keepSpd * 0.55, Math.min(keepSpd * 0.55, lat));
+            const rem = Math.sqrt(Math.max(0.01, keepSpd * keepSpd - lat * lat));
+            vx = lat;
+            vy = forward * rem;
         } else {
-            // Hit top or bottom side - reflect vertically
-            if (bullet.angle !== undefined) {
-                // For angled bullets, reverse the vertical component
-                bullet.angle = Math.PI - bullet.angle;
-            } else {
-                // For straight bullets, reverse vertical direction
-                bullet.speed = -bullet.speed;
-            }
+            const len = Math.hypot(vx, vy) || 1;
+            vx = (vx / len) * keepSpd;
+            vy = (vy / len) * keepSpd;
         }
+        bullet.isEnemyShot = !!asEnemy;
+        bullet.angle = undefined;
+        bullet.moveSpeed = keepSpd;
+        bullet.speed = keepSpd;
+        bullet.vx = vx;
+        bullet.vy = vy;
+        bullet.reflected = true;
+    },
 
-        // Ensure bullet moves away from obstacle
-        if (bullet.angle !== undefined) {
-            // Adjust angle to ensure proper direction
-            if (relativeY > 0) { // Bullet hit from below
-                bullet.angle = Math.abs(bullet.angle);
-            } else { // Bullet hit from above
-                bullet.angle = -Math.abs(bullet.angle);
-            }
-        }
+    reflectBullet(bullet, obstacle) {
+        this.reflectShotOffObstacle(bullet, obstacle, false);
     },
 
     reflectEnemyBullet(bullet, obstacle) {
-        // Enemy bullets move straight down, so we need simpler reflection
-        // Calculate bullet center and obstacle center
-        const bulletCenterX = bullet.x + bullet.width / 2;
-        const bulletCenterY = bullet.y + bullet.height / 2;
-        const obstacleCenterX = obstacle.x + obstacle.width / 2;
-        const obstacleCenterY = obstacle.y + obstacle.height / 2;
-
-        // Calculate collision point relative to obstacle center
-        const relativeX = bulletCenterX - obstacleCenterX;
-        const relativeY = bulletCenterY - obstacleCenterY;
-
-        // Determine which side of the obstacle was hit
-        const absX = Math.abs(relativeX);
-        const absY = Math.abs(relativeY);
-
-        if (absX > absY) {
-            // Hit left or right side - reflect horizontally
-            // Add horizontal movement to enemy bullet
-            bullet.angle = relativeX > 0 ? Math.PI / 2 : -Math.PI / 2; // Right or left
-            bullet.speed = Math.abs(bullet.speed);
-        } else {
-            // Hit top or bottom side - reflect vertically
-            bullet.speed = -bullet.speed; // Reverse direction
-        }
+        this.reflectShotOffObstacle(bullet, obstacle, true);
     },
 
     /**
@@ -128,9 +115,8 @@ extendClass(CollisionManager, {
         obstacle.pushVx = Math.max(-2.5, Math.min(2.5, (obstacle.pushVx || 0) + dx * k));
         obstacle.pushVy = Math.max(-2.5, Math.min(2.5, (obstacle.pushVy || 0) + dy * k));
         obstacle.pushFlashMs = 120;
-        const hx = bullet.x + (bullet.width || 0) / 2;
-        const hy = bullet.y + (bullet.height || 0) / 2;
-        this.createDetailedHitEffect(hx, hy, 'impact');
+        const tip = this.shotImpactXY(bullet);
+        this.createDetailedHitEffect(tip.x, tip.y, 'impact');
         if (typeof soundManager !== 'undefined') soundManager.playHit();
     },
 
@@ -141,16 +127,23 @@ extendClass(CollisionManager, {
 
         // Check player bullets vs obstacles
         for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            if (!bullet) continue;
+            if (!(Number(bullet.vy) < 0) && !(Number(bullet._sweepDy) < 0)) continue;
+            if (typeof bulletManager !== 'undefined' && bulletManager.playerShotSpawnBlocked
+                && bulletManager.playerShotSpawnBlocked(bullet)) continue;
+            const bTop = bullet.y - 20;
+            const bBot = bullet.y + (bullet.height || 0) + 20;
             for (let j = obstacles.length - 1; j >= 0; j--) {
-                if (this.isColliding(bullets[i], obstacles[j])) {
-                    const obstacle = obstacles[j];
-                    if (obstacle.isFog || bullets[i]._ignoreObstacle === obstacle) continue;
-                    const bullet = bullets[i];
-                    const bulletX = bullet.x;
-                    const bulletY = bullet.y;
+                const obstacle = obstacles[j];
+                if (obstacle.y > bBot || obstacle.y + (obstacle.height || 0) < bTop) continue;
+                if (this.isColliding(bullet, obstacle)) {
+                    if (obstacle.isFog || bullet._ignoreObstacle === obstacle) continue;
+                    const tip = this.shotImpactXY(bullet);
+                    const bulletX = tip.x;
+                    const bulletY = tip.y;
                     const explosionId = obstacle.explosionId || 'asteroid_burst';
                     const optical = obstacle.opticalMode || 'none';
-
                     if (optical === 'mirror' || optical === 'prism' || optical === 'kaleidoscope') {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'player', i, j);
                         if (handled) break;
@@ -163,22 +156,8 @@ extendClass(CollisionManager, {
                     }
 
                     if (obstacle.reflectsShots) {
-                        // Convert reflected bullet to enemy bullet
-                        const reflectedBullet = bullets[i];
-                        reflectedBullet.speed = -reflectedBullet.speed; // Reverse direction
-                        reflectedBullet.y += 5; // Move away from obstacle
-                        reflectedBullet.reflected = true;
-
-                        // Add to enemy bullets array
-                        bulletManager.getEnemyBullets().push(reflectedBullet);
-
-                        // Remove from player bullets
-                        bulletManager.removeBullet(i);
-
-                        // Play reflection sound
+                        this.reassignShotTeam(i, 'player', true, obstacle);
                         if (typeof soundManager !== 'undefined') soundManager.playReflect();
-
-                        // Damage obstacle (shields are fragile)
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
@@ -188,8 +167,8 @@ extendClass(CollisionManager, {
                             this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
-                        const hx = bulletX + (bullet.width || 0) / 2;
-                        const hy = bulletY + (bullet.height || 0) / 2;
+                        const hx = bulletX;
+                        const hy = bulletY;
                         // Bomb crates: detonate immediately on shot contact.
                         if (obstacle.isCrate && obstacle.trap === 'bomb') {
                             bulletManager.removeBullet(i);
@@ -222,9 +201,8 @@ extendClass(CollisionManager, {
                         // Award points for destruction
                         game.score += 10;
                     } else {
-                        // Non-destructible obstacle - just remove bullet
-                        bulletManager.removeBullet(i);
-                        this.createDetailedHitEffect(bulletX, bulletY, 'impact');
+                        // Non-destructible obstacle - tip pop then cull
+                        this.destroyShotAt('player', i, 'impact');
                         if (typeof soundManager !== 'undefined') soundManager.playHit();
                     }
 
@@ -235,13 +213,17 @@ extendClass(CollisionManager, {
 
         // Check enemy bullets vs obstacles
         for (let i = enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = enemyBullets[i];
+            const bTop = bullet.y - 20;
+            const bBot = bullet.y + (bullet.height || 0) + 20;
             for (let j = obstacles.length - 1; j >= 0; j--) {
-                if (this.isColliding(enemyBullets[i], obstacles[j])) {
-                    const obstacle = obstacles[j];
-                    if (obstacle.isFog || enemyBullets[i]._ignoreObstacle === obstacle) continue;
-                    const bullet = enemyBullets[i];
-                    const bulletX = bullet.x;
-                    const bulletY = bullet.y;
+                const obstacle = obstacles[j];
+                if (obstacle.y > bBot || obstacle.y + (obstacle.height || 0) < bTop) continue;
+                if (this.isColliding(bullet, obstacle)) {
+                    if (obstacle.isFog || bullet._ignoreObstacle === obstacle) continue;
+                    const tip = this.shotImpactXY(bullet);
+                    const bulletX = tip.x;
+                    const bulletY = tip.y;
                     const explosionId = obstacle.explosionId || 'asteroid_burst';
                     const optical = obstacle.opticalMode || 'none';
 
@@ -257,31 +239,19 @@ extendClass(CollisionManager, {
                     }
 
                     if (obstacle.reflectsShots) {
-                        // Convert reflected enemy bullet to player bullet
-                        const reflectedBullet = enemyBullets[i];
-                        reflectedBullet.speed = -reflectedBullet.speed; // Reverse direction
-                        reflectedBullet.y -= 10; // Move away from obstacle
-                        reflectedBullet.reflected = true;
-
-                        // Add to player bullets array
-                        bulletManager.getBullets().push(reflectedBullet);
-
-                        // Remove from enemy bullets
-                        bulletManager.removeEnemyBullet(i);
-
-                        // Play reflection sound
+                        this.reassignShotTeam(i, 'enemy', false, obstacle);
                         if (typeof soundManager !== 'undefined') soundManager.playReflect();
-
-                        // Damage obstacle
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
                             this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId, obstacle);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
+                        } else {
+                            this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
-                        const hx = bulletX + (bullet.width || 0) / 2;
-                        const hy = bulletY + (bullet.height || 0) / 2;
+                        const hx = bulletX;
+                        const hy = bulletY;
                         if (obstacle.isCrate && obstacle.trap === 'bomb') {
                             bulletManager.removeEnemyBullet(i);
                             if (typeof pickupManager !== 'undefined' && pickupManager.trapBlast) {
@@ -305,9 +275,8 @@ extendClass(CollisionManager, {
                         // Remove bullet
                         bulletManager.removeEnemyBullet(i);
                     } else {
-                        // Non-destructible obstacle - just remove bullet
-                        bulletManager.removeEnemyBullet(i);
-                        this.createExplosion(bulletX, bulletY, 'small_pop');
+                        // Non-destructible — tip impact only (never full small_pop).
+                        this.destroyShotAt('enemy', i, 'impact');
                         if (typeof soundManager !== 'undefined') soundManager.playHit();
                     }
 

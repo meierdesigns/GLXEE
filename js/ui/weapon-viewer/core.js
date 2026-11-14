@@ -140,6 +140,7 @@ class WeaponViewerUI {
                 </div>
                 <div class="content-viewer-footer">
                     <button type="button" class="pe-btn" id="wvEditGfx">EDIT GFX</button>
+                    <button type="button" class="pe-btn" id="wvEditBehavior" hidden>EDIT BEHAVIOR</button>
                     <button type="button" class="pe-btn" id="wvClose">CLOSE</button>
                 </div>
                 <div class="content-viewer-hint">↑↓ Navigate • ESC Close</div>
@@ -158,6 +159,12 @@ class WeaponViewerUI {
         this.startPreview();
         this.overlay.querySelector('#wvClose').addEventListener('click', () => this.close());
         this.overlay.querySelector('#wvEditGfx').addEventListener('click', () => this.openGfxEditor());
+        const behaviorBtn = this.overlay.querySelector('#wvEditBehavior');
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        if (behaviorBtn) {
+            behaviorBtn.hidden = !devOn;
+            behaviorBtn.addEventListener('click', () => this.openBehaviorEditor());
+        }
         this.mountDevToggles();
     }
 

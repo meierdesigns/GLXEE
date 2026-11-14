@@ -4,29 +4,76 @@
 // (this runs inside every nested bullet/obstacle/enemy collision loop, every frame).
 const _collisionBoundsScratch1 = { x: 0, y: 0, width: 0, height: 0 };
 const _collisionBoundsScratch2 = { x: 0, y: 0, width: 0, height: 0 };
+const _collisionSweptScratch = { x: 0, y: 0, width: 0, height: 0 };
 
 // CollisionManager methods, split from collisions.js.
 extendClass(CollisionManager, {
     /**
-     * Redirect the clash in the selected shot's travel direction.
-     * winnerSide 'player' → both become upward player shots;
-     * 'enemy' → both become downward enemy shots.
+     * Flip a live shot onto the other team with locked straight velocity.
+     * Caps bounce chains so mirrors cannot ping-pong forever.
+     */
+    reassignShotTeam(index, fromSide, asEnemy, obstacle) {
+        if (typeof bulletManager === 'undefined') return null;
+        const fromList = fromSide === 'player'
+            ? bulletManager.getBullets()
+            : bulletManager.getEnemyBullets();
+        const b = bulletManager.detachBullet
+            ? bulletManager.detachBullet(fromList, index)
+            : null;
+        if (!b) return null;
+        const tip = this.shotImpactXY(b);
+        const count = (Number(b._reflectCount) || 0) + 1;
+        if (count > 3) {
+            this.createDetailedHitEffect(tip.x, tip.y, 'impact');
+            if (bulletManager.releaseBullet) bulletManager.releaseBullet(b);
+            return null;
+        }
+        const spd = bulletManager.getBulletMoveSpeed
+            ? bulletManager.getBulletMoveSpeed(b, asEnemy ? 5 : 6)
+            : Math.abs(Number(b.speed) || (asEnemy ? 5 : 6));
+        const w = Math.max(1, Math.min(6, Number(b.width != null ? b.width : b.w) || 2));
+        const h = Math.max(3, Math.min(22, Number(b.height != null ? b.height : b.h) || 8));
+        b.width = w;
+        b.height = h;
+        b.isEnemyShot = !!asEnemy;
+        b.isBossShot = asEnemy ? b.isBossShot : undefined;
+        b.angle = undefined;
+        b.reflected = true;
+        b._reflectCount = count;
+        b._ignoreObstacle = obstacle || null;
+        b.moveSpeed = spd;
+        b.speed = spd;
+        b.vx = 0;
+        b.vy = asEnemy ? spd : -spd;
+        b._sweepDx = 0;
+        b._sweepDy = 0;
+        b._spawnAt = undefined;
+        // Bounced shots never re-enter laser clash (would eat the next volley).
+        b.reflectiveShots = false;
+        // Tip sits just past the bounce point along the new travel axis.
+        b.x = tip.x - w / 2;
+        b.y = asEnemy ? (tip.y + 2 - h) : (tip.y - 2);
+        const toList = asEnemy ? bulletManager.enemyBullets : bulletManager.bullets;
+        // Always copy into a fresh list entry — never reinsert the same ref.
+        if (bulletManager.pushBullet) {
+            bulletManager.pushBullet(toList, Object.assign({}, b));
+            if (bulletManager.releaseBullet) bulletManager.releaseBullet(b);
+        } else {
+            toList.push(b);
+        }
+        return toList[toList.length - 1];
+    },
+
+    /**
+     * Shot clash: stronger damage wins and continues as one beam.
+     * Equal power → both annihilate. No random bounce / dual spawn.
      */
     redirectLaserClash(playerBullet, enemyBullet, winnerSide, hitX, hitY) {
-        const combinedDamage = Math.max(
-            playerBullet.damage != null ? playerBullet.damage : 10,
-            enemyBullet.damage != null ? enemyBullet.damage : 10
-        ) + Math.floor(Math.min(
-            playerBullet.damage != null ? playerBullet.damage : 10,
-            enemyBullet.damage != null ? enemyBullet.damage : 10
-        ) * 0.35);
+        const pDmg = playerBullet.damage != null ? playerBullet.damage : 10;
+        const eDmg = enemyBullet.damage != null ? enemyBullet.damage : 10;
+        const combinedDamage = Math.max(pDmg, eDmg)
+            + Math.floor(Math.min(pDmg, eDmg) * 0.35);
 
-        const speed = Math.max(
-            Math.abs(playerBullet.speed || 6),
-            Math.abs(enemyBullet.speed || 6)
-        );
-
-        // Remove originals by identity from arrays
         const pList = bulletManager.getBullets();
         const eList = bulletManager.getEnemyBullets();
         const pi = pList.indexOf(playerBullet);
@@ -34,55 +81,51 @@ extendClass(CollisionManager, {
         if (pi !== -1) bulletManager.removeBullet(pi);
         if (ei !== -1) bulletManager.removeEnemyBullet(ei);
 
-        const makeBeam = (dx, side) => {
-            const w = Math.max(playerBullet.width || 3, enemyBullet.width || 3);
-            const h = Math.max(playerBullet.height || 12, enemyBullet.height || 12);
-            if (side === 'player') {
-                return {
-                    x: hitX - w / 2 + dx,
-                    y: hitY - h - 2,
-                    width: w,
-                    height: h,
-                    speed: speed,
-                    damage: combinedDamage,
-                    color: playerBullet.color || '#808080',
-                    type: playerBullet.type || 'laser_beam',
-                    reflected: true,
-                    lightRadius: Math.max(playerBullet.lightRadius || 60, 60),
-                    lightIntensity: 1.4,
-                    lightColor: playerBullet.lightColor || '#808080'
-                };
-            }
-            return {
-                x: hitX - w / 2 + dx,
-                y: hitY + 2,
-                width: w,
-                height: h,
-                speed: speed,
-                damage: combinedDamage,
-                color: enemyBullet.color || '#808080',
-                type: enemyBullet.type || 'enemy_laser',
-                reflected: true,
-                lightRadius: Math.max(enemyBullet.lightRadius || 50, 50),
-                lightIntensity: 1.4,
-                lightColor: enemyBullet.lightColor || '#808080'
-            };
-        };
-
-        if (winnerSide === 'player') {
-            pList.push(makeBeam(-4, 'player'));
-            pList.push(makeBeam(4, 'player'));
-            game.score += 8;
-        } else {
-            eList.push(makeBeam(-4, 'enemy'));
-            eList.push(makeBeam(4, 'enemy'));
-        }
-
-        if (typeof graphicsManager !== 'undefined') {
-            graphicsManager.createHitEffect(hitX, hitY, 10, 'var(--current-primary)');
-        }
         this.createDetailedHitEffect(hitX, hitY, 'reflect');
+        if (typeof graphicsManager !== 'undefined') {
+            graphicsManager.createHitEffect(hitX, hitY, 8, 'var(--current-primary)');
+        }
         if (typeof soundManager !== 'undefined') soundManager.playReflect();
+
+        // Tie: both die at the clash — no ghost beams.
+        if (!winnerSide || pDmg === eDmg) return;
+
+        const asEnemy = winnerSide === 'enemy';
+        const src = asEnemy ? enemyBullet : playerBullet;
+        const spd = Math.max(
+            (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+                ? bulletManager.getBulletMoveSpeed(playerBullet, 6) : Math.abs(Number(playerBullet.speed) || 6),
+            (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+                ? bulletManager.getBulletMoveSpeed(enemyBullet, 5) : Math.abs(Number(enemyBullet.speed) || 5)
+        );
+        const w = Math.max(2, Math.min(6, Number(src.width || 3)));
+        const h = Math.max(4, Math.min(18, Number(src.height || 10)));
+        const beam = {
+            x: hitX - w / 2,
+            y: asEnemy ? hitY + 2 : hitY - h - 2,
+            width: w,
+            height: h,
+            speed: spd,
+            moveSpeed: spd,
+            vx: 0,
+            vy: asEnemy ? spd : -spd,
+            damage: combinedDamage,
+            color: src.color,
+            type: src.type || (asEnemy ? 'enemy_laser' : 'laser_beam'),
+            weaponId: src.weaponId,
+            isEnemyShot: asEnemy,
+            reflected: true,
+            reflectiveShots: false,
+            lightRadius: Math.max(src.lightRadius || 50, 50),
+            lightIntensity: 1.35,
+            lightColor: src.lightColor || src.color,
+            _isShot: true,
+            _reflectCount: 1
+        };
+        const list = asEnemy ? eList : pList;
+        if (bulletManager.pushBullet) bulletManager.pushBullet(list, beam);
+        else list.push(beam);
+        if (!asEnemy && typeof game !== 'undefined') game.score += 8;
     },
 
     /**
@@ -222,28 +265,62 @@ extendClass(CollisionManager, {
      */
     isShotEntity(obj) {
         if (!obj) return false;
-        if (obj._sweepDx != null || obj._sweepDy != null) return true;
         if (obj.isEnemyShot || obj.isBossShot || obj._isShot) return true;
-        // Untagged projectile: has shot stats, no hull HP.
-        if (obj.damage != null && obj.speed != null && obj.health == null && obj.maxHealth == null
-            && !obj.collision) {
-            return true;
+        if (obj._sweepDx != null || obj._sweepDy != null) {
+            if (obj.moveSpeed != null || obj.weaponId || (obj.type && String(obj.type).includes('beam'))) return true;
+            if (obj.damage != null && (obj.width != null || obj.height != null) && !obj.kind && !obj.isFog) return true;
         }
         return false;
+    },
+
+    /** Impact point when a shot dies — always the leading tip. */
+    shotImpactXY(bullet) {
+        if (!bullet) return { x: 0, y: 0 };
+        if (typeof bulletManager !== 'undefined' && bulletManager.shotTip) {
+            return bulletManager.shotTip(bullet);
+        }
+        return {
+            x: Number(bullet.x) + (Number(bullet.width != null ? bullet.width : bullet.w) || 0) / 2,
+            y: Number(bullet.y) + (Number(bullet.height != null ? bullet.height : bullet.h) || 0) / 2
+        };
+    },
+
+    /** Remove a shot and pop a small impact at its tip. */
+    destroyShotAt(listSide, index, effectType) {
+        const list = listSide === 'enemy'
+            ? (bulletManager.getEnemyBullets ? bulletManager.getEnemyBullets() : null)
+            : (bulletManager.getBullets ? bulletManager.getBullets() : null);
+        const b = list && list[index];
+        if (!b) return;
+        const p = this.shotImpactXY(b);
+        if (listSide === 'enemy') bulletManager.removeEnemyBullet(index);
+        else bulletManager.removeBullet(index);
+        this.createDetailedHitEffect(p.x, p.y, effectType || 'impact');
+    },
+
+    isObstacleEntity(obj) {
+        return !!(obj && (obj.isFog || obj.kind
+            || obj.pushable != null || obj.reflectsShots != null
+            || (obj.isDestructible != null && obj.collisionDamage == null && !obj.maxHealth)));
     },
 
     /**
      * Shot vs hull: prefer the silhouette mask / opaque insets so empty
      * footprint padding (wing gaps, letterbox) does not count as a hit.
-     * Broken/sparse masks fall back to padded inset AABB instead of rejecting.
+     * Only missing mask data falls back to the padded inset AABB — a sparse
+     * mask that was actually sampled is trusted on its "no pixel here" result
+     * too, otherwise thin/sparse hulls (rails, wires, debris) ate shots well
+     * outside their visible silhouette.
      */
     confirmShotHit(shotBounds, hull) {
         if (!hull || !shotBounds) return true;
         const spr = this.getCollisionSprite(hull);
-        if (spr && spr.sprite && spr.sprite.length) {
+        // Sparse / tiny masks used to reject real visual hits — only trust a
+        // silhouette that has enough solid coverage; otherwise use the hull AABB.
+        if (spr && spr.sprite && spr.sprite.length && this.collisionMaskIsTrustworthy(hull, spr)) {
             try {
                 if (this.spriteOverlapsRect(hull, spr, shotBounds)) return true;
-                if (this.collisionMaskIsTrustworthy(hull, spr)) return false;
+                return false;
             } catch (e) {
                 // Mask path must never abort the frame's collision pass.
             }
@@ -284,6 +361,10 @@ extendClass(CollisionManager, {
     isColliding(obj1, obj2) {
         const shot1 = this.isShotEntity(obj1);
         const shot2 = this.isShotEntity(obj2);
+        // Shot↔shot: only opposing travel directions may interact.
+        if (shot1 && shot2) {
+            if (!this.shotsOpposing(obj1, obj2)) return false;
+        }
         const anyShot = shot1 || shot2;
         // Broadphase uses the full footprint so silhouette insets cannot drop a
         // glancing visual hit; confirmShotHit then tests the real hull mask.
@@ -296,12 +377,36 @@ extendClass(CollisionManager, {
             ignoreInsets: anyShot && !shot2,
             matchVoxelDraw: false
         });
+        // Shot vs hull/obstacle: tip only — full beam AABB killed trailing
+        // autofire shots while their tip was still behind the lead shot.
+        if (!(shot1 && shot2)) {
+            const tipBox = (obj, b) => {
+                const down = !!(obj.isEnemyShot || obj.isBossShot || Number(obj.vy) > 0);
+                const fullH = Number(obj.height != null ? obj.height : obj.h) || b.height || 4;
+                const fullW = Number(obj.width != null ? obj.width : obj.w) || b.width || 2;
+                const tw = Math.max(2, Math.min(4, fullW));
+                const th = Math.max(3, Math.min(5, fullH));
+                const cx = Number(obj.x) + fullW / 2;
+                b.width = tw;
+                b.height = th;
+                b.x = cx - tw / 2;
+                b.y = down ? (Number(obj.y) + fullH - th) : Number(obj.y);
+            };
+            if (shot1) tipBox(obj1, b1);
+            if (shot2) tipBox(obj2, b2);
+        }
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
                                b1.y < b2.y + b2.height &&
                                b1.y + b1.height > b2.y;
 
         if (!basicCollision) {
+            // Swept path vs obstacles grazes wide AABBs — only the live position counts.
+            if (anyShot) {
+                if (shot1 && shot2) return false;
+                if (shot1 && this.isObstacleEntity(obj2)) return false;
+                if (shot2 && this.isObstacleEntity(obj1)) return false;
+            }
             // Fast shots: also test the strip swept since last frame so they cannot jump over a target.
             const sx = obj1 && obj1._sweepDx, sy = obj1 && obj1._sweepDy;
             if (!(sx || sy)) return false;
@@ -311,13 +416,16 @@ extendClass(CollisionManager, {
             if (!sweptHit) return false;
             // Carved rocks: confirm the swept strip still touches remaining pixels
             // (previously skipped entirely → shots tunneled through thin lips).
-            const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+            const swept = _collisionSweptScratch;
+            swept.x = x0;
+            swept.y = y0;
+            swept.width = Math.max(1, x1 - x0);
+            swept.height = Math.max(1, y1 - y0);
             if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
                 if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, swept)) return false;
                 if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, swept)) return false;
             }
             if (anyShot) {
-                if (shot1 && shot2) return true;
                 return this.confirmShotHit(shot1 ? swept : b2, shot1 ? obj2 : obj1);
             }
             return true;
@@ -330,7 +438,7 @@ extendClass(CollisionManager, {
 
         // Shots vs hull: refine against silhouette (not empty footprint padding).
         if (anyShot) {
-            if (shot1 && shot2) return true;
+            if (shot1 && shot2) return false;
             return this.confirmShotHit(shot1 ? b1 : b2, shot1 ? obj2 : obj1);
         }
 

@@ -5,7 +5,7 @@ extendClass(BulletManager, {
     shootWithLegacySystem(playerPosition, options) {
         const opts = options || {};
         const currentType = this.shotTypes[this.shotType];
-        let maxBullets = 4;
+        let maxBullets = 64;
 
         // Check for infinite ammo cheat
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
@@ -54,7 +54,8 @@ extendClass(BulletManager, {
             width: 2,
             height: 8,
             bonusGlow: Math.max(0, Math.min(1, (mult - 1) / 0.75)),
-            speed: 6 * (1 + (mult - 1) * 0.15),
+            _powerShot: mult > 1.2,
+            speed: 6,
             damage: Math.round(10 * mult),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'laser_beam',
@@ -64,13 +65,13 @@ extendClass(BulletManager, {
             lightIntensity: 1.2 * mult,
             lightColor: '#808080' // Grayscale base
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootSpread(playerPosition) {
         // Shoot 3 bullets in spread pattern (but respect bullet limit)
         const angles = [-0.3, 0, 0.3];
-        const maxBullets = 4;
+        const maxBullets = 64;
 
         angles.forEach(angle => {
             if (this.bullets.length < maxBullets) {
@@ -89,14 +90,14 @@ extendClass(BulletManager, {
                     lightIntensity: 1.0,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         });
     },
 
     shootRapid(playerPosition) {
         // Shoot 2 bullets rapidly (but respect bullet limit)
-        const maxBullets = 4;
+        const maxBullets = 64;
 
         for (let i = 0; i < 2; i++) {
             if (this.bullets.length < maxBullets) {
@@ -114,7 +115,7 @@ extendClass(BulletManager, {
                     lightIntensity: 0.9,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         }
     },
@@ -140,7 +141,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.2 * Math.max(1, mult * 0.85),
             lightColor: '#808080' // Grayscale base
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootSpreadWeapon(playerPosition, config) {
@@ -155,7 +156,7 @@ extendClass(BulletManager, {
         }
 
         angles.forEach(angle => {
-            if (this.bullets.length < 6) { // Max bullets for spread
+            if (this.bullets.length < 64) { // Max bullets for spread
                 const w = (config && config.width) || 2;
                 const h = (config && config.height) || 8;
                 const bullet = {
@@ -173,7 +174,7 @@ extendClass(BulletManager, {
                     lightIntensity: 1.0,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         });
     },
@@ -184,7 +185,7 @@ extendClass(BulletManager, {
         const h = (config && config.height) || 8;
 
         for (let i = 0; i < bulletCount; i++) {
-            if (this.bullets.length < 6) {
+            if (this.bullets.length < 64) {
                 const bullet = {
                     x: playerPosition.x + playerPosition.width / 2 - w / 2 + (i - (bulletCount - 1) / 2) * (w + 1),
                     y: playerPosition.y,
@@ -199,7 +200,7 @@ extendClass(BulletManager, {
                     lightIntensity: 0.9,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         }
     },
@@ -218,7 +219,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.5,
             lightColor: '#808080'
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootMissile(playerPosition, config) {
@@ -235,7 +236,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.1,
             lightColor: '#808080'
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootIon(playerPosition, config) {
@@ -243,8 +244,8 @@ extendClass(BulletManager, {
         const spacing = config.bulletSpacing || 5;
         const start = playerPosition.x + playerPosition.width / 2 - ((count - 1) * spacing) / 2 - 1.5;
         for (let i = 0; i < count; i++) {
-            if (this.bullets.length >= 8) break;
-            this.pushBullet(this.bullets, {
+            if (this.bullets.length >= 64) break;
+            this.spawnPlayerBullet({
                 x: start + i * spacing,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -256,12 +257,12 @@ extendClass(BulletManager, {
                 lightRadius: 14,
                 lightIntensity: 1.0,
                 lightColor: '#808080'
-            });
+            }, playerPosition.y);
         }
     },
 
     shootWave(playerPosition, config) {
-        this.pushBullet(this.bullets, {
+        this.spawnPlayerBullet({
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 4) / 2,
             y: playerPosition.y,
             width: config.width || 4,
@@ -275,6 +276,6 @@ extendClass(BulletManager, {
             lightRadius: 18,
             lightIntensity: 1.1,
             lightColor: '#808080'
-        });
+        }, playerPosition.y);
     },
 });

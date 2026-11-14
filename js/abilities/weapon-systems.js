@@ -14,7 +14,7 @@ export const weaponSystemsAbility = {
     // Game mechanics
     effects: {
         accuracyModifier: 1.2,     // 20% accuracy bonus
-        criticalChance: 0.15,      // 15% critical hit chance
+        criticalChance: 0,
         weaponDamage: 1.1,         // 10% weapon damage bonus
         rangeModifier: 1.25         // 25% increased range
     },

@@ -9,32 +9,15 @@ extendClass(CollisionManager, {
     applyOpticalBulletHit(bullet, obstacle, sourceSide, bulletIndex, obstacleIndex) {
         const mode = obstacle.opticalMode || 'none';
         if (mode === 'none') return false;
-        const cx = bullet.x + (bullet.width || 0) / 2;
-        const cy = bullet.y + (bullet.height || 0) / 2;
+        const tip = this.shotImpactXY(bullet);
+        const cx = tip.x;
+        const cy = tip.y;
         const explosionId = obstacle.explosionId || 'crystal_shatter';
 
         if (mode === 'mirror') {
-            if (sourceSide === 'player') {
-                const reflectedBullet = bullet;
-                this.reflectBullet(reflectedBullet, obstacle);
-                if (reflectedBullet.angle === undefined) {
-                    reflectedBullet.speed = Math.abs(reflectedBullet.speed || 8);
-                }
-                reflectedBullet.y += 5;
-                reflectedBullet.reflected = true;
-                bulletManager.getEnemyBullets().push(reflectedBullet);
-                bulletManager.removeBullet(bulletIndex);
-            } else {
-                const reflectedBullet = bullet;
-                this.reflectEnemyBullet(reflectedBullet, obstacle);
-                if (reflectedBullet.angle === undefined) {
-                    reflectedBullet.speed = -Math.abs(reflectedBullet.speed || 5);
-                }
-                reflectedBullet.y -= 10;
-                reflectedBullet.reflected = true;
-                bulletManager.getBullets().push(reflectedBullet);
-                bulletManager.removeEnemyBullet(bulletIndex);
-            }
+            // Straight team flip — same path as shield reflects (no mid-air park).
+            const asEnemy = sourceSide === 'player';
+            this.reassignShotTeam(bulletIndex, sourceSide, asEnemy, obstacle);
             if (typeof soundManager !== 'undefined') soundManager.playReflect();
             this.damageObstacleOptical(obstacle, obstacleIndex, cx, cy, explosionId, 'reflect');
             return true;
@@ -64,26 +47,40 @@ extendClass(CollisionManager, {
         for (let s = 0; s < splitCount; s++) {
             const t = splitCount === 1 ? 0 : (s / (splitCount - 1)) - 0.5;
             const ang = baseAngle + t * angleSpread * 2;
+            const forward = toEnemy ? 1 : -1;
+            const shardW = Math.max(1, Math.min(4, bullet.width || 3));
+            const shardH = Math.max(3, Math.min(16, bullet.height || 8));
             const shard = {
-                x: cx - (bullet.width || 3) / 2,
-                y: cy - (bullet.height || 8) / 2,
-                width: bullet.width || 3,
-                height: bullet.height || 8,
-                speed: baseSpeed * (toEnemy ? 1 : -1),
+                x: cx - shardW / 2,
+                y: toEnemy ? cy + 2 : cy - shardH - 2,
+                width: shardW,
+                height: shardH,
+                speed: baseSpeed,
+                moveSpeed: baseSpeed,
                 angle: ang,
+                vx: Math.sin(ang) * baseSpeed,
+                vy: forward * Math.cos(ang) * baseSpeed,
+                isEnemyShot: !!toEnemy,
                 damage: Math.max(1, Math.round(baseDamage)),
                 color: bullet.color || (mode === 'kaleidoscope' ? 'var(--color-highlight)' : 'var(--color-accent)'),
                 type: bullet.type || 'laser_beam',
+                weaponId: bullet.weaponId,
                 reflected: true,
+                reflectiveShots: false,
+                _reflectCount: 1,
                 lightRadius: bullet.lightRadius || 50,
                 lightIntensity: 1.2,
                 lightColor: bullet.lightColor || 'var(--color-highlight)',
-                // Born inside this obstacle: never split on it again.
-                _ignoreObstacle: obstacle
+                _ignoreObstacle: obstacle,
+                _isShot: true
             };
-            // Use angled movement: ensure angle is set and speed is magnitude
-            shard.speed = baseSpeed;
-            if (toEnemy) {
+            if (typeof bulletManager !== 'undefined' && bulletManager.normalizeBulletMotion) {
+                bulletManager.normalizeBulletMotion(shard, { speed: baseSpeed });
+            }
+            if (typeof bulletManager !== 'undefined' && bulletManager.pushBullet) {
+                if (toEnemy) bulletManager.pushBullet(bulletManager.enemyBullets, shard);
+                else bulletManager.pushBullet(bulletManager.bullets, shard);
+            } else if (toEnemy) {
                 bulletManager.getEnemyBullets().push(shard);
             } else {
                 bulletManager.getBullets().push(shard);

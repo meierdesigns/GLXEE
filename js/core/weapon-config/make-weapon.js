@@ -64,6 +64,8 @@ extendClass(WeaponConfigManager, {
         if (cfg.lightRadius != null) {
             cfg.lightRadius = Math.max(8, Math.min(28, Number(cfg.lightRadius) || 16));
         }
+        if (!(Number(cfg.speed) > 0)) cfg.speed = 10;
+        else cfg.speed = Math.max(1, Math.min(24, Number(cfg.speed)));
         return cfg;
     },
 
@@ -158,5 +160,63 @@ extendClass(WeaponConfigManager, {
         if (w.waveAmp) cfg.waveAmp = w.waveAmp;
         if (w.pierce) cfg.pierce = true;
         return this.clampWeaponShot(cfg);
+    },
+
+    setWeapon(id, data) {
+        const key = String(id || 'laser').toLowerCase().replace(/[\s-]+/g, '_');
+        const prev = this.configs[key] || this.getWeapon(key);
+        this.configs[key] = this.makeWeapon(Object.assign({}, prev, data || {}, { id: key }));
+        this.save();
+        return this.configs[key];
+    },
+
+    resetWeapon(id) {
+        const key = String(id || 'laser').toLowerCase().replace(/[\s-]+/g, '_');
+        const factory = (this._factoryDefaults && this._factoryDefaults[key])
+            || this.createDefaults()[key];
+        if (!factory) return null;
+        this.configs[key] = this.makeWeapon(Object.assign({}, factory));
+        this.save();
+        return this.configs[key];
+    },
+
+    resetAllWeapons() {
+        this.configs = this.createDefaults();
+        this._factoryDefaults = this.createDefaults();
+        this.save();
+    },
+
+    save() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.configs));
+        } catch (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('WeaponConfigManager: save failed', e);
+            }
+        }
+    },
+
+    load() {
+        try {
+            const raw = localStorage.getItem(this.storageKey);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return;
+            const defaults = this._factoryDefaults || this.createDefaults();
+            Object.keys(defaults).forEach((id) => {
+                if (parsed[id]) {
+                    this.configs[id] = this.makeWeapon(Object.assign({}, defaults[id], parsed[id], { id: id }));
+                }
+            });
+            Object.keys(parsed).forEach((id) => {
+                if (!this.configs[id]) {
+                    this.configs[id] = this.makeWeapon(Object.assign({}, parsed[id], { id: id }));
+                }
+            });
+        } catch (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('WeaponConfigManager: load failed', e);
+            }
+        }
     },
 });

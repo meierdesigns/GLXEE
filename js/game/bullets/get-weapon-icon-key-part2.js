@@ -4,7 +4,9 @@
 extendClass(BulletManager, {
     shootWithShipWeapon(playerPosition, currentTime, options) {
         const opts = options || {};
-        let maxBullets = 18; // Shared cap across all weapon mounts on the ship
+        // High enough that sustained autofire never eats mid-stream shots to
+        // make room — old beams fly out the top; new ones spawn at the muzzle.
+        let maxBullets = 64;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
@@ -66,13 +68,10 @@ extendClass(BulletManager, {
             const powerMul = powerShot ? powerShot.damage : 1;
             cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul * abilityDmg * powerMul));
             if (opts.chargeMult && opts.chargeMult > 1) {
-                const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
-                cfg.speed = (cfg.speed || 6) * (1 + (cm - 1) * 0.15);
-                // Bonus shots keep their size; they are drawn brighter instead
-                // (bullet.bonusGlow, see drawBullet).
                 cfg._charged = true;
                 cfg._chargeMult = opts.chargeMult;
+                cfg._beatPower = !!opts.beatPower;
             }
             if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
                 weaponConfigManager.clampWeaponShot(cfg);
@@ -94,18 +93,34 @@ extendClass(BulletManager, {
                 b.reflectiveShots = !!cfg.reflectiveShots;
                 // Spread-family CHAIN unlock: hits temporarily slow the target.
                 b.chainSlow = !!cfg.chainSlow;
-                // 0..1 brightness boost from the charge / beat bonus.
-                if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
-                if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
-                if (powerSize !== 1) {
+                // Rare beat / charge shots must read as stronger: brighter + thicker.
+                if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.85);
+                if (cfg._charged) {
+                    const glow = cfg._beatPower
+                        ? 1
+                        : Math.max(0.55, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
+                    b.bonusGlow = Math.max(b.bonusGlow || 0, glow);
+                    b._powerShot = true;
+                }
+                let sizeMul = powerSize !== 1 ? powerSize : 1;
+                if (cfg._charged) sizeMul *= cfg._beatPower ? 1.55 : 1.3;
+                if (sizeMul !== 1) {
                     const cx = b.x + (b.width || 0) / 2;
-                    b.width = Math.max(1, (b.width || 2) * powerSize);
-                    b.height = Math.max(3, (b.height || 8) * powerSize);
+                    const maxW = b._powerShot ? 6 : 4;
+                    const maxH = b._powerShot ? 22 : 16;
+                    b.width = Math.max(1, Math.min(maxW, (b.width || 2) * sizeMul));
+                    b.height = Math.max(3, Math.min(maxH, (b.height || 8) * sizeMul));
                     b.x = cx - b.width / 2;
                 }
-                // Hangar close-up: mount width is already zoomed, so only speed
-                // needs shotScale (size comes from barrel fit).
-                if (shotScale !== 1) b.speed = (b.speed || 6) * shotScale;
+                this.tagPlayerShotAtMuzzle(b, slot.position.y);
+                if (shotScale !== 1) {
+                    b.moveSpeed = this.getBulletMoveSpeed(b, cfg.speed || 6) * shotScale;
+                    b.speed = b.moveSpeed;
+                    b.vx = undefined;
+                    b.vy = undefined;
+                }
+                this.normalizeBulletMotion(b, cfg);
+                this.clampLiveShotSize(b);
             }
             if (slot.muzzle) this.addMuzzleFlash(slot, cfg);
             firedAny = true;
@@ -122,13 +137,15 @@ extendClass(BulletManager, {
         }
         if (isEnemy) {
             switch (id) {
+                case 'nova':
+                    this.shootNova(position, Object.assign({ bulletCount: 8 }, cfg), true);
+                    break;
                 case 'spread':
                 case 'burst':
-                case 'nova':
                 case 'spike_burst':
                     this.enemyShootSpread(position, Object.assign({
-                        bulletCount: id === 'nova' ? 5 : (id === 'spike_burst' ? 4 : (id === 'burst' ? 2 : 2)),
-                        spreadAngle: id === 'nova' ? 0.5 : (id === 'spike_burst' ? 0.45 : (id === 'burst' ? 0.4 : 0.3))
+                        bulletCount: id === 'spike_burst' ? 4 : (id === 'burst' ? 2 : 2),
+                        spreadAngle: id === 'spike_burst' ? 0.45 : (id === 'burst' ? 0.4 : 0.3)
                     }, cfg));
                     break;
                 case 'rapid':

@@ -7,6 +7,10 @@ class CollisionManager {
     }
 
     checkCollisions(gameState) {
+        if (typeof bulletManager !== 'undefined' && bulletManager.beginCollisionFrame
+            && typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            bulletManager.beginCollisionFrame(playerManager.getPosition());
+        }
         // Each pair runs in its own try so one bad sprite/mask cannot abort
         // terrain wall hits (or the rest of the frame's collisions).
         const run = (fn) => {
@@ -39,8 +43,14 @@ class CollisionManager {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
                 if (!b) continue;
-                const cx = b.x + (b.width || 0) / 2;
-                const cy = b.y + (b.height || 0) / 2;
+                if (byPlayer && typeof bulletManager !== 'undefined'
+                    && bulletManager.playerShotSpawnBlocked
+                    && bulletManager.playerShotSpawnBlocked(b)) continue;
+                const tip = (typeof bulletManager !== 'undefined' && bulletManager.shotTip)
+                    ? bulletManager.shotTip(b)
+                    : { x: b.x + (b.width || 0) / 2, y: b.y + (b.height || 0) / 2 };
+                const cx = tip.x;
+                const cy = tip.y;
                 if (objectiveManager.isInGateDome(cx, cy)) {
                     remove(i);
                     this.createDetailedHitEffect(cx, cy, 'impact');
@@ -48,8 +58,11 @@ class CollisionManager {
                     // hitGateDome already plays coded gate SFX; skip generic hit.
                     continue;
                 }
+                // Only the solid bulkhead band kills shots — not everything
+                // above the gate (that erased mid-screen autofire streams).
                 const inOpening = Math.abs(cx - g.cx) <= g.open / 2;
-                if (cy <= g.y + g.h && (!inOpening || cy <= g.y)) {
+                const inGateBand = cy >= g.y - 2 && cy <= g.y + g.h + 2;
+                if (inGateBand && (!inOpening || cy <= g.y)) {
                     remove(i);
                     if (cy >= g.y - 4) this.createDetailedHitEffect(cx, g.y + g.h, 'impact');
                 }
@@ -128,23 +141,32 @@ class CollisionManager {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
                 if (!b) continue;
-                const ex = b.x + (b.width || 0) / 2;
-                const ey = b.y + (b.height || 0) / 2;
+                if (byPlayer && typeof bulletManager !== 'undefined'
+                    && bulletManager.playerShotSpawnBlocked
+                    && bulletManager.playerShotSpawnBlocked(b)) continue;
+                // Leading tip — AABB centre made tall lasers vanish mid-lane.
+                const tip = (typeof bulletManager !== 'undefined' && bulletManager.shotTip)
+                    ? bulletManager.shotTip(b)
+                    : { x: b.x + (b.width || 0) / 2, y: b.y + (b.height || 0) / 2 };
+                const ex = tip.x;
+                const ey = tip.y;
                 // Sweep the path travelled this frame in half-cell steps: fast
                 // shots otherwise jump over 1–2 row thin ledges and hatch lips.
                 const sdx = b._sweepDx || 0;
                 const sdy = b._sweepDy || 0;
-                const steps = Math.max(1, Math.min(32, Math.ceil(Math.max(Math.abs(sdx), Math.abs(sdy)) / (cell / 2))));
+                const steps = Math.max(1, Math.min(16, Math.ceil(Math.max(Math.abs(sdx), Math.abs(sdy)) / (cell / 2))));
                 let side = -1;
                 let cx = ex, cy = ey, w = null, wrCheck = 0;
+                // Continuous flight: 1px lip only (never +cell).
+                const lip = 1;
                 for (let s = steps - 1; s >= 0 && side < 0; s--) {
                     const f = s / steps;
                     cx = ex - sdx * f;
                     cy = ey - sdy * f;
                     w = obstacleManager.terrainWallsAtY(cy, W);
                     if (!w) continue;
-                    if (cx <= w.left + cell) side = 0;
-                    else if (cx >= w.right - cell) side = 1;
+                    if (cx <= w.left + lip) side = 0;
+                    else if (cx >= w.right - lip) side = 1;
                     else continue;
                     // Skip if that side is already fully carved away.
                     wrCheck = obstacleManager.terrainRowAtY(cy);
@@ -159,7 +181,9 @@ class CollisionManager {
                 const row = wrCheck;
                 if (profile.pierce && b._terrainRow === row) continue;
                 b._terrainRow = row;
-                if (!profile.pierce) remove(i);
+                if (!profile.pierce) {
+                    remove(i);
+                }
                 const broke = obstacleManager.damageTerrain(cy, side, profile);
                 const lipX = side ? w.right : w.left;
                 this.createDetailedHitEffect(lipX, cy, broke ? 'destroy' : 'impact');
@@ -221,15 +245,18 @@ class CollisionManager {
         const bullets = bulletManager.getBullets();
         const sides = enemyManager.getSideEnemies();
         for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            if (!bullet) continue;
+            if (!(Number(bullet.vy) < 0) && !(Number(bullet._sweepDy) < 0)) continue;
+            if (typeof bulletManager !== 'undefined' && bulletManager.playerShotSpawnBlocked
+                && bulletManager.playerShotSpawnBlocked(bullet)) continue;
             for (let j = sides.length - 1; j >= 0; j--) {
                 // Still sliding in through the hangar gap: not a fair target yet.
                 if (sides[j].entering) continue;
-                if (this.isColliding(bullets[i], sides[j])) {
-                    const bullet = bullets[i];
-                    const hitX = bullet.x + (bullet.width || 0) / 2;
-                    const hitY = bullet.y + (bullet.height || 0) / 2;
-                    const sx = sides[j].x + sides[j].width / 2;
-                    const sy = sides[j].y + sides[j].height / 2;
+                if (this.isColliding(bullet, sides[j])) {
+                    const tip = this.shotImpactXY(bullet);
+                    const hitX = tip.x;
+                    const hitY = tip.y;
                     let damage = 10;
                     if (bullet && bullet.damage !== undefined) damage = bullet.damage;
                     if (bullet && bullet.chainSlow && enemyManager.applyChainSlow) {
@@ -276,6 +303,7 @@ class CollisionManager {
                 enemyClass: killed.enemyClass,
                 cluster: killed.cluster,
                 champion: false,
+                isBoss: false,
                 x: sx,
                 y: sy
             });
@@ -341,10 +369,16 @@ class CollisionManager {
         if (!enemy || enemyManager.isExploding()) return;
 
         for (let i = bullets.length - 1; i >= 0; i--) {
-            if (this.isColliding(bullets[i], enemy)) {
-                const bullet = bullets[i];
-                const hitX = bullet.x + (bullet.width || 0) / 2;
-                const hitY = bullet.y + (bullet.height || 0) / 2;
+            const bullet = bullets[i];
+            if (!bullet) continue;
+            // Wrong-way / dual-list ghosts must not consume hits or die mid-stream.
+            if (!(Number(bullet.vy) < 0) && !(Number(bullet._sweepDy) < 0)) continue;
+            if (typeof bulletManager !== 'undefined' && bulletManager.playerShotSpawnBlocked
+                && bulletManager.playerShotSpawnBlocked(bullet)) continue;
+            if (this.isColliding(bullet, enemy)) {
+                const tip = this.shotImpactXY(bullet);
+                const hitX = tip.x;
+                const hitY = tip.y;
                 const enemyX = enemy.x + enemy.width / 2;
                 const enemyY = enemy.y + enemy.height / 2;
 
@@ -478,23 +512,51 @@ class CollisionManager {
         }
     }
 
+    /** Travel vector for a live shot (vx/vy, else sweep, else team axis). */
+    shotTravelDir(b) {
+        if (!b) return { x: 0, y: 0 };
+        let dx = Number(b.vx);
+        let dy = Number(b.vy);
+        if (!(Math.hypot(dx, dy) > 0.01)) {
+            dx = Number(b._sweepDx) || 0;
+            dy = Number(b._sweepDy) || 0;
+        }
+        if (!(Math.hypot(dx, dy) > 0.01)) {
+            dy = (b.isEnemyShot || b.isBossShot) ? 1 : -1;
+            dx = 0;
+        }
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: dx / len, y: dy / len };
+    }
+
+    /** True only when two shots fly toward opposite directions. */
+    shotsOpposing(a, b) {
+        const da = this.shotTravelDir(a);
+        const db = this.shotTravelDir(b);
+        return (da.x * db.x + da.y * db.y) < -0.25;
+    }
+
     /**
      * Shot vs shot, swept over this frame: thin fast shots move further per
      * frame than their own length and used to pass through each other
      * without ever overlapping, so clashes/reflections rarely triggered.
-     * Player shots move up, enemy shots down; stretch each box back along
-     * its path by one frame of travel, and give thin shots a 2 px minimum.
+     * Only opposing travel directions may clash; same-way beams pass through.
      */
     shotsCrossed(pb, eb) {
+        if (!this.shotsOpposing(pb, eb)) return false;
         const minW = 2;
         const pw = Math.max(minW, pb.width || 0);
         const ew = Math.max(minW, eb.width || 0);
         const px = pb.x + (pb.width || 0) / 2 - pw / 2;
         const ex = eb.x + (eb.width || 0) / 2 - ew / 2;
         if (!(px < ex + ew && px + pw > ex)) return false;
+        const pSpd = (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+            ? bulletManager.getBulletMoveSpeed(pb, 6) : Math.abs(Number(pb.speed) || 6);
+        const eSpd = (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+            ? bulletManager.getBulletMoveSpeed(eb, 5) : Math.abs(Number(eb.speed) || 5);
         const pTop = pb.y;
-        const pBot = pb.y + (pb.height || 0) + Math.abs(pb.speed || 0);
-        const eTop = eb.y - Math.abs(eb.speed || 0);
+        const pBot = pb.y + (pb.height || 0) + pSpd;
+        const eTop = eb.y - eSpd;
         const eBot = eb.y + (eb.height || 0);
         return pTop < eBot && pBot > eTop;
     }
@@ -505,44 +567,22 @@ class CollisionManager {
 
         for (let i = playerBullets.length - 1; i >= 0; i--) {
             for (let j = enemyBullets.length - 1; j >= 0; j--) {
-                if (this.shotsCrossed(playerBullets[i], enemyBullets[j])) {
-                    const pb = playerBullets[i];
-                    const eb = enemyBullets[j];
-                    // Reflective shots is a per-weapon EQUIPMENT unlock — without it,
-                    // player and enemy fire pass through each other.
-                    if (!pb.reflectiveShots) continue;
-                    const playerBulletX = pb.x + pb.width / 2;
-                    const playerBulletY = pb.y + pb.height / 2;
-                    const enemyBulletX = eb.x + eb.width / 2;
-                    const enemyBulletY = eb.y + eb.height / 2;
-                    const hitX = (playerBulletX + enemyBulletX) / 2;
-                    const hitY = (playerBulletY + enemyBulletY) / 2;
-
-                    const playerPower = (pb.damage != null ? pb.damage : 10);
-                    const enemyPower = (eb.damage != null ? eb.damage : 10);
-
-                    if (playerPower !== enemyPower) {
-                        const weakerSide = playerPower < enemyPower ? 'player' : 'enemy';
-                        const strongerSide = weakerSide === 'player' ? 'enemy' : 'player';
-                        const weakerPower = Math.min(playerPower, enemyPower);
-                        const strongerPower = Math.max(playerPower, enemyPower);
-                        const powerGap = (strongerPower - weakerPower) / strongerPower;
-
-                        // A smaller shot has a comeback chance. The larger the gap,
-                        // the more likely the clash travels in the weaker shot's direction.
-                        const weakerDirectionChance = Math.min(0.75, 0.25 + powerGap * 0.5);
-                        const directionSide = Math.random() < weakerDirectionChance
-                            ? weakerSide
-                            : strongerSide;
-                        this.redirectLaserClash(pb, eb, directionSide, hitX, hitY);
-                    } else {
-                        // Equal power: reflect the clash in a random direction.
-                        const directionSide = Math.random() < 0.5 ? 'player' : 'enemy';
-                        this.redirectLaserClash(pb, eb, directionSide, hitX, hitY);
-                    }
-
-                    break;
-                }
+                const pb = playerBullets[i];
+                const eb = enemyBullets[j];
+                // Reflective unlock required; same-direction beams never clash.
+                if (!pb || !eb || !pb.reflectiveShots) continue;
+                if (!this.shotsCrossed(pb, eb)) continue;
+                const pTip = this.shotImpactXY(pb);
+                const eTip = this.shotImpactXY(eb);
+                const hitX = (pTip.x + eTip.x) / 2;
+                const hitY = (pTip.y + eTip.y) / 2;
+                const playerPower = (pb.damage != null ? pb.damage : 10);
+                const enemyPower = (eb.damage != null ? eb.damage : 10);
+                let winnerSide = null;
+                if (playerPower > enemyPower) winnerSide = 'player';
+                else if (enemyPower > playerPower) winnerSide = 'enemy';
+                this.redirectLaserClash(pb, eb, winnerSide, hitX, hitY);
+                break;
             }
         }
     }

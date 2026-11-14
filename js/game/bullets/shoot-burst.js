@@ -6,9 +6,9 @@ extendClass(BulletManager, {
         const bulletCount = config.bulletCount || 5;
         const spreadAngle = config.spreadAngle || 0.45;
         for (let i = 0; i < bulletCount; i++) {
-            if (this.bullets.length >= 8) break;
+            if (this.bullets.length >= 64) break;
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.pushBullet(this.bullets, {
+            this.spawnPlayerBullet({
                 x: playerPosition.x + playerPosition.width / 2 - 1.5,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -21,7 +21,7 @@ extendClass(BulletManager, {
                 lightRadius: 12,
                 lightIntensity: 0.85,
                 lightColor: '#808080'
-            });
+            }, playerPosition.y);
         }
     },
 
@@ -39,7 +39,7 @@ extendClass(BulletManager, {
         const meet = h * 5;
         const angle = Math.atan2(half, meet);
         [-1, 1].forEach((side) => {
-            this.pushBullet(this.bullets, {
+            this.spawnPlayerBullet({
                 x: playerPosition.x + playerPosition.width / 2 + side * half - w / 2,
                 y: playerPosition.y,
                 width: w,
@@ -54,12 +54,12 @@ extendClass(BulletManager, {
                 lightRadius: config.lightRadius || 40,
                 lightIntensity: config.lightIntensity || 1.1,
                 lightColor: '#808080'
-            });
+            }, playerPosition.y);
         });
     },
 
     shootPierce(playerPosition, config) {
-        this.pushBullet(this.bullets, {
+        this.spawnPlayerBullet({
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 2) / 2,
             y: playerPosition.y,
             width: config.width || 2,
@@ -72,29 +72,55 @@ extendClass(BulletManager, {
             lightRadius: 20,
             lightIntensity: 1.3,
             lightColor: '#808080'
-        });
+        }, playerPosition.y);
     },
 
-    shootNova(playerPosition, config) {
-        const bulletCount = config.bulletCount || 5;
-        const spreadAngle = config.spreadAngle || 0.55;
+    /**
+     * Expanding ring around the ship (full 360°), not a forward fan.
+     * Pellets keep radial vx/vy — motion locks skip `_radial` shots.
+     */
+    shootNova(playerPosition, config, isEnemy) {
+        const bulletCount = Math.max(6, Math.round(Number(config.bulletCount) || 8));
+        const speed = Math.max(2, Number(config.speed) || 7);
+        const w = Math.max(2, Number(config.width) || 4);
+        const h = Math.max(2, Number(config.height) || 8);
+        const cx = playerPosition.x + playerPosition.width / 2;
+        const cy = playerPosition.y + playerPosition.height / 2;
+        const ring = Math.max(playerPosition.width, playerPosition.height) * 0.55 + 2;
+        const list = isEnemy ? this.enemyBullets : this.bullets;
+        const maxBullets = 64;
         for (let i = 0; i < bulletCount; i++) {
-            if (this.bullets.length >= 8) break;
-            const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.pushBullet(this.bullets, {
-                x: playerPosition.x + playerPosition.width / 2 - 2,
-                y: playerPosition.y,
-                width: config.width || 4,
-                height: config.height || 8,
-                speed: config.speed || 7,
-                damage: config.damage || 6,
-                angle: angle,
+            if (list.length >= maxBullets) break;
+            // angle 0 = up (player convention: vy = -cos, vx = sin)
+            const angle = (i / bulletCount) * Math.PI * 2;
+            const sx = Math.sin(angle);
+            const cyDir = Math.cos(angle);
+            const fields = {
+                x: cx + sx * ring - w / 2,
+                y: cy - cyDir * ring - h / 2,
+                width: w,
+                height: h,
+                speed: speed,
+                moveSpeed: speed,
+                vx: sx * speed,
+                vy: (isEnemy ? cyDir : -cyDir) * speed,
+                angle: isEnemy ? angle + Math.PI : angle,
+                damage: config.damage || 7,
                 color: '#808080',
                 type: 'nova_shot',
-                lightRadius: 22,
-                lightIntensity: 1.4,
+                _radial: true,
+                isEnemyShot: !!isEnemy,
+                charged: !!config._charged,
+                lightRadius: config.lightRadius || 22,
+                lightIntensity: config.lightIntensity || 1.4,
                 lightColor: '#808080'
-            });
+            };
+            if (isEnemy) {
+                this.pushBullet(this.enemyBullets, fields);
+            } else {
+                // null muzzleY — keep ring positions, do not snap to gun tip
+                this.spawnPlayerBullet(fields, null);
+            }
         }
     },
 
@@ -123,6 +149,10 @@ extendClass(BulletManager, {
         const grow = maxGrow != null && Number(maxGrow) > 0
             ? Math.max(0.3, Number(maxGrow))
             : Infinity;
+        // Hard cap: oversized lasers (tall AABB) hit the enemy / walls while the
+        // tip still looked mid-lane and vanished halfway up the field.
+        const maxW = 4;
+        const maxH = 16;
         for (let i = from; i < list.length; i++) {
             const b = list[i];
             const bw = b.width != null ? b.width : b.w;
@@ -130,13 +160,14 @@ extendClass(BulletManager, {
             const s = Math.max(0.3, Math.min(grow, target / bw));
             if (Math.abs(s - 1) < 0.001) continue;
             const cx = b.x + bw / 2;
-            const nw = Math.max(1, bw * s);
+            const nw = Math.min(maxW, Math.max(1, bw * s));
+            const nh = Math.min(maxH, Math.max(3, (b.height != null ? b.height : (b.h || 8)) * s));
             if (b.width != null) {
                 b.width = nw;
-                b.height = Math.max(3, (b.height || 8) * s);
+                b.height = nh;
             } else {
                 b.w = nw;
-                b.h = Math.max(3, (b.h || 8) * s);
+                b.h = nh;
             }
             b.x = cx - nw / 2;
         }
@@ -148,6 +179,8 @@ extendClass(BulletManager, {
         const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSizeMul)
             ? uiAppearanceManager.getShotSizeMul(kind || 'enemy') : 1;
         if (!(mul > 0) || Math.abs(mul - 1) < 0.01) return;
+        const maxW = 4;
+        const maxH = 16;
         for (let i = from; i < list.length; i++) {
             const b = list[i];
             if (!b) continue;
@@ -155,8 +188,8 @@ extendClass(BulletManager, {
             const bh = b.height != null ? b.height : b.h;
             if (!(bw > 0)) continue;
             const cx = b.x + bw / 2;
-            const nw = Math.max(1, Math.round(bw * mul * 100) / 100);
-            const nh = Math.max(3, Math.round((bh || 8) * mul * 100) / 100);
+            const nw = Math.min(maxW, Math.max(1, Math.round(bw * mul * 100) / 100));
+            const nh = Math.min(maxH, Math.max(3, Math.round((bh || 8) * mul * 100) / 100));
             if (b.width != null) {
                 b.width = nw;
                 b.height = nh;
@@ -461,24 +494,114 @@ extendClass(BulletManager, {
         return this.enemyBullets;
     },
 
-    removeBullet(index) {
-        const list = this.bullets;
-        if (index < 0 || index >= list.length) return;
+    /**
+     * Pull a live shot out of `list` without pooling it. Use when the same
+     * object is about to be pushed onto the other side (reflect / optical) —
+     * releaseBullet here used to pool a still-live enemy/player bullet, so the
+     * next spawn reused it and one object lived in both arrays (looked like a
+     * top-of-screen bounce).
+     */
+    detachBullet(list, index) {
+        if (!list || index < 0 || index >= list.length) return null;
+        const b = list[index];
         const last = list.length - 1;
         if (index !== last) list[index] = list[last];
-        this.releaseBullet(list.pop());
+        list.pop();
+        return b;
+    },
+
+    removeBullet(index) {
+        const b = this.detachBullet(this.bullets, index);
+        if (b) this.releaseBullet(b);
     },
 
     removeEnemyBullet(index) {
-        const list = this.enemyBullets;
-        if (index < 0 || index >= list.length) return;
-        const last = list.length - 1;
-        if (index !== last) list[index] = list[last];
-        this.releaseBullet(list.pop());
+        const b = this.detachBullet(this.enemyBullets, index);
+        if (b) this.releaseBullet(b);
     },
 
-    switchShotType() {
-        return this.switchWeapon();
+    switchShotType(direction) {
+        return this.switchWeapon(direction);
+    },
+
+    /**
+     * DevMode combat cheat: Q/E cycle every registered weapon type and
+     * equip that gun in all available mount slots for this round only.
+     */
+    devCycleWeaponCheat(direction) {
+        const ids = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getIds)
+            ? weaponConfigManager.getIds()
+            : (this.shotTypes || []);
+        if (!ids.length) return this.currentWeapon || 'laser';
+
+        const step = direction < 0 ? -1 : 1;
+        let idx = ids.indexOf(this._devWeaponCheatId || this.currentWeapon);
+        if (idx < 0) idx = 0;
+        idx = (idx + step + ids.length) % ids.length;
+        const weaponId = ids[idx];
+        this._devWeaponCheatId = weaponId;
+
+        const model = this.currentShipModel
+            || (typeof graphicsManager !== 'undefined' && graphicsManager.currentPlayerModel)
+            || (typeof playerManager !== 'undefined' && playerManager.currentShipModel)
+            || null;
+        if (model && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+            model._devWeaponFillId = weaponId;
+            shipLoadoutManager.applyLayoutToModel(model, model.id || model.type);
+            model.weaponConfig = model.weaponConfig || {};
+            if (!model.weaponConfig[weaponId]
+                && typeof weaponConfigManager !== 'undefined'
+                && weaponConfigManager.getDefaultsForShip) {
+                const cfg = weaponConfigManager.getDefaultsForShip(weaponId);
+                if (cfg) model.weaponConfig[weaponId] = Object.assign({}, cfg);
+            }
+            this.setShipModel(model);
+            if (typeof graphicsManager !== 'undefined') {
+                graphicsManager.currentPlayerModel = model;
+                graphicsManager._shieldHullCache = Object.create(null);
+                graphicsManager._voxelShipBake = Object.create(null);
+            }
+            if (typeof playerManager !== 'undefined') {
+                playerManager.currentShipModel = model;
+                if (playerManager.applyFixedFootprint) playerManager.applyFixedFootprint();
+                if (playerManager.refreshPlayerHitMask) {
+                    playerManager._hitMaskKey = null;
+                    playerManager.refreshPlayerHitMask();
+                }
+            }
+        } else {
+            this.currentWeapon = weaponId;
+            this.updateWeaponDisplay();
+        }
+
+        this.currentWeapon = weaponId;
+        this.updateWeaponDisplay();
+        return weaponId;
+    },
+
+    /** Clear DevMode all-slots weapon fill and restore the real hangar loadout. */
+    clearDevWeaponFill() {
+        this._devWeaponCheatId = null;
+        const models = [];
+        if (this.currentShipModel) models.push(this.currentShipModel);
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.currentPlayerModel) {
+            models.push(graphicsManager.currentPlayerModel);
+        }
+        if (typeof playerManager !== 'undefined' && playerManager.currentShipModel) {
+            models.push(playerManager.currentShipModel);
+        }
+        const seen = {};
+        models.forEach((model) => {
+            if (!model || seen[model.id || '']) return;
+            seen[model.id || ''] = true;
+            if (!model._devWeaponFillId) return;
+            delete model._devWeaponFillId;
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+                shipLoadoutManager.applyLayoutToModel(model, model.id || model.type);
+            }
+        });
+        if (this.currentShipModel) this.setShipModel(this.currentShipModel);
+        this.updateWeaponDisplay();
     },
 
     getCurrentShotType() {

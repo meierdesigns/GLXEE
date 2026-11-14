@@ -43,6 +43,25 @@ extendClass(WeaponViewerUI, {
         }
     },
 
+    openBehaviorEditor() {
+        const wpn = this.weapons[this.selectedIndex];
+        if (!wpn) return;
+        const open = () => {
+            if (typeof shotBehaviorEditorUI === 'undefined') return;
+            const returnCb = this.onClose;
+            this.hide();
+            shotBehaviorEditorUI.show(wpn.id, false, {
+                returnTo: 'weapon-viewer',
+                onClose: () => this.show({ onClose: returnCb, weaponId: wpn.id })
+            });
+        };
+        if (typeof ensureVfEditors === 'function') {
+            ensureVfEditors(() => open());
+        } else {
+            open();
+        }
+    },
+
     openGfxEditor() {
         const wpn = this.weapons[this.selectedIndex];
         if (!wpn || typeof componentEditorUI === 'undefined') return;

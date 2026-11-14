@@ -47,7 +47,10 @@ class BulletManager {
         b.isBossShot = undefined;
         b.isEnemyShot = undefined;
         b.bonusGlow = undefined;
+        b._powerShot = undefined;
         b._ignoreObstacle = undefined;
+        b._reflectCount = undefined;
+        b._isShot = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
         b._vxAcc = 0;
@@ -60,12 +63,52 @@ class BulletManager {
         b.lightRadius = undefined;
         b.lightIntensity = undefined;
         b.lightColor = undefined;
+        b.weaponId = undefined;
+        b.type = undefined;
+        b.speed = undefined;
+        b.reflected = undefined;
+        b.chainSlow = undefined;
+        b.reflectiveShots = undefined;
+        b.wavePhase = undefined;
+        b._spawnAt = undefined;
+        b._stall = undefined;
+        b._still = undefined;
+        b._radial = undefined;
+        b.moveSpeed = undefined;
+        b.vx = undefined;
+        b.vy = undefined;
         return b;
     }
 
     releaseBullet(b) {
         if (!b || this._bulletPool.length >= BULLET_POOL_MAX) return;
+        // Never pool a shell that is still live on either combat list —
+        // scrubDualMembership used to do that, and the next spawn overwrote
+        // mid-flight player shots (same object in both arrays).
+        if (this.bullets.indexOf(b) !== -1 || this.enemyBullets.indexOf(b) !== -1) return;
         this._bulletPool.push(b);
+    }
+
+    /** Keep projectile AABB tiny so tall lasers cannot hit a full screen early. */
+    clampLiveShotSize(bullet) {
+        if (!bullet) return bullet;
+        const bw = bullet.width != null ? bullet.width : bullet.w;
+        const bh = bullet.height != null ? bullet.height : bullet.h;
+        const powered = !!(bullet._powerShot || (bullet.bonusGlow != null && bullet.bonusGlow >= 0.85));
+        const maxW = powered ? 6 : 4;
+        const maxH = powered ? 22 : 16;
+        const cx = Number(bullet.x) + (Number(bw) || 0) / 2;
+        const nw = Math.max(1, Math.min(maxW, Number(bw) || 2));
+        const nh = Math.max(3, Math.min(maxH, Number(bh) || 8));
+        if (bullet.width != null) {
+            bullet.width = nw;
+            bullet.height = nh;
+        } else {
+            bullet.w = nw;
+            bullet.h = nh;
+        }
+        if (Number.isFinite(cx)) bullet.x = cx - nw / 2;
+        return bullet;
     }
 
     /**
@@ -74,10 +117,26 @@ class BulletManager {
      * shots copy into recycled shells so long fights stop growing.
      */
     pushBullet(list, fields) {
-        const b = this._bulletPool.pop();
+        // Never insert a live reference that already sits on either combat list —
+        // dual membership let enemy step flip vy and rear autofire shots died.
+        let src = fields;
+        if (src && (this.bullets.indexOf(src) !== -1 || this.enemyBullets.indexOf(src) !== -1)) {
+            src = Object.assign({}, fields);
+        }
+        let b = null;
+        while (this._bulletPool.length) {
+            const cand = this._bulletPool.pop();
+            if (!cand) continue;
+            // Stale pool entry still referenced by a live list — skip it.
+            if (this.bullets.indexOf(cand) !== -1 || this.enemyBullets.indexOf(cand) !== -1) continue;
+            b = cand;
+            break;
+        }
         if (!b) {
-            list.push(fields);
-            return fields;
+            list.push(src);
+            this.normalizeBulletMotion(src, src);
+            this.clampLiveShotSize(src);
+            return src;
         }
         b.angle = undefined;
         b.waveAmp = undefined;
@@ -87,7 +146,10 @@ class BulletManager {
         b.isBossShot = undefined;
         b.isEnemyShot = undefined;
         b.bonusGlow = undefined;
+        b._powerShot = undefined;
         b._ignoreObstacle = undefined;
+        b._reflectCount = undefined;
+        b._isShot = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
         b._vxAcc = 0;
@@ -97,11 +159,225 @@ class BulletManager {
         b._snapLastX = undefined;
         b._snapLastY = undefined;
         b._terrainRow = undefined;
-        for (const k in fields) {
-            if (Object.prototype.hasOwnProperty.call(fields, k)) b[k] = fields[k];
+        b.weaponId = undefined;
+        b.type = undefined;
+        b.speed = undefined;
+        b.reflected = undefined;
+        b.chainSlow = undefined;
+        b.reflectiveShots = undefined;
+        b.wavePhase = undefined;
+        b._spawnAt = undefined;
+        b._stall = undefined;
+        b._still = undefined;
+        b._radial = undefined;
+        b.moveSpeed = undefined;
+        b.vx = undefined;
+        b.vy = undefined;
+        for (const k in src) {
+            if (Object.prototype.hasOwnProperty.call(src, k)) b[k] = src[k];
         }
         list.push(b);
+        this.normalizeBulletMotion(b, src);
+        this.clampLiveShotSize(b);
         return b;
+    }
+
+    /** Drop any shot that somehow landed on both team lists. */
+    scrubDualMembership() {
+        const p = this.bullets;
+        const e = this.enemyBullets;
+        if (!p || !e || !p.length || !e.length) return;
+        for (let i = p.length - 1; i >= 0; i--) {
+            const b = p[i];
+            if (!b) continue;
+            const ei = e.indexOf(b);
+            if (ei === -1) continue;
+            // Keep the team that matches travel direction. Detach only — never
+            // releaseBullet here (the kept list still owns this object).
+            // Stalled/zero/NaN vy: trust isEnemyShot so enemy shells stay enemy.
+            const vy = Number(b.vy);
+            const keepEnemy = b.isEnemyShot
+                ? !(Number.isFinite(vy) && vy < 0)
+                : (Number.isFinite(vy) && vy > 0);
+            if (keepEnemy) {
+                this.detachBullet(p, i);
+                b.isEnemyShot = true;
+            } else {
+                this.detachBullet(e, ei);
+                b.isEnemyShot = false;
+            }
+        }
+    }
+
+    /**
+     * Lock a concrete velocity (vx/vy) once. Flight never re-derives from angle
+     * mid-air — that caused frozen / reversed / mid-lane vanishing beams.
+     */
+    normalizeBulletMotion(bullet, fields) {
+        if (!bullet) return bullet;
+        const hint = fields && Number(fields.speed);
+        let s = Number(bullet.moveSpeed);
+        if (!(s > 0)) s = Number(bullet.speed);
+        if (!Number.isFinite(s) || s === 0) {
+            s = (Number.isFinite(hint) && hint !== 0) ? Math.abs(hint)
+                : (bullet.isEnemyShot ? 5 : 6);
+        } else {
+            s = Math.abs(s);
+        }
+        s = Math.max(0.5, Math.min(24, s));
+        bullet.moveSpeed = s;
+        bullet.speed = s;
+
+        let vx = Number(bullet.vx);
+        let vy = Number(bullet.vy);
+        const hasVel = Number.isFinite(vx) && Number.isFinite(vy) && Math.hypot(vx, vy) > 0.01;
+        if (!hasVel) {
+            const upward = !bullet.isEnemyShot;
+            if (bullet.type === 'wave_beam' && bullet.waveAmp) {
+                vx = 0;
+                vy = upward ? -s : s;
+            } else if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
+                const a = Number(bullet.angle);
+                vx = Math.sin(a) * s;
+                vy = (upward ? -Math.cos(a) : Math.cos(a)) * s;
+            } else {
+                vx = 0;
+                vy = upward ? -s : s;
+            }
+        }
+        // Own-team primary axis must dominate (no sideways-parked lasers).
+        // Radial nova rings intentionally fly every direction — leave them alone.
+        const radial = !!(bullet._radial || bullet.type === 'nova_shot');
+        const forward = bullet.isEnemyShot ? 1 : -1;
+        if (!radial && (Math.abs(vy) < s * 0.55 || Math.sign(vy || forward) !== Math.sign(forward))) {
+            const lat = Number.isFinite(vx) ? Math.max(-s * 0.75, Math.min(s * 0.75, vx)) : 0;
+            const rem = Math.sqrt(Math.max(0.01, s * s - lat * lat));
+            vx = lat;
+            vy = forward * rem;
+            bullet.angle = undefined;
+        }
+        bullet.vx = vx;
+        bullet.vy = vy;
+        bullet.x = Number(bullet.x) || 0;
+        bullet.y = Number(bullet.y) || 0;
+        bullet._isShot = true;
+        return bullet;
+    }
+
+    /** @deprecated alias — keep call sites working */
+    stabilizeBulletSpeed(bullet, fields) {
+        return this.normalizeBulletMotion(bullet, fields);
+    }
+
+    getBulletMoveSpeed(bullet, fallback) {
+        if (!bullet) return fallback || 6;
+        const locked = Number(bullet.moveSpeed);
+        if (Number.isFinite(locked) && locked > 0) return locked;
+        const s = Number(bullet.speed);
+        if (Number.isFinite(s) && s !== 0) return Math.abs(s);
+        const v = Math.hypot(Number(bullet.vx) || 0, Number(bullet.vy) || 0);
+        if (v > 0) return v;
+        return fallback || (bullet.isEnemyShot ? 5 : 6);
+    }
+
+    /**
+     * One frame of travel from locked vx/vy. Wave sway is additive on X only.
+     */
+    computeBulletStep(bullet, spd, speedMultiplier, upward) {
+        // Lock vx/vy once at spawn — re-normalizing every frame made some
+        // beams drift faster/slower than others in the same stream.
+        const hasVel = Number.isFinite(bullet.vx) && Number.isFinite(bullet.vy)
+            && Math.hypot(bullet.vx, bullet.vy) > 0.01;
+        if (!hasVel) this.normalizeBulletMotion(bullet, { speed: spd });
+        const smRaw = Number(speedMultiplier);
+        const sm = Number.isFinite(smRaw) ? Math.max(0.05, smRaw) : 1;
+        let bdx = Number(bullet.vx) * sm;
+        let bdy = Number(bullet.vy) * sm;
+        if (bullet.type === 'wave_beam' && bullet.waveAmp) {
+            bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * sm;
+            bdx += Math.sin(bullet.wavePhase) * Number(bullet.waveAmp) * sm;
+        }
+        const radial = !!(bullet._radial || bullet.type === 'nova_shot');
+        const forward = upward ? -1 : 1;
+        if (!radial && (Math.abs(bdy) < 0.05 || Math.sign(bdy) !== Math.sign(forward))) {
+            const s = Math.max(0.5, Number(spd) || 6) * sm;
+            bdx = 0;
+            bdy = forward * s;
+            bullet.vx = 0;
+            bullet.vy = forward * Math.max(0.5, Number(spd) || 6);
+        }
+        return { bdx, bdy };
+    }
+
+    /** Leading tip of a shot (collision / terrain sample point). */
+    shotTip(bullet) {
+        const w = Math.max(1, Number(bullet.width != null ? bullet.width : bullet.w) || 1);
+        const h = Math.max(1, Number(bullet.height != null ? bullet.height : bullet.h) || 1);
+        const down = !!bullet.isEnemyShot;
+        return {
+            x: Number(bullet.x) + w / 2,
+            y: down ? Number(bullet.y) + h : Number(bullet.y)
+        };
+    }
+
+    /**
+     * Player shots move up: the muzzle point is the trail end (bottom of the AABB),
+     * not the leading tip. Spawning at muzzle Y put most of the bullet inside the hull.
+     */
+    playerShotY(muzzleY, height) {
+        const h = Math.max(1, Number(height) || 8);
+        return (Number(muzzleY) || 0) - h;
+    }
+
+    tagPlayerShotAtMuzzle(bullet, muzzleY) {
+        if (!bullet) return bullet;
+        bullet.isEnemyShot = false;
+        bullet._spawnAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (muzzleY != null && Number.isFinite(Number(muzzleY))) {
+            const h = bullet.height != null ? bullet.height : bullet.h;
+            bullet.y = this.playerShotY(muzzleY, h);
+        }
+        return bullet;
+    }
+
+    spawnPlayerBullet(fields, muzzleY) {
+        const fieldsWithTag = Object.assign({}, fields, { _isShot: true, isEnemyShot: false });
+        return this.tagPlayerShotAtMuzzle(this.pushBullet(this.bullets, fieldsWithTag), muzzleY);
+    }
+
+    bulletOverlapsFootprint(bullet, rect) {
+        if (!bullet || !rect) return false;
+        const bw = bullet.width != null ? bullet.width : (bullet.w || 0);
+        const bh = bullet.height != null ? bullet.height : (bullet.h || 0);
+        const pad = 1;
+        return bullet.x < rect.x + rect.width + pad
+            && bullet.x + bw > rect.x - pad
+            && bullet.y < rect.y + rect.height + pad
+            && bullet.y + bh > rect.y - pad;
+    }
+
+    /** Brief spawn grace while a shot still overlaps the player footprint. */
+    beginCollisionFrame(player) {
+        this._spawnBlockPlayer = player || null;
+    }
+
+    playerShotSpawnBlocked(bullet) {
+        if (!bullet || bullet.isEnemyShot) return false;
+        if (!bullet._spawnAt) return false;
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (now - bullet._spawnAt > 220) return false;
+        let p = this._spawnBlockPlayer;
+        if (!p && typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            p = playerManager.getPosition();
+        }
+        if (!p) return false;
+        return this.bulletOverlapsFootprint(bullet, p);
+    }
+
+    cullBulletAt(i, list) {
+        const last = list.length - 1;
+        if (i !== last) list[i] = list[last];
+        this.releaseBullet(list.pop());
     }
 
     /** In-stage shop purchase: fires `weaponId` for `shots` shots, then reverts to whatever was equipped before. */
@@ -270,86 +546,74 @@ class BulletManager {
         const enemySpeed = ui ? ui.getShotSpeedMul('enemy') : 1;
         const bossSpeed = ui ? ui.getShotSpeedMul('boss') : 1;
 
-        // Shots move on continuous coords (same as the pilot). Lattice stepMove
-        // froze beams for whole frames whenever cell > per-frame travel — they
-        // looked stuck mid-lane and their sweep stayed 0 so clashes/hits missed.
-        // VOXEL still snaps them at draw time via fillCombatRect / drawBullet.
-
-        // Update player bullets
-        for (let i = this.bullets.length - 1; i >= 0; i--) {
-            const bullet = this.bullets[i];
-            const speedMultiplier = baseSpeedMultiplier * playerSpeed;
-            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 6;
-            let bdx = 0;
-            let bdy = 0;
-
-            // Handle angled bullets (spread shot) and wave sway
-            if (bullet.type === 'wave_beam' && bullet.waveAmp) {
-                bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * speedMultiplier;
-                bdx = Math.sin(bullet.wavePhase) * bullet.waveAmp * speedMultiplier;
-                bdy = -spd * speedMultiplier;
-            } else if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
-                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
-                bdy = -Math.cos(bullet.angle) * spd * speedMultiplier;
-            } else {
-                bdy = -spd * speedMultiplier;
-            }
-            const px0 = bullet.x, py0 = bullet.y;
-            bullet.x += bdx;
-            bullet.y += bdy;
-            bullet._sweepDx = bullet.x - px0;
-            bullet._sweepDy = bullet.y - py0;
-
-            // Cull only when the shot is fully off-screen. The pilot's guns can
-            // sit on the rim (player.x down to -halfW), so a fresh laser spawns
-            // with x ≈ -1.5 — culling on `x < 0` ate those shots instantly.
-            const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            const bw = bullet.width || 0;
-            const bh = bullet.height || 0;
-            if (!isFinite(bullet.x) || !isFinite(bullet.y)
-                || bullet.y + bh < 0
-                || bullet.x + bw < 0
-                || bullet.x > canvasWidth) {
-                const last = this.bullets.length - 1;
-                if (i !== last) this.bullets[i] = this.bullets[last];
-                this.releaseBullet(this.bullets.pop());
-            }
+        if (typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            this.beginCollisionFrame(playerManager.getPosition());
         }
 
-        // Update enemy bullets
-        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
-            const bullet = this.enemyBullets[i];
-            const speedMultiplier = baseSpeedMultiplier * (bullet.isBossShot ? bossSpeed : enemySpeed);
-            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 5;
-            let bdx = 0;
-            let bdy = 0;
+        const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
+        const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
 
-            // Handle angled enemy bullets (after reflection)
-            if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
-                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
-                bdy = Math.cos(bullet.angle) * spd * speedMultiplier;
-            } else {
-                bdy = spd * speedMultiplier;
-            }
-            const px0 = bullet.x, py0 = bullet.y;
-            bullet.x += bdx;
-            bullet.y += bdy;
-            bullet._sweepDx = bullet.x - px0;
-            bullet._sweepDy = bullet.y - py0;
+        this.scrubDualMembership();
 
-            const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
-            const bw = bullet.width || 0;
-            const bh = bullet.height || 0;
-            if (bullet.y > canvasHeight
-                || bullet.x + bw < 0
-                || bullet.x > canvasWidth
-                || bullet.y + bh < 0) {
-                const last = this.enemyBullets.length - 1;
-                if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
-                this.releaseBullet(this.enemyBullets.pop());
+        const stepList = (list, speedMulFor, upward) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const bullet = list[i];
+                if (!bullet) {
+                    this.cullBulletAt(i, list);
+                    continue;
+                }
+                bullet.isEnemyShot = !upward;
+                this.clampLiveShotSize(bullet);
+                const spd = this.getBulletMoveSpeed(bullet, upward ? 6 : 5);
+                const mul = speedMulFor(bullet);
+                const frameMul = baseSpeedMultiplier * mul;
+                // Hard lock: never park mid-air (zero/wrong-axis velocity).
+                // Radial nova pellets keep their ring direction.
+                const radial = !!(bullet._radial || bullet.type === 'nova_shot');
+                const forward = upward ? -1 : 1;
+                if (!radial && (!Number.isFinite(bullet.vx) || !Number.isFinite(bullet.vy)
+                    || Math.abs(bullet.vy) < spd * 0.35
+                    || Math.sign(bullet.vy || forward) !== Math.sign(forward))) {
+                    bullet.angle = undefined;
+                    bullet.vx = 0;
+                    bullet.vy = forward * spd;
+                    bullet.moveSpeed = spd;
+                    bullet.speed = spd;
+                }
+                const step = this.computeBulletStep(bullet, spd, frameMul, upward);
+                const px0 = bullet.x;
+                const py0 = bullet.y;
+                let bdx = step.bdx;
+                let bdy = step.bdy;
+                if (!radial && Math.abs(bdy) < 0.2 * frameMul) {
+                    bdx = 0;
+                    bdy = forward * spd * frameMul;
+                    bullet.vx = 0;
+                    bullet.vy = forward * spd;
+                }
+                bullet.x = px0 + bdx;
+                bullet.y = py0 + bdy;
+                bullet._sweepDx = bullet.x - px0;
+                bullet._sweepDy = bullet.y - py0;
+
+                const bw = bullet.width || 0;
+                const bh = bullet.height || 0;
+                // Radial shots leave in every direction — cull all screen edges.
+                const offY = radial
+                    ? (bullet.y + bh < -2 || bullet.y > canvasHeight + 2)
+                    : (upward ? (bullet.y + bh < -2) : (bullet.y > canvasHeight + 2 || bullet.y + bh < -2));
+                const off = !Number.isFinite(bullet.x) || !Number.isFinite(bullet.y)
+                    || bullet.x + bw < -4
+                    || bullet.x > canvasWidth + 4
+                    || offY;
+                if (off) {
+                    this.cullBulletAt(i, list);
+                }
             }
-        }
+        };
+
+        stepList(this.bullets, () => playerSpeed, true);
+        stepList(this.enemyBullets, (b) => (b && b.isBossShot ? bossSpeed : enemySpeed), false);
     }
 
     setShipModel(shipModel) {
@@ -401,6 +665,9 @@ class BulletManager {
             this.fireMode = shipLoadoutManager.getFireMode(shipModel.id);
         }
         this.resetCharge();
+        this._firePosCache = null;
+        this._firePosFrame = -1;
+        this._firePosSig = '';
         // Update weapon display
         this.updateWeaponDisplay();
     }
@@ -413,13 +680,24 @@ class BulletManager {
      * modular layout (legacy/non-modular ship models).
      */
     getWeaponFirePositions(playerPosition) {
+        const fc = (typeof game !== 'undefined' && game.gameState)
+            ? game.gameState.frameCount
+            : -1;
+        const sig = [playerPosition.x, playerPosition.y, playerPosition.width, playerPosition.height].join('|');
+        if (this._firePosCache && this._firePosFrame === fc && this._firePosSig === sig) {
+            return this._firePosCache;
+        }
         const model = this.currentShipModel;
         const layout = model && model.layout;
         const weaponModules = layout && Array.isArray(layout.modules)
             ? layout.modules.filter((m) => m && m.kind === 'weapon')
             : [];
         if (!weaponModules.length) {
-            return [{ id: this.currentWeapon, key: this.currentWeapon, position: playerPosition }];
+            const lone = [{ id: this.currentWeapon, key: this.currentWeapon, position: playerPosition }];
+            this._firePosFrame = fc;
+            this._firePosSig = sig;
+            this._firePosCache = lone;
+            return lone;
         }
         const lw = Math.max(1, layout.width || playerPosition.width);
         const lh = Math.max(1, layout.height || playerPosition.height);
@@ -440,7 +718,7 @@ class BulletManager {
         };
         const muzzleUp = () => 1.4;
         const fireKeys = (model.loadout && model.loadout.weaponKeys) || {};
-        return weaponModules.map((m) => ({
+        const slots = weaponModules.map((m) => ({
             id: m.id,
             // Trigger of this slot: 'space' (default) or 'a' / 's' / 'd'.
             fireKey: (m.slotIndex != null && fireKeys[String(m.slotIndex)]) || 'space',
@@ -468,20 +746,28 @@ class BulletManager {
                 height: Math.max(1, (m.height || 0) * scaleY)
             }
         }));
+        this._firePosFrame = fc;
+        this._firePosSig = sig;
+        this._firePosCache = slots;
+        return slots;
     }
 
-    switchWeapon() {
+    switchWeapon(direction) {
+        const step = direction < 0 ? -1 : 1;
         if (!this.currentShipModel || !this.currentShipModel.availableWeapons) {
             // Fallback to old system
-            this.shotType = (this.shotType + 1) % this.shotTypes.length;
+            const n = this.shotTypes.length || 1;
+            this.shotType = (this.shotType + step + n) % n;
             this.updateWeaponDisplay();
             const fallback = this.shotTypes[this.shotType];
             return fallback;
         }
 
-        const currentIndex = this.currentShipModel.availableWeapons.indexOf(this.currentWeapon);
-        const nextIndex = (currentIndex + 1) % this.currentShipModel.availableWeapons.length;
-        this.currentWeapon = this.currentShipModel.availableWeapons[nextIndex];
+        const list = this.currentShipModel.availableWeapons;
+        const n = list.length || 1;
+        const currentIndex = list.indexOf(this.currentWeapon);
+        const nextIndex = ((currentIndex < 0 ? 0 : currentIndex) + step + n) % n;
+        this.currentWeapon = list[nextIndex];
         this.updateWeaponDisplay();
         return this.currentWeapon;
     }

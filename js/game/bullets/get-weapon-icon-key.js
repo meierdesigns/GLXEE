@@ -488,16 +488,9 @@ extendClass(BulletManager, {
     },
     shoot(playerPosition, options) {
         // FREEZE trap only slows movement — guns stay free.
+        // Beat-synced critical shots are disabled.
         const opts = Object.assign({}, options || {});
-        if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
-            const beatOpts = beatSyncManager.getShotOptions();
-            if (beatOpts.beatPower) {
-                const existing = opts.chargeMult != null ? opts.chargeMult : 1;
-                opts.chargeMult = Math.max(existing, beatOpts.chargeMult || 1);
-                opts.beatPower = true;
-                if (beatOpts.cooldownMul) opts.cooldownMul = beatOpts.cooldownMul;
-            }
-        }
+        delete opts.beatPower;
         const currentTime = Date.now();
         let shotFired = false;
 
@@ -539,9 +532,6 @@ extendClass(BulletManager, {
         // Play shooting sound only if a shot was actually fired
         if (shotFired && typeof soundManager !== 'undefined') {
             soundManager.playWeaponShoot(this.currentWeapon || 'laser');
-            if (opts.beatPower && soundManager.createBeep) {
-                soundManager.createBeep(1400, 0.04, 'square', 0.35);
-            }
         }
         return !!shotFired;
     },

@@ -6,7 +6,10 @@
  */
 class WeaponConfigManager {
     constructor() {
+        this.storageKey = 'vf_weapon_behavior_v1';
         this.configs = this.createDefaults();
+        this._factoryDefaults = this.createDefaults();
+        this.load();
     }
 
     createDefaults() {
@@ -167,16 +170,16 @@ class WeaponConfigManager {
             nova: this.makeWeapon({
                 id: 'nova',
                 name: 'Nova',
-                description: 'Radial nova volley',
+                description: 'Expanding energy ring around the ship',
                 iconKey: 'shotNova',
                 damage: 7,
-                speed: 7,
+                speed: 6,
                 cooldown: 800,
                 energyCost: 6,
                 width: 4,
                 height: 8,
-                bulletCount: 5,
-                spreadAngle: 0.55,
+                bulletCount: 8,
+                spreadAngle: 0,
                 lightRadius: 90,
                 lightIntensity: 1.4,
                 bulletType: 'nova_shot',

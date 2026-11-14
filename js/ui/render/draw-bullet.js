@@ -8,9 +8,10 @@ extendClass(RenderManager, {
 
         let bulletColor = this.resolveCss(this.getBulletColor(bullet), '#ffffff');
 
-        // Bonus (charged / beat) shots: same size, brighter colour.
+        // Bonus (charged / beat) shots: hotter colour so rare power shots read.
         if (bullet.bonusGlow > 0) {
-            bulletColor = this.blendColors(bulletColor, '#ffffff', 0.25 + 0.45 * bullet.bonusGlow);
+            const g = Math.max(0, Math.min(1, Number(bullet.bonusGlow) || 0));
+            bulletColor = this.blendColors(bulletColor, '#ffffff', 0.3 + 0.55 * g);
         }
 
         if (lighting && lighting.intensity > 0 && lighting.color) {
@@ -21,13 +22,13 @@ extendClass(RenderManager, {
             );
         }
 
+        // Projectiles always fly/draw on continuous px — never the combat lattice
+        // (large VOXEL / Global-Pixel cells froze or stuttered shots mid-lane).
+        const x = bullet.x;
+        const y = bullet.y;
+        const w = Math.max(1, bullet.width != null ? bullet.width : bullet.w);
+        const h = Math.max(1, bullet.height != null ? bullet.height : bullet.h);
         const cell = this.getCombatVoxelCell();
-        // Continuous flight coords — never lattice-snap the draw origin (that
-        // froze beams mid-lane whenever cell > per-frame travel). Size may stay chunky.
-        const x = Math.floor(bullet.x);
-        const y = Math.floor(bullet.y);
-        const w = cell ? this.quantizeCombatSize(bullet.width, cell) : Math.max(1, Math.ceil(bullet.width));
-        const h = cell ? this.quantizeCombatSize(bullet.height, cell) : Math.max(1, Math.ceil(bullet.height));
 
         // Shots that know their weapon get its shape, so the type reads at a glance.
         if (bullet.weaponId) {
@@ -51,6 +52,13 @@ extendClass(RenderManager, {
                 Math.max(cell || 1, Math.ceil(w / 2)), Math.max(cell || 1, h - 2),
                 glow, 1, true
             );
+        }
+        // Untyped laser: bright leading tip (up for player, down for enemy).
+        if (h >= 3) {
+            const down = !!(bullet.isEnemyShot || String(bullet.type || '').indexOf('enemy') === 0);
+            const tipH = Math.max(2, Math.min(5, Math.round(h * 0.35)));
+            const tipY = down ? y + h - tipH : y;
+            this.fillCombatRect(ctx, x, tipY, w, tipH, glow, 1, true);
         }
 
         ctx.restore();
@@ -77,6 +85,15 @@ extendClass(RenderManager, {
         // Soft halo only on wide shots in FLAT — VOXEL keeps hard blocks.
         if (!cell && w >= 3) rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
         const tipY = (len) => (down ? lead - len : lead);
+        // Leading tip: brighter so the nose reads clearly when shot speeds differ.
+        const paintTip = (len, tw) => {
+            const L = Math.max(2, Math.min(h, Math.round(len || 3)));
+            const twid = Math.max(1, Math.min(w, tw != null ? tw : Math.max(1, w)));
+            rect(cx - twid / 2, tipY(L), twid, L, hot, 1);
+            if (twid + 2 <= w + 1 && !cell) {
+                rect(cx - (twid + 2) / 2, tipY(Math.max(1, L - 1)), twid + 2, Math.max(1, L - 1), hot, 0.45);
+            }
+        };
         switch (id) {
             case 'plasma':
             case 'nova': {
@@ -120,6 +137,7 @@ extendClass(RenderManager, {
                 // Core with bright ring bands.
                 rect(cx - w / 2, y, w, h, color, 0.8);
                 for (let i = 1; i < h - 1; i += 3) rect(cx - w / 2, y + i, w, 1, hot, 0.85);
+                paintTip(3, Math.max(1, w));
                 break;
             }
             case 'spread':
@@ -157,13 +175,22 @@ extendClass(RenderManager, {
                 rect(x, y, 1, h, color);
                 rect(x + w - 1, y, 1, h, color);
                 rect(cx - Math.max(0.5, w / 4), y, Math.max(1, w / 2), h, hot, 0.9);
+                paintTip(3, Math.max(1, w));
                 break;
             }
             default: {
-                // Laser: solid beam with a hot core line.
+                // Laser: solid beam, hot core, brightest nose.
                 rect(x, y, w, h, color);
-                if (w >= 2) rect(cx - Math.max(0.5, w / 4), y + 1, Math.max(1, w / 2), Math.max(1, h - 2), hot, 0.85);
-                else rect(x, tipY(2), w, 2, hot);
+                if (w >= 2) {
+                    rect(cx - Math.max(0.5, w / 4), y + 1, Math.max(1, w / 2), Math.max(1, h - 2), hot, 0.75);
+                }
+                const tipLen = Math.max(3, Math.min(6, Math.round(h * 0.35)));
+                paintTip(tipLen, Math.max(1, w));
+                // Rare powered shot: extra white flare at the tip.
+                if (bullet._powerShot || (bullet.bonusGlow != null && bullet.bonusGlow >= 0.85)) {
+                    paintTip(Math.max(4, tipLen + 1), Math.max(1, w + 1));
+                    if (!cell) rect(cx - (w + 2) / 2, tipY(2), w + 2, 2, hot, 0.55);
+                }
             }
         }
         ctx.globalAlpha = 1;

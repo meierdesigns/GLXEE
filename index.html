@@ -11,7 +11,7 @@
     <!-- Critical boot loader paint: visible before the large styles.css arrives (css/styles/part-*.css) -->
     <style id="vf-boot-critical">
         /* Inline face starts the fetch with the boot UI (no orphan <link rel=preload>). */
-        @font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: block; src: url('assets/fonts/Silkscreen-400.ttf') format('truetype'); }
+        @font-face { font-family: 'Silkscreen'; font-style: normal; font-weight: 400; font-display: swap; src: url('assets/fonts/Silkscreen-400.ttf') format('truetype'); }
         html, body { margin: 0; background: #05060a; }
         #vf-boot-veil.vf-boot-veil-loading {
             position: fixed; inset: 0; z-index: 9980; pointer-events: auto;   /* under the bezel (9990): the screen frame is already there while loading */
@@ -71,8 +71,8 @@
     <link rel="stylesheet" href="css/optimized-variables.css?v=hud-2">
     <link rel="stylesheet" href="css/pilot-hud.css?v=33">
     <!-- Deferred app CSS: stamped by dev-server; media=print→all avoids render-block. -->
-    <link id="vf-app-css" rel="stylesheet" href="css/bundles/app.css?v=boot-perf-9" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="css/bundles/app.css?v=boot-perf-9"></noscript>
+    <link id="vf-app-css" rel="stylesheet" href="css/bundles/app.css?v=tools-tab-1" media="print" onload="this.media='all'">
+    <noscript><link rel="stylesheet" href="css/bundles/app.css?v=tools-tab-1"></noscript>
     <script>
     (function () {
         window.vfLoadAppCss = function () {
@@ -91,10 +91,8 @@
     </script>
     <script src="js/core/stage-boot.js?v=boot-14"></script>
     <script src="js/core/boot-loader.js"></script>
-    <script src="js/core/reload-keys.js?v=f4-4"></script>
-    <script src="js/core/zoom-rect-fix.js?v=vf-glass-1"></script>
-    <script src="js/graphics/pixel-cursors.js?v=stem-1"></script>
-</head>
+    <!-- Non-critical head scripts: defer so HTML/CSS discovery is not parser-blocked. -->
+    </head>
 <body>
     <div id="vf-bezel" class="vf-bezel" data-faction="terran"><div class="vf-bezel-back" aria-hidden="true"></div><div class="vf-fr" aria-hidden="true"><i class="vf-fr-p vf-fr-dark"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-lit"><b class="vf-fr-hole"></b></i><i class="vf-fr-p vf-fr-hullA"><i class="vf-fr-p vf-fr-hullB"><b class="vf-fr-hole"></b></i></i></div><div class="vf-bezel-tools" style="pointer-events:auto"><button type="button" data-tool="save" title="Save layout" aria-label="Save layout" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/></svg></button><button type="button" data-tool="reset" title="Reset layout" aria-label="Reset layout" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/></svg></button><button type="button" data-tool="layout" title="Layout edit" aria-label="Layout edit" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="12" height="5"/></svg></button><button type="button" data-tool="hud" title="HUD remote" aria-label="HUD remote" hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="10"/><circle cx="6" cy="7" r="2"/><path d="M10 5h2M10 8h2M10 11h2"/></svg></button><button type="button" data-tool="res" title="Resolution" aria-label="Resolution"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="3" width="12" height="8"/><path d="M8 11v3M5 14h6"/></svg></button><button type="button" data-tool="mute" title="Volume" aria-label="Volume"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5c1.5 1 1.5 5 0 6M13 3c3 2.5 3 7.5 0 10"/></svg></button><button type="button" data-tool="fs" title="Fullscreen" aria-label="Fullscreen"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M2 10v4h4M14 10v4h-4"/></svg></button><button type="button" data-tool="fx" title="Settings" aria-label="Settings"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><rect x="4" y="1" width="8" height="14"/><circle cx="8" cy="5" r="2"/><path d="M6 9h4M6 12h4"/></svg></button><button type="button" data-tool="logout" title="Logout" aria-label="Logout"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M4.5 4.5a5 5 0 1 0 7 0M8 2v6"/></svg></button></div></div>
     <script>try{var gs=window.vfGuiPreview||window.vfGuiState;if(gs&&gs.id){var bz=document.getElementById("vf-bezel");bz.setAttribute("data-faction",gs.id);if(window.vfGuiPreview)bz.setAttribute("data-preview","1")}}catch(e){}</script>
@@ -392,6 +390,35 @@
 
             // Initialize the game
             game.init();
+
+            // ?assetGen=<typeId>[&assetGenTab=library|settings][&assetGenId=<id>] — boots straight
+            // into the Asset Generator / Face Editor (typeId "portrait"), independent of whatever
+            // screen is open. Used by the editor's own "NEW TAB" button so it can keep running in
+            // a tab of its own. See js/ui/asset-gen-ui/hide.js openInNewTab().
+            (function openAssetGenFromUrl() {
+                var params = new URLSearchParams(location.search);
+                var typeId = params.get('assetGen');
+                if (!typeId) return;
+                var mainTab = params.get('assetGenTab') || 'library';
+                var selectedId = params.get('assetGenId') || null;
+                if (typeof window.ensureVfEditors !== 'function') { setTimeout(openAssetGenFromUrl, 30); return; }
+                window.ensureVfEditors(function (editorsErr) {
+                    if (editorsErr) return;
+                    window.ensureVfStation(function () {
+                        if (typeof startScreenManager !== 'undefined' && !startScreenManager.devMode) {
+                            startScreenManager.toggleDevMode();
+                        }
+                        if (typeof assetGenUI === 'undefined') return;
+                        assetGenUI.show({
+                            typeId: typeId,
+                            mainTab: mainTab,
+                            selectedId: selectedId,
+                            returnToSettings: false,
+                            skipPersist: true
+                        });
+                    });
+                });
+            })();
 
             function refreshViewportAfterControls() {
                 if (window.viewportFit && typeof window.viewportFit.scheduleUpdate === 'function') {

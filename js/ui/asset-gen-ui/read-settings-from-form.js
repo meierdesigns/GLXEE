@@ -145,7 +145,15 @@ extendClass(AssetGenUI, {
             for (let i = 0; i < list.length; i++) {
                 const entry = list[i];
                 this.selectedId = entry.id;
-                this.renderList();
+                // Avoid full list+thumb rebuild per batch item — only refresh selection chrome.
+                if (this.overlay) {
+                    const listEl = this.overlay.querySelector("#agList");
+                    if (listEl) {
+                        listEl.querySelectorAll(".ag-list-item.ag-on, tr.ag-on").forEach((el) => el.classList.remove("ag-on"));
+                        const on = listEl.querySelector('.ag-list-item[data-id="' + entry.id + '"], tr[data-id="' + entry.id + '"]');
+                        if (on) on.classList.add("ag-on");
+                    }
+                }
                 this.renderDetail();
                 this.setStatus("Generating " + (i + 1) + "/" + list.length + " · " + entry.label);
                 try {

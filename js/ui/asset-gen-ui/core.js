@@ -22,6 +22,9 @@ class AssetGenUI {
         this.returnToSettings = true;
         this.factionCategory = this.loadFactionCategory();
         this.factionFilterText = "";
+        this.listView = this.loadListView();
+        this.gridZoom = this.loadGridZoom();
+        this.collapsedSections = this.loadCollapsedSections();
         this._pointerX = 0;
         this._pointerY = 0;
         this._hoverZoomEl = null;
@@ -39,7 +42,20 @@ class AssetGenUI {
             }
         } catch (e) { /* ignore */ }
         this._comfyStatus = null;
+        this._pointerBound = false;
+    }
+
+    /** Bind hover-zoom pointer tracking only while the overlay is open. */
+    _bindPointerTracking() {
+        if (this._pointerBound) return;
         document.addEventListener("mousemove", this._pointerHandler, true);
+        this._pointerBound = true;
+    }
+
+    _unbindPointerTracking() {
+        if (!this._pointerBound) return;
+        document.removeEventListener("mousemove", this._pointerHandler, true);
+        this._pointerBound = false;
     }
 
     persistMenuState() {
@@ -234,6 +250,7 @@ class AssetGenUI {
         }
         this.visible = true;
         this.build();
+        if (typeof this._bindPointerTracking === "function") this._bindPointerTracking();
         document.addEventListener("keydown", this._keyHandler, true);
         this.renderList();
         this.renderDetail();

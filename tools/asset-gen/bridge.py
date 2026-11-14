@@ -494,6 +494,38 @@ def make_transparent(img, key_rgb: tuple[int, int, int] | None = None):
     return rgba
 
 
+def punch_magenta_fringe(img, key_rgb: tuple[int, int, int] | None = None):
+    """Clean up leftover near-key fringe from resize/quantize, without eating
+    the character: flood-fills OUT from the already-transparent region only,
+    so a magenta/pink detail that isn't touching the background survives."""
+    ensure_pil()
+    key = key_rgb or MAGENTA
+    rgba = img.convert("RGBA")
+    pixels = rgba.load()
+    w, h = rgba.size
+    visited = set()
+    stack = []
+    for y in range(h):
+        for x in range(w):
+            if pixels[x, y][3] == 0:
+                visited.add((x, y))
+                stack.append((x, y))
+    while stack:
+        x, y = stack.pop()
+        for nx, ny in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1)):
+            if (nx, ny) in visited or nx < 0 or ny < 0 or nx >= w or ny >= h:
+                continue
+            visited.add((nx, ny))
+            r, g, b, a = pixels[nx, ny]
+            if a == 0:
+                stack.append((nx, ny))
+                continue
+            if color_dist((r, g, b), key) <= MAGENTA_TOL:
+                pixels[nx, ny] = (0, 0, 0, 0)
+                stack.append((nx, ny))
+    return rgba
+
+
 def force_grayscale(img, key_rgb: tuple[int, int, int] | None = None):
     """Collapse RGB to luminance; drop residual chroma; keep alpha."""
     ensure_pil()
@@ -594,13 +626,8 @@ def process_image(raw: bytes, out_size: int = 64, colors: int = 15, bg_hex: str 
         img = img.resize((mid, mid), Image.Resampling.BOX)
     img = nearest_resize(img, side)
     img = quantize_grays(img, colors)
-    # Punch leftover fully-magenta fringe
-    px = img.load()
-    for y in range(img.size[1]):
-        for x in range(img.size[0]):
-            r, g, b, a = px[x, y]
-            if a and color_dist((r, g, b), key) <= MAGENTA_TOL:
-                px[x, y] = (0, 0, 0, 0)
+    # Punch leftover fully-magenta fringe (border-connected only — keeps magenta/pink character detail intact)
+    img = punch_magenta_fringe(img, key)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return buf.getvalue()
@@ -647,12 +674,8 @@ def process_portrait_image(
     # restore alpha from canvas
     ca = canvas.split()[3]
     q.putalpha(ca)
-    px = q.load()
-    for y in range(th):
-        for x in range(tw):
-            r, g, b, a = px[x, y]
-            if a and color_dist((r, g, b), key) <= MAGENTA_TOL:
-                px[x, y] = (0, 0, 0, 0)
+    # Punch leftover fully-magenta fringe (border-connected only — keeps magenta/pink character detail intact)
+    q = punch_magenta_fringe(q, key)
     buf = io.BytesIO()
     q.save(buf, format="PNG")
     return buf.getvalue()

@@ -89,6 +89,72 @@ class AssetGenClient {
         return data;
     }
 
+    /** Start/stop the :8787 bridge via the local game dev-server (tools/dev-server.py). */
+    async startBridgeViaDevServer() {
+        const res = await fetch("/__asset-bridge/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}"
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+            throw new Error((data && data.error) || ("Bridge start HTTP " + res.status));
+        }
+        this._offlineUntil = 0;
+        return data;
+    }
+
+    async stopBridgeViaDevServer() {
+        const res = await fetch("/__asset-bridge/stop", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}"
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+            throw new Error((data && data.error) || ("Bridge stop HTTP " + res.status));
+        }
+        this._offlineUntil = 0;
+        return data;
+    }
+
+    /**
+     * DevMode switch: ensure Bridge (:8787) + ComfyUI are up, or shut Comfy (+ Bridge) down.
+     * @param {boolean} on
+     */
+    async setComfyStack(on) {
+        if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
+        if (on) {
+            let h = await this.health(true);
+            if (!h || !h.ok) {
+                await this.startBridgeViaDevServer();
+                for (let i = 0; i < 12; i++) {
+                    await new Promise((r) => setTimeout(r, 250));
+                    h = await this.health(true);
+                    if (h && h.ok) break;
+                }
+            }
+            if (!h || !h.ok) throw new Error("Bridge still offline after start");
+            if (!h.comfy) {
+                await this.startComfy();
+                for (let i = 0; i < 20; i++) {
+                    await new Promise((r) => setTimeout(r, 400));
+                    h = await this.health(true);
+                    if (h && h.ok && h.comfy) break;
+                }
+            }
+            return h;
+        }
+        try {
+            const h = await this.health(true);
+            if (h && h.ok) await this.stopComfy();
+        } catch (e) { /* bridge already down */ }
+        try {
+            await this.stopBridgeViaDevServer();
+        } catch (e) { /* optional — game may not be on tools/dev-server.py */ }
+        return this.health(true);
+    }
+
     async setComfyConfig(cfg) {
         if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
         const res = await fetch(this.baseUrl + "/api/comfy/config", {

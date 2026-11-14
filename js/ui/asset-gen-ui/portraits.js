@@ -107,6 +107,42 @@ extendClass(AssetGenUI, {
         this.renderPortraitFactionTabs();
         this.renderPortraitReferencePreview();
         this.syncPortraitBgvChrome();
+        this.applyCollapsedSections();
+    },
+
+    loadCollapsedSections() {
+        try {
+            const raw = localStorage.getItem("vf_asset_gen_collapsed_v1");
+            if (raw) return JSON.parse(raw) || {};
+        } catch (e) { /* ignore */ }
+        return {};
+    },
+
+    saveCollapsedSections() {
+        try {
+            localStorage.setItem("vf_asset_gen_collapsed_v1", JSON.stringify(this.collapsedSections || {}));
+        } catch (e) { /* ignore */ }
+    },
+
+    toggleCardCollapse(name) {
+        if (!name) return;
+        const collapsed = Object.assign({}, this.collapsedSections || {});
+        collapsed[name] = !collapsed[name];
+        this.collapsedSections = collapsed;
+        this.saveCollapsedSections();
+        this.applyCollapsedSections();
+    },
+
+    applyCollapsedSections() {
+        if (!this.overlay) return;
+        const collapsed = this.collapsedSections || {};
+        this.overlay.querySelectorAll(".ag-card[data-section]").forEach((card) => {
+            const name = card.dataset.section;
+            const on = !!collapsed[name];
+            card.classList.toggle("is-collapsed", on);
+            const header = card.querySelector(".ag-card-header");
+            if (header) header.setAttribute("aria-expanded", on ? "false" : "true");
+        });
     },
 
     renderPortraitFactionTabs() {
@@ -173,6 +209,46 @@ extendClass(AssetGenUI, {
         };
         reader.onerror = () => this.setStatus("Failed to read reference image");
         reader.readAsDataURL(file);
+    },
+
+    async onPortraitReferenceUrl(input, button) {
+        const url = String((input && input.value) || "").trim();
+        if (!url) {
+            this.setStatus("Paste an image URL first");
+            return;
+        }
+        if (button && button.disabled) return;
+        const prevLabel = button ? button.textContent : null;
+        if (button) {
+            button.disabled = true;
+            button.textContent = "LOADING…";
+        }
+        if (input) input.disabled = true;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const blob = await res.blob();
+            if (!blob.type || blob.type.indexOf("image/") !== 0) {
+                throw new Error("Not an image (" + (blob.type || "unknown type") + ")");
+            }
+            const dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result || ""));
+                reader.onerror = () => reject(reader.error || new Error("Failed to read image"));
+                reader.readAsDataURL(blob);
+            });
+            this.portraitReferenceDataUrl = dataUrl;
+            this.renderPortraitReferencePreview();
+            this.setStatus("Reference loaded from URL · GENERATE ALL to replace portraits");
+        } catch (e) {
+            this.setStatus("Could not load that URL (CORS or network) — try LOAD EXAMPLE / download it locally instead.");
+        } finally {
+            if (button) {
+                button.disabled = false;
+                button.textContent = prevLabel || "LOAD LINK";
+            }
+            if (input) input.disabled = false;
+        }
     },
 
     clearPortraitReference() {

@@ -4,15 +4,18 @@
 extendClass(StartScreenManager, {
     async refreshAssetBridgeStatus() {
         const item = this.settingsItems.find((s) => s.type === 'assetStatus');
-        if (!item) return;
-        item.value = '…';
-        this.refreshSettingsRow(this.settingsItems.indexOf(item));
+        const sw = this.settingsItems.find((s) => s.type === 'comfySwitch');
+        if (!item && !sw) return;
+        if (item) {
+            item.value = '…';
+            this.refreshSettingsRow(this.settingsItems.indexOf(item));
+        }
         let text = 'OFFLINE';
         let ok = false;
         let comfy = false;
         try {
             if (typeof assetGenClient !== 'undefined' && assetGenClient.health) {
-                const h = await assetGenClient.health();
+                const h = await assetGenClient.health(true);
                 ok = !!(h && h.ok);
                 comfy = !!(h && h.comfy);
                 if (ok && comfy) text = 'READY';
@@ -22,14 +25,56 @@ extendClass(StartScreenManager, {
         } catch (e) {
             text = 'OFFLINE';
         }
-        item.value = text;
-        const idx = this.settingsItems.indexOf(item);
-        this.refreshSettingsRow(idx);
-        const el = document.querySelector('[data-asset-status="1"]');
-        if (el) {
-            el.classList.toggle('settings-asset-ready', ok && comfy);
-            el.classList.toggle('settings-asset-warn', ok && !comfy);
-            el.classList.toggle('settings-asset-off', !ok);
+        if (item) {
+            item.value = text;
+            const idx = this.settingsItems.indexOf(item);
+            this.refreshSettingsRow(idx);
+            const el = document.querySelector('[data-asset-status="1"]');
+            if (el) {
+                el.classList.toggle('settings-asset-ready', ok && comfy);
+                el.classList.toggle('settings-asset-warn', ok && !comfy);
+                el.classList.toggle('settings-asset-off', !ok);
+            }
+        }
+        if (sw) {
+            sw.value = (ok && comfy) ? 'ON' : 'OFF';
+            this.refreshSettingsRow(this.settingsItems.indexOf(sw));
+        }
+    },
+
+    async toggleComfySwitch(direction) {
+        const item = this.settingsItems.find((s) => s.type === 'comfySwitch');
+        if (!item || item._busy) return;
+        const opts = item.options || ['ON', 'OFF'];
+        let next = item.value;
+        if (direction === 0) {
+            next = item.value === 'ON' ? 'OFF' : 'ON';
+        } else {
+            const currentIndex = opts.indexOf(item.value);
+            next = opts[(currentIndex + direction + opts.length) % opts.length];
+        }
+        if (next === item.value) return;
+        item._busy = true;
+        item.value = '…';
+        this.refreshSettingsRow(this.settingsItems.indexOf(item));
+        try {
+            if (typeof assetGenClient === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                await new Promise((resolve) => window.ensureVfEditors(() => resolve()));
+            }
+            if (typeof assetGenClient === 'undefined' || !assetGenClient.setComfyStack) {
+                throw new Error('Asset client missing');
+            }
+            await assetGenClient.setComfyStack(next === 'ON');
+            item.value = next;
+        } catch (e) {
+            item.value = 'OFF';
+            try {
+                if (typeof console !== 'undefined') console.warn('[ComfyUI switch]', e && e.message || e);
+            } catch (e2) { /* ignore */ }
+        } finally {
+            item._busy = false;
+            this.refreshSettingsRow(this.settingsItems.indexOf(item));
+            await this.refreshAssetBridgeStatus();
         }
     },
 
@@ -200,15 +245,9 @@ extendClass(StartScreenManager, {
                     break;
                 }
                 if (typeof profileManager !== 'undefined' && !profileManager.hasActiveProfile()) {
-                    if (typeof onboardingManager !== 'undefined') {
-                        onboardingManager.show({
-                            onComplete: () => {
-                                this.returnToHub();
-                            }
-                        });
-                        this.hide();
-                        break;
-                    }
+                    this.openProfileCreate();
+                    this.hide();
+                    break;
                 }
                 {
                     const openHs = () => {

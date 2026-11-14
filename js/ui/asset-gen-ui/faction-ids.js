@@ -165,8 +165,14 @@ extendClass(AssetGenUI, {
             const tdThumb = document.createElement("td");
             const thumb = document.createElement("div");
             thumb.className = "ag-thumb";
-            this.drawThumbInto(thumb, entry, 24);
-            thumb.addEventListener("mouseenter", () => this.showHoverZoom(thumb, entry));
+            this._observeLazyThumb(thumb, entry, 24);
+            thumb.addEventListener("mouseenter", () => {
+                if (thumb.dataset.lazyDone !== "1") {
+                    this.drawThumbInto(thumb, entry, 24);
+                    thumb.dataset.lazyDone = "1";
+                }
+                this.showHoverZoom(thumb, entry);
+            });
             thumb.addEventListener("mouseleave", () => this.hideHoverZoom());
             tdThumb.appendChild(thumb);
 
@@ -203,9 +209,119 @@ extendClass(AssetGenUI, {
         listEl.appendChild(table);
     },
 
+    loadListView() {
+        try {
+            const v = localStorage.getItem("vf_asset_gen_list_view_v1");
+            if (v === "grid" || v === "list") return v;
+        } catch (e) { /* ignore */ }
+        return "grid";
+    },
+
+    saveListView() {
+        try {
+            localStorage.setItem("vf_asset_gen_list_view_v1", this.listView || "grid");
+        } catch (e) { /* ignore */ }
+    },
+
+    setListView(view) {
+        this.listView = (view === "grid") ? "grid" : "list";
+        this.saveListView();
+        this.applyListView();
+    },
+
+    applyListView() {
+        if (!this.overlay) return;
+        const list = this.overlay.querySelector("#agList");
+        if (list) list.classList.toggle("is-grid", this.listView === "grid");
+        this.overlay.querySelectorAll("#agViewToggle button").forEach((btn) => {
+            const on = btn.dataset.view === this.listView;
+            btn.classList.toggle("ag-on", on);
+            btn.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        const toggleHost = this.overlay.querySelector("#agViewToggle");
+        if (toggleHost) toggleHost.hidden = this.isFactionLibrary();
+        this.applyGridZoom();
+    },
+
+    loadGridZoom() {
+        try {
+            const n = parseInt(localStorage.getItem("vf_asset_gen_grid_zoom_v1"), 10);
+            if (Number.isFinite(n)) return Math.min(160, Math.max(48, n));
+        } catch (e) { /* ignore */ }
+        return 72;
+    },
+
+    saveGridZoom() {
+        try {
+            localStorage.setItem("vf_asset_gen_grid_zoom_v1", String(this.gridZoom || 72));
+        } catch (e) { /* ignore */ }
+    },
+
+    setGridZoom(px) {
+        this.gridZoom = Math.min(160, Math.max(48, Math.round(px) || 72));
+        this.saveGridZoom();
+        this.applyGridZoom();
+    },
+
+    applyGridZoom() {
+        if (!this.overlay) return;
+        this.overlay.style.setProperty("--ag-grid-zoom", this.gridZoom + "px");
+        const zoomHost = this.overlay.querySelector("#agZoomControl");
+        if (zoomHost) zoomHost.hidden = !(this.listView === "grid" && this.isPortraitLibrary());
+        const zoomInput = this.overlay.querySelector("#agGridZoom");
+        if (zoomInput && Number(zoomInput.value) !== this.gridZoom) zoomInput.value = String(this.gridZoom);
+    },
+
+    /** Disconnect prior IntersectionObserver used for lazy thumbnails. */
+    _teardownThumbObserver() {
+        if (this._thumbObserver) {
+            try { this._thumbObserver.disconnect(); } catch (e) { /* ignore */ }
+            this._thumbObserver = null;
+        }
+    },
+
+    /** Paint a thumb only when it nears the viewport (portraits are expensive). */
+    _observeLazyThumb(thumb, entry, size) {
+        if (!thumb || !entry) return;
+        thumb.dataset.lazyThumb = "1";
+        const paint = () => {
+            if (thumb.dataset.lazyDone === "1") return;
+            thumb.dataset.lazyDone = "1";
+            this.drawThumbInto(thumb, entry, size);
+            if (this._thumbObserver) {
+                try { this._thumbObserver.unobserve(thumb); } catch (e) { /* ignore */ }
+            }
+        };
+        if (typeof IntersectionObserver === "undefined") {
+            paint();
+            return;
+        }
+        if (!this._thumbObserver) {
+            this._thumbObserver = new IntersectionObserver((entries) => {
+                entries.forEach((ev) => {
+                    if (!ev.isIntersecting) return;
+                    const el = ev.target;
+                    const id = el.dataset.entryId;
+                    const ent = (this._lazyThumbEntries && this._lazyThumbEntries.get(id)) || null;
+                    const px = Number(el.dataset.thumbSize) || 28;
+                    if (ent) this.drawThumbInto(el, ent, px);
+                    el.dataset.lazyDone = "1";
+                    try { this._thumbObserver.unobserve(el); } catch (e) { /* ignore */ }
+                });
+            }, { root: this.overlay ? this.overlay.querySelector("#agList") : null, rootMargin: "120px 0px", threshold: 0.01 });
+        }
+        if (!this._lazyThumbEntries) this._lazyThumbEntries = new Map();
+        this._lazyThumbEntries.set(entry.id, entry);
+        thumb.dataset.entryId = entry.id;
+        thumb.dataset.thumbSize = String(size);
+        this._thumbObserver.observe(thumb);
+    },
+
     renderList() {
         if (!this.overlay) return;
         const list = this.overlay.querySelector("#agList");
+        this._teardownThumbObserver();
+        if (this._lazyThumbEntries) this._lazyThumbEntries.clear();
         list.innerHTML = "";
         this.syncFactionChrome();
 
@@ -217,6 +333,7 @@ extendClass(AssetGenUI, {
         if (this.isFactionLibrary()) {
             this.renderFactionTable(list, entries);
             this.updateSelectAllState();
+            this.applyListView();
             const on = list.querySelector("tr.ag-on");
             if (on) on.scrollIntoView({ block: "nearest" });
             return;
@@ -241,8 +358,15 @@ extendClass(AssetGenUI, {
             const thumb = document.createElement("div");
             const face = entry.type === "portrait" || entry.kind === "portrait";
             thumb.className = "ag-thumb" + (face ? " ag-thumb-face" : "");
-            this.drawThumbInto(thumb, entry, face ? 72 : 28);
-            thumb.addEventListener("mouseenter", () => this.showHoverZoom(thumb, entry));
+            // Defer expensive VXP/getImageData thumbs until the row is near the list viewport.
+            this._observeLazyThumb(thumb, entry, face ? 72 : 28);
+            thumb.addEventListener("mouseenter", () => {
+                if (thumb.dataset.lazyDone !== "1") {
+                    this.drawThumbInto(thumb, entry, face ? 72 : 28);
+                    thumb.dataset.lazyDone = "1";
+                }
+                this.showHoverZoom(thumb, entry);
+            });
             thumb.addEventListener("mouseleave", () => this.hideHoverZoom());
 
             const label = document.createElement("span");
@@ -257,6 +381,7 @@ extendClass(AssetGenUI, {
         });
 
         this.updateSelectAllState();
+        this.applyListView();
         const on = list.querySelector(".ag-list-item.ag-on");
         if (on) on.scrollIntoView({ block: "nearest" });
     },

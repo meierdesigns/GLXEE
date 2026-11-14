@@ -6,6 +6,8 @@ extendClass(AssetGenUI, {
         if (!this.visible) return;
         this.visible = false;
         this.hideHoverZoom();
+        if (typeof this._unbindPointerTracking === "function") this._unbindPointerTracking();
+        if (typeof this._teardownThumbObserver === "function") this._teardownThumbObserver();
         document.removeEventListener("keydown", this._keyHandler, true);
         if (this.overlay && this.overlay.parentNode) {
             this.overlay.parentNode.removeChild(this.overlay);
@@ -80,32 +82,44 @@ extendClass(AssetGenUI, {
             <input type="search" class="ag-faction-filter" id="agFactionFilter" placeholder="FILTER SHIPS…" autocomplete="off">
           </div>
           <div class="ag-portrait-chrome" id="agPortraitChrome" hidden>
-            <div class="ag-portrait-ref">
-              <div class="ag-label">REFERENCE (style for all faces)</div>
-              <div class="ag-portrait-ref-row">
-                <div class="ag-portrait-ref-preview" id="agPortraitRefPreview">(none)</div>
-                <div class="ag-portrait-ref-actions">
-                  <input type="file" id="agPortraitRefFile" accept="image/png,image/jpeg,image/webp" hidden>
-                  <button type="button" id="agPortraitRefPick">LOAD EXAMPLE</button>
-                  <button type="button" id="agPortraitRefClear">CLEAR</button>
-                  <button type="button" id="agPortraitGenerateAll">GENERATE ALL</button>
+            <div class="ag-portrait-ref ag-card" id="agSectionReference" data-section="reference">
+              <button type="button" class="ag-card-header" data-collapse="reference" aria-expanded="true">
+                <span class="ag-card-chevron" aria-hidden="true">▾</span>
+                <span class="ag-card-title">REFERENCE (style for all faces)</span>
+              </button>
+              <div class="ag-card-body">
+                <div class="ag-portrait-ref-row">
+                  <div class="ag-portrait-ref-preview" id="agPortraitRefPreview">(none)</div>
+                  <div class="ag-portrait-ref-actions">
+                    <input type="file" id="agPortraitRefFile" accept="image/png,image/jpeg,image/webp" hidden>
+                    <button type="button" id="agPortraitRefPick">LOAD EXAMPLE</button>
+                    <input type="url" class="ag-portrait-ref-url" id="agPortraitRefUrl" placeholder="or paste image URL…" autocomplete="off">
+                    <button type="button" id="agPortraitRefUrlLoad">LOAD LINK</button>
+                    <button type="button" id="agPortraitRefClear">CLEAR</button>
+                    <button type="button" id="agPortraitGenerateAll">GENERATE ALL</button>
+                  </div>
                 </div>
+                <p class="ag-portrait-hint">One example image → Flux img2img → replaces every checked / all portraits under assets/factions/*/portraits/</p>
               </div>
-              <p class="ag-portrait-hint">One example image → Flux img2img → replaces every checked / all portraits under assets/factions/*/portraits/</p>
             </div>
-            <div class="ag-portrait-bg">
-              <div class="ag-label">ANIMATED BACKDROP (preview)</div>
-              <div class="ag-portrait-bg-row">
-                <input type="range" id="agPortraitBgv" min="0" max="31" step="1" value="0" aria-label="Animated backdrop">
-                <b class="ag-portrait-bg-val" id="agPortraitBgvVal">01 / 32</b>
-                <button type="button" id="agPortraitBgvRand" title="Random backdrop">RND</button>
+            <div class="ag-portrait-bg ag-card" id="agSectionBackdrop" data-section="backdrop">
+              <button type="button" class="ag-card-header" data-collapse="backdrop" aria-expanded="true">
+                <span class="ag-card-chevron" aria-hidden="true">▾</span>
+                <span class="ag-card-title">ANIMATED BACKDROP (preview)</span>
+              </button>
+              <div class="ag-card-body">
+                <div class="ag-portrait-bg-row">
+                  <input type="range" id="agPortraitBgv" min="0" max="31" step="1" value="0" aria-label="Animated backdrop">
+                  <b class="ag-portrait-bg-val" id="agPortraitBgvVal">01 / 32</b>
+                  <button type="button" id="agPortraitBgvRand" title="Random backdrop">RND</button>
+                </div>
+                <div class="ag-label">ANIMATION</div>
+                <div class="ag-portrait-bg-row">
+                  <input type="range" id="agPortraitBga" min="0" max="4" step="1" value="2" aria-label="Backdrop animation speed">
+                  <b class="ag-portrait-bg-val" id="agPortraitBgaVal">NORMAL</b>
+                </div>
+                <p class="ag-portrait-hint">Backdrop + motion speed — same controls as Pilot create (BACKDROP / ANIMATION).</p>
               </div>
-              <div class="ag-label">ANIMATION</div>
-              <div class="ag-portrait-bg-row">
-                <input type="range" id="agPortraitBga" min="0" max="4" step="1" value="2" aria-label="Backdrop animation speed">
-                <b class="ag-portrait-bg-val" id="agPortraitBgaVal">NORMAL</b>
-              </div>
-              <p class="ag-portrait-hint">Backdrop + motion speed — same controls as Pilot create (BACKDROP / ANIMATION).</p>
             </div>
             <div class="ag-faction-tabs" id="agPortraitFactionTabs"></div>
           </div>
@@ -116,6 +130,14 @@ extendClass(AssetGenUI, {
             </label>
             <button type="button" id="agClearChecks">CLEAR</button>
             <span class="ag-label" id="agCheckCount">0 selected</span>
+            <div class="ag-zoom-control" id="agZoomControl" hidden>
+              <label for="agGridZoom" title="Thumbnail size">ZOOM</label>
+              <input type="range" id="agGridZoom" min="48" max="160" step="4" value="72" aria-label="Thumbnail size">
+            </div>
+            <div class="ag-view-toggle" id="agViewToggle" role="group" aria-label="List view">
+              <button type="button" class="ag-view-btn" data-view="list" title="List view">LIST</button>
+              <button type="button" class="ag-view-btn" data-view="grid" title="Grid view">GRID</button>
+            </div>
           </div>
           <div class="ag-list" id="agList"></div>
         </div>
@@ -137,33 +159,53 @@ extendClass(AssetGenUI, {
                 <button type="button" id="agGenerateChecked">GENERATE CHECKED</button>
                 <button type="button" id="agAccept">ACCEPT</button>
                 <button type="button" id="agDiscard">DISCARD</button>
+                <button type="button" id="agNewTab" title="Open this editor in its own browser tab">NEW TAB</button>
                 <button type="button" id="agClose">CLOSE</button>
               </div>
             </div>
           </div>
-          <div class="ag-library-render" id="agLibraryRender">
-            <div class="ag-settings-section-title">RENDER</div>
-            <div class="ag-settings-grid" id="agLibraryRenderGrid"></div>
+          <div class="ag-library-render ag-card" id="agLibraryRender" data-section="render">
+            <button type="button" class="ag-card-header" data-collapse="render" aria-expanded="true">
+              <span class="ag-card-chevron" aria-hidden="true">▾</span>
+              <span class="ag-card-title">RENDER</span>
+            </button>
+            <div class="ag-card-body">
+              <div class="ag-settings-grid" id="agLibraryRenderGrid"></div>
+            </div>
           </div>
         </div>
       </div>
     </div>
     <div class="ag-settings" id="agSettingsPane" hidden>
       <p class="ag-settings-note">Render + ComfyUI. Bridge: <code>npm run assets</code> (Comfy + Bridge). Dann hier <b>START COMFYUI</b> / Generate.</p>
-      <div class="ag-settings-section-title">COMFYUI</div>
-      <div class="ag-row ag-actions" id="agComfyActions" style="margin-bottom:10px">
-        <button type="button" id="agComfyStart">START COMFYUI</button>
-        <button type="button" id="agComfyStop">STOP COMFYUI</button>
-        <button type="button" id="agComfyRefresh">REFRESH STATUS</button>
-        <button type="button" id="agComfyOpen">OPEN UI</button>
+      <div class="ag-card" data-section="comfy">
+        <button type="button" class="ag-card-header" data-collapse="comfy" aria-expanded="true">
+          <span class="ag-card-chevron" aria-hidden="true">▾</span>
+          <span class="ag-card-title">COMFYUI</span>
+        </button>
+        <div class="ag-card-body">
+          <div class="ag-row ag-actions" id="agComfyActions" style="margin-bottom:10px">
+            <button type="button" id="agComfyStart">START COMFYUI</button>
+            <button type="button" id="agComfyStop">STOP COMFYUI</button>
+            <button type="button" id="agComfyRefresh">REFRESH STATUS</button>
+            <button type="button" id="agComfyOpen">OPEN UI</button>
+          </div>
+          <div class="ag-status" id="agComfyStatusLine" style="margin:0 0 10px">ComfyUI: …</div>
+          <div class="ag-settings-grid" id="agComfyGrid"></div>
+        </div>
       </div>
-      <div class="ag-status" id="agComfyStatusLine" style="margin:0 0 10px">ComfyUI: …</div>
-      <div class="ag-settings-grid" id="agComfyGrid"></div>
-      <div class="ag-settings-section-title">RENDER</div>
-      <div class="ag-settings-grid" id="agSettingsGrid"></div>
-      <div class="ag-row ag-actions">
-        <button type="button" id="agSettingsSave">SAVE SETTINGS</button>
-        <button type="button" id="agSettingsReset">RESET DEFAULTS</button>
+      <div class="ag-card" data-section="render-settings">
+        <button type="button" class="ag-card-header" data-collapse="render-settings" aria-expanded="true">
+          <span class="ag-card-chevron" aria-hidden="true">▾</span>
+          <span class="ag-card-title">RENDER</span>
+        </button>
+        <div class="ag-card-body">
+          <div class="ag-settings-grid" id="agSettingsGrid"></div>
+          <div class="ag-row ag-actions" style="margin-top:10px">
+            <button type="button" id="agSettingsSave">SAVE SETTINGS</button>
+            <button type="button" id="agSettingsReset">RESET DEFAULTS</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -216,6 +258,17 @@ extendClass(AssetGenUI, {
             this.checkedIds = new Set();
             this.renderList();
         });
+        root.querySelectorAll("#agViewToggle button").forEach((btn) => {
+            btn.addEventListener("click", () => this.setListView(btn.dataset.view));
+        });
+        const zoomInput = root.querySelector("#agGridZoom");
+        if (zoomInput) {
+            zoomInput.value = String(this.gridZoom || 72);
+            zoomInput.addEventListener("input", () => this.setGridZoom(Number(zoomInput.value)));
+        }
+        root.querySelectorAll(".ag-card-header").forEach((btn) => {
+            btn.addEventListener("click", () => this.toggleCardCollapse(btn.dataset.collapse));
+        });
 
         const filterEl = root.querySelector("#agFactionFilter");
         if (filterEl) {
@@ -231,11 +284,21 @@ extendClass(AssetGenUI, {
         root.querySelector("#agAccept").addEventListener("click", () => this.onAccept());
         const refPick = root.querySelector("#agPortraitRefPick");
         const refFile = root.querySelector("#agPortraitRefFile");
+        const refUrlInput = root.querySelector("#agPortraitRefUrl");
+        const refUrlLoad = root.querySelector("#agPortraitRefUrlLoad");
         const refClear = root.querySelector("#agPortraitRefClear");
         const refAll = root.querySelector("#agPortraitGenerateAll");
         if (refPick && refFile) {
             refPick.addEventListener("click", () => refFile.click());
             refFile.addEventListener("change", () => this.onPortraitReferenceFile(refFile));
+        }
+        if (refUrlLoad && refUrlInput) {
+            refUrlLoad.addEventListener("click", () => this.onPortraitReferenceUrl(refUrlInput, refUrlLoad));
+            refUrlInput.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                this.onPortraitReferenceUrl(refUrlInput, refUrlLoad);
+            });
         }
         if (refClear) refClear.addEventListener("click", () => this.clearPortraitReference());
         if (refAll) refAll.addEventListener("click", () => this.onGenerateAllPortraits());
@@ -267,6 +330,7 @@ extendClass(AssetGenUI, {
             this.setStatus("Discarded.");
             this.renderDetail();
         });
+        root.querySelector("#agNewTab").addEventListener("click", () => this.openInNewTab());
         root.querySelector("#agClose").addEventListener("click", () => this.hide());
         root.querySelector("#agSettingsSave").addEventListener("click", () => {
             this.readSettingsFromForm();
@@ -299,6 +363,8 @@ extendClass(AssetGenUI, {
         this.renderMainTabs();
         this.syncPanelVisibility();
         this.updateHintPorts();
+        this.applyListView();
+        this.applyCollapsedSections();
     },
 
     renderMainTabs() {
@@ -347,5 +413,21 @@ extendClass(AssetGenUI, {
 
     isPortraitLibrary() {
         return this.typeId === "portrait";
+    },
+
+    // Opens a fresh, independent tab that boots straight into this same editor
+    // (same type + tab), so it keeps running on its own if this tab reloads/closes.
+    openInNewTab() {
+        try {
+            const url = new URL(location.href);
+            url.searchParams.set("assetGen", this.typeId || "mount");
+            url.searchParams.set("assetGenTab", this.mainTab || "library");
+            if (this.selectedId) url.searchParams.set("assetGenId", this.selectedId);
+            else url.searchParams.delete("assetGenId");
+            window.open(url.toString(), "_blank", "noopener");
+            this.setStatus("Opened in new tab.");
+        } catch (e) {
+            this.setStatus("Could not open new tab: " + String(e && e.message || e));
+        }
     },
 });

@@ -37,6 +37,28 @@ var vfCssVar = (() => {
 })();
 
 
+/* --- js/ui/dom-helpers.js --- */
+"use strict";
+
+// Shared DOM building blocks for screens/panels/editors, so each one stops
+// hand-rolling its own close button and backdrop-click-to-close wiring.
+
+function createCloseButton(onClick, className) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = className || 'ui-close-btn';
+    btn.textContent = '✕';
+    btn.addEventListener('click', onClick);
+    return btn;
+}
+
+function bindBackdropClose(container, onClose) {
+    container.addEventListener('click', (e) => {
+        if (e.target === container) onClose();
+    });
+}
+
+
 /* --- js/core/feature-loaders.js --- */
 "use strict";
 
@@ -742,6 +764,16 @@ extendClass(MenuStateManager, {
                     return true;
                 }
                 break;
+            case 'shot-behavior-editor':
+                if (typeof shotBehaviorEditorUI !== 'undefined') {
+                    if (typeof startScreenManager !== 'undefined') {
+                        startScreenManager.show({ skipPersist: true });
+                    }
+                    shotBehaviorEditorUI.returnTo = s.returnTo || null;
+                    shotBehaviorEditorUI.show(s.weaponId || 'laser', true);
+                    return true;
+                }
+                break;
             case 'settings':
                 if (typeof startScreenManager !== 'undefined') {
                     startScreenManager.showSettings = true;
@@ -886,8 +918,13 @@ extendClass(MenuStateManager, {
                 }
                 break;
             case 'onboarding':
+                // Legacy first-run screen → unified Profile Selection create wizard.
+                this.hideStartShell();
+                if (typeof startScreenManager !== 'undefined' && startScreenManager.openProfileCreate) {
+                    startScreenManager.openProfileCreate(s && s.pfaction);
+                    return true;
+                }
                 if (typeof onboardingManager !== 'undefined') {
-                    this.hideStartShell();
                     onboardingManager.show({
                         onComplete: () => {
                             if (typeof startScreenManager !== 'undefined') {
@@ -1427,6 +1464,7 @@ var EconomyConfig = class EconomyConfig {
             elite: 0.10,
             capital: 0.15,
             champion: 0.15,
+            boss: 0.22,
             default: 0.03
         };
         /** Finished parts shed less often than schematics. */
@@ -1437,6 +1475,7 @@ var EconomyConfig = class EconomyConfig {
             elite: 0.04,
             capital: 0.06,
             champion: 0.08,
+            boss: 0.10,
             default: 0.012
         };
         this.defaultPlanetResources = {
@@ -1606,6 +1645,7 @@ var EconomyConfig = class EconomyConfig {
             elite: 1.45,
             capital: 1.9,
             champion: 2.4,
+            boss: 3.0,
             default: 0.75
         };
     }
@@ -2048,6 +2088,7 @@ extendClass(EconomyConfig, {
 
     getBlueprintDropChance(info) {
         if (!info) return this.blueprintDropChance.default;
+        if (info.isBoss && this.blueprintDropChance.boss != null) return this.blueprintDropChance.boss;
         if (info.champion) return this.blueprintDropChance.champion;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.blueprintDropChance[cls] != null) return this.blueprintDropChance[cls];
@@ -2057,6 +2098,7 @@ extendClass(EconomyConfig, {
     getPartDropChance(info) {
         const table = this.partDropChance || {};
         if (!info) return table.default != null ? table.default : 0.012;
+        if (info.isBoss && table.boss != null) return table.boss;
         if (info.champion) return table.champion != null ? table.champion : 0.08;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (table[cls] != null) return table[cls];
@@ -2099,10 +2141,26 @@ extendClass(EconomyConfig, {
 
     getEnemyDropScale(info) {
         if (!info) return this.enemyDropScale.default;
+        if (info.isBoss && this.enemyDropScale.boss != null) return this.enemyDropScale.boss;
         if (info.champion) return this.enemyDropScale.champion;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.enemyDropScale[cls] != null) return this.enemyDropScale[cls];
         return this.enemyDropScale.default;
+    },
+
+    /** Effective roll chances after station dropBonus (for dev HUD / viewer). */
+    previewKillDropRates(info, dropBonus) {
+        const bonus = Math.max(0, Number(dropBonus) || 0);
+        return {
+            blueprint: Math.min(0.5, this.getBlueprintDropChance(info) + bonus),
+            part: Math.min(0.35, this.getPartDropChance(info) + bonus * 0.5),
+            resourceScale: this.getEnemyDropScale(info)
+        };
+    },
+
+    formatDropPct(rate) {
+        const n = Math.max(0, Math.min(1, Number(rate) || 0));
+        return (Math.round(n * 1000) / 10).toFixed(1) + '%';
     },
 });
 
@@ -2136,9 +2194,9 @@ extendClass(EconomyConfig, {
         const table = this.getPlanetResourceTable(planetId);
         const scale = this.getEnemyDropScale(info);
         const mul = Math.max(0.5, Number(yieldMul) || 1);
-        const rollCount = info && info.champion
-            ? 2 + Math.floor(Math.random() * 2)
-            : (scale >= 1.4 ? 1 + Math.floor(Math.random() * 2) : 1);
+        let rollCount = scale >= 1.4 ? 1 + Math.floor(Math.random() * 2) : 1;
+        if (info && info.isBoss) rollCount = 3 + Math.floor(Math.random() * 2);
+        else if (info && info.champion) rollCount = 2 + Math.floor(Math.random() * 2);
         const drops = [];
         for (let i = 0; i < rollCount; i++) {
             const id = this.pickWeightedResourceId(table);
@@ -2165,6 +2223,85 @@ extendClass(EconomyConfig, {
         const w = wallet || {};
         const c = costMap || {};
         return Object.keys(c).every((id) => (w[id] || 0) >= c[id]);
+    },
+});
+
+
+/* --- js/core/economy-config/dev-enemy-drop-table.js --- */
+"use strict";
+
+// EconomyConfig methods: dev-mode loot chance table (enemy viewer).
+extendClass(EconomyConfig, {
+    buildEnemyDropDevRows(dropBonus) {
+        const rows = [];
+        const push = (role, info, typeId) => {
+            const rates = this.previewKillDropRates(info, dropBonus);
+            rows.push({
+                role: role,
+                type: typeId || '—',
+                enemyClass: String((info && info.enemyClass) || '—').toUpperCase(),
+                blueprint: rates.blueprint,
+                part: rates.part,
+                resScale: rates.resourceScale,
+                info: info
+            });
+        };
+
+        const classOrder = ['scout', 'assault', 'heavy', 'elite', 'capital'];
+        classOrder.forEach((cls) => {
+            push('Side · ' + cls.toUpperCase(), { champion: false, isBoss: false, enemyClass: cls }, '—');
+        });
+        push('Champion', { champion: true, isBoss: false, enemyClass: 'elite' }, '—');
+        push('Boss', { champion: true, isBoss: true, enemyClass: 'capital' }, '—');
+
+        if (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getTypeIds) {
+            const ids = enemyConfigManager.getTypeIds().slice().sort();
+            ids.forEach((typeId) => {
+                let cls = 'assault';
+                if (typeof planetConfigManager !== 'undefined' && planetConfigManager.taxonomyForType) {
+                    const tax = planetConfigManager.taxonomyForType(typeId);
+                    if (tax && tax.enemyClass) cls = tax.enemyClass;
+                }
+                push('Type · side', { type: typeId, champion: false, isBoss: false, enemyClass: cls }, typeId);
+                const bossish = typeId === 'enemyBoss' || typeId === 'battleship';
+                if (bossish) {
+                    push('Type · boss', {
+                        type: typeId,
+                        champion: true,
+                        isBoss: true,
+                        enemyClass: cls === 'scout' ? 'capital' : cls
+                    }, typeId);
+                }
+            });
+        }
+        return rows;
+    },
+
+    buildEnemyDropDevTableHtml(dropBonus, highlightType) {
+        const rows = this.buildEnemyDropDevRows(dropBonus);
+        const hi = String(highlightType || '').toLowerCase();
+        const body = rows.map((r) => {
+            const match = hi && r.type !== '—' && String(r.type).toLowerCase() === hi;
+            const sel = match ? ' class="is-selected"' : '';
+            return '<tr' + sel + '>' +
+                '<td>' + r.role + '</td>' +
+                '<td>' + r.type + '</td>' +
+                '<td>' + r.enemyClass + '</td>' +
+                '<td>' + this.formatDropPct(r.blueprint) + '</td>' +
+                '<td>' + this.formatDropPct(r.part) + '</td>' +
+                '<td>×' + (Math.round(r.resScale * 100) / 100) + '</td>' +
+                '</tr>';
+        }).join('');
+        const bonusNote = dropBonus > 0
+            ? '<p class="cv-drop-dev-note">+ Station drop bonus: ' + this.formatDropPct(dropBonus) + ' BP / half on parts</p>'
+            : '';
+        return '<div class="cv-drop-dev">' +
+            '<h4 class="cv-drop-dev-title">LOOT DROP CHANCES (DEV)</h4>' +
+            bonusNote +
+            '<div class="cv-drop-dev-scroll"><table class="hs-ship-table cv-drop-dev-table">' +
+            '<thead><tr>' +
+            '<th>Role</th><th>Type</th><th>Class</th><th>Blueprint</th><th>Part</th><th>Resources</th>' +
+            '</tr></thead><tbody>' + body + '</tbody></table></div>';
     },
 });
 
@@ -2499,7 +2636,7 @@ var BalanceConfigManager = class BalanceConfigManager {
 
         /** Mid-game laser nose, no modules — seconds. */
         this.TTK = {
-            side: { min: 1.5, max: 2.5, target: 2 },
+            side: { min: 0.8, max: 1.6, target: 1.2 },
             champion: { min: 4, max: 6, target: 5 },
             boss: { min: 18, max: 25, target: 22 }
         };
@@ -2523,6 +2660,45 @@ var BalanceConfigManager = class BalanceConfigManager {
             { max: 1.35, cost: { scrap: 210, ore: 85, crystal: 40, voltex: 12 } },
             { max: Infinity, cost: { scrap: 260, ore: 100, crystal: 55, voltex: 22 } }
         ];
+
+        /**
+         * Planet-shop item classes: each class rolls independent stat multipliers
+         * inside these bands (per offer, per visit) — same archetype ≠ same numbers.
+         */
+        this.SHOP_ITEM_CLASSES = {
+            sustained: { label: 'SUSTAINED', dmg: [0.94, 1.06], spd: [0.96, 1.04], cd: [0.94, 1.06] },
+            rapid: { label: 'RAPID', dmg: [0.88, 1.02], spd: [1.02, 1.12], cd: [0.84, 0.96] },
+            coverage: { label: 'COVERAGE', dmg: [0.90, 1.04], spd: [0.94, 1.06], cd: [0.92, 1.04] },
+            heavy: { label: 'HEAVY', dmg: [1.02, 1.12], spd: [0.90, 0.98], cd: [0.96, 1.08] },
+            pierce: { label: 'PIERCE', dmg: [0.96, 1.08], spd: [1.0, 1.1], cd: [0.94, 1.06] },
+            defense: { label: 'DEFENSE', potency: [0.92, 1.08] },
+            ability: { label: 'ABILITY', potency: [0.92, 1.08] },
+            energy: { label: 'ENERGY', potency: [0.92, 1.08] },
+            perk_buff: { label: 'STAGE BUFF', potency: [0.92, 1.08], duration: [0.92, 1.08] },
+            perk_weapon: { label: 'TEMP WEAPON', dmg: [0.90, 1.10], ammo: [0.85, 1.15] }
+        };
+    }
+
+    /** Human-readable class band for shop tooltips (base-relative % spread). */
+    shopClassRangeLine(classKey) {
+        const c = this.SHOP_ITEM_CLASSES[classKey];
+        if (!c) return '';
+        const pct = (pair) => {
+            if (!pair || pair.length < 2) return '';
+            const lo = Math.round((pair[0] - 1) * 100);
+            const hi = Math.round((pair[1] - 1) * 100);
+            const a = (lo >= 0 ? '+' : '') + lo;
+            const b = (hi >= 0 ? '+' : '') + hi;
+            return a + '…' + b + '%';
+        };
+        const bits = [];
+        if (c.dmg) bits.push('DMG ' + pct(c.dmg));
+        if (c.spd) bits.push('SPD ' + pct(c.spd));
+        if (c.cd) bits.push('RATE ' + pct(c.cd));
+        if (c.potency) bits.push('POTENCY ' + pct(c.potency));
+        if (c.duration) bits.push('TIME ' + pct(c.duration));
+        if (c.ammo) bits.push('AMMO ' + pct(c.ammo));
+        return bits.length ? 'CLASS RANGE · ' + bits.join(' · ') : '';
     }
 
     getWeaponRole(weaponId) {
@@ -7645,8 +7821,22 @@ extendClass(ProfileManager, {
         const left = available - n;
         if (left > 0) profile.cargo.parts[key] = left;
         else delete profile.cargo.parts[key];
+        // Reveal final salvage rolls on the new copies (found tip only showed ranges).
+        const rolls = [];
+        if (shipBucket && this.rollSalvageVendorStats && this.setShopVendorRoll && this.getPartInstanceLayout) {
+            const layoutNow = this.getPartInstanceLayout(profile, shipBucket, bp.id);
+            const shipUnitsNow = (layoutNow.ships && layoutNow.ships[shipId]) || [];
+            const eqNow = this._equippedStorageCount
+                ? this._equippedStorageCount(profile, shipId, shipBucket, bp.id) : 0;
+            const newUnits = shipUnitsNow.slice(eqNow).slice(-n);
+            newUnits.forEach((unit) => {
+                const roll = this.rollSalvageVendorStats(bp.kind, bp.id);
+                this.setShopVendorRoll(shipBucket, bp.id + '#' + unit, roll.mul, roll.classKey);
+                rolls.push({ unit: unit, classKey: roll.classKey, mul: roll.mul });
+            });
+        }
         this.save();
-        return { ok: true, amount: n };
+        return { ok: true, amount: n, rolls: rolls };
     },
 
     /** Drops whatever found parts/blueprints the player never took or sold — called when the
@@ -11391,7 +11581,10 @@ window.flightProfiles = flightProfiles;
  */
 var WeaponConfigManager = class WeaponConfigManager {
     constructor() {
+        this.storageKey = 'vf_weapon_behavior_v1';
         this.configs = this.createDefaults();
+        this._factoryDefaults = this.createDefaults();
+        this.load();
     }
 
     createDefaults() {
@@ -11552,16 +11745,16 @@ var WeaponConfigManager = class WeaponConfigManager {
             nova: this.makeWeapon({
                 id: 'nova',
                 name: 'Nova',
-                description: 'Radial nova volley',
+                description: 'Expanding energy ring around the ship',
                 iconKey: 'shotNova',
                 damage: 7,
-                speed: 7,
+                speed: 6,
                 cooldown: 800,
                 energyCost: 6,
                 width: 4,
                 height: 8,
-                bulletCount: 5,
-                spreadAngle: 0.55,
+                bulletCount: 8,
+                spreadAngle: 0,
                 lightRadius: 90,
                 lightIntensity: 1.4,
                 bulletType: 'nova_shot',
@@ -11715,6 +11908,8 @@ extendClass(WeaponConfigManager, {
         if (cfg.lightRadius != null) {
             cfg.lightRadius = Math.max(8, Math.min(28, Number(cfg.lightRadius) || 16));
         }
+        if (!(Number(cfg.speed) > 0)) cfg.speed = 10;
+        else cfg.speed = Math.max(1, Math.min(24, Number(cfg.speed)));
         return cfg;
     },
 
@@ -11809,6 +12004,64 @@ extendClass(WeaponConfigManager, {
         if (w.waveAmp) cfg.waveAmp = w.waveAmp;
         if (w.pierce) cfg.pierce = true;
         return this.clampWeaponShot(cfg);
+    },
+
+    setWeapon(id, data) {
+        const key = String(id || 'laser').toLowerCase().replace(/[\s-]+/g, '_');
+        const prev = this.configs[key] || this.getWeapon(key);
+        this.configs[key] = this.makeWeapon(Object.assign({}, prev, data || {}, { id: key }));
+        this.save();
+        return this.configs[key];
+    },
+
+    resetWeapon(id) {
+        const key = String(id || 'laser').toLowerCase().replace(/[\s-]+/g, '_');
+        const factory = (this._factoryDefaults && this._factoryDefaults[key])
+            || this.createDefaults()[key];
+        if (!factory) return null;
+        this.configs[key] = this.makeWeapon(Object.assign({}, factory));
+        this.save();
+        return this.configs[key];
+    },
+
+    resetAllWeapons() {
+        this.configs = this.createDefaults();
+        this._factoryDefaults = this.createDefaults();
+        this.save();
+    },
+
+    save() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.configs));
+        } catch (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('WeaponConfigManager: save failed', e);
+            }
+        }
+    },
+
+    load() {
+        try {
+            const raw = localStorage.getItem(this.storageKey);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return;
+            const defaults = this._factoryDefaults || this.createDefaults();
+            Object.keys(defaults).forEach((id) => {
+                if (parsed[id]) {
+                    this.configs[id] = this.makeWeapon(Object.assign({}, defaults[id], parsed[id], { id: id }));
+                }
+            });
+            Object.keys(parsed).forEach((id) => {
+                if (!this.configs[id]) {
+                    this.configs[id] = this.makeWeapon(Object.assign({}, parsed[id], { id: id }));
+                }
+            });
+        } catch (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('WeaponConfigManager: load failed', e);
+            }
+        }
     },
 });
 
@@ -16304,6 +16557,19 @@ extendClass(ShipLoadoutManager, {
         }
         if (model.segmentUv) loadout.segmentUv = model.segmentUv;
         const caps = this.getSlotCaps(id, model.modelClass);
+        // DevMode combat cheat: fill every mount slot with one weapon id
+        // (runtime only — loadout came from getLoadout's clamp copy).
+        const devFillOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        if (model._devWeaponFillId && devFillOn) {
+            const wid = String(model._devWeaponFillId);
+            const n = Math.max(1, this.weaponMountSlots(caps.weapons));
+            const filled = [];
+            for (let i = 0; i < n; i++) filled.push(wid);
+            loadout.weaponSlots = filled;
+            loadout.weapons = filled.slice();
+        } else if (model._devWeaponFillId && !devFillOn) {
+            delete model._devWeaponFillId;
+        }
         // Same wing rows as the hangar markers (see buildHangarSlots).
         const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign(
             this.withWeaponSlotScales ? this.withWeaponSlotScales(id, loadout) : Object.assign({}, loadout),
@@ -20712,6 +20978,10 @@ extendClass(GameControlSystem, {
             abilityEditorUI.returnTo = null;
             abilityEditorUI.hide();
         }
+        if (typeof shotBehaviorEditorUI !== 'undefined' && shotBehaviorEditorUI.visible) {
+            shotBehaviorEditorUI.returnTo = null;
+            shotBehaviorEditorUI.hide();
+        }
 
         if (typeof themeContextManager !== 'undefined') {
             themeContextManager.restoreAppTheme();
@@ -20955,12 +21225,26 @@ extendClass(GameControlSystem, {
         if (s.endKind === 'victory') {
             this.lastVictoryLoot = s.endLoot || null;
             this.showVictoryOverlay();
+            if (typeof soundManager !== 'undefined' && soundManager.playVictory) {
+                soundManager.playVictory();
+            }
+            const reopenShop = () => {
+                if (typeof inStageShop === 'undefined' || !inStageShop.tryRestoreAfterVictoryBoot) return;
+                if (inStageShop.tryRestoreAfterVictoryBoot()) return;
+                if (s.issShopOpen && inStageShop.showFromVictory) {
+                    inStageShop.showFromVictory();
+                }
+            };
+            requestAnimationFrame(() => requestAnimationFrame(reopenShop));
         } else {
             const overlay = document.getElementById('gameOver');
             if (!overlay) return false;
             this.applyGameOverFaction(overlay, s.endLoot || {});
             overlay.classList.remove('hidden');
             if (typeof VFGameOverWreck !== 'undefined') VFGameOverWreck.start(overlay);
+            if (typeof soundManager !== 'undefined' && soundManager.playGameOver) {
+                soundManager.playGameOver();
+            }
         }
         return true;
     },
@@ -21144,6 +21428,8 @@ var GameLoop = class GameLoop {
                 objectiveManager.updateArrivalIntro(deltaTime, missionStartManager.phase);
             }
             if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
+            if (typeof bulletManager !== 'undefined') bulletManager.update(deltaTime, null);
+            if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(16);
             if (typeof uiManager !== 'undefined') uiManager.updateUI();
@@ -21292,6 +21578,7 @@ var MenuNavHelper = class MenuNavHelper {
             () => typeof planetEditorUI !== 'undefined' && planetEditorUI.visible,
             () => typeof enemyEditorUI !== 'undefined' && enemyEditorUI.visible,
             () => typeof abilityEditorUI !== 'undefined' && abilityEditorUI.visible,
+            () => typeof shotBehaviorEditorUI !== 'undefined' && shotBehaviorEditorUI.visible,
             () => typeof uiDialog !== 'undefined' && uiDialog.isOpen,
             () => typeof onboardingManager !== 'undefined' && onboardingManager.isVisible
         ];
@@ -21644,12 +21931,27 @@ var InputHandler = class InputHandler {
         document.addEventListener('pointerdown', (e) => {
             if (e.button != null && e.button !== 0) return;
             if (typeof missionStartManager === 'undefined' || !missionStartManager.isAwaitingFire()) return;
-            if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen()) return;
-            const stage = document.querySelector('.game-stage, .game-canvas-container, #gameCanvas, canvas');
-            if (stage && e.target && stage.contains(e.target)) {
+            if (this.missionStartInputBlockedByOverlay()) return;
+            const root = document.querySelector('.game-container');
+            if (!root || !e.target || root.contains(e.target)) {
                 missionStartManager.onFire();
             }
         });
+    }
+
+    /** Menus block mission-start except while the combat "FIRE TO START" prompt is up. */
+    missionStartInputBlockedByOverlay() {
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
+            return false;
+        }
+        return typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen();
+    }
+
+    isMissionStartFireKey(event) {
+        if (!event || !event.key) return false;
+        const key = event.key;
+        if (key === ' ' || key === 'Enter') return true;
+        return key === 'a' || key === 'A' || key === 's' || key === 'S' || key === 'd' || key === 'D';
     }
 
     /** Victory loot scoop or win / lose overlay: combat is over, no firing. */
@@ -21667,11 +21969,14 @@ var InputHandler = class InputHandler {
     handleKeyDown(event) {
         // Space still held from combat: end screens wait for its release.
         const spaceHeld = !!(this.keys[' '] || this.keys['Space']);
-        const blockShip = typeof menuNavHelper !== 'undefined' && menuNavHelper.shouldBlockShipControls();
-        if (!(blockShip && typeof menuNavHelper !== 'undefined' && menuNavHelper.isMoveKey(event.key))) {
+        const missionIntro = typeof missionStartManager !== 'undefined' && missionStartManager.isActive();
+        const blockShip = missionIntro
+            || (typeof menuNavHelper !== 'undefined' && menuNavHelper.shouldBlockShipControls());
+        const moveKey = typeof menuNavHelper !== 'undefined' && menuNavHelper.isMoveKey(event.key);
+        if (!(blockShip && moveKey)) {
             this.keys[event.key] = true;
         } else {
-            // Clear sticky movement while menus own the arrows
+            // Clear sticky movement while menus / mission intro own the arrows
             this.keys[event.key] = false;
             this.keys['ArrowUp'] = false;
             this.keys['ArrowDown'] = false;
@@ -21727,6 +22032,24 @@ var InputHandler = class InputHandler {
             }
         }
 
+        // DevMode Shift+C during combat / anywhere the start screen / station /
+        // onboarding aren't owning the shortcut. The HUD layout editor also
+        // binds this, but that lives in the lazy editors bundle — without this
+        // boot-path handler the shortcut is dead until DevMode was already on.
+        if (event.shiftKey && (event.key === 'c' || event.key === 'C') && !event.repeat) {
+            const tag = event.target && event.target.tagName;
+            const stationOwns = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible;
+            const onboardOwns = typeof onboardingManager !== 'undefined' && onboardingManager.isVisible;
+            const startOwns = typeof startScreenManager !== 'undefined' && startScreenManager.isVisible();
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA'
+                && !startOwns && !stationOwns && !onboardOwns
+                && typeof startScreenManager !== 'undefined') {
+                event.preventDefault();
+                startScreenManager.toggleDevMode();
+                return;
+            }
+        }
+
         // Victory and game-over screens must receive the initial key directly.
         // The generic overlay guard below would otherwise consume it first.
         const gameOverOverlay = document.getElementById('gameOver');
@@ -21768,6 +22091,18 @@ var InputHandler = class InputHandler {
                 items[next].focus();
                 return;
             }
+        }
+
+        // Mission intro must run before generic overlay / pause guards (held Space from
+        // stage select, or a stale isAnyOverlayOpen flag, otherwise FIRE TO START ignores input).
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.isActive()) {
+            if (this.isMissionStartFireKey(event)) {
+                event.preventDefault();
+                if (missionStartManager.isAwaitingFire()) {
+                    missionStartManager.onFire();
+                }
+            }
+            return;
         }
 
         // Any other menu / archive / station overlay owns input (not ship)
@@ -21860,17 +22195,6 @@ var InputHandler = class InputHandler {
             return;
         }
 
-        // Mission intro: SPACE = FIRE TO START (no combat yet)
-        if (typeof missionStartManager !== 'undefined' && missionStartManager.isActive()) {
-            if (event.key === ' ' || event.key === 'Enter') {
-                event.preventDefault();
-                if (missionStartManager.isAwaitingFire()) {
-                    missionStartManager.onFire();
-                }
-            }
-            return;
-        }
-
         // Shoot on spacebar (mode-dependent)
         if (event.key === ' ' && this.isCombatEnded()) {
             event.preventDefault();
@@ -21912,18 +22236,14 @@ var InputHandler = class InputHandler {
             }
         }
 
-        // Switch shot type with Q and E
-        if (event.key === 'q' || event.key === 'Q') {
+        // Switch shot type with Q and E (DevMode: cycle all weapons into every slot)
+        if (event.key === 'q' || event.key === 'Q' || event.key === 'e' || event.key === 'E') {
             if (typeof bulletManager !== 'undefined') {
-                const newType = bulletManager.switchShotType();
-                if (typeof uiManager !== 'undefined') {
-                    uiManager.updateShotTypeDisplay(newType);
-                }
-            }
-        }
-        if (event.key === 'e' || event.key === 'E') {
-            if (typeof bulletManager !== 'undefined') {
-                const newType = bulletManager.switchShotType();
+                const dir = (event.key === 'q' || event.key === 'Q') ? -1 : 1;
+                const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+                const newType = (devOn && bulletManager.devCycleWeaponCheat)
+                    ? bulletManager.devCycleWeaponCheat(dir)
+                    : bulletManager.switchShotType(dir);
                 if (typeof uiManager !== 'undefined') {
                     uiManager.updateShotTypeDisplay(newType);
                 }
@@ -22896,7 +23216,7 @@ var CheatSystem = class CheatSystem {
         this.cheatSequence = '';
         this.cheatMenuVisible = false;
         this.cheatMenuIndex = 0;
-        this.cheatMenuItems = ['GOD MODE', 'INFINITE AMMO', 'FAST FIRE', 'SLOW MOTION', 'INSTANT KILL', 'SHIP SELECT', 'LEVEL SELECT', 'CLOSE'];
+        this.cheatMenuItems = ['GOD MODE', 'INFINITE AMMO', 'FAST FIRE', 'SLOW MOTION', 'INSTANT KILL', 'FOUND LOOT', 'SHIP SELECT', 'LEVEL SELECT', 'CLOSE'];
         this.cheats = {
             godMode: false,
             infiniteAmmo: false,
@@ -23010,6 +23330,16 @@ var CheatSystem = class CheatSystem {
             case 'INSTANT KILL':
                 this.cheats.instantKill = !this.cheats.instantKill;
                 break;
+            case 'FOUND LOOT': {
+                // Inject a random salvage part into FOUND ITEMS (victory cargo).
+                const gc = (typeof gameControl !== 'undefined') ? gameControl
+                    : (typeof game !== 'undefined' && game.gameControl) ? game.gameControl : null;
+                if (gc && gc.seedDevVictoryFoundItem) {
+                    gc.seedDevVictoryFoundItem({ force: true });
+                    if (gc.updateVictoryStats) gc.updateVictoryStats();
+                }
+                break;
+            }
             case 'SHIP SELECT':
                 this.cheats.shipSelect = !this.cheats.shipSelect;
                 break;
@@ -23501,12 +23831,19 @@ var CoreRenderManager = class CoreRenderManager {
                 this.ctx.fillText(item, this.width / 2, 50 + index * 20);
             }
             
-            // Show cheat status
-            if (index < cheatSystem.cheatMenuItems.length - 1) { // Not for CLOSE
-                const cheatKey = Object.keys(cheatSystem.cheats)[index];
-                const status = cheatSystem.cheats[cheatKey] ? 'ON' : 'OFF';
-                this.ctx.fillStyle = this.resolveFill(cheatSystem.cheats[cheatKey] ? 'var(--status-success)' : 'var(--status-error)');
-                this.ctx.fillText(status, this.width / 2 + 80, 50 + index * 20);
+            // Show ON/OFF only for toggle cheats (skip one-shot actions like FOUND LOOT).
+            const toggleKey = ({
+                'GOD MODE': 'godMode',
+                'INFINITE AMMO': 'infiniteAmmo',
+                'FAST FIRE': 'fastFire',
+                'SLOW MOTION': 'slowMotion',
+                'INSTANT KILL': 'instantKill',
+                'SHIP SELECT': 'shipSelect'
+            })[item];
+            if (toggleKey) {
+                const on = !!cheatSystem.cheats[toggleKey];
+                this.ctx.fillStyle = this.resolveFill(on ? 'var(--status-success)' : 'var(--status-error)');
+                this.ctx.fillText(on ? 'ON' : 'OFF', this.width / 2 + 80, 50 + index * 20);
             }
         });
         
@@ -24296,8 +24633,27 @@ var CoreRenderManager = class CoreRenderManager {
         document.documentElement.setAttribute('data-vf-frame-sil', '');
         silKey = silKeyNow;
     }
-    function scheduleSilhouette() {
-        if (!silhouetteRaf) silhouetteRaf = requestAnimationFrame(updateSilhouette);
+    let silhouetteDue = 0;
+    function scheduleSilhouette(force) {
+        // Coalesce resize/style storms: at most ~8 rebuilds/sec unless a faction swap forces sync.
+        const now = performance.now();
+        if (!force && silhouetteDue && now < silhouetteDue) {
+            if (!silhouetteRaf) {
+                silhouetteRaf = requestAnimationFrame(function () {
+                    silhouetteRaf = 0;
+                    updateSilhouette();
+                    silhouetteDue = performance.now() + 120;
+                });
+            }
+            return;
+        }
+        if (!silhouetteRaf) {
+            silhouetteRaf = requestAnimationFrame(function () {
+                silhouetteRaf = 0;
+                updateSilhouette();
+                silhouetteDue = performance.now() + 120;
+            });
+        }
     }
     (function watchSilhouette() {
         const frame = document.getElementById('vf-bezel');
@@ -24306,18 +24662,19 @@ var CoreRenderManager = class CoreRenderManager {
         new MutationObserver(function () {
             if (silhouetteRaf) { cancelAnimationFrame(silhouetteRaf); silhouetteRaf = 0; }
             updateSilhouette();
+            silhouetteDue = performance.now() + 120;
         }).observe(frame, { attributes: true, attributeFilter: ['data-faction'] });
         // Colour / bevel overrides (FACTIONS tab) land as inline styles on the frame: re-shade the voxels.
-        new MutationObserver(scheduleSilhouette).observe(frame, { attributes: true, attributeFilter: ['style'] });
-        new MutationObserver(scheduleSilhouette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
+        new MutationObserver(function () { scheduleSilhouette(false); }).observe(frame, { attributes: true, attributeFilter: ['style'] });
+        new MutationObserver(function () { scheduleSilhouette(false); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
         if (window.ResizeObserver) {
-            const ro = new ResizeObserver(scheduleSilhouette);
+            const ro = new ResizeObserver(function () { scheduleSilhouette(false); });
             // Bezel size only — not body childList (menus/combat DOM thrash rebuilt the mask constantly).
             ro.observe(frame);
         }
-        window.addEventListener('resize', scheduleSilhouette);
-        window.addEventListener('vf-pilot-changed', scheduleSilhouette);
-        scheduleSilhouette();
+        window.addEventListener('resize', function () { scheduleSilhouette(false); });
+        window.addEventListener('vf-pilot-changed', function () { scheduleSilhouette(true); });
+        scheduleSilhouette(true);
     })();
     function hex(c) {
         const m = /(\d+)[^\d]+(\d+)[^\d]+(\d+)/.exec(c || '');
@@ -24410,13 +24767,19 @@ var CoreRenderManager = class CoreRenderManager {
     // Default heavy OFF: SVG backdrop-filters over the whole shell were the main
     // full-app jank source when any CRT/chroma/bloom value was non-zero.
     const PERF_KEY = 'vf-perf';
-    const perf = { sway: 'AUTO', heavy: 'OFF', anim: 'ON' };
+    const PERF_VER = 2;
+    const perf = { v: PERF_VER, sway: 'AUTO', heavy: 'OFF', anim: 'ON' };
     try {
         const sp = JSON.parse(localStorage.getItem(PERF_KEY) || 'null');
         if (sp) {
             if (/^(AUTO|ON|OFF)$/.test(sp.sway)) perf.sway = sp.sway;
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
+            // v2 migration: many installs left PERF→heavy ON (bloom/chroma SVG shell
+            // filters). That tanks runtime FPS even at tiny bloom values. Once.
+            if (Number(sp.v) < PERF_VER && perf.heavy === 'ON') {
+                perf.heavy = 'OFF';
+            }
         } else {
             // First boot: light path — heavy FX off; freeze decorative anim only
             // on genuinely low-end machines. dpr>=1.5 used to trigger this too,
@@ -24428,10 +24791,13 @@ var CoreRenderManager = class CoreRenderManager {
             perf.anim = (cores <= 4 || mem <= 4) ? 'OFF' : 'ON';
         }
     } catch (e) { /* defaults */ }
+    perf.v = PERF_VER;
     function applyPerf() {
         const root = document.documentElement;
-        root.setAttribute('data-vf-perf-heavy', perf.heavy === 'OFF' ? 'off' : 'on');
-        root.setAttribute('data-vf-perf-anim', perf.anim === 'OFF' ? 'off' : 'on');
+        // PERFORMANCE MODE always kills heavy shell filters.
+        const forceLight = root.hasAttribute('data-vf-performance');
+        root.setAttribute('data-vf-perf-heavy', (forceLight || perf.heavy === 'OFF') ? 'off' : 'on');
+        root.setAttribute('data-vf-perf-anim', (forceLight || perf.anim === 'OFF') ? 'off' : 'on');
         try { localStorage.setItem(PERF_KEY, JSON.stringify(perf)); } catch (e) { /* ignore */ }
     }
     function setPerf(key, val) {
@@ -24817,6 +25183,13 @@ var CoreRenderManager = class CoreRenderManager {
             setFxOpen(false);
             if (d.toolsAction === 'startupSound' && typeof startupSoundEditorUI !== 'undefined') startupSoundEditorUI.show();
             else if (d.toolsAction === 'soundtrackEditor' && typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            else if (d.toolsAction === 'shotBehavior') {
+                const openShot = () => {
+                    if (typeof shotBehaviorEditorUI !== 'undefined') shotBehaviorEditorUI.show('laser');
+                };
+                if (typeof ensureVfEditors === 'function') ensureVfEditors(() => openShot());
+                else openShot();
+            }
             else if (d.toolsAction === 'factionCommand' && typeof factionCommandUI !== 'undefined' && factionCommandUI.show) factionCommandUI.show();
             else if (d.toolsAction === 'faceEditor' && typeof startScreenManager !== 'undefined') {
                 if (startScreenManager.openFaceEditor) startScreenManager.openFaceEditor();
@@ -25870,17 +26243,32 @@ var CoreRenderManager = class CoreRenderManager {
         } else if (vfs.fxTab === 'tools') {
             const soundCode = (typeof startupSound !== 'undefined' && startupSound.toCode) ? startupSound.toCode() : '';
             const menuUrl = (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.getMenuUrl) ? (youtubeSoundtrackManager.getMenuUrl() || '') : '';
-            h += '<div class="vf-fx-title">AUDIO ASSETS</div>' +
-                '<div class="vf-fx-row"><span>SOUND CODE</span><output>' + (soundCode || '—') + '</output></div>' +
-                '<div class="vf-fx-row"><span>MENU SOUNDTRACK</span><output>' + (menuUrl || '—') + '</output></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="startupSound">STARTUP SOUND ›</button></div>' +
-                (fxDevModeOn() ? '<div class="vf-fx-row"><button type="button" data-tools-action="soundtrackEditor">SOUNDTRACK EDITOR ›</button></div>' : '') +
+            const escHtml = function (s) {
+                return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            };
+            const soundCodeShow = escHtml(soundCode || '—');
+            const menuUrlShow = escHtml(menuUrl || '—');
+            h += '<div class="vf-fx-tools">' +
+                '<section class="vf-fx-tools-sec">' +
+                '<div class="vf-fx-title">AUDIO ASSETS</div>' +
+                '<div class="vf-fx-tools-meta">' +
+                '<div class="vf-fx-tools-readout"><span>SOUND CODE</span><output title="' + soundCodeShow + '">' + soundCodeShow + '</output></div>' +
+                '<div class="vf-fx-tools-readout"><span>MENU SOUNDTRACK</span><output title="' + menuUrlShow + '">' + menuUrlShow + '</output></div>' +
+                '</div>' +
+                '<div class="vf-fx-tools-actions">' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="startupSound"><em>STARTUP SOUND</em><i aria-hidden="true">›</i></button>' +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="soundtrackEditor"><em>SOUNDTRACK EDITOR</em><i aria-hidden="true">›</i></button>' : '') +
+                '</div></section>' +
+                '<section class="vf-fx-tools-sec">' +
                 '<div class="vf-fx-title">EDITORS</div>' +
-                (fxDevModeOn() ? '<div class="vf-fx-row"><button type="button" data-tools-action="faceEditor">FACE EDITOR · FLUX ›</button></div>' : '') +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="factionCommand">FACTION COMMAND ›</button></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGen">ASSET GENERATOR ›</button></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGenFaction">FACTION EMBLEMS ›</button></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGenFactionShips">FACTION SHIPS ›</button></div>';
+                '<div class="vf-fx-tools-actions">' +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="faceEditor"><em>FACE EDITOR · FLUX</em><i aria-hidden="true">›</i></button>' : '') +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="shotBehavior"><em>SHOT BEHAVIOR</em><i aria-hidden="true">›</i></button>' : '') +
+                '<button type="button" class="vf-fx-launch" data-tools-action="factionCommand"><em>FACTION COMMAND</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="assetGen"><em>ASSET GENERATOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFaction"><em>FACTION EMBLEMS</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFactionShips"><em>FACTION SHIPS</em><i aria-hidden="true">›</i></button>' +
+                '</div></section>';
             if (fxDevModeOn()) {
                 let ppBgv = 0, ppBga = 2;
                 try {
@@ -25899,12 +26287,16 @@ var CoreRenderManager = class CoreRenderManager {
                 const bgaNames = (typeof heroPortrait !== 'undefined' && heroPortrait.NAMES && heroPortrait.NAMES.bga)
                     ? heroPortrait.NAMES.bga
                     : ['OFF', 'SLOW', 'NORMAL', 'FAST', 'TURBO'];
-                h += '<div class="vf-fx-title">PILOT PORTRAIT</div>' +
+                h += '<section class="vf-fx-tools-sec">' +
+                    '<div class="vf-fx-title">PILOT PORTRAIT</div>' +
+                    '<div class="vf-fx-tools-sliders">' +
                     fxSlider('BACKDROP', 'pp:bgv', 0, 31, 1, ppBgv, '',
                         String(ppBgv + 1).padStart(2, '0') + ' / 32') +
                     fxSlider('ANIMATION', 'pp:bga', 0, 4, 1, ppBga, '',
-                        bgaNames[ppBga] || String(ppBga));
+                        bgaNames[ppBga] || String(ppBga)) +
+                    '</div></section>';
             }
+            h += '</div>';
         }
         h += '</div>';
         plate.innerHTML = h;
@@ -27155,7 +27547,10 @@ var CoreRenderManager = class CoreRenderManager {
             machine:  { out: '#020706', body: '#0f3331', hi: '#3ff0d6', route: 'chamfer', led: '#3ff0d6', plugFill: '#041211', plugLine: '#1a5a54', thick: 2, hiDash: true, hiW: 1 }
         };
         const S = STY[fac] || STY.terran;
-        const wiggle = fac === 'voidborn';
+        // feTurbulence displacement is a GPU tax; only when PERF → heavy FX is ON.
+        const wiggle = fac === 'voidborn'
+            && typeof document !== 'undefined'
+            && document.documentElement.getAttribute('data-vf-perf-heavy') === 'on';
         // Each faction plugs its cables in at its own spots: h = [left, right], v = [top, bottom].
         const LAY = {
             terran:   { h: [[0.2, 0.55, 0.8], [0.3, 0.7]], v: [[0.25, 0.75], [0.5]] },
@@ -27643,7 +28038,14 @@ var CoreRenderManager = class CoreRenderManager {
         const u = Math.min(real.vw / 1640, real.vh / 1110);
         const openL = 56 * u;          // keep in sync with --fr-open-side (part-19)
         const openR = 56 * u;
-        const openT = (44 + 50) * u;   // keep in sync with --bz-extra (styles part-19)
+        // Prefer live CSS --bz-extra so fight layout tracks part-19 (was hard-coded 50).
+        let bzExtra = 24;
+        try {
+            const raw = getComputedStyle(ROOT).getPropertyValue('--bz-extra').trim();
+            const n = parseFloat(raw);
+            if (Number.isFinite(n) && n >= 0) bzExtra = n;
+        } catch (e) { /* default */ }
+        const openT = (44 + bzExtra) * u; // keep in sync with --fr-open-top (part-19)
         const openB = 56 * u;          // keep in sync with --fr-open-bottom (part-19)
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;
@@ -29026,27 +29428,27 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(250, 0.3, 'sine', 0.85), 300);
         this.schedule(() => this.createBeep(200, 0.5, 'sine', 0.9), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        this.schedule(() => this.startEndMusic('lose'), 950);
+        // Crossfade into defeat as soon as the sting lands — do not leave
+        // combat/YouTube rolling under the game-over screen.
+        this.schedule(() => this.startEndMusic('lose'), 650);
     },
 
     playVictory() {
         this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
         this._endMusicFaction = this._currentHostileFaction || null;
-        // Keep combat loop rolling through the victory screen. Swapping to the
-        // victory fanfare (then back on next stage) felt like the old intro
-        // fanfare every clear. Beeps still celebrate; music stays on the bus.
+        // Stop combat reevaluation so victory motif is not yanked back to stage BGM.
+        if (this.clearMusicContext) this.clearMusicContext();
         this.clearActiveTimeouts();
-        this.stopPlanetAmbientNodesOnly({ keepTracker: true, keepLocal: true });
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        this.ambientPlanetId = null;
         this.createBeep(500, 0.2, 'sine', 0.85);
         this.schedule(() => this.createBeep(600, 0.2, 'sine', 0.85), 200);
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        // Soft duck only — no track swap (55% of current music bus).
-        if (this.pushMusicBusVolume) this.pushMusicBusVolume(0.55);
-        else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
-            vfTrackerManager.setVolume((this.musicBusVolume ? this.musicBusVolume() : VFVolume.busDefault()) * 0.55);
-        }
+        // Full bus + victory fanfare (shop close / next stage re-bind combat).
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        this.schedule(() => this.startEndMusic('victory'), 500);
     },
 
     /** Menu difficulty + planet tier for scene-feel (tempo / STYLE intensity). */
@@ -29095,7 +29497,11 @@ extendClass(SoundManager, {
         this.notePendingMusic(mode, mode);
         if (!this.ensureContext()) return;
         const faction = String(this._endMusicFaction || this._currentHostileFaction || '').toLowerCase();
-        const planet = String(this._endMusicPlanet || this._currentPlanetId || '').toLowerCase().split('-')[0];
+        let planet = String(this._endMusicPlanet || this._currentPlanetId || this.ambientPlanetId || '')
+            .toLowerCase().split('-')[0];
+        if (planet && typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey) {
+            planet = VFTrackerDefaults.normalizePlanetKey(planet);
+        }
         // Prefer planet Hauptmelodie; faction only skins instruments when both known.
         const keys = [];
         if (planet && faction) keys.push(mode + ':' + faction + ':' + planet);
@@ -29103,12 +29509,20 @@ extendClass(SoundManager, {
         if (faction) keys.push(mode + ':' + faction);
         keys.push(mode);
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
         if (typeof vfTrackerManager === 'undefined') return;
-        this._applyMusicScene(mode);
+        // Keep end-screen identity for AUTO STYLE even after clearMusicContext.
+        this._applyMusicScene(mode, faction);
         if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
-        if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
+        // Force role swap: combat/YouTube must not keep playhead into end screens.
+        const played = vfTrackerManager.playFirst
+            ? vfTrackerManager.playFirst(keys, { force: true, galaxyFaction: faction })
+            : null;
+        if (played) this.clearPendingMusic();
     },
 
     /**
@@ -30712,9 +31126,15 @@ extendClass(SoundManager, {
         this._activeOverrideKey = null;
         this._pendingMissionIntro = false;
         this._introPlaying = false;
-        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-        // Leave the tracker bus up so startMenuMusic can crossfade combat→menu
-        // (hard-stop made non-PLANET styles feel like the same loop continued).
+        // Drop non-tracker combat sources so end/menu motifs own the bus.
+        // Tracker stays up for a clean crossfade into victory/lose/menu/map.
+        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.stop) {
+            youtubeSoundtrackManager.stop();
+        }
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
     }
 });
 
@@ -31132,9 +31552,11 @@ var BeatSyncManager = class BeatSyncManager {
         this.justDownbeat = false;
         this._lastBeatIndex = -1;
 
-        this.powerWindow = 0.18; // fraction of beat near attack
-        this.powerDamageMul = 1.85;
-        this.powerCooldownMul = 0.72;
+        // Beat-synced critical / power shots removed — groove still drives enemy motion.
+        this.powerWindow = 0;
+        this.powerDamageMul = 1;
+        this.powerCooldownMul = 1;
+        this._powerConsumedBeat = -1;
 
         // Curated to match the tempo/feel of the procedural ambient drone in
         // sounds.js (planetAmbient lfo/filter/base) used when no YouTube
@@ -31168,6 +31590,7 @@ var BeatSyncManager = class BeatSyncManager {
         this.offsetMs = 0;
         this.active = true;
         this._lastBeatIndex = -1;
+        this._powerConsumedBeat = -1;
         this.justBeat = false;
         this.justDownbeat = false;
         this.update(0);
@@ -31177,6 +31600,7 @@ var BeatSyncManager = class BeatSyncManager {
         if (!this.active) return;
         this.startMs = performance.now();
         this._lastBeatIndex = -1;
+        this._powerConsumedBeat = -1;
     }
 
     stop() {
@@ -31186,6 +31610,7 @@ var BeatSyncManager = class BeatSyncManager {
         this.justBeat = false;
         this.justDownbeat = false;
         this._lastBeatIndex = -1;
+        this._powerConsumedBeat = -1;
     }
 
     setBpm(bpm) {
@@ -31230,12 +31655,10 @@ var BeatSyncManager = class BeatSyncManager {
     }
 
     isPowerBeatWindow() {
-        if (!this.active) return false;
-        // Stronger shots on downbeats (beat 1 of bar) and mid-bar accents (beat 3)
-        const accent = this.barBeat === 0 || this.barBeat === 2;
-        if (!accent) return false;
-        return this.phase < this.powerWindow || this.phase > (1 - this.powerWindow * 0.35);
+        return false;
     }
+
+    consumePowerShot() {}
 
     getEnemySpeedMul() {
         if (!this.active) return 1;
@@ -31275,14 +31698,7 @@ var BeatSyncManager = class BeatSyncManager {
     }
 
     getShotOptions() {
-        if (!this.isPowerBeatWindow()) {
-            return { chargeMult: 1, beatPower: false };
-        }
-        return {
-            chargeMult: this.powerDamageMul,
-            beatPower: true,
-            cooldownMul: this.powerCooldownMul
-        };
+        return { chargeMult: 1, beatPower: false };
     }
 
     getPulse() {
@@ -33210,6 +33626,24 @@ Object.assign(IconSprites, {
     ],
 
     // ——— Home Station resources ———
+    resCredits: [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,6,8,8,8,8,6,0,0,0,0,0],
+        [0,0,0,0,8,10,10,10,10,10,10,8,0,0,0,0],
+        [0,0,0,8,10,12,12,15,15,12,12,10,8,0,0,0],
+        [0,0,8,10,12,15,10,10,15,15,15,12,10,8,0,0],
+        [0,6,10,12,15,10,15,15,15,15,15,15,12,10,6,0],
+        [0,8,10,12,15,15,15,15,15,15,15,15,12,10,8,0],
+        [0,8,10,15,15,8,8,8,8,8,8,15,15,10,8,0],
+        [0,8,10,15,15,0,0,0,0,0,0,15,15,10,8,0],
+        [0,8,10,12,15,8,8,8,8,8,8,15,12,10,8,0],
+        [0,6,10,12,15,15,15,15,15,15,15,15,12,10,6,0],
+        [0,0,8,10,12,15,15,15,15,15,15,12,10,8,0,0],
+        [0,0,0,8,10,12,12,15,15,12,12,10,8,0,0,0],
+        [0,0,0,0,8,10,10,10,10,10,10,8,0,0,0,0],
+        [0,0,0,0,0,6,8,8,8,8,6,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
     resScrap: [
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,8,10,0,0,0,0,10,8,0,0,0,0],
@@ -33875,6 +34309,40 @@ IconSprites.factionPirateHi = [
 // Hand-shaded 32x32 resource icons, used for the @2x/@4x keys (see
 // iconRenderer.detailKey) so large loot icons show real detail.
 Object.assign(IconSprites, {
+    resCreditsHi: [
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,6,6,8,8,8,8,8,8,8,8,6,6,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,6,6,8,8,8,8,8,8,8,8,6,6,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,8,8,10,10,10,10,10,10,10,10,10,10,10,10,8,8,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,8,8,10,10,10,10,10,10,10,10,10,10,10,10,8,8,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,8,8,10,10,12,12,12,12,15,15,15,15,12,12,12,12,10,10,8,8,0,0,0,0,0,0],
+        [0,0,0,0,0,0,8,8,10,10,12,12,12,12,15,15,15,15,12,12,12,12,10,10,8,8,0,0,0,0,0,0],
+        [0,0,0,0,8,8,10,10,12,12,15,15,10,10,10,10,15,15,15,15,15,15,12,12,10,10,8,8,0,0,0,0],
+        [0,0,0,0,8,8,10,10,12,12,15,15,10,10,10,10,15,15,15,15,15,15,12,12,10,10,8,8,0,0,0,0],
+        [0,0,6,6,10,10,12,12,15,15,10,10,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,6,6,0,0],
+        [0,0,6,6,10,10,12,12,15,15,10,10,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,6,6,0,0],
+        [0,0,8,8,10,10,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,8,8,0,0],
+        [0,0,8,8,10,10,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,8,8,0,0],
+        [0,0,8,8,10,10,15,15,15,15,8,8,8,8,8,8,8,8,8,8,8,8,15,15,15,15,10,10,8,8,0,0],
+        [0,0,8,8,10,10,15,15,15,15,8,8,8,8,8,8,8,8,8,8,8,8,15,15,15,15,10,10,8,8,0,0],
+        [0,0,8,8,10,10,15,15,15,15,0,0,0,0,0,0,0,0,0,0,0,0,15,15,15,15,10,10,8,8,0,0],
+        [0,0,8,8,10,10,15,15,15,15,0,0,0,0,0,0,0,0,0,0,0,0,15,15,15,15,10,10,8,8,0,0],
+        [0,0,8,8,10,10,12,12,15,15,8,8,8,8,8,8,8,8,8,8,8,8,15,15,12,12,10,10,8,8,0,0],
+        [0,0,8,8,10,10,12,12,15,15,8,8,8,8,8,8,8,8,8,8,8,8,15,15,12,12,10,10,8,8,0,0],
+        [0,0,6,6,10,10,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,6,6,0,0],
+        [0,0,6,6,10,10,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,6,6,0,0],
+        [0,0,0,0,8,8,10,10,12,12,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,8,8,0,0,0,0],
+        [0,0,0,0,8,8,10,10,12,12,15,15,15,15,15,15,15,15,15,15,15,15,12,12,10,10,8,8,0,0,0,0],
+        [0,0,0,0,0,0,8,8,10,10,12,12,12,12,15,15,15,15,12,12,12,12,10,10,8,8,0,0,0,0,0,0],
+        [0,0,0,0,0,0,8,8,10,10,12,12,12,12,15,15,15,15,12,12,12,12,10,10,8,8,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,8,8,10,10,10,10,10,10,10,10,10,10,10,10,8,8,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,8,8,10,10,10,10,10,10,10,10,10,10,10,10,8,8,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,6,6,8,8,8,8,8,8,8,8,6,6,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,6,6,8,8,8,8,8,8,8,8,6,6,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+    ],
     resScrapHi: [
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
         [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
@@ -34014,7 +34482,7 @@ Object.assign(IconSprites, {
 });
 
 // The hand-drawn resource art replaces the old abstract 16x16 symbols everywhere (all sizes, all renderers).
-['resScrap', 'resOre', 'resCrystal', 'resVoltex'].forEach((k) => {
+['resCredits', 'resScrap', 'resOre', 'resCrystal', 'resVoltex'].forEach((k) => {
     if (IconSprites[k + 'Hi']) IconSprites[k] = IconSprites[k + 'Hi'];
 });
 
@@ -35120,6 +35588,7 @@ var IconLabels = {
     navTrophy: 'SCORE',
     navClock: 'TIME',
     navSkull: 'KILLS',
+    resCredits: 'CREDITS',
     resScrap: 'SCRAP',
     resOre: 'ORE',
     resCrystal: 'CRYSTAL',
@@ -36112,8 +36581,20 @@ extendClass(IconRenderer, {
      * sprite grid. At fractional display scaling (e.g. 125%) 32 CSS px are
      * 40 device px = 2.5 per sprite pixel, so pixels alternate 2/3 px wide
      * and look distorted. Snap to 16·k device px instead (k ≥ 1).
+     * Global Pixel Size: one sprite texel == gp CSS px (× integer k).
      */
     devicePixelSnap(cssPx) {
+        let gp = 0;
+        try {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) {
+                gp = uiAppearanceManager.getGlobalPixelPx() || 0;
+            }
+        } catch (e) { gp = 0; }
+        if (gp > 0) {
+            const step = 16 * gp;
+            const k = Math.max(1, Math.round((Number(cssPx) || 16) / step));
+            return step * k;
+        }
         let dpr = 1;
         try { dpr = Number(window.devicePixelRatio) || 1; } catch (e) { dpr = 1; }
         if (!(dpr > 0)) dpr = 1;
@@ -36123,7 +36604,7 @@ extendClass(IconRenderer, {
 
     /** Resource icons: fixed resource color (16x16 sprite grid, shown at 16·k px), never theme/faction tinted. */
     resourceIconColor(key) {
-        const ids = { menuCredits: 'credits', resScrap: 'scrap', resOre: 'ore', resCrystal: 'crystal', resVoltex: 'voltex' };
+        const ids = { menuCredits: 'credits', resCredits: 'credits', resScrap: 'scrap', resOre: 'ore', resCrystal: 'crystal', resVoltex: 'voltex' };
         const id = ids[key];
         if (!id) return null;
         if (id === 'credits') return '#e8c85a';
@@ -36385,17 +36866,25 @@ var UiTooltipManager = class UiTooltipManager {
             this.unbindMoveWatch();
             return;
         }
-        if (!this._active.isConnected) {
-            this.hide();
-            return;
-        }
-        const under = document.elementFromPoint(e.clientX, e.clientY);
-        const hit = this.resolveTip(under);
-        if (!hit) {
-            this.hide();
-            return;
-        }
-        if (hit.el !== this._active) this.show(hit.el, hit.tip);
+        // Coalesce: elementFromPoint every pointermove was a layout tax across the app.
+        this._moveX = e.clientX;
+        this._moveY = e.clientY;
+        if (this._moveRaf) return;
+        this._moveRaf = requestAnimationFrame(() => {
+            this._moveRaf = 0;
+            if (!this._active) return;
+            if (!this._active.isConnected) {
+                this.hide();
+                return;
+            }
+            const under = document.elementFromPoint(this._moveX, this._moveY);
+            const hit = this.resolveTip(under);
+            if (!hit) {
+                this.hide();
+                return;
+            }
+            if (hit.el !== this._active) this.show(hit.el, hit.tip);
+        });
     };
 
     show(anchor, text) {
@@ -36540,7 +37029,7 @@ var UiTooltipManager = class UiTooltipManager {
                 } else {
                     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
                     const resIcon = {
-                        credits: 'menuCredits',
+                        credits: 'resCredits',
                         scrap: 'resScrap',
                         ore: 'resOre',
                         crystal: 'resCrystal',
@@ -44173,398 +44662,6 @@ extendClass(ShipModels, {
 var shipModels = new ShipModels();
 
 
-/* --- js/ui/difficulty-editor.js?v=role-diff-1 --- */
-"use strict";
-
-var DifficultyEditorUI = class DifficultyEditorUI {
-    constructor() {
-        this.visible = false;
-        this.profileId = (typeof difficultyConfigManager !== 'undefined')
-            ? difficultyConfigManager.current : 'normal';
-        this.ensureOverlay();
-    }
-
-    ensureOverlay() {
-        if (document.getElementById('difficultyEditorOverlay')) return;
-        const overlay = document.createElement('div');
-        overlay.id = 'difficultyEditorOverlay';
-        overlay.className = 'difficulty-editor-overlay hidden';
-        overlay.innerHTML = `
-            <div class="difficulty-editor-panel">
-                <header class="difficulty-editor-header">
-                    <h2>COMBAT DIFFICULTY</h2>
-                    <button type="button" class="de-close" id="deClose">×</button>
-                </header>
-                <div class="difficulty-editor-body">
-                    <aside class="difficulty-editor-nav">
-                        <div class="de-section-title">PRESET</div>
-                        <div id="deProfiles"></div>
-                        <div class="de-section-title">ENEMY AI</div>
-                        <label class="de-select-label">FACTION
-                            <select id="deFaction"></select>
-                        </label>
-                        <label class="de-select-label">SHIP TIER
-                            <select id="deTier">
-                                <option value="1">TIER 1</option>
-                                <option value="2">TIER 2</option>
-                                <option value="3">TIER 3</option>
-                                <option value="4">TIER 4</option>
-                            </select>
-                        </label>
-                    </aside>
-                    <main class="difficulty-editor-controls" id="deControls"></main>
-                </div>
-                <footer class="difficulty-editor-footer">
-                    <button type="button" class="pe-btn" id="deReset">RESET PRESET</button>
-                    <button type="button" class="pe-btn pe-primary" id="deSave">SAVE</button>
-                    <button type="button" class="pe-btn" id="deBack">BACK</button>
-                </footer>
-            </div>`;
-        document.body.appendChild(overlay);
-        overlay.querySelector('#deClose').addEventListener('click', () => this.hide());
-        overlay.querySelector('#deBack').addEventListener('click', () => this.hide());
-        overlay.querySelector('#deSave').addEventListener('click', () => this.save());
-        overlay.querySelector('#deReset').addEventListener('click', () => this.reset());
-        overlay.querySelector('#deFaction').addEventListener('change', () => this.renderAI());
-        overlay.querySelector('#deTier').addEventListener('change', () => this.renderAI());
-    }
-
-    show() {
-        this.ensureOverlay();
-        this.visible = true;
-        this._returnToSettings = !!(typeof startScreenManager !== 'undefined'
-            && startScreenManager
-            && (startScreenManager.showSettings
-                || startScreenManager.overlayMode
-                || startScreenManager.embeddedMode));
-        if (typeof startScreenManager !== 'undefined' && startScreenManager) {
-            if (startScreenManager.overlayMode) startScreenManager.hideOverlay();
-            if (startScreenManager.embeddedMode) startScreenManager.hideEmbedded();
-        }
-        if (typeof settingsManager !== 'undefined' && settingsManager.hideSettings) {
-            settingsManager.hideSettings();
-        }
-        const overlay = document.getElementById('difficultyEditorOverlay');
-        if (overlay.parentNode !== document.body) document.body.appendChild(overlay);
-        overlay.classList.remove('hidden');
-        this.render();
-    }
-
-    hide() {
-        this.visible = false;
-        const overlay = document.getElementById('difficultyEditorOverlay');
-        if (overlay) overlay.classList.add('hidden');
-        if (this._returnToSettings && typeof startScreenManager !== 'undefined' && startScreenManager) {
-            this._returnToSettings = false;
-            startScreenManager.showSettings = true;
-            startScreenManager.showCredits = false;
-            if (startScreenManager.hasActiveProfile && startScreenManager.hasActiveProfile()
-                && typeof homeStationUI !== 'undefined') {
-                if (!homeStationUI.isVisible) {
-                    homeStationUI.show({ skipPersist: true });
-                }
-                startScreenManager.show({ asOverlay: true, showSettings: true });
-            } else {
-                startScreenManager.show({ forceMenu: true });
-            }
-        }
-    }
-
-    makeSlider(label, key, min, max, step, value, onInput) {
-        const row = document.createElement('div');
-        row.className = 'de-slider-row';
-        const title = document.createElement('label');
-        title.textContent = label;
-        const output = document.createElement('output');
-        output.textContent = Number(value).toFixed(step < 1 ? 2 : 0);
-        const input = document.createElement('input');
-        input.type = 'range';
-        input.min = min;
-        input.max = max;
-        input.step = step;
-        input.value = value;
-        input.dataset.key = key;
-        input.addEventListener('input', () => {
-            output.textContent = Number(input.value).toFixed(step < 1 ? 2 : 0);
-            onInput(Number(input.value));
-        });
-        row.append(title, input, output);
-        return row;
-    }
-
-    appendSection(root, title, fields, profile) {
-        const h = document.createElement('h3');
-        h.textContent = title;
-        root.appendChild(h);
-        fields.forEach(([label, key, min, max, step]) => {
-            const val = profile[key] != null ? profile[key] : 1;
-            root.appendChild(this.makeSlider(label, key, min, max, step, val, (value) => {
-                profile[key] = value;
-            }));
-        });
-    }
-
-    render() {
-        const manager = window.difficultyConfigManager;
-        if (!manager) return;
-        const profiles = document.getElementById('deProfiles');
-        profiles.innerHTML = '';
-        Object.keys(manager.profiles).forEach((id) => {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'de-profile-btn' + (id === this.profileId ? ' active' : '');
-            button.textContent = id.toUpperCase();
-            button.addEventListener('click', () => {
-                this.profileId = id;
-                this.render();
-            });
-            profiles.appendChild(button);
-        });
-        const faction = document.getElementById('deFaction');
-        faction.innerHTML = Object.keys(manager.factionProfiles)
-            .map((id) => `<option value="${id}">${id.toUpperCase()}</option>`).join('');
-        this.renderProfile();
-        this.renderAI();
-    }
-
-    renderProfile() {
-        const root = document.getElementById('deControls');
-        const profile = window.difficultyConfigManager.getProfile(this.profileId);
-        root.innerHTML = '';
-        this.appendSection(root, 'GLOBAL COMBAT VALUES', [
-            ['Enemy damage', 'enemyDamageMul', 0, 3, 0.05],
-            ['Player damage', 'playerDamageMul', 0, 3, 0.05],
-            ['Enemy health', 'enemyHealthMul', 0.25, 4, 0.05],
-            ['Enemy speed', 'enemySpeedMul', 0.25, 3, 0.05],
-            ['Number of enemies', 'enemyCountMul', 0.25, 3, 0.05],
-            ['Max active enemies', 'enemyMaxActive', 1, 10, 1],
-            ['Obstacle frequency', 'obstacleSpawnMul', 0.25, 3, 0.05]
-        ], profile);
-        this.appendSection(root, 'CHAMPION', [
-            ['Damage', 'championDamageMul', 0.25, 3, 0.05],
-            ['Health', 'championHealthMul', 0.25, 4, 0.05],
-            ['Speed', 'championSpeedMul', 0.25, 3, 0.05],
-            ['Evasion', 'championEvasionMul', 0.25, 3, 0.05]
-        ], profile);
-        this.appendSection(root, 'SIDE ENEMIES', [
-            ['Damage', 'sideDamageMul', 0.25, 3, 0.05],
-            ['Health', 'sideHealthMul', 0.25, 4, 0.05],
-            ['Speed', 'sideSpeedMul', 0.25, 3, 0.05],
-            ['Count', 'sideCountMul', 0.25, 3, 0.05]
-        ], profile);
-        this.appendSection(root, 'BOSS', [
-            ['Damage', 'bossDamageMul', 0.25, 3, 0.05],
-            ['Health', 'bossHealthMul', 0.25, 4, 0.05],
-            ['Speed', 'bossSpeedMul', 0.25, 3, 0.05],
-            ['Attack rate', 'bossAttackRateMul', 0.25, 3, 0.05]
-        ], profile);
-        root.dataset.profile = this.profileId;
-        root._profileDraft = profile;
-    }
-
-    renderAI() {
-        const manager = window.difficultyConfigManager;
-        const faction = document.getElementById('deFaction').value;
-        const tier = document.getElementById('deTier').value;
-        const cfg = manager.factionProfiles[faction];
-        const tierCfg = manager.tierProfiles[tier];
-        const root = document.getElementById('deControls');
-        const old = root.querySelector('.de-ai-controls');
-        if (old) old.remove();
-        const aiRoot = document.createElement('section');
-        aiRoot.className = 'de-ai-controls';
-        const heading = document.createElement('h3');
-        heading.textContent = `${faction.toUpperCase()} — TIER ${tier} AI`;
-        aiRoot.appendChild(heading);
-        [['Evasion', 'evasion'], ['Prediction', 'prediction'], ['Damage', 'damage']]
-            .forEach(([label, key]) => {
-                aiRoot.appendChild(this.makeSlider(label, key, 0, 3, 0.05, (cfg[key] || 1) * (tierCfg[key] || 1), (value) => {
-                    cfg[key] = value / (tierCfg[key] || 1);
-                }));
-            });
-        // Show this faction's boss kit so designers see the weapon + doctrine split.
-        const kit = manager.getBossWeaponKit ? manager.getBossWeaponKit(faction) : null;
-        const beh = manager.getBossBehaviorKit ? manager.getBossBehaviorKit(faction) : null;
-        if (kit) {
-            const note = document.createElement('p');
-            note.className = 'de-kit-note';
-            const seq = beh && beh.patterns ? beh.patterns.join(' → ') : 'fan → aimed → sweep';
-            const style = beh && beh.style ? beh.style : '?';
-            note.textContent = `Boss kit — ${style} · fan: ${kit.fan} · aimed: ${kit.aimed} · sweep: ${kit.sweep} · ${seq}`;
-            aiRoot.appendChild(note);
-        }
-        root.appendChild(aiRoot);
-    }
-
-    save() {
-        const root = document.getElementById('deControls');
-        const draft = root._profileDraft;
-        if (draft) window.difficultyConfigManager.setProfile(this.profileId, draft);
-        window.difficultyConfigManager.setDifficulty(this.profileId);
-        if (typeof settingsManager !== 'undefined') {
-            settingsManager.settings.difficulty = this.profileId;
-            settingsManager.applyDifficultySettings();
-            settingsManager.updateSettingsDisplay();
-        }
-        if (typeof startScreenManager !== 'undefined' && startScreenManager.settingsItems) {
-            const difficultyItem = startScreenManager.settingsItems.find((item) => item.name === 'Difficulty');
-            if (difficultyItem) {
-                difficultyItem.value = String(this.profileId || 'normal').toUpperCase();
-            }
-        }
-        this.hide();
-    }
-
-    reset() {
-        window.difficultyConfigManager.resetProfile(this.profileId);
-        this.render();
-    }
-}
-
-var difficultyEditorUI = new DifficultyEditorUI();
-window.difficultyEditorUI = difficultyEditorUI;
-
-
-/* --- js/ui/faction-command.js --- */
-"use strict";
-
-var FactionCommandUI = class FactionCommandUI {
-    constructor() {
-        this.visible = false;
-        this.selected = (typeof factionManager !== 'undefined' && factionManager.getAllegiance())
-            || 'terran';
-    }
-
-    show() {
-        if (this.visible) return;
-        this.visible = true;
-        this._returnToSettings = !!(typeof startScreenManager !== 'undefined'
-            && startScreenManager
-            && (startScreenManager.showSettings
-                || startScreenManager.overlayMode
-                || startScreenManager.embeddedMode));
-        if (typeof startScreenManager !== 'undefined' && startScreenManager) {
-            if (startScreenManager.overlayMode) startScreenManager.hideOverlay();
-            if (startScreenManager.embeddedMode) startScreenManager.hideEmbedded();
-        }
-        if (typeof settingsManager !== 'undefined' && settingsManager.hideSettings) {
-            settingsManager.hideSettings();
-        }
-        this.render();
-    }
-
-    hide() {
-        this.visible = false;
-        const el = document.getElementById('factionCommandOverlay');
-        if (el) el.remove();
-        if (this._returnToSettings && typeof startScreenManager !== 'undefined' && startScreenManager) {
-            this._returnToSettings = false;
-            startScreenManager.showSettings = true;
-            startScreenManager.showCredits = false;
-            if (startScreenManager.hasActiveProfile && startScreenManager.hasActiveProfile()
-                && typeof homeStationUI !== 'undefined') {
-                if (!homeStationUI.isVisible) {
-                    homeStationUI.show({ skipPersist: true });
-                }
-                startScreenManager.show({ asOverlay: true, showSettings: true });
-            } else {
-                startScreenManager.show({ forceMenu: true });
-            }
-        }
-    }
-
-    render() {
-        const fm = window.factionManager;
-        if (!fm) return;
-        const existing = document.getElementById('factionCommandOverlay');
-        if (existing) existing.remove();
-        const faction = fm.getFaction(this.selected);
-        const factionColor = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor)
-            ? factionShipStyles.getFactionColor(this.selected)
-            : ((typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionPlanetTheme)
-                ? (planetConfigManager.getFactionPlanetTheme(this.selected) || {}).baseColor
-                : null);
-        const overlay = document.createElement('div');
-        overlay.id = 'factionCommandOverlay';
-        overlay.className = 'faction-command-overlay';
-        if (factionColor) overlay.style.setProperty('--fc-selected-color', factionColor);
-        overlay.innerHTML = `
-            <div class="faction-command-panel">
-                <header class="faction-command-header">
-                    <h2>FACTION COMMAND</h2>
-                    <button type="button" class="de-close" id="fcClose">×</button>
-                </header>
-                <div class="faction-command-grid">
-                    <aside class="faction-command-list">
-                        <h3>ALLEGIANCE</h3>
-                        ${fm.getFactionIds().map((id) => {
-                            const color = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor)
-                                ? factionShipStyles.getFactionColor(id)
-                                : ((typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionPlanetTheme)
-                                    ? (planetConfigManager.getFactionPlanetTheme(id) || {}).baseColor
-                                    : null);
-                            const style = color
-                                ? `style="--fc-faction-color:${color};border-color:${color};color:${color}"`
-                                : '';
-                            return `
-                            <button type="button" class="fc-faction ${id === this.selected ? 'active' : ''}" data-faction="${id}" ${style}>
-                                ${fm.getFaction(id).label}
-                            </button>`;
-                        }).join('')}
-                    </aside>
-                    <main class="faction-command-detail">
-                        <h1>${faction.label || this.selected.toUpperCase()}</h1>
-                        <p class="fc-lore">${faction.loreLong || faction.lore || ''}</p>
-                        <h3>FACTION GOAL</h3>
-                        <p>${faction.goal || ''}</p>
-                        <h3>OBJECTIVES</h3>
-                        <ul>${(faction.objectives || []).map((x) => `<li>${x}</li>`).join('')}</ul>
-                        <h3>TERRITORY</h3>
-                        <p>${fm.getControlledPlanets().length} planets controlled</p>
-                        <div class="fc-actions">
-                            <button type="button" class="pe-btn pe-primary" id="fcJoin">
-                                ${fm.getAllegiance() === this.selected ? 'ALIGNED' : 'JOIN FACTION'}
-                            </button>
-                        </div>
-                        <h3>PACT NETWORK</h3>
-                        <div class="fc-pacts">
-                            ${fm.getFactionIds().filter((id) => id !== this.selected).map((id) => `
-                                <button type="button" class="pe-btn fc-pact ${fm.hasPact(id) ? 'active' : ''}" data-pact="${id}">
-                                    ${fm.getFaction(id).label}: ${fm.hasPact(id) ? 'PACT ACTIVE' : 'PROPOSE PACT'}
-                                </button>`).join('')}
-                        </div>
-                    </main>
-                </div>
-                <footer class="difficulty-editor-footer">
-                    <button type="button" class="pe-btn" id="fcBack">BACK</button>
-                </footer>
-            </div>`;
-        document.body.appendChild(overlay);
-        overlay.querySelector('#fcClose').addEventListener('click', () => this.hide());
-        overlay.querySelector('#fcBack').addEventListener('click', () => this.hide());
-        overlay.querySelector('#fcJoin').addEventListener('click', () => {
-            fm.join(this.selected);
-            this.render();
-        });
-        overlay.querySelectorAll('[data-faction]').forEach((button) => {
-            button.addEventListener('click', () => {
-                this.selected = button.dataset.faction;
-                this.render();
-            });
-        });
-        overlay.querySelectorAll('[data-pact]').forEach((button) => {
-            button.addEventListener('click', () => {
-                if (fm.getAllegiance() === this.selected) fm.togglePact(button.dataset.pact);
-                this.render();
-            });
-        });
-    }
-}
-
-var factionCommandUI = new FactionCommandUI();
-window.factionCommandUI = factionCommandUI;
-
-
 /* --- js/graphics/sprite-loader/core.js --- */
 "use strict";
 
@@ -44984,755 +45081,6 @@ window.spriteLoader = spriteLoader;
 
 // Export for use in other modules (commented out for non-module usage)
 // export { spriteLoader };
-
-
-/* --- js/ui/parallax/core.js --- */
-"use strict";
-
-// Parallax background system
-var ParallaxManager = class ParallaxManager {
-    constructor() {
-        this.layers = [];
-        this.scrollSpeed = 0.5;
-        this.currentPlanet = 'mars'; // Default planet
-        this.starsEnabled = true;
-        this.starsOpacity = 0.35;
-        this.globalLayerOpacity = 1;
-    }
-
-    init() {
-        this.createLayers();
-    }
-
-    setPlanet(planet) {
-        this.currentPlanet = planet;
-        if (typeof planetConfigManager !== 'undefined') {
-            planetConfigManager.applyToRuntime(planet);
-            return;
-        }
-        this.createLayers();
-    }
-
-    setBackground(background) {
-        // Alias for setPlanet to maintain compatibility
-        this.setPlanet(background);
-    }
-
-    applyPlanetConfig(cfg) {
-        if (!cfg) return;
-        this.currentPlanet = cfg.id || this.currentPlanet;
-        this.starsEnabled = cfg.starsEnabled !== false;
-        this.starsOpacity = cfg.starsOpacity != null ? cfg.starsOpacity : 0.35;
-        const sourceLayers = (typeof planetConfigManager !== 'undefined')
-            ? planetConfigManager.getResolvedLayers(this.currentPlanet)
-            : (cfg.backgroundLayers || []);
-        this.layers = sourceLayers.map(layer => ({
-            y: 0,
-            speed: layer.speed,
-            color: layer.color,
-            height: layer.height || 300,
-            pattern: layer.pattern,
-            opacity: layer.opacity != null ? layer.opacity : 0.15,
-            scale: layer.scale != null ? layer.scale : 1,
-            visible: layer.visible !== false,
-            colorSource: layer.colorSource || 'primary'
-        }));
-        if (this.horizontalOffset == null) this.horizontalOffset = 0;
-        if (this.horizontalSpeed == null) this.horizontalSpeed = 0.05;
-        if (this.starSpawnTimer == null) this.starSpawnTimer = 0;
-        if (this.starSpawnInterval == null) this.starSpawnInterval = 120;
-        if (!this.flyingStars || !this.flyingStars.length) this.seedFlyingStars();
-    }
-
-    setLayerOpacity(index, opacity) {
-        if (this.layers[index]) {
-            this.layers[index].opacity = Math.max(0, Math.min(1, Number(opacity)));
-        }
-    }
-
-    setLayerVisible(index, visible) {
-        if (this.layers[index]) {
-            this.layers[index].visible = !!visible;
-        }
-    }
-
-    setGlobalLayerOpacity(opacity) {
-        this.globalLayerOpacity = Math.max(0, Math.min(1, Number(opacity)));
-    }
-
-    createLayers() {
-        if (typeof planetConfigManager !== 'undefined') {
-            this.applyPlanetConfig(planetConfigManager.getConfig(this.currentPlanet));
-            return;
-        }
-
-        this.layers = this.getPlanetLayers(this.currentPlanet);
-        this.horizontalOffset = 0;
-        this.horizontalSpeed = 0.05;
-        this.starSpawnTimer = 0;
-        this.starSpawnInterval = 120;
-        this.seedFlyingStars();
-    }
-
-    /** Theme CSS variable, cached ~250ms: getComputedStyle() on every frame forces a style recalc. */
-    envVar(name) {
-        const now = performance.now();
-        const c = this._envCache || (this._envCache = {});
-        const hit = c[name];
-        if (hit && now - hit.t < 250) return hit.v;
-        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-        c[name] = { v: v, t: now };
-        return v;
-    }
-
-    getPlanetLayers(planet) {
-        if (typeof planetConfigManager !== 'undefined') {
-            return planetConfigManager.getResolvedLayers(planet);
-        }
-
-        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--env-primary').trim() || '#808080';
-        const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--env-secondary').trim() || '#606060';
-        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--env-accent').trim() || '#808080';
-        const soft = (color, opacity) => ({ y: 0, speed: 0.2, color, height: 300, opacity, visible: true });
-
-        switch (planet) {
-            case 'mars':
-                return [
-                    Object.assign(soft(primaryColor, 0.18), { speed: 0.2, pattern: 'mars_surface' }),
-                    Object.assign(soft(secondaryColor, 0.12), { speed: 0.4, pattern: 'mars_dust' }),
-                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'mars_sky' })
-                ];
-            case 'jupiter':
-                return [
-                    Object.assign(soft(primaryColor, 0.16), { speed: 0.2, pattern: 'jupiter_bands' }),
-                    Object.assign(soft(secondaryColor, 0.12), { speed: 0.4, pattern: 'jupiter_storms' }),
-                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'jupiter_atmosphere' })
-                ];
-            case 'saturn':
-                return [
-                    Object.assign(soft(secondaryColor, 0.16), { speed: 0.2, pattern: 'saturn_rings' }),
-                    Object.assign(soft(primaryColor, 0.12), { speed: 0.4, pattern: 'saturn_clouds' }),
-                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'saturn_sky' })
-                ];
-            case 'neptune':
-                return [
-                    Object.assign(soft(primaryColor, 0.15), { speed: 0.2, pattern: 'neptune_deep' }),
-                    Object.assign(soft(secondaryColor, 0.11), { speed: 0.4, pattern: 'neptune_storms' }),
-                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'neptune_ice' })
-                ];
-            default:
-                return [
-                    Object.assign(soft(primaryColor, 0.12), { speed: 0.2, pattern: 'grid' }),
-                    Object.assign(soft(secondaryColor, 0.1), { speed: 0.4, pattern: 'dots' }),
-                    Object.assign(soft(accentColor, 0.07), { speed: 0.6, pattern: 'lines' })
-                ];
-        }
-    }
-
-    update(deltaTime) {
-        const frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
-        // Never hard-reset scroll offsets: draws use modulo, and resets at
-        // layer.height (often 300) or horizontalOffset=400 jumped while patterns
-        // wrap at 600 / factor*offset (0.1/0.2).
-        // Boss arenas hold still; regular stages scroll towards the player.
-        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
-            || obstacleManager.isScrollStage();
-        if (scrolling) {
-            // Transit backtrack runs the background in reverse (obstacleManager.levelScrollMul).
-            const mul = typeof obstacleManager !== 'undefined' && obstacleManager.levelScrollMul
-                ? obstacleManager.levelScrollMul() : 1;
-            this.layers.forEach(layer => {
-                // Kept >= 0: the pattern draws wrap with %, which breaks on negatives.
-                layer.y = Math.max(0, layer.y + layer.speed * frameScale * mul);
-            });
-        }
-        this.horizontalOffset += this.horizontalSpeed * frameScale;
-        this.updateFlyingStars(deltaTime);
-    }
-
-    render(ctx) {
-        // Check if ctx is valid
-        if (!ctx) {
-            console.warn('ParallaxManager.render: ctx is undefined');
-            return;
-        }
-
-
-        // Set pixelated rendering first
-        ctx.imageSmoothingEnabled = false;
-        ctx.webkitImageSmoothingEnabled = false;
-        ctx.mozImageSmoothingEnabled = false;
-        ctx.msImageSmoothingEnabled = false;
-
-        // Fill base background with theme color
-        const backgroundColor = this.envVar('--env-background');
-        ctx.fillStyle = backgroundColor || '#0a0a0a';
-        // Logical playfield (transform already supersamples). Using backing width
-        // here filled k² more user-space pixels that the clip immediately discarded.
-        const cw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
-        const ch = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
-        // Stars keep the prior spawn box (backing px as user units) so density on
-        // screen matches the pre-bake look.
-        const starW = (ctx.canvas && ctx.canvas.width) || cw;
-        const starH = (ctx.canvas && ctx.canvas.height) || ch;
-        this._starFieldW = starW;
-        this._starFieldH = starH;
-        ctx.fillRect(0, 0, cw, ch);
-
-        // When the stage is frozen (boss / non-scroll), reuse a baked layer plate.
-        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
-            || obstacleManager.isScrollStage();
-        let layerKey = backgroundColor + '|' + (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
-        for (let i = 0; i < this.layers.length; i++) {
-            const L = this.layers[i];
-            layerKey += '|' + (L.pattern || '') + ':' + (L.y || 0) + ':' + (L.color || '') + ':' + (L.visible === false ? 0 : 1);
-        }
-        layerKey += '|h' + (this.horizontalOffset || 0);
-
-        const drawLayers = (target) => {
-            for (let index = 0; index < this.layers.length; index++) {
-                const layer = this.layers[index];
-                if (layer.visible === false) continue;
-                const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
-                if (opacity <= 0) continue;
-                target.save();
-                target.globalAlpha = Math.max(0, Math.min(1, opacity));
-                this.drawLayerPattern(target, layer, index);
-                target.restore();
-            }
-        };
-
-        if (!scrolling && this._frozenLayerKey === layerKey && this._frozenLayerCanvas) {
-            ctx.drawImage(this._frozenLayerCanvas, 0, 0);
-        } else {
-            if (!scrolling) {
-                if (!this._frozenLayerCanvas
-                    || this._frozenLayerCanvas.width !== cw
-                    || this._frozenLayerCanvas.height !== ch) {
-                    this._frozenLayerCanvas = document.createElement('canvas');
-                    this._frozenLayerCanvas.width = cw;
-                    this._frozenLayerCanvas.height = ch;
-                }
-                const fx = this._frozenLayerCanvas.getContext('2d');
-                if (fx) {
-                    fx.setTransform(1, 0, 0, 1, 0, 0);
-                    fx.imageSmoothingEnabled = false;
-                    fx.clearRect(0, 0, cw, ch);
-                    fx.fillStyle = backgroundColor || '#0a0a0a';
-                    fx.fillRect(0, 0, cw, ch);
-                    drawLayers(fx);
-                    this._frozenLayerKey = layerKey;
-                    ctx.drawImage(this._frozenLayerCanvas, 0, 0);
-                } else {
-                    drawLayers(ctx);
-                }
-            } else {
-                this._frozenLayerKey = '';
-                drawLayers(ctx);
-            }
-        }
-
-        // Draw flying stars
-        if (this.starsEnabled !== false) {
-            this.drawFlyingStars(ctx);
-        }
-
-        this.renderBossIntensity(ctx, cw, ch);
-    }
-
-    /**
-     * Boss arenas hold still (see update()), so they need their own visual
-     * drama: a phase-tinted vignette + slow pulse layered over the frozen
-     * background, ramping up as the boss loses health (phase 1→3).
-     */
-    renderBossIntensity(ctx, cw, ch) {
-        const em = typeof enemyManager !== 'undefined' ? enemyManager : null;
-        const e = em && em.enemy;
-        if (!e || !e.isBoss || em.exploding) return;
-        const phase = e.bossPhase || 1;
-        const col = ['#5a1018', '#7a2a10', '#7a0a3a'][Math.max(0, phase - 1)];
-        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / (600 - phase * 120));
-        const baseAlpha = 0.08 + phase * 0.06;
-        const alpha = baseAlpha + pulse * 0.04;
-        ctx.save();
-        // Same radial falloff every frame for a given size/phase — rebuild only on change.
-        if (!this._bossGrad || this._bossGradW !== cw || this._bossGradH !== ch || this._bossGradPhase !== phase) {
-            const grad = ctx.createRadialGradient(
-                cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2,
-                cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75
-            );
-            grad.addColorStop(0, 'rgba(0,0,0,0)');
-            grad.addColorStop(1, col);
-            this._bossGrad = grad;
-            this._bossGradW = cw;
-            this._bossGradH = ch;
-            this._bossGradPhase = phase;
-        }
-        ctx.globalAlpha = Math.max(0, Math.min(0.55, alpha));
-        ctx.fillStyle = this._bossGrad;
-        ctx.fillRect(0, 0, cw, ch);
-        ctx.restore();
-    }
-
-    drawLayerPattern(ctx, layer, index) {
-        // Refresh theme color if layer uses a color source
-        if (typeof planetConfigManager !== 'undefined' && layer.colorSource && layer.colorSource !== 'custom') {
-            layer.color = planetConfigManager.resolveLayerColor(layer);
-        }
-        const layerColor = layer.color || '#808080';
-        ctx.fillStyle = layerColor;
-
-        const scale = (layer.scale != null && Number(layer.scale) > 0) ? Number(layer.scale) : 1;
-        const drawContent = () => {
-            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.hasCustomPattern(layer.pattern)) {
-                this.drawCustomTile(ctx, layer, planetConfigManager.getCustomPattern(layer.pattern));
-                return;
-            }
-            switch (layer.pattern) {
-                case 'grid':
-                    this.drawGrid(ctx, layer, index);
-                    break;
-                case 'dots':
-                    this.drawDots(ctx, layer);
-                    break;
-                case 'lines':
-                    this.drawLines(ctx, layer);
-                    break;
-                case 'mars_surface':
-                    this.drawMarsSurface(ctx, layer);
-                    break;
-                case 'mars_dust':
-                    this.drawMarsDust(ctx, layer);
-                    break;
-                case 'mars_sky':
-                    this.drawMarsSky(ctx, layer);
-                    break;
-                case 'jupiter_bands':
-                    this.drawJupiterBands(ctx, layer);
-                    break;
-                case 'jupiter_storms':
-                    this.drawJupiterStorms(ctx, layer);
-                    break;
-                case 'jupiter_atmosphere':
-                    this.drawJupiterAtmosphere(ctx, layer);
-                    break;
-                case 'saturn_rings':
-                    this.drawSaturnRings(ctx, layer);
-                    break;
-                case 'saturn_clouds':
-                    this.drawSaturnClouds(ctx, layer);
-                    break;
-                case 'saturn_sky':
-                    this.drawSaturnSky(ctx, layer);
-                    break;
-                case 'neptune_deep':
-                    this.drawNeptuneDeep(ctx, layer);
-                    break;
-                case 'neptune_storms':
-                    this.drawNeptuneStorms(ctx, layer);
-                    break;
-                case 'neptune_ice':
-                    this.drawNeptuneIce(ctx, layer);
-                    break;
-            }
-        };
-
-        if (scale === 1) {
-            drawContent();
-            return;
-        }
-
-        const w = 400;
-        const h = 600;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, w, h);
-        ctx.clip();
-        ctx.translate(w / 2, h / 2);
-        ctx.scale(scale, scale);
-        ctx.translate(-w / 2, -h / 2);
-
-        const extent = scale < 1 ? Math.ceil(1 / scale) : 0;
-        for (let oy = -extent; oy <= extent; oy++) {
-            for (let ox = -extent; ox <= extent; ox++) {
-                if (ox === 0 && oy === 0) {
-                    drawContent();
-                } else {
-                    ctx.save();
-                    ctx.translate(ox * w, oy * h);
-                    drawContent();
-                    ctx.restore();
-                }
-            }
-        }
-        ctx.restore();
-    }
-}
-
-
-/* --- js/ui/parallax/draw-custom-tile.js --- */
-"use strict";
-
-// ParallaxManager methods, split from parallax.js.
-extendClass(ParallaxManager, {
-    /** One offscreen tile blit — same pixels as nested fillRect loops. */
-    bakePatternTile(key, tw, th, paint) {
-        if (!this._patternBake) this._patternBake = Object.create(null);
-        let entry = this._patternBake[key];
-        if (entry && entry.w === tw && entry.h === th) return entry;
-        const c = document.createElement('canvas');
-        c.width = Math.max(1, tw);
-        c.height = Math.max(1, th);
-        const x = c.getContext('2d');
-        if (!x) return null;
-        x.imageSmoothingEnabled = false;
-        paint(x);
-        entry = { canvas: c, w: tw, h: th };
-        const keys = Object.keys(this._patternBake);
-        if (keys.length > 48) {
-            for (let i = 0; i < 12; i++) delete this._patternBake[keys[i]];
-        }
-        this._patternBake[key] = entry;
-        return entry;
-    },
-
-    /** Draw baked tile across the field. `scrollX/Y` are subtracted (custom-tile convention). */
-    blitTiled(ctx, tile, scrollX, scrollY, fieldW, fieldH) {
-        if (!tile) return;
-        const tw = tile.w;
-        const th = tile.h;
-        for (let ty = -th; ty < fieldH + th; ty += th) {
-            for (let tx = -tw; tx < fieldW + tw; tx += tw) {
-                ctx.drawImage(tile.canvas, Math.floor(tx - scrollX), Math.floor(ty - scrollY));
-            }
-        }
-    },
-
-    drawCustomTile(ctx, layer, def) {
-        if (!def || !def.cells) return;
-        const tw = def.width;
-        const th = def.height;
-        const cell = def.cellSize || 4;
-        const tilePxW = tw * cell;
-        const tilePxH = th * cell;
-        const ox = ((this.horizontalOffset * 0.1) % tilePxW + tilePxW) % tilePxW;
-        const oy = ((layer.y || 0) % tilePxH + tilePxH) % tilePxH;
-        const color = ctx.fillStyle || layer.color || '#808080';
-        const key = 'ct:' + (def.id || layer.pattern || 'x') + ':' + tilePxW + 'x' + tilePxH + ':' + color + ':' + cell;
-        const bake = this.bakePatternTile(key, tilePxW, tilePxH, (x) => {
-            x.fillStyle = color;
-            for (let cy = 0; cy < th; cy++) {
-                for (let cx = 0; cx < tw; cx++) {
-                    if (!def.cells[cy * tw + cx]) continue;
-                    x.fillRect(cx * cell, cy * cell, cell, cell);
-                }
-            }
-        });
-        const fieldW = (ctx.canvas && ctx.canvas.width) || 400;
-        const fieldH = (ctx.canvas && ctx.canvas.height) || 600;
-        this.blitTiled(ctx, bake, ox, oy, fieldW, fieldH);
-    },
-
-    drawGrid(ctx, layer, index) {
-        // Checker parity comes from the cell's own index, not from its
-        // scrolled position — the old version flipped the checker every time
-        // a cell crossed a 16 px boundary, so the dots jumped while scrolling.
-        // The period is two cells, so wrapping the offset at 2*gridSize is seamless.
-        // Depth by layer: slow (far) layers get a fine, small-dot grid, faster
-        // (near) ones a wider grid with bigger dots — stacked grid layers used
-        // to be identical in size and overlapped into a muddled pattern.
-        const depth = Math.max(0, Math.min(3, Math.round((Number(layer.speed) || 0.2) / 0.2) - 1 + (index || 0) % 2));
-        const gridSize = [12, 20, 28, 36][depth];
-        const dot = [2, 3, 4, 5][depth];
-        const period = gridSize * 2;
-        const w = (ctx.canvas && ctx.canvas.width) || 400;
-        const h = (ctx.canvas && ctx.canvas.height) || 600;
-        const ox = (((this.horizontalOffset * 0.1) % period) + period) % period;
-        const oy = (((layer.y || 0) % period) + period) % period;
-        const color = ctx.fillStyle || layer.color || '#808080';
-        const key = 'grid:' + gridSize + ':' + dot + ':' + color;
-        const bake = this.bakePatternTile(key, period, period, (x) => {
-            x.fillStyle = color;
-            const cols = Math.ceil(period / gridSize) + 1;
-            const rows = Math.ceil(period / gridSize) + 1;
-            for (let i = 0; i < cols; i++) {
-                for (let j = 0; j < rows; j++) {
-                    if (((i + j) & 1) !== 0) continue;
-                    x.fillRect(i * gridSize, j * gridSize, dot, dot);
-                }
-            }
-        });
-        this.blitTiled(ctx, bake, -ox, -oy, w, h);
-    },
-
-    drawDots(ctx, layer) {
-        const dots = [
-            {x: 40, y: 80},
-            {x: 120, y: 160},
-            {x: 200, y: 240},
-            {x: 280, y: 320},
-            {x: 360, y: 400},
-            {x: 80, y: 480},
-            {x: 160, y: 560}
-        ];
-
-        const ox = ((this.horizontalOffset * 0.2) % 400 + 400) % 400;
-        const oy = ((layer.y || 0) % 600 + 600) % 600;
-        dots.forEach(dot => {
-            // Draw neighbouring tiles as well so a wrap never exposes a
-            // one-frame gap or makes the pattern appear to jump.
-            for (let tx = -1; tx <= 1; tx++) {
-                for (let ty = -1; ty <= 1; ty++) {
-                    const x = dot.x + ox + tx * 400;
-                    const y = dot.y + oy + ty * 600;
-                    if (x < -5 || x > 405 || y < -5 || y > 605) continue;
-                    ctx.fillRect(Math.floor(x), Math.floor(y), 5, 5);
-                }
-            }
-        });
-    },
-
-    drawLines(ctx, layer) {
-        const lines = [
-            {x: 0, y: 100, width: 400, height: 4},
-            {x: 0, y: 300, width: 400, height: 4},
-            {x: 0, y: 500, width: 400, height: 4}
-        ];
-
-        lines.forEach(line => {
-            const y = (line.y + layer.y) % 600;
-            ctx.fillRect(line.x, Math.floor(y), line.width, line.height);
-        });
-    },
-
-    darkenColor(color, factor) {
-        // Simple color darkening
-        const hex = color.replace('#', '');
-        const r = Math.floor(parseInt(hex.substr(0, 2), 16) * (1 - factor));
-        const g = Math.floor(parseInt(hex.substr(2, 2), 16) * (1 - factor));
-        const b = Math.floor(parseInt(hex.substr(4, 2), 16) * (1 - factor));
-        return `rgb(${r}, ${g}, ${b})`;
-    },
-
-    /** Fills the field immediately so a fresh stage never opens on empty space. */
-    seedFlyingStars(count) {
-        this.flyingStars = [];
-        if (!this._starFieldW || !this._starFieldH) {
-            // No render() yet this session (fresh load) — read the real canvas once
-            // so the very first seed isn't scattered across the old 400x600 default.
-            const cv = (typeof document !== 'undefined') && document.getElementById('gameCanvas');
-            if (cv && cv.width && cv.height) {
-                this._starFieldW = cv.width;
-                this._starFieldH = cv.height;
-            }
-        }
-        const n = count != null ? count : 70;
-        for (let i = 0; i < n; i++) this.spawnFlyingStar(true);
-    },
-
-    updateFlyingStars(deltaTime) {
-        this.starSpawnTimer += deltaTime;
-
-        // Spawn new stars, several at a time — a trickle of one every couple
-        // seconds reads as empty space instead of a starfield. Capped so a
-        // star that happens to drift at ~0 speed can't make this unbounded.
-        const maxStars = 140;
-        while (this.starSpawnTimer >= this.starSpawnInterval) {
-            if (this.flyingStars.length < maxStars) this.spawnFlyingStar();
-            this.starSpawnTimer -= this.starSpawnInterval;
-        }
-
-        // Update existing stars
-        const list = this.flyingStars;
-        const fw = this._starFieldW || 400;
-        const fh = this._starFieldH || 600;
-        for (let i = list.length - 1; i >= 0; i--) {
-            const star = list[i];
-            star.x += star.speedX;
-            star.y += star.speedY;
-            if (star.x < -10 || star.x > fw + 10 || star.y < -10 || star.y > fh + 10) {
-                const last = list.length - 1;
-                if (i !== last) list[i] = list[last];
-                list.pop();
-            }
-        }
-    },
-
-    /** `fromEdge` false (initial seed) scatters across the whole field instead of spawning at the rim. */
-    spawnFlyingStar(seeding) {
-        // Depth: smaller/dimmer stars drift slower (far background), bigger/brighter ones faster (near).
-        const depth = Math.random();
-        const size = depth < 0.6 ? 1 : (depth < 0.9 ? 2 : 3);
-        const speedScale = 0.3 + depth * 1.4;
-        const star = {
-            x: Math.floor(Math.random() * (this._starFieldW || 400)),
-            y: Math.floor(Math.random() * (this._starFieldH || 600)),
-            speedX: (Math.random() - 0.5) * 2 * speedScale,
-            speedY: (Math.random() - 0.5) * 2 * speedScale,
-            size: size,
-            alpha: 0.5 + depth * 0.5
-        };
-        this.flyingStars.push(star);
-        return star;
-    },
-
-    drawFlyingStars(ctx) {
-        const stars = this.flyingStars;
-        if (!stars || !stars.length) return;
-        ctx.save();
-        const baseOpacity = this.starsOpacity != null ? this.starsOpacity : 0.35;
-        ctx.fillStyle = this.envVar('--env-primary') || '#808080';
-        for (let i = 0; i < stars.length; i++) {
-            const star = stars[i];
-            ctx.globalAlpha = Math.max(0, Math.min(1, baseOpacity * (star.alpha != null ? star.alpha : 1)));
-            ctx.fillRect(star.x | 0, star.y | 0, star.size | 0, star.size | 0);
-        }
-        ctx.restore();
-    },
-
-    /**
-     * Bake a 400×600 planet plate once; scroll with the same wrap as
-     * `fillRect(..., (y + layer.y) % 600)` — identical pixels, one blit.
-     */
-    drawWrappedYField(ctx, layer, bakeKey, paint) {
-        const color = String(ctx.fillStyle || layer.color || '#808080');
-        const bake = this.bakePatternTile(bakeKey + ':' + color, 400, 600, (x) => {
-            x.fillStyle = color;
-            paint(x);
-        });
-        if (!bake) return;
-        const oy = ((layer.y || 0) % 600 + 600) % 600;
-        // Shift plate down by oy (wrap): matches (y + layer.y) % 600 placement.
-        ctx.drawImage(bake.canvas, 0, oy);
-        if (oy) ctx.drawImage(bake.canvas, 0, oy - 600);
-    },
-
-    // Planet-specific drawing methods
-    drawMarsSurface(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'mars_surface', (x) => {
-            for (let px = 0; px < 400; px += 8) {
-                for (let py = 0; py < 600; py += 8) {
-                    if (((px / 8) + (py / 8)) % 3 === 0) x.fillRect(px, py, 6, 6);
-                }
-            }
-        });
-    },
-
-    drawMarsDust(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'mars_dust', (x) => {
-            for (let px = 0; px < 400; px += 12) {
-                for (let py = 0; py < 600; py += 12) {
-                    if (((px / 12) + (py / 12)) % 4 === 0) x.fillRect(px, py, 4, 4);
-                }
-            }
-        });
-    },
-
-    drawMarsSky(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'mars_sky', (x) => {
-            for (let px = 0; px < 400; px += 16) {
-                x.fillRect(px, Math.floor((px * 0.1) % 600), 4, 4);
-            }
-        });
-    },
-
-    drawJupiterBands(ctx, layer) {
-        // x and y both phase with layer.y — keep the light O(30) loop (not a Y-only wrap).
-        for (let y = 0; y < 600; y += 20) {
-            const x = Math.floor((y * 0.05 + layer.y) % 400);
-            ctx.fillRect(x, Math.floor(y + layer.y) % 600, 6, 4);
-        }
-    },
-
-    drawJupiterStorms(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'jupiter_storms', (x) => {
-            for (let px = 0; px < 400; px += 16) {
-                for (let py = 0; py < 600; py += 16) {
-                    if (((px / 16) + (py / 16)) % 5 === 0) x.fillRect(px, py, 8, 8);
-                }
-            }
-        });
-    },
-
-    drawJupiterAtmosphere(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'jupiter_atmosphere', (x) => {
-            for (let px = 0; px < 400; px += 12) {
-                x.fillRect(px, Math.floor((px * 0.2) % 600), 4, 4);
-            }
-        });
-    },
-
-    drawSaturnRings(ctx, layer) {
-        for (let y = 0; y < 600; y += 15) {
-            const x = Math.floor((y * 0.1 + layer.y) % 400);
-            ctx.fillRect(x, Math.floor(y + layer.y) % 600, 4, 4);
-        }
-    },
-
-    drawSaturnClouds(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'saturn_clouds', (x) => {
-            for (let px = 0; px < 400; px += 14) {
-                for (let py = 0; py < 600; py += 14) {
-                    if (((px / 14) + (py / 14)) % 6 === 0) x.fillRect(px, py, 6, 6);
-                }
-            }
-        });
-    },
-
-    drawSaturnSky(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'saturn_sky', (x) => {
-            for (let px = 0; px < 400; px += 8) {
-                x.fillRect(px, Math.floor((px * 0.15) % 600), 4, 4);
-            }
-        });
-    },
-
-    drawNeptuneDeep(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'neptune_deep', (x) => {
-            for (let px = 0; px < 400; px += 6) {
-                for (let py = 0; py < 600; py += 6) {
-                    if (((px / 6) + (py / 6)) % 7 === 0) x.fillRect(px, py, 4, 4);
-                }
-            }
-        });
-    },
-
-    drawNeptuneStorms(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'neptune_storms', (x) => {
-            for (let px = 0; px < 400; px += 18) {
-                for (let py = 0; py < 600; py += 18) {
-                    if (((px / 18) + (py / 18)) % 8 === 0) x.fillRect(px, py, 6, 6);
-                }
-            }
-        });
-    },
-
-    drawNeptuneIce(ctx, layer) {
-        this.drawWrappedYField(ctx, layer, 'neptune_ice', (x) => {
-            for (let px = 0; px < 400; px += 10) {
-                x.fillRect(px, Math.floor((px * 0.3) % 600), 4, 4);
-            }
-        });
-    },
-
-    reset() {
-        this.layers.forEach(layer => {
-            layer.y = 0;
-        });
-        this.horizontalOffset = 0;
-        this.starSpawnTimer = 0;
-        this.seedFlyingStars();
-    },
-});
-
-
-/* --- js/ui/parallax.js --- */
-"use strict";
-
-// ParallaxManager is defined in parallax/core.js and extended by the other files in parallax/,
-// which index.html loads before this file.
-// Global parallax manager instance
-var parallaxManager = new ParallaxManager();
 
 
 /* --- js/ui/bg-mouse-parallax/state.js?v=inline-1 --- */
@@ -47199,1401 +46547,6 @@ var devProfileToggles = {
 window.devProfileToggles = devProfileToggles;
 
 
-/* --- js/ui/planet-viewer/core.js --- */
-"use strict";
-
-/**
- * Planet Viewer — browse planets by galaxy/system; open Planet Editor from here.
- * Open: Start menu → PLANETS, Pause → PLANETS
- */
-var PlanetViewerUI = class PlanetViewerUI {
-    constructor() {
-        this.visible = false;
-        this.selectedIndex = 0;
-        this.planets = [];
-        this.systems = [];
-        this.overlay = null;
-        this.previewCanvas = null;
-        this.previewCtx = null;
-        this.previewAnimId = null;
-        this.previewZoom = 1;
-        this.previewFullscreen = false;
-        this.previewPanX = 0;
-        this.previewPanY = 0;
-        this.previewPanning = false;
-        this.previewPanLastX = 0;
-        this.previewPanLastY = 0;
-        this.previewObstacles = [];
-        this.previewObstacleSpawnAcc = 0;
-        this._previewCfgId = null;
-        this._keyHandler = (e) => this.handleKeyDown(e);
-    }
-
-    getPlanetData(id) {
-        if (typeof planetConfigManager === 'undefined') {
-            return {
-                id: id,
-                name: String(id).toUpperCase(),
-                difficulty: '',
-                description: '',
-                galaxy: '',
-                galaxyId: '',
-                enemyCount: 0,
-                layerCount: 0,
-                stages: []
-            };
-        }
-        const cfg = planetConfigManager.getConfig(id);
-        const gid = planetConfigManager.getPlanetGalaxyId(id);
-        const galaxy = planetConfigManager.getGalaxy(gid);
-        const stages = cfg && cfg.stages
-            ? Object.keys(cfg.stages).map((key) => {
-                const stage = cfg.stages[key] || {};
-                const enemies = Array.isArray(stage.enemies) ? stage.enemies.length : 0;
-                return { key: key, enemies: enemies };
-            })
-            : [];
-        return {
-            id: id,
-            name: (cfg && cfg.name) || id.toUpperCase(),
-            difficulty: (cfg && cfg.difficulty) || '',
-            description: (cfg && cfg.description) || '',
-            galaxy: galaxy ? galaxy.name : '',
-            galaxyId: gid || '',
-            factions: (cfg && Array.isArray(cfg.factions)) ? cfg.factions.slice() : [],
-            enemyCount: (cfg && cfg.enemies && cfg.enemies.length) || 0,
-            layerCount: (cfg && cfg.backgroundLayers && cfg.backgroundLayers.length) || 0,
-            stages: stages
-        };
-    }
-
-    getSelectedConfig() {
-        const p = this.planets[this.selectedIndex];
-        if (!p || typeof planetConfigManager === 'undefined') return null;
-        return planetConfigManager.getConfig(p.id) || null;
-    }
-
-    isPlanetVisible(galaxyId, planetId) {
-        if (typeof startScreenManager !== 'undefined' && startScreenManager.devMode) {
-            return true;
-        }
-        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile()) {
-            return true;
-        }
-        const gid = galaxyId || (typeof planetConfigManager !== 'undefined'
-            ? planetConfigManager.getPlanetGalaxyId(planetId)
-            : null);
-        if (!gid) return true;
-        return profileManager.isPlanetUnlocked(gid, planetId)
-            || profileManager.isPlanetCleared(gid, planetId);
-    }
-
-    buildSystems() {
-        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyTree) {
-            const tree = planetConfigManager.getGalaxyTree();
-            this.systems = tree.map((g) => ({
-                id: g.id,
-                name: g.name,
-                planets: (g.planets || [])
-                    .filter((p) => this.isPlanetVisible(g.id, p.id))
-                    .map((p) => this.getPlanetData(p.id))
-            })).filter((sys) => sys.planets.length > 0);
-        } else {
-            const ids = ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
-            this.systems = [{
-                id: 'milky_way',
-                name: 'MILKY WAY',
-                planets: ids
-                    .filter((id) => this.isPlanetVisible('milky_way', id))
-                    .map((id) => this.getPlanetData(id))
-            }].filter((sys) => sys.planets.length > 0);
-        }
-        this.planets = [];
-        this.systems.forEach((sys) => {
-            sys.planets.forEach((p) => this.planets.push(p));
-        });
-    }
-
-    /** Static icon (list rows): many can be on screen at once, so no spin cost. */
-    planetIconHtmlStatic(planetId, size) {
-        const sid = String(planetId || 'mars').toLowerCase();
-        const px = size || 32;
-        if (typeof planetSVGManager !== 'undefined') {
-            if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
-                planetSVGManager.init();
-            }
-            let svg = planetSVGManager.getPlanetSVG(sid);
-            if (svg) {
-                const uid = 'pv_' + sid + '_' + Math.random().toString(36).slice(2, 7);
-                svg = svg
-                    .replace(/id="([^"]+)"/g, (m, id) => `id="${uid}_${id}"`)
-                    .replace(/url\(#([^)]+)\)/g, (m, id) => `url(#${uid}_${id})`)
-                    .replace(/width="\d+"/, `width="${px}"`)
-                    .replace(/height="\d+"/, `height="${px}"`);
-                return `<span class="cv-icon cv-planet-icon">${svg}</span>`;
-            }
-        }
-        return `<span class="cv-icon cv-planet-fallback" data-planet="${sid}" style="width:${px}px;height:${px}px"></span>`;
-    }
-
-    /** Animated hero icon (one at a time, the selected-planet detail view). */
-    planetIconHtml(planetId, size) {
-        const sid = String(planetId || 'mars').toLowerCase();
-        const px = size || 32;
-        // Shared spin pipeline (js/graphics/planet-svgs/spin-frames.js) so the
-        // preview's lava/clouds/bands turn like everywhere else, instead of a
-        // once-baked static SVG. Reserved for the single big detail icon —
-        // the "featured" bucket in startPlanetSpin's round-robin repaints
-        // every tick, so it must stay a handful of icons, not a whole list.
-        if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.planetIconHtml) {
-            const html = galaxyMapManager.planetIconHtml(sid, px, true);
-            if (html) {
-                // The wrapper span needs an explicit pixel box: outside the galaxy
-                // map's SVG/flex frame it sits in a plain flex row with no height,
-                // so its 100%-height CSS collapses to 0px. That makes the spin
-                // timer's getBoundingClientRect visibility check treat it as
-                // off-screen forever after the first paint, freezing the planet.
-                return html
-                    .replace('gm-planet-icon', 'gm-planet-icon cv-icon cv-planet-icon')
-                    .replace('class="gm-planet-icon', `style="width:${px}px;height:${px}px" class="gm-planet-icon`);
-            }
-        }
-        if (typeof planetSVGManager !== 'undefined') {
-            if (!planetSVGManager.planets || !Object.keys(planetSVGManager.planets).length) {
-                planetSVGManager.init();
-            }
-            let svg = planetSVGManager.getPlanetSVG(sid);
-            if (svg) {
-                const uid = 'pv_' + sid + '_' + Math.random().toString(36).slice(2, 7);
-                svg = svg
-                    .replace(/id="([^"]+)"/g, (m, id) => `id="${uid}_${id}"`)
-                    .replace(/url\(#([^)]+)\)/g, (m, id) => `url(#${uid}_${id})`)
-                    .replace(/width="\d+"/, `width="${px}"`)
-                    .replace(/height="\d+"/, `height="${px}"`);
-                return `<span class="cv-icon cv-planet-icon">${svg}</span>`;
-            }
-        }
-        return `<span class="cv-icon cv-planet-fallback" data-planet="${sid}" style="width:${px}px;height:${px}px"></span>`;
-    }
-
-    show(options) {
-        if (options && Object.prototype.hasOwnProperty.call(options, 'onClose')) {
-            this.onClose = options.onClose;
-        }
-        this.buildSystems();
-        if (!this.planets.length) return;
-        const preferId = options && options.planetId;
-        if (preferId) {
-            const idx = this.planets.findIndex((p) => p.id === preferId);
-            if (idx >= 0) this.selectedIndex = idx;
-        }
-        this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.planets.length - 1));
-        this.visible = true;
-        this.createUI();
-        document.addEventListener('keydown', this._keyHandler);
-        if (!(options && options.skipPersist) && typeof menuStateManager !== 'undefined') {
-            menuStateManager.setScreen('planet-viewer', {
-                planet: this.planets[this.selectedIndex].id
-            });
-        }
-    }
-
-    hide() {
-        this.visible = false;
-        this.stopPreview();
-        this.cleanupPreviewControls();
-        this.setPreviewFullscreen(false);
-        document.removeEventListener('keydown', this._keyHandler);
-        if (this._panelResize) {
-            this._panelResize.destroy();
-            this._panelResize = null;
-        }
-        if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
-        }
-        this.previewCanvas = null;
-        this.previewCtx = null;
-    }
-
-    createUI() {
-        if (this._panelResize) {
-            this._panelResize.destroy();
-            this._panelResize = null;
-        }
-        if (this.overlay) this.overlay.remove();
-
-        this.overlay = document.createElement('div');
-        this.overlay.className = 'content-viewer-overlay';
-        this.overlay.innerHTML = `
-            <div class="content-viewer-panel">
-                <h2 class="content-viewer-title">PLANETS</h2>
-                <div class="content-viewer-body has-preview" id="pvViewerBody">
-                    <aside class="content-viewer-list" id="pvList"></aside>
-                    <div class="pe-resize-handle" data-resize="left" title="Resize planet list"></div>
-                    <div class="content-viewer-detail" id="pvDetail"></div>
-                    <div class="pe-resize-handle" data-resize="right" title="Resize preview"></div>
-                    <aside class="content-viewer-preview planet-editor-preview-wrap" id="pvPreviewWrap">
-                        <div class="pe-preview-toolbar">
-                            <button type="button" class="pe-btn pe-preview-btn" id="pvZoomOut" title="Zoom out">−</button>
-                            <span class="pe-zoom-label" id="pvZoomLabel">100%</span>
-                            <button type="button" class="pe-btn pe-preview-btn" id="pvZoomIn" title="Zoom in">+</button>
-                            <button type="button" class="pe-btn pe-preview-btn" id="pvZoomReset" title="Reset zoom">1:1</button>
-                            <button type="button" class="pe-btn pe-preview-btn" id="pvPreviewFullscreen" title="Fullscreen">FULL</button>
-                        </div>
-                        <div class="pe-preview-viewport" id="pvPreviewViewport">
-                            <canvas id="pvPreview" width="240" height="300"></canvas>
-                        </div>
-                        <div class="pe-preview-label">PREVIEW</div>
-                    </aside>
-                </div>
-                <div class="content-viewer-footer">
-                    <button type="button" class="pe-btn pe-primary" id="pvEdit">EDIT</button>
-                    <button type="button" class="pe-btn" id="pvClose">CLOSE</button>
-                </div>
-                <div class="content-viewer-hint">↑↓ Navigate • E Edit • ESC Close</div>
-            </div>
-        `;
-        document.body.appendChild(this.overlay);
-        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-            VFBgMouseParallax.refresh();
-        }
-
-        this.bindPreviewControls();
-        this.setupPanelResize();
-        this.renderList();
-        this.renderDetail();
-        this.startPreview();
-
-        this.overlay.querySelector('#pvEdit').addEventListener('click', () => this.openEditor());
-        this.overlay.querySelector('#pvClose').addEventListener('click', () => this.close());
-        this.mountDevToggles();
-    }
-
-    planetProgressFlags(planet) {
-        if (!planet || typeof profileManager === 'undefined') {
-            return { known: false, visited: false, cleared: false };
-        }
-        const gid = planet.galaxyId || (typeof planetConfigManager !== 'undefined'
-            ? planetConfigManager.getPlanetGalaxyId(planet.id)
-            : null);
-        return {
-            known: profileManager.isDiscovered('planets', planet.id),
-            visited: !!(gid && (profileManager.isPlanetUnlocked(gid, planet.id)
-                || profileManager.isPlanetCleared(gid, planet.id))),
-            cleared: !!(gid && profileManager.isPlanetCleared(gid, planet.id))
-        };
-    }
-}
-
-
-/* --- js/ui/planet-viewer/mount-dev-toggles.js --- */
-"use strict";
-
-// PlanetViewerUI methods, split from planet-viewer.js.
-extendClass(PlanetViewerUI, {
-    mountDevToggles() {
-        this._devToggles = null;
-        if (typeof devProfileToggles === 'undefined' || !devProfileToggles.active()) return;
-        const footer = this.overlay.querySelector('.content-viewer-footer');
-        const hint = this.overlay.querySelector('.content-viewer-hint');
-        this._devToggles = devProfileToggles.mount(footer, hint, {
-            known: () => {
-                const p = this.planets[this.selectedIndex];
-                return !!(p && profileManager.isDiscovered('planets', p.id));
-            },
-            toggleKnown: () => {
-                const p = this.planets[this.selectedIndex];
-                if (p) profileManager.toggleDiscovered('planets', p.id);
-            },
-            visited: () => {
-                const p = this.planets[this.selectedIndex];
-                return !!(p && this.planetProgressFlags(p).visited);
-            },
-            toggleVisited: () => {
-                const p = this.planets[this.selectedIndex];
-                if (p) profileManager.togglePlanetVisited(p.id);
-            },
-            cleared: () => {
-                const p = this.planets[this.selectedIndex];
-                return !!(p && this.planetProgressFlags(p).cleared);
-            },
-            toggleCleared: () => {
-                const p = this.planets[this.selectedIndex];
-                if (p) profileManager.togglePlanetCleared(p.id);
-            },
-            onChange: () => {
-                this.renderList();
-                this.renderDetail();
-                if (this._devToggles) this._devToggles.refresh();
-            }
-        });
-    },
-
-    setupPanelResize() {
-        const body = this.overlay && this.overlay.querySelector('#pvViewerBody');
-        if (!body || typeof setupPanelResize !== 'function') return;
-        this._panelResize = setupPanelResize({
-            body,
-            root: this.overlay,
-            storageKey: 'pvPanelWidths',
-            defaults: { left: 220, right: 260 },
-            mins: { left: 140, right: 180, center: 200 },
-            leftVar: '--cv-left-w',
-            rightVar: '--cv-right-w',
-            onChange: () => {
-                if (this.visible) this.applyPreviewView();
-            }
-        });
-    },
-
-    bindPreviewControls() {
-        const overlay = this.overlay;
-        this.previewCanvas = overlay.querySelector('#pvPreview');
-        this.previewCtx = this.previewCanvas.getContext('2d');
-        this.previewZoom = 1;
-        this.previewPanX = 0;
-        this.previewPanY = 0;
-        this.previewFullscreen = false;
-
-        overlay.querySelector('#pvZoomOut').addEventListener('click', () => this.setPreviewZoom(this.previewZoom - 0.25));
-        overlay.querySelector('#pvZoomIn').addEventListener('click', () => this.setPreviewZoom(this.previewZoom + 0.25));
-        overlay.querySelector('#pvZoomReset').addEventListener('click', () => {
-            this.previewPanX = 0;
-            this.previewPanY = 0;
-            this.setPreviewZoom(1);
-        });
-        overlay.querySelector('#pvPreviewFullscreen').addEventListener('click', () => {
-            this.setPreviewFullscreen(!this.previewFullscreen);
-        });
-
-        const viewport = overlay.querySelector('#pvPreviewViewport');
-        viewport.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            this.setPreviewZoom(this.previewZoom + (e.deltaY < 0 ? 0.1 : -0.1));
-        }, { passive: false });
-        viewport.addEventListener('contextmenu', (e) => e.preventDefault());
-        viewport.addEventListener('mousedown', (e) => {
-            if (e.button !== 2) return;
-            e.preventDefault();
-            this.previewPanning = true;
-            this.previewPanLastX = e.clientX;
-            this.previewPanLastY = e.clientY;
-            viewport.classList.add('pe-panning');
-        });
-        const onMove = (e) => {
-            if (!this.previewPanning || !this.visible) return;
-            this.previewPanX += vfPanDelta(this.previewCanvas, e.clientX - this.previewPanLastX);
-            this.previewPanY += vfPanDelta(this.previewCanvas, e.clientY - this.previewPanLastY);
-            this.previewPanLastX = e.clientX;
-            this.previewPanLastY = e.clientY;
-            this.applyPreviewView();
-        };
-        const endPan = () => {
-            if (!this.previewPanning) return;
-            this.previewPanning = false;
-            const vp = this.overlay && this.overlay.querySelector('#pvPreviewViewport');
-            if (vp) vp.classList.remove('pe-panning');
-        };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', endPan);
-        this._previewCleanup = () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', endPan);
-        };
-        this.applyPreviewView();
-        requestAnimationFrame(() => this.applyPreviewView());
-    },
-
-    setPreviewZoom(zoom) {
-        this.previewZoom = Math.min(4, Math.max(0.5, Math.round(zoom * 100) / 100));
-        this.applyPreviewView();
-    },
-
-    setPreviewFullscreen(on) {
-        this.previewFullscreen = !!on;
-        requestAnimationFrame(() => this.applyPreviewView());
-    },
-
-    applyPreviewView() {
-        const wrap = this.overlay && this.overlay.querySelector('#pvPreviewWrap');
-        const label = this.overlay && this.overlay.querySelector('#pvZoomLabel');
-        const fsBtn = this.overlay && this.overlay.querySelector('#pvPreviewFullscreen');
-        const viewport = this.overlay && this.overlay.querySelector('#pvPreviewViewport');
-        if (wrap) wrap.classList.toggle('pe-preview-fs', this.previewFullscreen);
-        if (label) label.textContent = `${Math.round(this.previewZoom * 100)}%`;
-        if (fsBtn) fsBtn.textContent = this.previewFullscreen ? 'EXIT' : 'FULL';
-        if (this.previewCanvas && viewport) {
-            const pad = 8;
-            const availW = Math.max(140, viewport.clientWidth - pad);
-            const availH = Math.max(200, viewport.clientHeight - pad);
-            const aspect = this.previewCanvas.width / this.previewCanvas.height || 0.8;
-            let fitW = availW;
-            let fitH = fitW / aspect;
-            if (fitH > availH) {
-                fitH = availH;
-                fitW = fitH * aspect;
-            }
-            this.previewCanvas.style.width = `${Math.round(fitW)}px`;
-            this.previewCanvas.style.height = `${Math.round(fitH)}px`;
-            this.previewCanvas.style.transform =
-                `translate(${this.previewPanX}px, ${this.previewPanY}px) scale(${this.previewZoom})`;
-        }
-    },
-
-    startPreview() {
-        this.stopPreview();
-        if (this.previewCanvas) {
-            this.previewCanvas.width = 240;
-            this.previewCanvas.height = 300;
-            this.previewCtx = this.previewCanvas.getContext('2d');
-        }
-        this.previewObstacles = [];
-        this.previewObstacleSpawnAcc = 0;
-        this._previewCfgId = null;
-        let lastTs = 0;
-        const tick = (ts) => {
-            if (!this.visible) return;
-            if (!lastTs) lastTs = ts;
-            const dt = Math.min(50, ts - lastTs);
-            lastTs = ts;
-            this.updatePreviewObstacles(dt);
-            this.drawPreview();
-            this.previewAnimId = requestAnimationFrame(tick);
-        };
-        this.previewAnimId = requestAnimationFrame(tick);
-    },
-
-    stopPreview() {
-        if (this.previewAnimId) {
-            cancelAnimationFrame(this.previewAnimId);
-            this.previewAnimId = null;
-        }
-        this.previewObstacles = [];
-        this.previewObstacleSpawnAcc = 0;
-    },
-
-    cleanupPreviewControls() {
-        if (this._previewCleanup) {
-            this._previewCleanup();
-            this._previewCleanup = null;
-        }
-    },
-
-    drawPreview() {
-        if (!this.previewCtx || !this.previewCanvas) return;
-        const ctx = this.previewCtx;
-        const w = this.previewCanvas.width;
-        const h = this.previewCanvas.height;
-        const cfg = this.getSelectedConfig();
-        const bg = getComputedStyle(document.documentElement).getPropertyValue('--current-background').trim() || '#0a0a0a';
-        ctx.fillStyle = bg;
-        ctx.fillRect(0, 0, w, h);
-
-        if (!cfg) {
-            ctx.fillStyle = '#888';
-            ctx.font = '11px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('NO DATA', w / 2, h / 2);
-            return;
-        }
-
-        const t = performance.now() / 1000;
-        const canDraw = typeof parallaxManager !== 'undefined' && parallaxManager.drawLayerPattern;
-        const layers = cfg.backgroundLayers || [];
-
-        layers.forEach((layer) => {
-            if (layer.visible === false) return;
-            const opacity = layer.opacity != null ? layer.opacity : 0.15;
-            if (opacity <= 0) return;
-
-            let color = '#808080';
-            if (typeof planetConfigManager !== 'undefined') {
-                color = planetConfigManager.resolveLayerColor(layer);
-            }
-
-            ctx.save();
-            ctx.globalAlpha = opacity;
-            if (canDraw) {
-                const speed = layer.speed || 0.3;
-                const fakeLayer = {
-                    pattern: layer.pattern,
-                    y: (t * speed * 40) % 600,
-                    color,
-                    colorSource: 'custom',
-                    opacity: 1,
-                    scale: layer.scale != null ? layer.scale : 1,
-                    visible: true
-                };
-                parallaxManager.drawLayerPattern(ctx, fakeLayer, 0);
-            } else {
-                ctx.fillStyle = color;
-                const speed = layer.speed || 0.3;
-                const offset = (t * speed * 40) % 40;
-                const step = layer.pattern && layer.pattern.includes('sky') ? 16 : 10;
-                for (let x = 0; x < w; x += step) {
-                    for (let y = -40; y < h + 40; y += step) {
-                        if (((Math.floor(x / step) + Math.floor((y + offset) / step)) % 3) === 0) {
-                            ctx.fillRect(x, Math.floor(y + offset) % h, 3, 3);
-                        }
-                    }
-                }
-            }
-            ctx.restore();
-        });
-
-        this.drawObstaclePreviews(ctx);
-        this.drawSideEnemyPreviews(ctx, w, h, cfg.enemies || cfg.sideEnemies || []);
-
-        const p = this.planets[this.selectedIndex];
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--current-text').trim() || '#e8a040';
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'left';
-        ctx.fillText((p && p.name) || 'PLANET', 8, 14);
-    },
-});
-
-
-/* --- js/ui/planet-viewer/update-preview-obstacles.js --- */
-"use strict";
-
-// PlanetViewerUI methods, split from planet-viewer.js.
-extendClass(PlanetViewerUI, {
-    updatePreviewObstacles(dtMs) {
-        if (!this.previewCanvas) return;
-        const cfg = this.getSelectedConfig();
-        const defs = (cfg && cfg.obstacles) || [];
-        const cfgId = cfg && cfg.id;
-        if (cfgId !== this._previewCfgId) {
-            this._previewCfgId = cfgId;
-            this.previewObstacles = [];
-            this.previewObstacleSpawnAcc = 0;
-        }
-        if (!defs.length) {
-            this.previewObstacles = [];
-            return;
-        }
-        const w = this.previewCanvas.width;
-        const h = this.previewCanvas.height;
-        const frames = dtMs / 16.67;
-        const interval = Math.max(400, (cfg && cfg.obstacleSpawnRate) || 2000);
-        this.previewObstacleSpawnAcc += dtMs;
-        while (this.previewObstacleSpawnAcc >= interval) {
-            this.previewObstacleSpawnAcc -= interval;
-            this.spawnPreviewObstacle(defs, w, h);
-        }
-        if (this.previewObstacles.length === 0) {
-            for (let i = 0; i < Math.min(3, defs.length); i++) {
-                this.spawnPreviewObstacle(defs, w, h);
-                const o = this.previewObstacles[this.previewObstacles.length - 1];
-                if (o) o.x = Math.random() * w * 0.7;
-            }
-        }
-        const margin = 40;
-        this.previewObstacles = this.previewObstacles.filter((o) => {
-            o.x += o.horizontalSpeed * frames;
-            o.y += o.verticalSpeed * frames;
-            return o.x < w + margin && o.y < h + margin && o.x > -margin && o.y > -margin;
-        });
-    },
-
-    spawnPreviewObstacle(defs, w, h) {
-        if (!defs || !defs.length) return;
-        let total = 0;
-        defs.forEach((d) => { total += Math.max(1, d.weight || 1); });
-        let r = Math.random() * total;
-        let def = defs[0];
-        for (let i = 0; i < defs.length; i++) {
-            r -= Math.max(1, defs[i].weight || 1);
-            if (r <= 0) { def = defs[i]; break; }
-        }
-        if (typeof obstacleManager !== 'undefined' && obstacleManager.createObstacleFromDef) {
-            const origin = obstacleManager.spawnOriginForDirection
-                ? obstacleManager.spawnOriginForDirection(def.direction || 'ltr', def.width, def.height, { width: w, height: h })
-                : { x: -(def.width || 18), y: Math.random() * Math.max(1, h - (def.height || 18)) };
-            this.previewObstacles.push(obstacleManager.createObstacleFromDef(def, { x: origin.x, y: origin.y }));
-            return;
-        }
-        const size = { width: def.width || 18, height: def.height || 18 };
-        const horizontalSpeed = def.speed != null ? def.speed : 0.8;
-        this.previewObstacles.push({
-            x: -size.width,
-            y: Math.random() * Math.max(1, h - size.height),
-            width: size.width,
-            height: size.height,
-            horizontalSpeed,
-            verticalSpeed: horizontalSpeed * 0.3,
-            type: def.type,
-            kind: def.kind,
-            isFog: def.kind === 'fog',
-            reflectsShots: !!def.reflectsShots,
-            sprite: def.sprite,
-            opacity: def.opacity != null ? def.opacity : 1,
-            opticalMode: def.opticalMode || 'none',
-            rotation: 0
-        });
-    },
-
-    drawObstaclePreviews(ctx) {
-        const list = this.previewObstacles || [];
-        const fogs = list.filter((o) => o.isFog);
-        const solids = list.filter((o) => !o.isFog);
-        [...fogs, ...solids].forEach((obstacle) => {
-            if (typeof renderManager !== 'undefined' && renderManager.drawObstacleSprite) {
-                renderManager.drawObstacleSprite(ctx, obstacle);
-                return;
-            }
-            const spriteName = obstacle.sprite
-                || (obstacle.isFog ? 'fog' : (obstacle.reflectsShots ? 'shield' : 'obstacle'));
-            const alpha = obstacle.opacity != null ? obstacle.opacity : 1;
-            if (typeof graphicsManager !== 'undefined' && graphicsManager.drawSprite && graphicsManager.getSprite) {
-                const sprite = graphicsManager.getSprite(spriteName)
-                    || graphicsManager.getSprite(obstacle.reflectsShots ? 'shield' : 'obstacle');
-                if (sprite) {
-                    ctx.save();
-                    if (alpha < 1) ctx.globalAlpha = alpha;
-                    graphicsManager.drawSprite(
-                        ctx, sprite,
-                        obstacle.x, obstacle.y, obstacle.width, obstacle.height,
-                        0, 'var(--current-text-secondary)'
-                    );
-                    ctx.restore();
-                    return;
-                }
-            }
-            ctx.save();
-            ctx.globalAlpha = alpha;
-            ctx.fillStyle = obstacle.isFog ? 'rgba(120,140,180,0.5)' : (obstacle.reflectsShots ? '#7a9aaa' : '#6a6a6a');
-            ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-            ctx.restore();
-        });
-    },
-
-    drawSideEnemyPreviews(ctx, w, h, enemies) {
-        if (!enemies.length) return;
-        enemies.slice(0, 4).forEach((entry, i) => {
-            const x = w - 48;
-            const y = 28 + i * 48;
-            ctx.save();
-            ctx.globalAlpha = 0.9;
-            if (typeof graphicsManager !== 'undefined' && graphicsManager.renderEnemyShip) {
-                graphicsManager.renderEnemyShip(ctx, {
-                    x, y, width: 24, height: 18, type: entry.type
-                }, 0.85);
-            } else {
-                ctx.fillStyle = '#999';
-                ctx.fillRect(x, y, 24, 18);
-            }
-            if (entry.champion) {
-                ctx.strokeStyle = '#c45c26';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(x - 2, y - 2, 28, 22);
-            }
-            ctx.restore();
-        });
-    },
-
-    renderList() {
-        const list = this.overlay && this.overlay.querySelector('#pvList');
-        if (!list) return;
-        list.innerHTML = '';
-
-        this.systems.forEach((sys) => {
-            const group = document.createElement('div');
-            group.className = 'cv-system-group';
-
-            const head = document.createElement('div');
-            head.className = 'cv-system-label';
-            head.textContent = sys.name || 'SYSTEM';
-            group.appendChild(head);
-
-            if (!sys.planets.length) {
-                const empty = document.createElement('div');
-                empty.className = 'cv-system-empty';
-                empty.textContent = '—';
-                group.appendChild(empty);
-            } else {
-                sys.planets.forEach((planet) => {
-                    const flatIndex = this.planets.findIndex((p) => p.id === planet.id);
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'content-viewer-item' + (flatIndex === this.selectedIndex ? ' selected' : '');
-                    btn.innerHTML =
-                        this.planetIconHtmlStatic(planet.id, 32) +
-                        `<span class="cv-item-label">${planet.name}` +
-                        (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
-                            ? devProfileToggles.badgesHtml(this.planetProgressFlags(planet))
-                            : '') +
-                        `</span>`;
-                    btn.addEventListener('click', () => {
-                        this.selectedIndex = flatIndex;
-                        this.renderList();
-                        this.renderDetail();
-                        this.persist();
-                    });
-                    group.appendChild(btn);
-                });
-            }
-            list.appendChild(group);
-        });
-        const selected = list.querySelector('.content-viewer-item.selected');
-        if (selected) selected.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-    },
-
-    renderDetail() {
-        const root = this.overlay && this.overlay.querySelector('#pvDetail');
-        const p = this.planets[this.selectedIndex];
-        if (!root || !p) return;
-
-        const stageRows = (p.stages && p.stages.length)
-            ? p.stages.map((s) => {
-                const label = s.key === 'boss' ? 'BOSS' : `STAGE ${s.key}`;
-                return `<div class="stat-row"><span class="stat-label">${label}</span><span class="stat-value">${s.enemies} enemies</span></div>`;
-            }).join('')
-            : '<div class="stat-row"><span class="stat-label">Stages</span><span class="stat-value">—</span></div>';
-
-        const systemsHtml = this.systems.map((sys) => {
-            const active = sys.id === p.galaxyId || sys.name === p.galaxy;
-            const count = sys.planets.length;
-            return `<span class="cv-system-chip${active ? ' active' : ''}">${sys.name} (${count})</span>`;
-        }).join('');
-
-        root.innerHTML = `
-            <div class="content-viewer-hero">
-                ${this.planetIconHtml(p.id, 48)}
-                <div>
-                    <h3 class="content-viewer-name">${p.name}</h3>
-                    <p class="content-viewer-desc">${p.description || 'No description.'}</p>
-                </div>
-            </div>
-            <div class="cv-systems-row">
-                <div class="cv-systems-title">SYSTEMS</div>
-                <div class="cv-systems-chips">${systemsHtml || '—'}</div>
-            </div>
-            <div class="content-viewer-stats">
-                <div class="stat-row"><span class="stat-label">Galaxy</span><span class="stat-value">${p.galaxy || '—'}</span></div>
-                <div class="stat-row"><span class="stat-label">Factions</span><span class="stat-value">${(p.factions && p.factions.length) ? p.factions.join(', ') : 'ALL'}</span></div>
-                <div class="stat-row"><span class="stat-label">Difficulty</span><span class="stat-value">${p.difficulty || '—'}</span></div>
-                <div class="stat-row"><span class="stat-label">BG Layers</span><span class="stat-value">${p.layerCount}</span></div>
-                <div class="stat-row"><span class="stat-label">Enemies</span><span class="stat-value">${p.enemyCount}</span></div>
-            </div>
-            <div class="cv-stages-block">
-                <div class="cv-systems-title">STAGES</div>
-                <div class="content-viewer-stats">${stageRows}</div>
-            </div>
-        `;
-        if (this._devToggles) this._devToggles.refresh();
-    },
-
-    persist() {
-        if (typeof menuStateManager !== 'undefined' && this.visible) {
-            const p = this.planets[this.selectedIndex];
-            menuStateManager.setScreen('planet-viewer', { planet: p ? p.id : 'mars' });
-        }
-    },
-
-    handleKeyDown(e) {
-        if (!this.visible) return;
-        if (this._devToggles && this._devToggles.handleKey(e)) return;
-        if (e.key === 'Escape' && this.previewFullscreen) {
-            e.preventDefault();
-            this.setPreviewFullscreen(false);
-            return;
-        }
-        switch (e.key) {
-            case 'ArrowUp':
-            case 'ArrowLeft':
-                e.preventDefault();
-                this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-                this.renderList();
-                this.renderDetail();
-                this.persist();
-                break;
-            case 'ArrowDown':
-            case 'ArrowRight':
-                e.preventDefault();
-                this.selectedIndex = Math.min(this.planets.length - 1, this.selectedIndex + 1);
-                this.renderList();
-                this.renderDetail();
-                this.persist();
-                break;
-            case 'e':
-            case 'E':
-            case 'Enter':
-                e.preventDefault();
-                this.openEditor();
-                break;
-            case 'Escape':
-                e.preventDefault();
-                this.close();
-                break;
-        }
-    },
-});
-
-
-/* --- js/ui/planet-viewer/open-editor.js --- */
-"use strict";
-
-// PlanetViewerUI methods, split from planet-viewer.js.
-extendClass(PlanetViewerUI, {
-    openEditor() {
-        const p = this.planets[this.selectedIndex];
-        if (!p || typeof planetEditorUI === 'undefined') return;
-        this.hide();
-        planetEditorUI.show(p.id, undefined, false, { returnTo: 'planet-viewer' });
-    },
-
-    close() {
-        this.hide();
-        const container = document.querySelector('.game-container');
-        const inGame = container && container.style.display !== 'none';
-        if (inGame) {
-            if (typeof menuStateManager !== 'undefined') menuStateManager.setScreen('ingame');
-            return;
-        }
-        if (this.onClose) {
-            const cb = this.onClose;
-            this.onClose = null;
-            cb();
-            return;
-        }
-        if (typeof homeStationUI !== 'undefined') {
-            homeStationUI.show({
-                tab: 'explorations',
-                focusExplore: 'planets',
-                onClose: () => {
-                    if (typeof startScreenManager !== 'undefined') startScreenManager.show();
-                }
-            });
-        } else if (typeof startScreenManager !== 'undefined') {
-            startScreenManager.show();
-        } else if (typeof menuStateManager !== 'undefined') {
-            menuStateManager.setScreen('start');
-        }
-    },
-});
-
-
-/* --- js/ui/planet-viewer.js --- */
-"use strict";
-
-// PlanetViewerUI is defined in planet-viewer/core.js and extended by the other files in planet-viewer/,
-// which index.html loads before this file.
-var planetViewerUI = new PlanetViewerUI();
-
-
-/* --- js/ui/event-viewer.js --- */
-"use strict";
-
-/**
- * Event Viewer — combat-event archive for discovered summon roles.
- * Open: Explorations → ARCHIVE → EVENTS
- */
-var EventViewerUI = class EventViewerUI {
-    constructor() {
-        this.visible = false;
-        this.selectedIndex = 0;
-        this.events = [];
-        this.overlay = null;
-        this._keyHandler = (e) => this.handleKeyDown(e);
-    }
-
-    getEventList() {
-        const all = (typeof combatEventConfigManager !== 'undefined')
-            ? combatEventConfigManager.getList()
-            : [];
-        const devMode = typeof startScreenManager !== 'undefined' && startScreenManager.devMode;
-        if (devMode || typeof profileManager === 'undefined' || !profileManager.hasActiveProfile()) {
-            return all.slice();
-        }
-        const allowed = {};
-        (profileManager.getDiscovered('events') || []).forEach((id) => {
-            allowed[String(id)] = true;
-        });
-        return all.filter((ev) => !!allowed[String(ev.id)]);
-    }
-
-    show(options) {
-        if (options && Object.prototype.hasOwnProperty.call(options, 'onClose')) {
-            this.onClose = options.onClose;
-        }
-        this.events = this.getEventList();
-        if (!this.events.length) return;
-        const preferId = options && (options.eventId || options.catalogId);
-        if (preferId) {
-            const idx = this.events.findIndex((e) => e.id === preferId);
-            if (idx >= 0) this.selectedIndex = idx;
-        }
-        this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.events.length - 1));
-        this.visible = true;
-        this.createUI();
-        document.addEventListener('keydown', this._keyHandler);
-        if (!(options && options.skipPersist) && typeof menuStateManager !== 'undefined') {
-            menuStateManager.setScreen('event-viewer', {
-                eventId: this.events[this.selectedIndex].id
-            });
-        }
-    }
-
-    hide() {
-        this.visible = false;
-        document.removeEventListener('keydown', this._keyHandler);
-        if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
-        }
-    }
-
-    close() {
-        this.hide();
-        if (typeof this.onClose === 'function') this.onClose();
-    }
-
-    persist() {
-        if (typeof menuStateManager === 'undefined') return;
-        const ev = this.events[this.selectedIndex];
-        if (!ev) return;
-        menuStateManager.setScreen('event-viewer', { eventId: ev.id });
-    }
-
-    createUI() {
-        if (this.overlay) this.overlay.remove();
-        this.overlay = document.createElement('div');
-        this.overlay.className = 'content-viewer-overlay';
-        this.overlay.innerHTML = `
-            <div class="content-viewer-panel">
-                <h2 class="content-viewer-title">EVENTS</h2>
-                <div class="content-viewer-body" id="evViewerBody">
-                    <aside class="content-viewer-list" id="evList"></aside>
-                    <div class="pe-resize-handle" aria-hidden="true"></div>
-                    <div class="content-viewer-detail" id="evDetail"></div>
-                </div>
-                <div class="content-viewer-footer">
-                    <button type="button" class="pe-btn" id="evClose">CLOSE</button>
-                </div>
-                <div class="content-viewer-hint">↑↓ Navigate • ESC Close</div>
-            </div>
-        `;
-        document.body.appendChild(this.overlay);
-        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-            VFBgMouseParallax.refresh();
-        }
-        this.renderList();
-        this.renderDetail();
-        this.overlay.querySelector('#evClose').addEventListener('click', () => this.close());
-        this.mountDevToggles();
-    }
-
-    mountDevToggles() {
-        this._devToggles = null;
-        if (typeof devProfileToggles === 'undefined' || !devProfileToggles.active()) return;
-        const footer = this.overlay.querySelector('.content-viewer-footer');
-        const hint = this.overlay.querySelector('.content-viewer-hint');
-        this._devToggles = devProfileToggles.mount(footer, hint, {
-            known: () => {
-                const ev = this.events[this.selectedIndex];
-                return !!(ev && profileManager.isDiscovered('events', ev.id));
-            },
-            toggleKnown: () => {
-                const ev = this.events[this.selectedIndex];
-                if (ev) profileManager.toggleDiscovered('events', ev.id);
-            },
-            onChange: () => {
-                this.events = this.getEventList();
-                this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.events.length - 1));
-                this.renderList();
-                this.renderDetail();
-                if (this._devToggles) this._devToggles.refresh();
-            }
-        });
-    }
-
-    renderList() {
-        const list = this.overlay && this.overlay.querySelector('#evList');
-        if (!list) return;
-        list.innerHTML = '';
-        this.events.forEach((ev, index) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'content-viewer-item' + (index === this.selectedIndex ? ' selected' : '');
-            const swatch = `<span class="cv-event-swatch" style="background:${ev.accent || '#888'}"></span>`;
-            btn.innerHTML =
-                swatch +
-                `<span class="cv-item-label">${ev.shortName || ev.name}` +
-                (typeof devProfileToggles !== 'undefined' && devProfileToggles.active()
-                    ? (typeof devProfileToggles.badgesHtml === 'function'
-                        ? devProfileToggles.badgesHtml({
-                            known: profileManager.isDiscovered('events', ev.id)
-                        })
-                        : '')
-                    : '') +
-                `</span>`;
-            btn.addEventListener('click', () => {
-                this.selectedIndex = index;
-                this.renderList();
-                this.renderDetail();
-                this.persist();
-            });
-            list.appendChild(btn);
-        });
-        const selected = list.querySelector('.content-viewer-item.selected');
-        if (selected) selected.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-    }
-
-    renderDetail() {
-        const root = this.overlay && this.overlay.querySelector('#evDetail');
-        const ev = this.events[this.selectedIndex];
-        if (!root || !ev) return;
-        root.innerHTML = `
-            <div class="content-viewer-hero">
-                <div class="cv-event-hero-swatch" style="background:${ev.accent || '#888'}"></div>
-                <div class="cv-ship-hero-text">
-                    <h3 class="content-viewer-name">${ev.name}</h3>
-                    <p class="content-viewer-desc">${ev.description || ''}</p>
-                </div>
-            </div>
-            <div class="content-viewer-stats cv-stat-clusters cv-stat-clusters-plain">
-                <div class="cv-stat-cluster">
-                    <div class="cv-stat-cluster-title">Signal</div>
-                    <div class="stat-row"><span class="stat-label">Role</span><span class="stat-value">${String(ev.role || ev.id).toUpperCase()}</span></div>
-                    <div class="stat-row"><span class="stat-label">Announce</span><span class="stat-value">${ev.announce || '—'}</span></div>
-                    <div class="stat-row"><span class="stat-label">Warn</span><span class="stat-value">${Math.round((ev.announceMs || 0) / 100) / 10}s</span></div>
-                </div>
-                <div class="cv-stat-cluster">
-                    <div class="cv-stat-cluster-title">Counter</div>
-                    <p class="content-viewer-desc" style="margin:0">${ev.counter || '—'}</p>
-                </div>
-            </div>
-        `;
-    }
-
-    handleKeyDown(e) {
-        if (!this.visible) return;
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            this.close();
-            return;
-        }
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            this.selectedIndex = Math.min(this.events.length - 1, this.selectedIndex + 1);
-            this.renderList();
-            this.renderDetail();
-            this.persist();
-        } else if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-            this.renderList();
-            this.renderDetail();
-            this.persist();
-        }
-    }
-}
-
-var eventViewerUI = new EventViewerUI();
-
-
-/* --- js/ui/ability-editor.js --- */
-"use strict";
-
-/**
- * Ability Editor — edit shared ability metadata (icon, cluster, type, …).
- * Open: Abilities viewer → EDIT / NEW
- */
-var AbilityEditorUI = class AbilityEditorUI {
-    constructor() {
-        this.visible = false;
-        this.returnTo = null;
-        this.selectedId = 'player_control';
-        this.draft = null;
-    }
-
-    init() {
-        this.ensureOverlay();
-    }
-
-    ensureOverlay() {
-        if (document.getElementById('abilityEditorOverlay')) return;
-
-        const overlay = document.createElement('div');
-        overlay.id = 'abilityEditorOverlay';
-        overlay.className = 'planet-editor-overlay ability-editor-overlay hidden';
-        overlay.innerHTML = `
-            <div class="planet-editor-panel">
-                <div class="planet-editor-header">
-                    <h2>ABILITY EDITOR</h2>
-                    <div class="planet-editor-planet-select" id="aeTypeSelect"></div>
-                </div>
-                <div class="planet-editor-body ae-body-single">
-                    <div class="planet-editor-controls" id="aeControls"></div>
-                </div>
-                <div class="planet-editor-footer">
-                    <button type="button" class="pe-btn" id="aeNew">NEW</button>
-                    <button type="button" class="pe-btn" id="aeReset">RESET</button>
-                    <button type="button" class="pe-btn pe-primary" id="aeSave">SAVE</button>
-                    <button type="button" class="pe-btn" id="aeClose">CLOSE</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(overlay);
-
-        overlay.querySelector('#aeSave').addEventListener('click', () => this.save());
-        overlay.querySelector('#aeReset').addEventListener('click', () => this.reset());
-        overlay.querySelector('#aeNew').addEventListener('click', () => this.createNew());
-        overlay.querySelector('#aeClose').addEventListener('click', () => this.hide());
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.visible) {
-                e.preventDefault();
-                this.hide();
-            }
-        });
-    }
-
-    persistMenuState() {
-        if (typeof menuStateManager !== 'undefined' && this.visible) {
-            menuStateManager.setScreen('ability-editor', {
-                abilityId: this.selectedId,
-                returnTo: this.returnTo
-            });
-        }
-    }
-
-    show(abilityId, fromRestore, options) {
-        this.ensureOverlay();
-        if (abilityId) this.selectedId = String(abilityId);
-        if (options && options.returnTo) this.returnTo = options.returnTo;
-        else if (!fromRestore) this.returnTo = null;
-        this.loadDraft();
-        this.visible = true;
-        document.getElementById('abilityEditorOverlay').classList.remove('hidden');
-        this.renderTypeSelect();
-        this.renderControls();
-        if (!fromRestore && typeof menuStateManager !== 'undefined') {
-            menuStateManager.setScreen('ability-editor', {
-                abilityId: this.selectedId,
-                returnTo: this.returnTo
-            });
-        }
-    }
-
-    hide() {
-        this.visible = false;
-        const el = document.getElementById('abilityEditorOverlay');
-        if (el) el.classList.add('hidden');
-        const backTo = this.returnTo;
-        this.returnTo = null;
-        if (backTo === 'ability-viewer' && typeof abilityViewerUI !== 'undefined') {
-            abilityViewerUI.show({ abilityId: this.selectedId });
-            return;
-        }
-        if (backTo === 'defense-viewer' && typeof defenseViewerUI !== 'undefined') {
-            defenseViewerUI.show({ defenseId: this.selectedId });
-            return;
-        }
-        if (typeof menuStateManager !== 'undefined') {
-            const container = document.querySelector('.game-container');
-            const inGame = container && container.style.display !== 'none';
-            menuStateManager.setScreen(inGame ? 'ingame' : 'start');
-        }
-    }
-
-    loadDraft() {
-        if (typeof abilityConfigManager === 'undefined') {
-            this.draft = {
-                id: this.selectedId,
-                name: this.selectedId,
-                description: '',
-                icon: '◆',
-                cluster: 'other',
-                type: 'passive',
-                tier: 1,
-                uiDescription: '',
-                custom: false
-            };
-            return;
-        }
-        this.draft = JSON.parse(JSON.stringify(abilityConfigManager.getAbility(this.selectedId)));
-    }
-
-    createNew() {
-        if (typeof abilityConfigManager === 'undefined') return;
-        const ability = abilityConfigManager.createAbility({ name: 'New Ability' });
-        this.selectedId = ability.id;
-        this.loadDraft();
-        this.renderTypeSelect();
-        this.renderControls();
-        this.persistMenuState();
-    }
-
-    renderTypeSelect() {
-        const root = document.getElementById('aeTypeSelect');
-        if (!root) return;
-        root.innerHTML = '';
-        const ids = typeof abilityConfigManager !== 'undefined'
-            ? abilityConfigManager.getIds()
-            : [this.selectedId];
-        ids.forEach((id) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'pe-planet-btn' + (id === this.selectedId ? ' active' : '');
-            const meta = typeof abilityConfigManager !== 'undefined'
-                ? abilityConfigManager.getAbility(id)
-                : { icon: '◆', name: id };
-            const iconHtml = typeof abilityConfigManager !== 'undefined'
-                ? abilityConfigManager.resolveIconHtml(meta.icon, 14, 'cv-ability-icon-img')
-                : meta.icon;
-            btn.innerHTML = `${iconHtml} <span>${meta.name}</span>`;
-            btn.addEventListener('click', () => {
-                this.selectedId = id;
-                this.loadDraft();
-                this.renderTypeSelect();
-                this.renderControls();
-                this.persistMenuState();
-            });
-            root.appendChild(btn);
-        });
-    }
-
-    renderControls() {
-        const root = document.getElementById('aeControls');
-        if (!root || !this.draft) return;
-        root.innerHTML = '';
-
-        const preview = document.createElement('div');
-        preview.className = 'ae-preview';
-        preview.innerHTML = `<span class="ae-preview-icon">${typeof abilityConfigManager !== 'undefined' ? abilityConfigManager.resolveIconHtml(this.draft.icon || '◆', 32, 'cv-ability-icon-img') : (this.draft.icon || '◆')}</span>` +
-            `<span class="ae-preview-name">${this.draft.name || this.draft.id}</span>`;
-        root.appendChild(preview);
-
-        root.appendChild(this.makeTextInput('Name', this.draft.name || '', (v) => {
-            this.draft.name = v;
-            this.updatePreview();
-        }));
-        root.appendChild(this.makeTextInput('Icon key', this.draft.icon || '', (v) => {
-            this.draft.icon = v || '◆';
-            this.updatePreview();
-        }));
-        root.appendChild(this.makeTextInput('Description', this.draft.description || '', (v) => {
-            this.draft.description = v;
-        }));
-        root.appendChild(this.makeTextInput('UI summary', this.draft.uiDescription || '', (v) => {
-            this.draft.uiDescription = v;
-        }));
-
-        const clusters = (typeof abilityConfigManager !== 'undefined'
-            ? abilityConfigManager.clusterOrder.map((c) => c.id)
-            : ['core', 'mobility', 'offense', 'defense', 'combat', 'other']);
-        root.appendChild(this.makeSelect('Cluster', this.draft.cluster || 'other', clusters, (v) => {
-            this.draft.cluster = v;
-        }));
-        root.appendChild(this.makeSelect('Type', this.draft.type || 'passive', ['passive', 'active'], (v) => {
-            this.draft.type = v;
-        }));
-        root.appendChild(this.makeSlider('Tier', this.draft.tier || 1, 1, 5, 1, (v) => {
-            this.draft.tier = Math.round(v);
-        }));
-    }
-
-    updatePreview() {
-        const icon = document.querySelector('#aeControls .ae-preview-icon');
-        const name = document.querySelector('#aeControls .ae-preview-name');
-        if (icon) {
-            icon.innerHTML = typeof abilityConfigManager !== 'undefined'
-                ? abilityConfigManager.resolveIconHtml(this.draft.icon || '◆', 32, 'cv-ability-icon-img')
-                : (this.draft.icon || '◆');
-        }
-        if (name) name.textContent = this.draft.name || this.draft.id;
-    }
-
-    makeSlider(labelText, value, min, max, step, onChange) {
-        const row = document.createElement('div');
-        row.className = 'pe-row';
-        const label = document.createElement('label');
-        label.textContent = labelText;
-        const val = document.createElement('span');
-        val.className = 'pe-val';
-        const format = (v) => (step < 1 ? Number(v).toFixed(2) : String(Math.round(v)));
-        val.textContent = format(value);
-        const input = document.createElement('input');
-        input.type = 'range';
-        input.min = String(min);
-        input.max = String(max);
-        input.step = String(step);
-        input.value = String(value);
-        input.addEventListener('input', () => {
-            const v = Number(input.value);
-            val.textContent = format(v);
-            onChange(v);
-        });
-        row.appendChild(label);
-        row.appendChild(val);
-        row.appendChild(input);
-        return row;
-    }
-
-    makeSelect(labelText, value, options, onChange) {
-        const row = document.createElement('div');
-        row.className = 'pe-row';
-        const label = document.createElement('label');
-        label.textContent = labelText;
-        const select = document.createElement('select');
-        options.forEach((opt) => {
-            const o = document.createElement('option');
-            o.value = opt;
-            o.textContent = opt;
-            if (opt === value) o.selected = true;
-            select.appendChild(o);
-        });
-        select.addEventListener('change', () => onChange(select.value));
-        row.appendChild(label);
-        row.appendChild(select);
-        return row;
-    }
-
-    makeTextInput(labelText, value, onChange) {
-        const row = document.createElement('div');
-        row.className = 'pe-row';
-        const label = document.createElement('label');
-        label.textContent = labelText;
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = value;
-        input.className = 'pe-text-input';
-        input.addEventListener('input', () => onChange(input.value));
-        row.appendChild(label);
-        row.appendChild(input);
-        return row;
-    }
-
-    save() {
-        if (typeof abilityConfigManager === 'undefined' || !this.draft) return;
-        abilityConfigManager.setAbility(this.selectedId, this.draft);
-        this.loadDraft();
-        this.renderTypeSelect();
-        this.renderControls();
-        const header = document.querySelector('#abilityEditorOverlay .planet-editor-header h2');
-        if (header) {
-            const prev = header.textContent;
-            header.textContent = 'SAVED';
-            setTimeout(() => { header.textContent = prev || 'ABILITY EDITOR'; }, 700);
-        }
-    }
-
-    reset() {
-        if (typeof abilityConfigManager === 'undefined') return;
-        abilityConfigManager.resetAbility(this.selectedId);
-        this.loadDraft();
-        this.renderControls();
-    }
-}
-
-var abilityEditorUI = new AbilityEditorUI();
-abilityEditorUI.init();
-
-
 /* --- js/ui/mission-start/core.js --- */
 "use strict";
 
@@ -48623,6 +46576,7 @@ var MissionStartManager = class MissionStartManager {
         this.sideTo = [];
         this._armed = false;
         this._introClock = 0;
+        this._awaitFireHeld = false;
     }
 
     /** Wall-clock countdown/GO — must not depend on the combat RAF (pause / FX remote / park). */
@@ -48731,6 +46685,11 @@ var MissionStartManager = class MissionStartManager {
         this.syncFactionChrome();
         this.setText('FIRE TO START', true);
         this.showOverlay();
+        this._awaitFireHeld = false;
+        this.clearStickyShipKeys();
+        if (typeof gamepadManager !== 'undefined' && gamepadManager.primeMissionStartFire) {
+            gamepadManager.primeMissionStartFire();
+        }
 
         if (typeof levelInfoManager !== 'undefined') {
             if (typeof levelInfoManager.prepareForCombat === 'function') {
@@ -48739,6 +46698,21 @@ var MissionStartManager = class MissionStartManager {
                 levelInfoManager.showPanel();
             }
         }
+    }
+
+    /** Drop latched move keys from menu stick / leftover keydowns before the pilot can steer. */
+    clearStickyShipKeys() {
+        if (typeof gamepadManager !== 'undefined' && gamepadManager.clearShipControlKeys) {
+            gamepadManager.clearShipControlKeys();
+            if (gamepadManager.releaseMenuDirections) gamepadManager.releaseMenuDirections();
+            return;
+        }
+        const ih = (typeof game !== 'undefined' && game.inputHandler) ? game.inputHandler : null;
+        if (!ih || !ih.keys) return;
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space',
+            'Shift', 'ShiftLeft', 'ShiftRight', 'a', 's', 'd', 'A', 'S', 'D'].forEach((k) => {
+            ih.keys[k] = false;
+        });
     }
 
     canvasWidth() {
@@ -48925,8 +46899,25 @@ var MissionStartManager = class MissionStartManager {
         el.classList.add('mission-start-tick');
     }
 
+    _keysIndicateMissionFire(keys) {
+        if (!keys) return false;
+        if (keys[' '] || keys.Space || keys.Enter) return true;
+        return !!(keys.a || keys.A || keys.s || keys.S || keys.d || keys.D);
+    }
+
+    _pollAwaitFireFromKeys() {
+        if (!this.isAwaitingFire()) return;
+        const inputHandler = (typeof game !== 'undefined' && game.systemManager)
+            ? game.systemManager.getSubsystem('inputHandler')
+            : null;
+        const held = inputHandler ? this._keysIndicateMissionFire(inputHandler.keys) : false;
+        if (held && !this._awaitFireHeld) this.onFire();
+        this._awaitFireHeld = held;
+    }
+
     onFire() {
         if (!this.active || this.phase !== 'awaitFire') return false;
+        this._awaitFireHeld = true;
         this.setPhase('countdown');
         this.countdownValue = 3;
         this.countdownTimer = 0;
@@ -48942,6 +46933,10 @@ var MissionStartManager = class MissionStartManager {
 
     update(deltaTime) {
         if (!this.active) return;
+
+        if (this.phase === 'awaitFire') {
+            this._pollAwaitFireFromKeys();
+        }
 
         // Countdown / GO advance via _armCountdownClock (setTimeout), so pause / FX remote
         // / parked combat RAF cannot freeze the "3…2…1…GO" beat.
@@ -49147,6 +47142,7 @@ extendClass(MissionStartManager, {
             if (enemyManager.enemy && this.enemyFrom) enemyManager.enemy.introEntry = true;
             (enemyManager.sideEnemies || []).forEach((s, i) => { if (this.sideFrom && this.sideFrom[i]) s.introEntry = true; });
         }
+        if (typeof this.clearStickyShipKeys === 'function') this.clearStickyShipKeys();
         this.active = false;
         this.phase = null;
         this._armed = false;
@@ -49850,751 +47846,72 @@ window.universeSave = universeSave;
 "use strict";
 
 /**
- * First-run onboarding: Faction homeworld → Pilot → Callsign → Scrap Fighter.
+ * First-run onboarding — consolidated into ProfileSelectionManager's create wizard
+ * (homeworld faction stage + pilot / setup / galaxy / story).
+ * Kept as a thin shim so menu-state restore and legacy callers still resolve.
  */
 var OnboardingManager = class OnboardingManager {
     constructor() {
         this.isVisible = false;
         this.overlay = null;
-        this._keyHandler = null;
-        this.step = 'story'; // story | pilot | name | scrap
         this.onComplete = null;
-        this._pendingName = '';
-        this._pendingFaction = 'terran';
-        this._pilotLook = null;
-        this._pilotLookKey = 'skin';
-        this._heroPlanet = null;
-        this._ppTimer = 0;
     }
 
     show(options) {
-        this.isVisible = true;
-        this.onComplete = options && options.onComplete;
-        this.step = 'story';
-        this._pendingName = '';
-        this._pilotLook = null;
-        this._pilotLookKey = 'skin';
-        this._pendingFaction = (typeof factionManager !== 'undefined' && factionManager.getFactionIds)
-            ? factionManager.getFactionIds()[0]
-            : 'terran';
-        this.createUI();
-        if (typeof menuStateManager !== 'undefined') {
-            menuStateManager.setScreen('onboarding');
+        this.onComplete = options && options.onComplete || null;
+        this.hide();
+        const wrapClose = (prev) => () => {
+            if (typeof prev === 'function') {
+                try { prev(); } catch (e) { /* ignore */ }
+            }
+            const cb = this.onComplete;
+            this.onComplete = null;
+            if (typeof cb === 'function') cb();
+        };
+
+        if (typeof startScreenManager !== 'undefined' && startScreenManager.openProfileCreate) {
+            startScreenManager.openProfileCreate();
+            if (typeof profileSelectionManager !== 'undefined') {
+                profileSelectionManager.onClose = wrapClose(profileSelectionManager.onClose);
+            }
+            return;
         }
+        if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.show) {
+            profileSelectionManager.show({
+                create: true,
+                onClose: wrapClose(null)
+            });
+            profileSelectionManager.mode = 'create';
+            profileSelectionManager.createStep = 'faction';
+            if (profileSelectionManager.createUI) profileSelectionManager.createUI();
+            return;
+        }
+        wrapClose(null)();
     }
 
     hide() {
         this.isVisible = false;
-        clearTimeout(this._ppTimer);
-        this._ppTimer = 0;
-        this.stopHomePlanet();
-        if (typeof profileSelectionManager !== 'undefined'
-            && profileSelectionManager.overlay === this.overlay) {
-            profileSelectionManager.overlay = null;
-        }
-        if (this._keyHandler) {
-            document.removeEventListener('keydown', this._keyHandler);
-            this._keyHandler = null;
-        }
         if (this.overlay) {
             this.overlay.remove();
             this.overlay = null;
         }
     }
 
+    /** DevMode remount hook — forward to the unified wizard if it is open. */
+    createUI() {
+        if (typeof profileSelectionManager !== 'undefined'
+            && profileSelectionManager.isVisible
+            && profileSelectionManager.mode === 'create'
+            && profileSelectionManager.createUI) {
+            profileSelectionManager.createUI();
+        }
+    }
+
     finish() {
         const cb = this.onComplete;
+        this.onComplete = null;
         this.hide();
         if (typeof cb === 'function') cb();
-    }
-
-    getFactionIds() {
-        if (typeof factionManager !== 'undefined' && factionManager.getFactionIds) {
-            return factionManager.getFactionIds();
-        }
-        return ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
-    }
-
-    getFactionLabel(id) {
-        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta) {
-            const meta = planetConfigManager.getFactionMeta(id);
-            if (meta && meta.label) return meta.label;
-        }
-        return String(id || '').toUpperCase();
-    }
-
-    getFactionColor(id) {
-        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionColor) {
-            return factionShipStyles.getFactionColor(id);
-        }
-        return '#888888';
-    }
-
-    getFactionMeta(id) {
-        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getFactionMeta) {
-            return planetConfigManager.getFactionMeta(id);
-        }
-        return null;
-    }
-
-    getFactionEmblemHtml(id, size = 48) {
-        if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml) {
-            return profileSelectionManager.getFactionEmblemHtml(id, size);
-        }
-        if (typeof iconRenderer === 'undefined' || typeof factionShipStyles === 'undefined') return '';
-        const base = factionShipStyles.emblemCamelKey ? factionShipStyles.emblemCamelKey(id) : null;
-        if (!base) return '';
-        let key = base;
-        if (typeof IconSprites !== 'undefined' && IconSprites[base + 'Hi'] && size >= 24) {
-            key = base + (size >= 96 ? '@4x' : '@2x');
-        } else if (typeof iconRenderer.detailKey === 'function') {
-            key = iconRenderer.detailKey(base, size);
-        }
-        const style = factionShipStyles.getFactionStyle ? factionShipStyles.getFactionStyle(id) : null;
-        return iconRenderer.imgHtml(key, size, 'profile-faction-emblem-img', style && style.accent, this.getFactionLabel(id));
-    }
-
-    factionSwatchesHtml() {
-        return `
-            <div class="profile-faction-picker onboarding-faction-picker">
-                <div class="profile-faction-picker-label">CHOOSE YOUR FACTION</div>
-                <div class="profile-faction-swatches">
-                    ${this.getFactionIds().map((id) => `
-                        <button type="button" class="profile-faction-swatch${id === this._pendingFaction ? ' selected' : ''}"
-                            data-faction="${id}" title="${this.getFactionLabel(id)}"
-                            style="--faction-color: ${this.getFactionColor(id)}">
-                            <span class="profile-faction-swatch-emblem">${this.getFactionEmblemHtml(id, 48)}</span>
-                            <span class="profile-faction-swatch-label">${this.getFactionLabel(id)}</span>
-                        </button>
-                    `).join('')}
-                </div>
-            </div>`;
-    }
-
-    factionPreviewHtml() {
-        return `
-            <div class="profile-faction-info-row onboarding-faction-preview">
-                <div class="onboarding-faction-dossier onboarding-preview-card" role="note">
-                    <div class="profile-faction-lore-text onboarding-dossier-lore"></div>
-                    <div class="profile-faction-focus" data-faction-focus aria-label="Faction focus"></div>
-                </div>
-            </div>`;
-    }
-
-    stepIconHtml(key) {
-        if (typeof ProfileSelectionManager !== 'undefined' && ProfileSelectionManager.stepIconHtml) {
-            return ProfileSelectionManager.stepIconHtml(key);
-        }
-        const paths = {
-            faction: 'M2 1h8v6H9v1H8v1H7v1H5V9H4V8H3V7H2zM5 3v3h2V3z',
-            pilot: 'M4 1h4v1h1v3H8v1H4V5H3V2h1zM2 8h8v1h1v2H1V9h1z',
-            name: 'M5 1h2v2h2v1h2v4h-2v1H7v2H5v-2H3V9H1V4h2V3h2zM5 5v2h2V5z'
-        };
-        return `<svg class="profile-stepper-icon" viewBox="0 0 12 12" width="40" height="40" shape-rendering="crispEdges" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${paths[key] || paths.faction}"/></svg>`;
-    }
-
-    steps() {
-        return [
-            ['story', 'faction', 'FACTION'],
-            ['pilot', 'pilot', 'PILOT'],
-            ['name', 'name', 'CALLSIGN'],
-            ['scrap', 'name', 'SHIP']
-        ];
-    }
-
-    stepIndex(id) {
-        const idx = this.steps().findIndex(([stepId]) => stepId === (id || this.step));
-        return Math.max(0, idx);
-    }
-
-    stepperHtml() {
-        const steps = this.steps();
-        const idx = this.stepIndex();
-        return `<ol class="profile-stepper onboarding-stepper" aria-label="Step ${idx + 1} of ${steps.length}">${steps.map(([id, icon, label], i) => `
-            <li class="profile-stepper-step${i < idx ? ' is-done' : ''}${i === idx ? ' is-current' : ''}"${i === idx ? ' aria-current="step"' : ''}>
-                ${i < idx
-                    ? `<button type="button" class="profile-stepper-btn" data-step-go="${id}" title="Back to ${label}">`
-                    : '<span class="profile-stepper-btn">'}
-                    <span class="profile-stepper-dot">${this.stepIconHtml(icon)}</span>
-                    <span class="profile-stepper-label">${label}</span>
-                ${i < idx ? '</button>' : '</span>'}
-            </li>`).join('')}</ol>`;
-    }
-
-    barHtml(primaryLabel, hint, showBack) {
-        const back = showBack
-            ? '<button class="action-button secondary" id="obBack">BACK</button>'
-            : '';
-        return `
-            <div class="profile-selection-bar onboarding-bar">
-                <div class="profile-selection-actions">
-                    ${back}
-                    <button class="action-button" id="obNext">${primaryLabel}</button>
-                </div>
-                <div class="profile-selection-instructions"><p>${hint}</p></div>
-            </div>`;
-    }
-
-    ensurePilotLook() {
-        if (typeof heroPortrait === 'undefined') return null;
-        if (!this._pilotLook || this._pilotLook.faction !== this._pendingFaction) {
-            this._pilotLook = heroPortrait.randomLook(this._pendingFaction);
-            this._pilotLookKey = 'skin';
-        }
-        this._pilotLook = heroPortrait.normalize(this._pilotLook);
-        const keys = heroPortrait.keysFor(this._pilotLook) || [];
-        if (keys.indexOf(this._pilotLookKey) < 0) this._pilotLookKey = keys[0] || 'skin';
-        return this._pilotLook;
-    }
-
-    pilotAccent() {
-        return this.getFactionColor(this._pendingFaction);
-    }
-
-    pilotHtml() {
-        const look = this.ensurePilotLook();
-        if (!look || typeof heroPortrait === 'undefined') {
-            return '<p class="onboarding-hint">PILOT LOOK UNAVAILABLE</p>';
-        }
-        const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
-        if (psm && psm.renderPilotRowHtml) {
-            psm.pendingFaction = this._pendingFaction;
-            psm._startOpts = Object.assign({}, psm._startOpts || {}, {
-                faction: this._pendingFaction,
-                look: this._pilotLook,
-                lookKey: this._pilotLookKey
-            });
-            return `<div class="profile-start-options onboarding-pilot-options">${psm.renderPilotRowHtml()}</div>`;
-        }
-        return `
-            <div class="profile-start-options onboarding-pilot-options">
-                <div class="profile-start-row" data-start-row="pilot">
-                    <span class="profile-start-label">PILOT</span>
-                    <div class="profile-pilot-card">
-                        <div class="profile-pilot-side">
-                            <div class="profile-pilot-portrait" id="psPortrait">${heroPortrait.html(look, this.pilotAccent())}</div>
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-    }
-
-    createUI() {
-        if (this.overlay) this.overlay.remove();
-        if (this._keyHandler) {
-            document.removeEventListener('keydown', this._keyHandler);
-            this._keyHandler = null;
-        }
-        this.stopHomePlanet();
-
-        this.overlay = document.createElement('div');
-        this.overlay.className = 'profile-selection-overlay onboarding-overlay';
-
-        let body = '';
-        let bar = '';
-        if (this.step === 'story') {
-            body = `
-                <div class="profile-selection-content onboarding-content onboarding-homeworld-site">
-                    <div class="onboarding-homeworld-main onboarding-panel">
-                        <h2 class="profile-selection-title">CHOOSE FACTION</h2>
-                        ${this.factionSwatchesHtml()}
-                        ${this.factionPreviewHtml()}
-                    </div>
-                    <aside class="onboarding-homeworld-stage onboarding-panel" aria-label="Faction homeworld">
-                        <div class="onboarding-homeworld-label"></div>
-                    </aside>
-                </div>`;
-            bar = this.barHtml('CONTINUE', '← → Faction | ENTER Continue', false);
-        } else if (this.step === 'pilot') {
-            body = `
-                <div class="profile-selection-content onboarding-content onboarding-panel onboarding-pilot-panel profile-selection-name-mode is-name-step is-pilot-step">
-                    <h2 class="profile-selection-title">CREATE YOUR PILOT</h2>
-                    <p class="onboarding-hint">PICK A FACE · R RANDOMIZE</p>
-                    ${this.pilotHtml()}
-                </div>`;
-            bar = this.barHtml('CONTINUE', '↑ ↓ Feature | ← → Change | R Randomize | ENTER Continue | ESC Back', true);
-        } else if (this.step === 'name') {
-            const psm = this.syncPilotToPsm();
-            const crest = this.ensurePilotLook() && typeof heroPortrait !== 'undefined'
-                ? `<span class="profile-name-crest onboarding-name-portrait" id="obNamePortrait">${heroPortrait.html(this._pilotLook, this.pilotAccent())}</span>`
-                : `<span class="profile-name-crest">${this.getFactionEmblemHtml(this._pendingFaction, 48)}</span>`;
-            const kitCol = (psm && psm.renderKitListHtml) ? psm.renderKitListHtml() : '';
-            const loadout = (psm && psm.renderLoadoutHtml) ? psm.renderLoadoutHtml() : '';
-            const kitInfo = (psm && psm.renderKitInfoHtml) ? psm.renderKitInfoHtml() : '';
-            body = `
-                <div class="profile-selection-content onboarding-content onboarding-panel onboarding-name-panel profile-selection-name-mode is-name-step">
-                    <h2 class="profile-selection-title">PILOT CALLSIGN</h2>
-                    <p class="onboarding-hint">ENTER YOUR NAME · PICK A START PROFILE</p>
-                    <div class="profile-name-row onboarding-name-row">
-                        ${crest}
-                        <input type="text" class="profile-name-input" id="obNameInput" maxlength="16" placeholder="NAME" autocomplete="off" spellcheck="false"/>
-                    </div>
-                    <div class="profile-start-main onboarding-pilot-kit-main">
-                        ${kitCol}
-                        <div class="profile-faction-preview">
-                            <div class="profile-faction-ship-wrap">
-                                <canvas class="profile-faction-ship" width="320" height="224" aria-label="Starter hull preview"></canvas>
-                            </div>
-                            <div class="profile-kit-ship"></div>
-                            <div class="profile-loadout">${loadout}</div>
-                            <div class="profile-kit-info">${kitInfo}</div>
-                        </div>
-                    </div>
-                </div>`;
-            bar = this.barHtml('CONFIRM', '↑ ↓ Profile | ENTER Confirm | ESC Back', true);
-        } else {
-            body = `
-                <div class="profile-selection-content onboarding-content onboarding-panel onboarding-ship-panel">
-                    <h2 class="profile-selection-title">SHIP ASSEMBLY</h2>
-                    <p class="onboarding-hint">YOUR STARTER HULL · OPEN THE HANGAR TO FIT MODULES</p>
-                    <div class="onboarding-ship-wrap">
-                        <canvas class="profile-faction-ship onboarding-ship-canvas" width="320" height="224" aria-label="Starter hull preview"></canvas>
-                    </div>
-                    <div class="profile-kit-ship"></div>
-                    <p class="hs-status">READY FOR HANGAR</p>
-                </div>`;
-            bar = this.barHtml('OPEN HANGAR', 'ENTER Continue | ESC Back', true);
-        }
-
-        this.overlay.innerHTML = `${this.stepperHtml()}${body}${bar}`;
-
-        document.body.appendChild(this.overlay);
-        this.applyFactionSurface(this._pendingFaction);
-        if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-            VFBgMouseParallax.refresh();
-        }
-        this.bindStep();
-    }
-
-    applyFactionSurface(id) {
-        if (document.documentElement.getAttribute('data-pf') !== id) {
-            document.documentElement.setAttribute('data-pf', id);
-            if (typeof VFBgMouseParallax !== 'undefined' && VFBgMouseParallax.refresh) {
-                VFBgMouseParallax.refresh();
-            }
-            if (window.vfRepaintBackdrops) window.vfRepaintBackdrops();
-        }
-        const color = this.getFactionColor(id);
-        if (this.overlay) {
-            this.overlay.style.setProperty('--faction-color', color);
-            this.overlay.style.setProperty('--faction-accent', color);
-        }
-        const box = this.overlay && this.overlay.querySelector('.onboarding-content');
-        if (box) {
-            box.style.setProperty('--faction-color', color);
-            box.style.setProperty('--faction-accent', color);
-            box.dataset.faction = id;
-        }
-    }
-
-    bindFactionPicker() {
-        this.overlay.querySelectorAll('.profile-faction-swatch').forEach((button) => {
-            button.addEventListener('click', () => {
-                this.setFaction(button.dataset.faction);
-            });
-        });
-    }
-
-    setFaction(id) {
-        if (!id || id === this._pendingFaction) {
-            this.refreshFactionPreview();
-            return;
-        }
-        this._pendingFaction = id;
-        this._pilotLook = null;
-        this.overlay.querySelectorAll('.profile-faction-swatch').forEach((item) => {
-            item.classList.toggle('selected', item.dataset.faction === id);
-        });
-        this.applyFactionSurface(id);
-        this.refreshFactionPreview();
-        this.startHomePlanet();
-    }
-
-    syncPilotToPsm() {
-        const psm = typeof profileSelectionManager !== 'undefined' ? profileSelectionManager : null;
-        if (!psm) return null;
-        this.ensurePilotLook();
-        // Treat as create-wizard so kit/inventory + ship preview use start-hull paths.
-        psm.mode = 'create';
-        psm.pendingFaction = this._pendingFaction;
-        psm._startOpts = Object.assign({}, psm._startOpts || {}, {
-            faction: this._pendingFaction,
-            look: this._pilotLook,
-            lookKey: this._pilotLookKey
-        });
-        if (!psm._startOpts.areas) psm._startOpts.areas = {};
-        psm.overlay = this.overlay;
-        return psm;
-    }
-
-    refreshPilotUi() {
-        const psm = this.syncPilotToPsm();
-        if (psm && psm.refreshPilotRow) {
-            psm.refreshPilotRow();
-            this._pilotLook = psm._startOpts && psm._startOpts.look
-                ? Object.assign({}, psm._startOpts.look)
-                : this._pilotLook;
-            this._pilotLookKey = (psm._startOpts && psm._startOpts.lookKey) || this._pilotLookKey;
-            return;
-        }
-        const box = this.overlay && this.overlay.querySelector('#psPortrait');
-        if (box && this._pilotLook && typeof heroPortrait !== 'undefined') {
-            box.innerHTML = heroPortrait.html(this._pilotLook, this.pilotAccent());
-        }
-    }
-
-    bindPilotControls() {
-        const psm = this.syncPilotToPsm();
-        if (!this.overlay) return;
-        this.overlay.querySelectorAll('.pp-ctl').forEach((el) => {
-            const k = el.getAttribute('data-pp-key');
-            el.addEventListener('click', (e) => {
-                if (e.target.closest('[data-pp-slider]')) return;
-                this._pilotLookKey = k;
-                if (psm && psm._startOpts) psm._startOpts.lookKey = k;
-                this.refreshPilotUi();
-            });
-            const sl = el.querySelector('.pp-slider');
-            if (!sl) return;
-            sl.addEventListener('change', () => {
-                clearTimeout(this._ppTimer);
-                this._ppTimer = 0;
-                this.refreshPilotUi();
-            });
-            sl.addEventListener('input', () => {
-                this._pilotLookKey = k;
-                this._pilotLook = Object.assign({}, this.ensurePilotLook(), { [k]: Number(sl.value) });
-                if (psm && psm._startOpts) {
-                    psm._startOpts.lookKey = k;
-                    psm._startOpts.look = this._pilotLook;
-                }
-                const val = el.querySelector('.pp-val');
-                if (val && typeof heroPortrait !== 'undefined') {
-                    val.textContent = heroPortrait.valueName(k, this._pilotLook[k], this._pilotLook);
-                }
-                if (this._ppTimer) return;
-                this._ppTimer = setTimeout(() => {
-                    this._ppTimer = 0;
-                    this.refreshPilotUi();
-                }, 90);
-            });
-        });
-        this.overlay.querySelectorAll('[data-pp-pick]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                this._pilotLookKey = 'v';
-                this._pilotLook = Object.assign({}, this.ensurePilotLook(), {
-                    v: Number(btn.getAttribute('data-pp-pick'))
-                });
-                if (psm && psm._startOpts) {
-                    psm._startOpts.lookKey = 'v';
-                    psm._startOpts.look = this._pilotLook;
-                }
-                this.refreshPilotUi();
-            });
-        });
-        if (psm && psm.ensurePilotPicksFit) psm.ensurePilotPicksFit();
-    }
-
-    goTo(step) {
-        const allowed = this.steps().map(([id]) => id);
-        if (allowed.indexOf(step) < 0) return;
-        if (this.stepIndex(step) > this.stepIndex()) return;
-        this.step = step;
-        this.createUI();
-    }
-
-    goBack() {
-        const idx = this.stepIndex();
-        if (idx <= 0) return;
-        this.step = this.steps()[idx - 1][0];
-        this.createUI();
-    }
-
-    refreshFactionPreview() {
-        if (!this.overlay || this.step !== 'story') return;
-        const id = this._pendingFaction;
-        const meta = this.getFactionMeta(id);
-        const lead = (meta && meta.lore) || '';
-        // Lore lives under the faction title on the right stage — not in the left dossier.
-        const loreEl = this.overlay.querySelector('.profile-faction-lore-text');
-        if (loreEl) loreEl.innerHTML = '';
-        const focusEl = this.overlay.querySelector('[data-faction-focus]');
-        if (focusEl && typeof ProfileSelectionManager !== 'undefined' && ProfileSelectionManager.prototype.buildFactionFocusHtml) {
-            focusEl.innerHTML = ProfileSelectionManager.prototype.buildFactionFocusHtml.call(
-                ProfileSelectionManager.prototype, id, meta);
-        }
-        const homeLabel = this.overlay.querySelector('.onboarding-homeworld-label');
-        if (homeLabel) {
-            const galaxy = String((meta && meta.homeGalaxy) || '').replace(/_/g, ' ').toUpperCase();
-            const name = this.getFactionLabel(id);
-            const sub = galaxy ? `HOMEWORLD · ${galaxy}` : 'HOMEWORLD';
-            const lore = lead || (name + ' fleets hold this homeworld.');
-            // Crest + name on the right stage; lore directly under the title.
-            homeLabel.innerHTML =
-                `<span class="onboarding-homeworld-crest">${this.getFactionEmblemHtml(id, 160)}</span>` +
-                `<span class="onboarding-homeworld-title">` +
-                `<b class="onboarding-homeworld-name">${name}</b>` +
-                `<small class="onboarding-homeworld-sub">${sub}</small>` +
-                `<p class="onboarding-homeworld-lore">${lore}</p>` +
-                `</span>`;
-        }
-        if (this._heroPlanet) this._heroPlanet.setFaction(id);
-    }
-
-    stopHomePlanet() {
-        if (this._heroPlanet && this._heroPlanet.unmount) {
-            this._heroPlanet.unmount();
-        }
-        this._heroPlanet = null;
-    }
-
-    startHomePlanet() {
-        if (!this.overlay || this.step !== 'story') return;
-        const stage = this.overlay.querySelector('.onboarding-homeworld-stage');
-        if (!stage) return;
-        if (typeof HeroPlanetBackdrop === 'undefined') {
-            // Profiles chunk may still be loading — retry briefly.
-            clearTimeout(this._planetRetry);
-            this._planetRetry = setTimeout(() => {
-                if (this.overlay && this.step === 'story') this.startHomePlanet();
-            }, 200);
-            return;
-        }
-        if (!this._heroPlanet) this._heroPlanet = new HeroPlanetBackdrop();
-        if (this._heroPlanet.setLayout) this._heroPlanet.setLayout('stage');
-        this._heroPlanet.setFaction(this._pendingFaction);
-        this._heroPlanet.mount(stage);
-        stage.classList.add('has-hero-planet');
-    }
-
-    bindStep() {
-        const next = this.overlay.querySelector('#obNext');
-        if (next) next.addEventListener('click', () => this.advance());
-        const back = this.overlay.querySelector('#obBack');
-        if (back) back.addEventListener('click', () => this.goBack());
-        this.overlay.querySelectorAll('[data-step-go]').forEach((btn) => {
-            btn.addEventListener('click', () => this.goTo(btn.getAttribute('data-step-go')));
-        });
-
-        if (this.step === 'story') {
-            this.bindFactionPicker();
-            this.startHomePlanet();
-            // Wait a frame so the preview canvas has layout before the first paint.
-            requestAnimationFrame(() => {
-                if (!this.overlay || this.step !== 'story') return;
-                this.refreshFactionPreview();
-                this.startHomePlanet();
-                requestAnimationFrame(() => {
-                    if (this.overlay && this.step === 'story') this.refreshFactionPreview();
-                });
-            });
-        }
-
-        if (this.step === 'pilot') {
-            this.bindPilotControls();
-        }
-
-        if (this.step === 'name') {
-            const input = this.overlay.querySelector('#obNameInput');
-            if (input) {
-                input.focus();
-                if (this._pendingName) input.value = this._pendingName;
-                const meta = this.getFactionMeta(this._pendingFaction);
-                if (meta && meta.hero && meta.hero.name && !input.value) {
-                    input.placeholder = meta.hero.name.slice(0, 16);
-                }
-            }
-            this.bindPilotKit();
-        }
-
-        if (this.step === 'scrap') {
-            this.bindShipPreview();
-        }
-
-        this._keyHandler = (e) => {
-            if (!this.isVisible) return;
-            // Start screen is hidden during onboarding and the editors bundle (global
-            // Shift+C) may not be loaded yet — handle DevMode here like the profile overlay.
-            if (e.shiftKey && (e.key === 'c' || e.key === 'C')) {
-                const tag = e.target && e.target.tagName;
-                if (tag !== 'INPUT' && tag !== 'TEXTAREA' && typeof startScreenManager !== 'undefined') {
-                    if (e.repeat) return;
-                    e.preventDefault();
-                    startScreenManager.toggleDevMode();
-                }
-                return;
-            }
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                if (this.stepIndex() > 0) this.goBack();
-                return;
-            }
-            if (this.step === 'story' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-                e.preventDefault();
-                const ids = this.getFactionIds();
-                const i = Math.max(0, ids.indexOf(this._pendingFaction));
-                const nextId = ids[(i + (e.key === 'ArrowRight' ? 1 : ids.length - 1)) % ids.length];
-                this.setFaction(nextId);
-                return;
-            }
-            if (this.step === 'pilot') {
-                const psm = this.syncPilotToPsm();
-                if ((e.key === 'r' || e.key === 'R') && !(e.target && e.target.tagName === 'INPUT')) {
-                    e.preventDefault();
-                    if (psm && psm.randomizePilotLook) {
-                        psm.randomizePilotLook();
-                        this._pilotLook = psm._startOpts && psm._startOpts.look
-                            ? Object.assign({}, psm._startOpts.look)
-                            : this._pilotLook;
-                    } else if (typeof heroPortrait !== 'undefined') {
-                        this._pilotLook = heroPortrait.randomLook(this._pendingFaction);
-                        this.refreshPilotUi();
-                    }
-                    return;
-                }
-                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    const d = e.key === 'ArrowRight' ? 1 : -1;
-                    if (psm && psm.stepPilotLook) {
-                        psm.stepPilotLook(this._pilotLookKey, d);
-                        this._pilotLook = psm._startOpts && psm._startOpts.look
-                            ? Object.assign({}, psm._startOpts.look)
-                            : this._pilotLook;
-                        this._pilotLookKey = (psm._startOpts && psm._startOpts.lookKey) || this._pilotLookKey;
-                    } else if (typeof heroPortrait !== 'undefined') {
-                        this._pilotLook = heroPortrait.cycle(this.ensurePilotLook(), this._pilotLookKey, d);
-                        this.refreshPilotUi();
-                    }
-                    return;
-                }
-                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    const keys = (typeof heroPortrait !== 'undefined' && heroPortrait.keysFor)
-                        ? heroPortrait.keysFor(this.ensurePilotLook())
-                        : [];
-                    if (!keys.length) return;
-                    const i = Math.max(0, keys.indexOf(this._pilotLookKey));
-                    this._pilotLookKey = keys[(i + (e.key === 'ArrowDown' ? 1 : keys.length - 1)) % keys.length];
-                    if (psm && psm._startOpts) psm._startOpts.lookKey = this._pilotLookKey;
-                    this.refreshPilotUi();
-                    return;
-                }
-            }
-            if (this.step === 'name' && e.target && e.target.id === 'obNameInput') {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    this.advance();
-                }
-                return;
-            }
-            if (this.step === 'name' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')
-                && !(e.target && e.target.id === 'obNameInput')) {
-                e.preventDefault();
-                const chips = Array.from(this.overlay.querySelectorAll('[data-start-opt="kit"]'));
-                if (!chips.length) return;
-                const cur = chips.findIndex((b) => b.classList.contains('selected'));
-                const next = chips[(Math.max(0, cur) + (e.key === 'ArrowDown' ? 1 : chips.length - 1)) % chips.length];
-                if (next) next.click();
-                return;
-            }
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                this.advance();
-            }
-        };
-        document.addEventListener('keydown', this._keyHandler);
-    }
-
-    advance() {
-        if (this.step === 'story') {
-            this.step = 'pilot';
-            this.createUI();
-            return;
-        }
-        if (this.step === 'pilot') {
-            this.ensurePilotLook();
-            this.step = 'name';
-            this.createUI();
-            return;
-        }
-        if (this.step === 'name') {
-            const input = this.overlay.querySelector('#obNameInput');
-            const name = input ? input.value : '';
-            if (typeof profileManager === 'undefined') return;
-            let p = profileManager.getActiveProfile && profileManager.getActiveProfile();
-            const already = p && this._pendingName && p.name === String(name || '').trim().toUpperCase().slice(0, 16)
-                && p.faction === this._pendingFaction;
-            if (!already) {
-                p = profileManager.create(name, this._pendingFaction);
-            }
-            if (!p) {
-                if (input) {
-                    input.classList.add('nav-focused');
-                    input.focus();
-                }
-                return;
-            }
-            profileManager.setActive(p.id);
-            if (this._pilotLook) {
-                p.portrait = Object.assign({}, this._pilotLook);
-            }
-            const psm = this.syncPilotToPsm();
-            if (psm && psm.applyStartOptions) {
-                try { psm.applyStartOptions(p); } catch (e) { /* continue */ }
-            }
-            if (profileManager.save) profileManager.save();
-            this._pendingName = p.name;
-            this.step = 'scrap';
-            this.createUI();
-            return;
-        }
-        this.hide();
-        if (typeof homeStationUI !== 'undefined') {
-            homeStationUI.show({
-                tab: 'hangar',
-                onClose: this.onComplete
-            });
-            return;
-        }
-        if (typeof this.onComplete === 'function') this.onComplete();
-    }
-
-    /** START PROFILE + inventory under the callsign (pilot) step. */
-    bindPilotKit() {
-        const psm = this.syncPilotToPsm();
-        if (!psm || !this.overlay) return;
-        if (!psm._startOpts) psm._startOpts = {};
-        psm._startOpts.faction = this._pendingFaction;
-        psm.pendingFaction = this._pendingFaction;
-        if (psm.currentKit) psm.currentKit();
-        this.overlay.querySelectorAll('[data-start-opt="kit"]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                psm._startOpts.kit = btn.getAttribute('data-value');
-                psm._startOpts.ship = psm.kitShipId ? psm.kitShipId(psm._startOpts.kit) : psm._startOpts.ship;
-                psm._startOpts.storyPathId = null;
-                this.overlay.querySelectorAll('[data-start-opt="kit"]').forEach((b) => {
-                    const on = b === btn;
-                    b.classList.toggle('selected', on);
-                    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-                });
-                const loadout = this.overlay.querySelector('.profile-loadout');
-                if (loadout && psm.renderLoadoutHtml) loadout.innerHTML = psm.renderLoadoutHtml();
-                const kitInfo = this.overlay.querySelector('.profile-kit-info');
-                if (kitInfo && psm.renderKitInfoHtml) kitInfo.innerHTML = psm.renderKitInfoHtml();
-                if (psm.renderFactionShipPreview) psm.renderFactionShipPreview(this._pendingFaction);
-                if (psm.renderKitShipInfo) psm.renderKitShipInfo();
-            });
-        });
-        if (psm.renderFactionShipPreview) psm.renderFactionShipPreview(this._pendingFaction);
-        if (psm.renderKitShipInfo) psm.renderKitShipInfo();
-    }
-
-    /** Ship step: preview the kit hull already chosen with the pilot. */
-    bindShipPreview() {
-        const psm = this.syncPilotToPsm();
-        if (!psm || !this.overlay) return;
-        if (psm.renderFactionShipPreview) psm.renderFactionShipPreview(this._pendingFaction);
-        if (psm.renderKitShipInfo) psm.renderKitShipInfo();
     }
 }
 
@@ -53379,6 +50696,11 @@ extendClass(StartScreenManager, {
                 value: 'FLUX ›',
                 type: 'action',
                 action: 'faceEditor'
+            }, {
+                name: 'ComfyUI',
+                value: 'OFF',
+                options: ['ON', 'OFF'],
+                type: 'comfySwitch'
             }] : []),
             {
                 name: 'Faction Command',
@@ -53588,6 +50910,11 @@ extendClass(StartScreenManager, {
             try {
                 window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync'));
             } catch (e) { /* ignore */ }
+            // Combat Q/E weapon-fill cheat must not stick after DevMode is off.
+            if (!this.devMode && typeof bulletManager !== 'undefined'
+                && bulletManager.clearDevWeaponFill) {
+                bulletManager.clearDevWeaponFill();
+            }
         };
         // Editors (layout / component / asset-gen) live in the lazy bundle.
         if (this.devMode && typeof ensureVfEditors === 'function') {
@@ -54239,12 +51566,13 @@ extendClass(StartScreenManager, {
         if (this.devMode) content.appendChild(footer);
         else utilRow.appendChild(footer);
     },
-    /** Top-5 style scoreboard of the last five played profiles. */
+    /** Arcade top-5 style scoreboard of all played profiles (scrolls past 5). */
     buildRecentPilotsBoard() {
         const pm = typeof profileManager !== 'undefined' ? profileManager : null;
         if (!pm || !pm.getRecentProfiles) return null;
-        // Last five played, ranked by score like an arcade top 5.
-        const recent = pm.getRecentProfiles(5)
+        // All played profiles, ranked by score like an arcade top list; the
+        // board stays 5 rows tall and scrolls for the rest.
+        const recent = pm.getRecentProfiles()
             .map((p) => ({ p, score: pm.getProfileScore(p) }))
             .sort((a, b) => b.score - a.score);
         const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -54253,8 +51581,9 @@ extendClass(StartScreenManager, {
         board.className = 'start-scoreboard';
         const rows = recent.map(({ p, score: raw }, i) => {
             const faction = String(p.faction || 'pirate');
-            const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
-                ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
+            const portrait = p.portrait && typeof heroPortrait !== 'undefined' ? heroPortrait.html(p.portrait, null, { nobg: true }) : '';
+            const emblem = portrait || (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '');
             const score = raw.toLocaleString('en-US');
             return `<li class="start-scoreboard-row is-pickable${p.id === activeId ? ' is-active' : ''}" data-profile-id="${esc(p.id)}" tabindex="0" role="button" data-ui-tip="${p.id === activeId ? 'Active pilot' : 'Select pilot'}">` +
                 `<span class="start-scoreboard-rank">${i + 1}</span>` +
@@ -54300,7 +51629,8 @@ extendClass(StartScreenManager, {
                     open();
                 }
             };
-            const pilot = pm.getRecentProfiles(5).find((x) => x.id === row.getAttribute('data-profile-id'));
+            const found = recent.find((x) => x.p.id === row.getAttribute('data-profile-id'));
+            const pilot = found && found.p;
             const bd = () => this._stationBackdrop;
             row.addEventListener('mouseenter', () => { if (bd()) bd().hover(pilot); });
             row.addEventListener('focus', () => { if (bd()) bd().hover(pilot); });
@@ -54313,6 +51643,35 @@ extendClass(StartScreenManager, {
                 e.stopPropagation();
                 pick();
             });
+        });
+        // Portraits (deferred-station) and faction emblems (deferred-profiles)
+        // aren't loaded yet at boot — load them in the background and patch
+        // the rows once ready, instead of blocking the start screen on them.
+        if (recent.length) {
+            const patchEmblems = () => {
+                board.querySelectorAll('.start-scoreboard-row[data-profile-id]').forEach((row) => {
+                    const found = recent.find((x) => x.p.id === row.getAttribute('data-profile-id'));
+                    if (!found) return;
+                    const emblemEl = row.querySelector('.start-scoreboard-emblem');
+                    if (!emblemEl) return;
+                    const faction = String(found.p.faction || 'pirate');
+                    const portrait = found.p.portrait && typeof heroPortrait !== 'undefined' ? heroPortrait.html(found.p.portrait, null, { nobg: true }) : '';
+                    const emblem = portrait || (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                        ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '');
+                    if (emblem) emblemEl.innerHTML = emblem;
+                });
+            };
+            if (typeof window.ensureVfStation === 'function') window.ensureVfStation(patchEmblems);
+            if (typeof window.ensureVfProfiles === 'function') window.ensureVfProfiles(patchEmblems);
+        }
+        // Keep the board exactly 5 rows tall and let the rest scroll.
+        requestAnimationFrame(() => {
+            const list = board.querySelector('.start-scoreboard-list');
+            if (!list) return;
+            const visible = Array.from(list.children).slice(0, 5);
+            if (!visible.length) return;
+            const cap = visible.reduce((sum, el) => sum + el.offsetHeight, 0);
+            if (list.scrollHeight > cap) list.style.maxHeight = `${cap}px`;
         });
         return board;
     },
@@ -55222,7 +52581,9 @@ extendClass(StartScreenManager, {
             (item.type === 'action' && item.action !== 'difficultyEditor'
                 && item.action !== 'factionCommand'
                 && item.action !== 'startupSound'
-                && item.action !== 'soundtrackEditor') || item.type === 'assetStatus'
+                && item.action !== 'soundtrackEditor')
+                || item.type === 'assetStatus'
+                || item.type === 'comfySwitch'
         );
 
         if (!audioOnly) this.attachShipRenderPreview(bare ? left : middle);
@@ -57646,6 +55007,11 @@ extendClass(StartScreenManager, {
             return;
         }
 
+        if (item.type === 'comfySwitch') {
+            this.toggleComfySwitch(direction);
+            return;
+        }
+
         if (item.type === 'volume') {
             return;
         }
@@ -57757,8 +55123,15 @@ extendClass(StartScreenManager, {
             return;
         }
         if (item.action === 'difficultyEditor') {
-            if (typeof difficultyEditorUI !== 'undefined' && difficultyEditorUI.show) {
-                difficultyEditorUI.show();
+            const openDiff = () => {
+                if (typeof difficultyEditorUI !== 'undefined' && difficultyEditorUI.show) {
+                    difficultyEditorUI.show();
+                }
+            };
+            if (typeof difficultyEditorUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(openDiff);
+            } else {
+                openDiff();
             }
             return;
         }
@@ -57767,8 +55140,15 @@ extendClass(StartScreenManager, {
             return;
         }
         if (item.action === 'factionCommand') {
-            if (typeof factionCommandUI !== 'undefined' && factionCommandUI.show) {
-                factionCommandUI.show();
+            const openCmd = () => {
+                if (typeof factionCommandUI !== 'undefined' && factionCommandUI.show) {
+                    factionCommandUI.show();
+                }
+            };
+            if (typeof factionCommandUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(openCmd);
+            } else {
+                openCmd();
             }
             return;
         }
@@ -57865,15 +55245,18 @@ extendClass(StartScreenManager, {
 extendClass(StartScreenManager, {
     async refreshAssetBridgeStatus() {
         const item = this.settingsItems.find((s) => s.type === 'assetStatus');
-        if (!item) return;
-        item.value = '…';
-        this.refreshSettingsRow(this.settingsItems.indexOf(item));
+        const sw = this.settingsItems.find((s) => s.type === 'comfySwitch');
+        if (!item && !sw) return;
+        if (item) {
+            item.value = '…';
+            this.refreshSettingsRow(this.settingsItems.indexOf(item));
+        }
         let text = 'OFFLINE';
         let ok = false;
         let comfy = false;
         try {
             if (typeof assetGenClient !== 'undefined' && assetGenClient.health) {
-                const h = await assetGenClient.health();
+                const h = await assetGenClient.health(true);
                 ok = !!(h && h.ok);
                 comfy = !!(h && h.comfy);
                 if (ok && comfy) text = 'READY';
@@ -57883,14 +55266,56 @@ extendClass(StartScreenManager, {
         } catch (e) {
             text = 'OFFLINE';
         }
-        item.value = text;
-        const idx = this.settingsItems.indexOf(item);
-        this.refreshSettingsRow(idx);
-        const el = document.querySelector('[data-asset-status="1"]');
-        if (el) {
-            el.classList.toggle('settings-asset-ready', ok && comfy);
-            el.classList.toggle('settings-asset-warn', ok && !comfy);
-            el.classList.toggle('settings-asset-off', !ok);
+        if (item) {
+            item.value = text;
+            const idx = this.settingsItems.indexOf(item);
+            this.refreshSettingsRow(idx);
+            const el = document.querySelector('[data-asset-status="1"]');
+            if (el) {
+                el.classList.toggle('settings-asset-ready', ok && comfy);
+                el.classList.toggle('settings-asset-warn', ok && !comfy);
+                el.classList.toggle('settings-asset-off', !ok);
+            }
+        }
+        if (sw) {
+            sw.value = (ok && comfy) ? 'ON' : 'OFF';
+            this.refreshSettingsRow(this.settingsItems.indexOf(sw));
+        }
+    },
+
+    async toggleComfySwitch(direction) {
+        const item = this.settingsItems.find((s) => s.type === 'comfySwitch');
+        if (!item || item._busy) return;
+        const opts = item.options || ['ON', 'OFF'];
+        let next = item.value;
+        if (direction === 0) {
+            next = item.value === 'ON' ? 'OFF' : 'ON';
+        } else {
+            const currentIndex = opts.indexOf(item.value);
+            next = opts[(currentIndex + direction + opts.length) % opts.length];
+        }
+        if (next === item.value) return;
+        item._busy = true;
+        item.value = '…';
+        this.refreshSettingsRow(this.settingsItems.indexOf(item));
+        try {
+            if (typeof assetGenClient === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                await new Promise((resolve) => window.ensureVfEditors(() => resolve()));
+            }
+            if (typeof assetGenClient === 'undefined' || !assetGenClient.setComfyStack) {
+                throw new Error('Asset client missing');
+            }
+            await assetGenClient.setComfyStack(next === 'ON');
+            item.value = next;
+        } catch (e) {
+            item.value = 'OFF';
+            try {
+                if (typeof console !== 'undefined') console.warn('[ComfyUI switch]', e && e.message || e);
+            } catch (e2) { /* ignore */ }
+        } finally {
+            item._busy = false;
+            this.refreshSettingsRow(this.settingsItems.indexOf(item));
+            await this.refreshAssetBridgeStatus();
         }
     },
 
@@ -58061,15 +55486,9 @@ extendClass(StartScreenManager, {
                     break;
                 }
                 if (typeof profileManager !== 'undefined' && !profileManager.hasActiveProfile()) {
-                    if (typeof onboardingManager !== 'undefined') {
-                        onboardingManager.show({
-                            onComplete: () => {
-                                this.returnToHub();
-                            }
-                        });
-                        this.hide();
-                        break;
-                    }
+                    this.openProfileCreate();
+                    this.hide();
+                    break;
                 }
                 {
                     const openHs = () => {
@@ -61807,13 +59226,16 @@ var StartStationBackdrop = class StartStationBackdrop {
         this._planetCurFrame = null;
         this._raf = 0;
         this._lastFrameT = 0;
-        this._frameInterval = 1000 / 12;
+        // 8 fps is enough for bob/twinkle; 12fps + high RES was a main-thread tax on the whole app.
+        this._frameInterval = 1000 / 8;
+        this._visOk = true;
+        this._visAt = 0;
         // Dev-mode layout overrides (drag to move, wheel to scale) per element — session-only
         // for now; "adjust" holds the live values, _hit the last-drawn screen position/radius
         // of each element (refreshed every draw) used to hit-test pointer/wheel input against.
         this.adjust = StartStationBackdrop.cloneDefaults();
         this._hit = {};
-        this.devResMult = 1;
+        this.devResMult = StartStationBackdrop.DEFAULT_RES;
         this._dragKey = null;
         this._dragLast = null;
         this._initDevControls();
@@ -61824,7 +59246,53 @@ var StartStationBackdrop = class StartStationBackdrop {
             this._ro = new ResizeObserver(() => this._syncSize());
             this._ro.observe(this.el);
         }
+        // Global Pixel Size: rebuild the low-res lattice when the setting changes.
+        window.addEventListener('vf:pixelsize', () => {
+            this.W = 0;
+            this.H = 0;
+            this._gpCell = 0;
+            try { this._loadPlanetImage(this._planetId, this._faction); } catch (e) { /* keep */ }
+            this._syncSize();
+        });
         this._startLoop();
+    }
+
+    /** Global Pixel Size in CSS px (0 = off). */
+    _gp() {
+        try {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) {
+                return uiAppearanceManager.getGlobalPixelPx() || 0;
+            }
+        } catch (e) { /* ignore */ }
+        return 0;
+    }
+
+    /**
+     * Draw a bitmap onto the shared art lattice: dest size is a whole multiple of
+     * `cell` (station zoom), via an intermediate nearest-neighbour downsample so
+     * ship/planet texels match station block size instead of reading finer.
+     */
+    _drawLatticeImage(c, img, dx, dy, dw, dh, cell) {
+        if (!img || !(dw > 0) || !(dh > 0)) return;
+        const k = Math.max(1, Math.round(cell) || 1);
+        const outW = Math.max(k, Math.round(dw / k) * k);
+        const outH = Math.max(k, Math.round(dh / k) * k);
+        const artW = Math.max(1, Math.round(outW / k));
+        const artH = Math.max(1, Math.round(outH / k));
+        c.imageSmoothingEnabled = false;
+        if (k <= 1) {
+            c.drawImage(img, dx, dy, outW, outH);
+            return;
+        }
+        if (!this._latticeTmp) this._latticeTmp = document.createElement('canvas');
+        const tmp = this._latticeTmp;
+        if (tmp.width !== artW) tmp.width = artW;
+        if (tmp.height !== artH) tmp.height = artH;
+        const tx = tmp.getContext('2d');
+        tx.imageSmoothingEnabled = false;
+        tx.clearRect(0, 0, artW, artH);
+        tx.drawImage(img, 0, 0, artW, artH);
+        c.drawImage(tmp, dx, dy, outW, outH);
     }
 
     /** True only while the start screen's own dev mode (Shift+C) is on. */
@@ -61954,8 +59422,17 @@ var StartStationBackdrop = class StartStationBackdrop {
         this.devPanel.hidden = true;
         this.devPanel.innerHTML =
             '<div class="start-station-dev-row">' +
-            '<label>RES <input type="range" id="ssdRes" min="0.4" max="2" step="0.05" value="1"><span id="ssdResOut">1.00x</span></label>' +
+            '<label>RES <input type="range" id="ssdRes" min="0.25" max="3" step="0.05" value="' +
+            StartStationBackdrop.DEFAULT_RES + '"><span id="ssdResOut">' +
+            StartStationBackdrop.DEFAULT_RES.toFixed(2) + 'x</span></label>' +
             '</div>' +
+            '<div class="start-station-dev-row start-station-dev-px">' +
+            '<span>PIXEL</span>' +
+            '<button type="button" data-ssd-px="1">1</button>' +
+            '<button type="button" data-ssd-px="2">2</button>' +
+            '<button type="button" data-ssd-px="4">4</button>' +
+            '</div>' +
+            '<div class="start-station-dev-meta" id="ssdMeta"></div>' +
             '<div class="start-station-dev-vals" id="ssdVals"></div>' +
             '<div class="start-station-dev-row">' +
             '<button type="button" id="ssdReset">RESET</button>' +
@@ -61969,18 +59446,33 @@ var StartStationBackdrop = class StartStationBackdrop {
             resOut.textContent = this.devResMult.toFixed(2) + 'x';
             this.W = 0; this.H = 0; // force _syncSize to re-apply at the new multiplier
             this._syncSize();
+            this._syncDevPanel();
+        });
+        this.devPanel.querySelectorAll('[data-ssd-px]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const v = String(btn.getAttribute('data-ssd-px') || '2');
+                try {
+                    if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setFx) {
+                        uiAppearanceManager.setFx('pixelSize', v);
+                    }
+                } catch (e) { /* ignore */ }
+                this.W = 0; this.H = 0; this._gpCell = 0;
+                this._syncSize();
+                this._syncDevPanel();
+            });
         });
         this.devPanel.querySelector('#ssdReset').addEventListener('click', () => {
             this.adjust = StartStationBackdrop.cloneDefaults();
-            this.devResMult = 1;
-            resInput.value = '1';
-            resOut.textContent = '1.00x';
+            this.devResMult = StartStationBackdrop.DEFAULT_RES;
+            resInput.value = String(StartStationBackdrop.DEFAULT_RES);
+            resOut.textContent = StartStationBackdrop.DEFAULT_RES.toFixed(2) + 'x';
             this.W = 0; this.H = 0;
             this._syncSize();
             this._syncDevPanel();
         });
         this.devPanel.querySelector('#ssdCopy').addEventListener('click', () => {
-            const text = 'Station backdrop dev values:\n' + JSON.stringify(this.adjust, null, 2) + '\nres: ' + this.devResMult;
+            const text = 'Station backdrop dev values:\n' + JSON.stringify(this.adjust, null, 2) +
+                '\nres: ' + this.devResMult + '\npixelSize: ' + this._gp();
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
         });
     }
@@ -61990,6 +59482,17 @@ var StartStationBackdrop = class StartStationBackdrop {
         const on = this.devMode;
         if (this.devPanel.hidden === on) this.devPanel.hidden = !on;
         if (!on) return;
+        const gp = this._gp();
+        const meta = this.devPanel.querySelector('#ssdMeta');
+        if (meta) {
+            meta.textContent = this.W + '×' + this.H +
+                (gp > 0 ? (' · gp ' + gp + 'px') : ' · full') +
+                ' · res ' + (Number(this.devResMult) || 1).toFixed(2) + 'x';
+        }
+        this.devPanel.querySelectorAll('[data-ssd-px]').forEach((btn) => {
+            const v = Number(btn.getAttribute('data-ssd-px'));
+            btn.classList.toggle('is-active', gp > 0 && v === gp);
+        });
         const vals = this.devPanel.querySelector('#ssdVals');
         if (vals) {
             vals.innerHTML = Object.keys(this.adjust).map((k) => {
@@ -62003,32 +59506,69 @@ var StartStationBackdrop = class StartStationBackdrop {
     }
 
     _syncSize() {
-        // Match the container's aspect ratio (fixes the old crop-to-a-sliver bug) at the
-        // real 1:1 CSS-pixel resolution, but the canvas's actual backing buffer also needs
-        // to account for devicePixelRatio — on any HiDPI/scaled display, a buffer sized in
-        // plain CSS pixels gets stretched over more physical pixels by the browser itself,
-        // which (combined with `image-rendering: pixelated`) is exactly the blockiness that
-        // made the station look lower-res than the separately-rasterised ship image. All
-        // draw() math still works in plain CSS-pixel units (this.W/this.H); the extra
-        // resolution is handled by scaling the 2D context to match.
+        // Match the container's aspect ratio (fixes the old crop-to-a-sliver bug).
+        // Global Pixel Size on: one backing texel == one shared art pixel (== gp CSS px
+        // after CSS nearest-neighbour stretch) so station, ship and planet share a grid.
+        // Off: full CSS-pixel buffer × devicePixelRatio (previous HiDPI path).
         const w = Math.round(this.el.clientWidth), h = Math.round(this.el.clientHeight);
-        if (w < 10 || h < 10 || (w === this.W && h === this.H)) return;
+        if (w < 10 || h < 10) return;
         if (window.vfResizing) { this._deferSync(); return; }
-        this.W = w;
-        this.H = h;
+
+        const gp = this._gp();
+        let cell = 1;
+        if (gp > 0) {
+            try {
+                cell = (uiAppearanceManager.getMapPxCellCss && uiAppearanceManager.getMapPxCellCss()) || gp;
+            } catch (e) { cell = gp; }
+            if (!(cell > 0)) cell = gp;
+        }
+        // DevMode RES slider: scales art resolution. With Global Pixel Size, 1× = one
+        // backing texel per gp CSS px; below 1× coarsens, above 1× adds detail for previews.
+        // Without GP, it multiplies devicePixelRatio (legacy HiDPI path).
+        const mult = Math.max(0.25, Math.min(3, Number(this.devResMult) || 1));
+        let logicalW;
+        let logicalH;
+        let dpr;
+        if (gp > 0) {
+            logicalW = Math.max(1, Math.round((w / cell) * mult));
+            logicalH = Math.max(1, Math.round((h / cell) * mult));
+            dpr = 1;
+        } else {
+            logicalW = w;
+            logicalH = h;
+            // Snapped to a whole multiple: a fractional devicePixelRatio reselects different
+            // source pixels on every redraw under software/sub-pixel compositing (seen in
+            // embedded browsers such as VS Code's webview), which reads as the pixelated
+            // backdrop flickering even though nothing in the scene actually changed.
+            dpr = Math.max(1, Math.round((window.devicePixelRatio || 1) * mult));
+        }
+        // Soft-cap backing store: CSS still stretches full-bleed; oversize buffers
+        // (RES 2.4 × large window) made every idle frame dominate main-thread time.
+        const maxEdge = StartStationBackdrop.MAX_EDGE;
+        const longEdge = Math.max(logicalW, logicalH);
+        if (maxEdge > 0 && longEdge > maxEdge) {
+            const s = maxEdge / longEdge;
+            logicalW = Math.max(1, Math.round(logicalW * s));
+            logicalH = Math.max(1, Math.round(logicalH * s));
+        }
+        if (logicalW === this.W && logicalH === this.H && this._gpCell === cell &&
+            this._syncDpr === dpr && this._syncMult === mult) return;
+
+        this.W = logicalW;
+        this.H = logicalH;
+        this._gpCell = cell;
+        this._syncDpr = dpr;
+        this._syncMult = mult;
         this._stars = null; // rebuild layered starfield for the new aspect
-        // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
-        // below 1 intentionally under-samples the backing buffer (CSS still stretches it
-        // to the same on-screen size) to preview lower-res/perf-constrained rendering.
-        // Snapped to a whole multiple: a fractional devicePixelRatio reselects different
-        // source pixels on every redraw under software/sub-pixel compositing (seen in
-        // embedded browsers such as VS Code's webview), which reads as the pixelated
-        // backdrop flickering even though nothing in the scene actually changed.
-        const rawDpr = (window.devicePixelRatio || 1) * (this.devResMult || 1);
-        const dpr = Math.max(1, Math.round(rawDpr));
-        this.canvas.width = Math.round(w * dpr);
-        this.canvas.height = Math.round(h * dpr);
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (gp > 0) {
+            this.canvas.width = logicalW;
+            this.canvas.height = logicalH;
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        } else {
+            this.canvas.width = Math.round(w * dpr);
+            this.canvas.height = Math.round(h * dpr);
+            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
         this.draw(this._faction, this._tier, this._seed, this._lastFrameT);
     }
 
@@ -62040,38 +59580,107 @@ var StartStationBackdrop = class StartStationBackdrop {
     }
 
     _startLoop() {
-        if (this._raf) return;
+        if (this._raf || this._idleTimer) return;
+        const schedule = (delay) => {
+            this._clearIdleTimer();
+            if (delay > 16) {
+                this._idleTimer = setTimeout(() => {
+                    this._idleTimer = 0;
+                    this._raf = requestAnimationFrame(tick);
+                }, delay);
+            } else {
+                this._raf = requestAnimationFrame(tick);
+            }
+        };
         const tick = (now) => {
+            this._raf = 0;
             if (!this.canvas.isConnected) {
-                this._raf = 0;
+                this._clearIdleTimer();
                 return;
             }
-            this._raf = requestAnimationFrame(tick);
-            // Pause while the start screen is off-DOM or covered / display:none.
-            try {
-                const host = this.el.closest('.start-screen, .start-screen-overlay') || this.el;
-                if (host.classList.contains('hidden')) return;
-                const st = getComputedStyle(host);
-                if (st.display === 'none' || st.visibility === 'hidden') return;
-            } catch (e) { /* draw anyway */ }
-            if (document.hidden || window.vfResizing) return;
+            if (document.hidden || window.vfResizing) {
+                this._parkLoop(400);
+                return;
+            }
             // Settings → DEBUG → PERFORMANCE MODE, and OS-level reduced-motion: freeze the
             // idle float/breathe/spin redraw. In some embedded/software-rendered webviews
             // (e.g. VS Code's) clearing and repainting this canvas on every tick reads as
             // the whole backdrop flickering even though the scene itself barely moves —
             // this gives those setups a static (non-flickering) backdrop instead.
             if (document.documentElement.hasAttribute('data-vf-performance') ||
-                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
-            if (now - this._lastFrameT < this._frameInterval) return;
+                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+                this._parkLoop(1000);
+                return;
+            }
+            // Pilot wizard / profile overlay sits on top — stop burning CPU on the menu backdrop.
+            try {
+                if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) {
+                    this._parkLoop(500);
+                    return;
+                }
+            } catch (e0) { /* continue */ }
+            // Pause while the start screen is off-DOM or covered / display:none.
+            // getComputedStyle every rAF forced layout; throttle visibility checks.
+            try {
+                const host = this.el.closest('.start-screen, .start-screen-overlay') || this.el;
+                if (host.classList.contains('hidden')) {
+                    this._parkLoop(500);
+                    return;
+                }
+                if (!this._visAt || now - this._visAt > 400) {
+                    this._visAt = now;
+                    const st = getComputedStyle(host);
+                    this._visOk = st.display !== 'none' && st.visibility !== 'hidden' && Number(st.opacity) > 0.02;
+                }
+                if (!this._visOk) {
+                    this._parkLoop(500);
+                    return;
+                }
+            } catch (e) { /* draw anyway */ }
+            const wait = this._frameInterval - (now - this._lastFrameT);
+            if (wait > 0) {
+                schedule(wait);
+                return;
+            }
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
+            // ~8 Hz draw cadence — do not keep a 60 Hz rAF chain alive between frames.
+            schedule(this._frameInterval);
         };
         this._raf = requestAnimationFrame(tick);
+        if (!this._visBound) {
+            this._visBound = true;
+            document.addEventListener('visibilitychange', this._onDocVis = () => {
+                if (document.hidden) this._parkLoop(800);
+                else {
+                    this._clearIdleTimer();
+                    this._startLoop();
+                }
+            });
+        }
+    }
+
+    /** Sleep the scheduler while hidden/paused so idle menus do not burn 60 Hz rAF. */
+    _parkLoop(ms) {
+        this._stopLoop();
+        this._clearIdleTimer();
+        this._idleTimer = setTimeout(() => {
+            this._idleTimer = 0;
+            this._startLoop();
+        }, Math.max(200, ms || 500));
+    }
+
+    _clearIdleTimer() {
+        if (this._idleTimer) {
+            clearTimeout(this._idleTimer);
+            this._idleTimer = 0;
+        }
     }
 
     _stopLoop() {
         if (this._raf) cancelAnimationFrame(this._raf);
         this._raf = 0;
+        this._clearIdleTimer();
     }
 
     /** Sum of all station upgrade levels -> 0..5 build stage. */
@@ -62429,7 +60038,8 @@ var StartStationBackdrop = class StartStationBackdrop {
         // (dx/dy tracks the cursor, but the drawn position also drifted from bob/shipBob
         // underneath it) — that mismatch is what read as "buggy" jitter while dragging.
         const devEditing = !!(this._dragKey || this._dragHandle);
-        const bob = devEditing ? 0 : Math.sin(tt * 0.7) * 3;
+        const gpOn = this._gp() > 0;
+        const bob = devEditing ? 0 : (gpOn ? Math.round(Math.sin(tt * 0.7) * 3) : Math.sin(tt * 0.7) * 3);
 
         this._drawSpace(c, pal, tt, bob);
         // A real planet: a sphere whose cap rises from the bottom edge, rendered with
@@ -62443,12 +60053,13 @@ var StartStationBackdrop = class StartStationBackdrop {
         // thin crescent + bottom strip stayed visible). Cap fraction is high
         // enough that the globe reads as a planet, not a flat horizon line.
         const pAdj = this.adjust.planet;
-        const pr = Math.min(this.W, this.H) * 0.82 * pAdj.scale;
+        let pr = Math.min(this.W, this.H) * 0.82 * pAdj.scale;
+        if (gpOn) pr = Math.max(1, Math.round(pr));
         const capFrac = 0.58;
         // Keep the disc mostly on-screen: centre sits near the station column,
         // but never so far left that (planetCx - pr) eats most of the sphere.
-        const planetCx = Math.round(Math.max(pr * 0.7, Math.min(this.W * 0.36, cx))) + pAdj.dx;
-        const pcy = this.H + pr * (1 - capFrac) + bob * 0.4 + pAdj.dy;
+        const planetCx = Math.round(Math.max(pr * 0.7, Math.min(this.W * 0.36, cx))) + Math.round(pAdj.dx);
+        const pcy = Math.round(this.H + pr * (1 - capFrac) + bob * 0.4 + pAdj.dy);
         this._hit.planet = { x: planetCx, y: pcy - pr * (1 - capFrac), r: pr * capFrac + 20 };
         const planetFrame = this._currentPlanetFrame();
         if (planetFrame) {
@@ -62460,8 +60071,12 @@ var StartStationBackdrop = class StartStationBackdrop {
             c.beginPath();
             c.arc(planetCx, pcy, pr, 0, Math.PI * 2);
             c.clip();
-            c.imageSmoothingEnabled = false;
-            c.drawImage(planetFrame.img, planetCx - dr, pcy - dr, dr * 2, dr * 2);
+            // Fit is computed below for the station; for the planet use the same
+            // integer lattice cell so globe texels match hull blocks.
+            const planetCell = gpOn
+                ? Math.max(1, Math.round(Math.max(0.9, Math.min(7.5, Math.min(this.W, this.H) / 90)) * sAdj.scale))
+                : 1;
+            this._drawLatticeImage(c, planetFrame.img, planetCx - dr, pcy - dr, dr * 2, dr * 2, planetCell);
             c.restore();
         }
         // Empty title (no pilot): planet + living starfield only — the old default
@@ -62477,8 +60092,10 @@ var StartStationBackdrop = class StartStationBackdrop {
         // Everything below is drawn in fixed "station units"; scale it with however
         // big the column actually is so a wide/tall column gets a bigger, more
         // detailed station instead of the same small silhouette floating in more
-        // empty space.
-        const fit = Math.max(0.9, Math.min(7.5, Math.min(this.W, this.H) / 90)) * sAdj.scale;
+        // empty space. Global Pixel Size: keep zoom on whole lattice cells so
+        // hull blocks never land between art pixels.
+        let fit = Math.max(0.9, Math.min(7.5, Math.min(this.W, this.H) / 90)) * sAdj.scale;
+        if (gpOn) fit = Math.max(1, Math.round(fit));
         // soft faction-colored halo behind the station, breathing gently
         const haloR = (92 + Math.sin(tt * 0.9) * 6) * fit;
         this._hit.station = { x: cx, y: cy + bob, r: haloR };
@@ -62490,7 +60107,8 @@ var StartStationBackdrop = class StartStationBackdrop {
         // the station itself floats a little and scales with the available space
         c.save();
         c.translate(cx, cy + bob);
-        const zoom = (1.05 - tier * 0.09) * fit;
+        let zoom = (1.05 - tier * 0.09) * fit;
+        if (gpOn) zoom = Math.max(1, Math.round(zoom));
         c.scale(zoom, zoom);
         c.translate(-cx, -cy);
 
@@ -62707,15 +60325,15 @@ var StartStationBackdrop = class StartStationBackdrop {
             // which is what showed up as "falscher Pivot": the handles assumed a fixed
             // center while the actual drawn center kept sliding as you resized.
             const baseFit = Math.min(5, fit);
-            const shipBob = devEditing ? 0 : Math.sin(tt * 1.3 + 0.6) * 4;
-            const sh = Math.min(400, 20 * baseFit * shAdj.scale);
+            const shipBob = devEditing ? 0 : (gpOn ? Math.round(Math.sin(tt * 1.3 + 0.6) * 4) : Math.sin(tt * 1.3 + 0.6) * 4);
+            let sh = Math.min(400, 20 * baseFit * shAdj.scale);
+            if (gpOn) sh = Math.max(zoom, Math.round(sh / zoom) * zoom);
             const sw = sh * (this._shipImg.width / this._shipImg.height || 0.73);
-            const sy = cy + bob + (34 * baseFit) + shipBob + shAdj.dy;
-            const sx = Math.max(sw / 2 + 4, cx - (28 + tier * 2) * baseFit) + shAdj.dx;
+            const sy = Math.round(cy + bob + (34 * baseFit) + shipBob + shAdj.dy);
+            const sx = Math.round(Math.max(sw / 2 + 4, cx - (28 + tier * 2) * baseFit) + shAdj.dx);
             this._hit.ship = { x: sx, y: sy, r: Math.max(sw, sh) / 2 };
             c.save();
-            c.imageSmoothingEnabled = false;
-            c.drawImage(this._shipImg, sx - sw / 2, sy - sh / 2, sw, sh);
+            this._drawLatticeImage(c, this._shipImg, sx - sw / 2, sy - sh / 2, sw, sh, gpOn ? zoom : 1);
             c.restore();
         } else {
             this._hit.ship = null;
@@ -62775,6 +60393,10 @@ StartStationBackdrop.DEFAULT_ADJUST = {
     ship: { dx: -1.7306609313578178, dy: 25.100620544578646, scale: 1.25 },
     planet: { dx: 0, dy: 0, scale: 1 }
 };
+/** DevMode RES baseline (COPY VALUES → paste here). pixelSize stays on uiAppearance (2). */
+StartStationBackdrop.DEFAULT_RES = 2.4;
+/** Soft cap on canvas long-edge texels (CSS still fills). Keeps RES>1 from melting the main thread. */
+StartStationBackdrop.MAX_EDGE = 640;
 
 extendClass(StartScreenManager, {
     /** Mounts the station as a full-bleed backdrop behind the main menu content. */
@@ -62850,6 +60472,44 @@ var GamepadManager = class GamepadManager {
             requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
+    }
+
+    /** Drop sticky menu arrows so a held stick cannot keep ArrowRight latched into combat. */
+    releaseMenuDirections() {
+        this.updateMenuDirection('up', 'ArrowUp', false);
+        this.updateMenuDirection('down', 'ArrowDown', false);
+        this.updateMenuDirection('left', 'ArrowLeft', false);
+        this.updateMenuDirection('right', 'ArrowRight', false);
+    }
+
+    /** Clear ship move / fire keys without requiring a prior combat frame. */
+    clearShipControlKeys() {
+        const g = (typeof window !== 'undefined') ? window.game : null;
+        const inputHandler = g && g.inputHandler;
+        if (!inputHandler || !inputHandler.keys) return;
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space',
+            'Shift', 'ShiftLeft', 'ShiftRight', 'a', 's', 'd', 'A', 'S', 'D'].forEach((k) => {
+            inputHandler.keys[k] = false;
+        });
+        this._combatState = {};
+    }
+
+    /** Sync A/RT edge tracker when "FIRE TO START" appears (avoids a held menu confirm blocking fire). */
+    primeMissionStartFire() {
+        this.releaseMenuDirections();
+        this.clearShipControlKeys();
+        if (typeof navigator === 'undefined' || !navigator.getGamepads) {
+            this._menuState.a = false;
+            return;
+        }
+        const pads = navigator.getGamepads();
+        let held = false;
+        for (let i = 0; i < pads.length; i++) {
+            if (!pads[i] || !pads[i].connected) continue;
+            held = this.isButtonPressed(pads[i], 0) || this.isButtonPressed(pads[i], 7);
+            break;
+        }
+        this._menuState.a = held;
     }
 
     _bindDisplayWake() {
@@ -63096,6 +60756,8 @@ var GamepadManager = class GamepadManager {
         // is already true there) but wants a discrete confirm press like a
         // menu, not held-key combat state, so it's special-cased here.
         if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
+            // Stick release must not be skipped here — otherwise menu Arrow* keydowns stick into combat.
+            this.releaseMenuDirections();
             const fireHeld = this.isButtonPressed(gamepad, 0) || this.isButtonPressed(gamepad, 7); // A / RT
             if (fireHeld && !this._menuState.a) missionStartManager.onFire();
             this._menuState.a = fireHeld;
@@ -63186,11 +60848,14 @@ extendClass(GamepadManager, {
         inputHandler.keys['s'] = this.isButtonPressed(gamepad, 5) || this.isButtonPressed(gamepad, 3);
         inputHandler.keys['d'] = this.isButtonPressed(gamepad, 6) || this.isButtonPressed(gamepad, 1);
 
-        // R3 → switch shot type (was LB)
+        // R3 → switch shot type (was LB); DevMode fills all slots like keyboard E
         const switchHeld = this.isButtonPressed(gamepad, 11);
         if (switchHeld && !this._combatState.switchShot) {
             if (typeof bulletManager !== 'undefined') {
-                const newType = bulletManager.switchShotType();
+                const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+                const newType = (devOn && bulletManager.devCycleWeaponCheat)
+                    ? bulletManager.devCycleWeaponCheat(1)
+                    : bulletManager.switchShotType(1);
                 if (typeof uiManager !== 'undefined') uiManager.updateShotTypeDisplay(newType);
             }
         }
@@ -63953,8 +61618,59 @@ extendClass(ProfileManager, {
     },
 
     /** Same progressive ramp as getModuleUpgradeBonuses, scoped to one item's own track levels. */
+    /** Vendor roll from planet shop (stored on the bought copy). */
+    setShopVendorRoll(bucket, instanceId, mul, classKey) {
+        const profile = this.getActiveProfile();
+        if (!profile) return;
+        this.ensureEconomyDefaults(profile);
+        const entry = this._itemUpgradeEntry(bucket, instanceId, profile);
+        if (!entry) return;
+        entry.vendorRoll = Object.assign({}, mul || {});
+        if (classKey) entry.vendorClass = String(classKey);
+        this.save();
+    },
+
+    /** Shop-class key for a salvage/found part (same bands as planet shop). */
+    salvageShopClassKey(kind, id) {
+        const k = String(kind || '');
+        if (k === 'weapon' && typeof balanceConfigManager !== 'undefined' && balanceConfigManager.getWeaponRole) {
+            return balanceConfigManager.getWeaponRole(id) || 'sustained';
+        }
+        if (k === 'defense') return 'defense';
+        if (k === 'energy') return 'energy';
+        return 'ability';
+    },
+
+    /** Roll final salvage multipliers inside the class band (revealed on loot-to-ship). */
+    rollSalvageVendorStats(kind, id) {
+        const classKey = this.salvageShopClassKey(kind, id);
+        const bcm = typeof balanceConfigManager !== 'undefined' ? balanceConfigManager : null;
+        const def = (bcm && bcm.SHOP_ITEM_CLASSES && bcm.SHOP_ITEM_CLASSES[classKey])
+            || { label: String(classKey).toUpperCase() };
+        const pick = (pair) => {
+            if (!pair || pair.length < 2) return 1;
+            const t = Math.random();
+            return Math.round((pair[0] + t * (pair[1] - pair[0])) * 1000) / 1000;
+        };
+        const mul = {};
+        if (def.dmg) mul.dmgMul = pick(def.dmg);
+        if (def.spd) mul.spdMul = pick(def.spd);
+        if (def.cd) mul.cdMul = pick(def.cd);
+        if (def.potency) mul.potencyMul = pick(def.potency);
+        if (def.duration) mul.durationMul = pick(def.duration);
+        if (def.ammo) mul.ammoMul = pick(def.ammo);
+        return { classKey: classKey, classLabel: def.label || String(classKey).toUpperCase(), mul: mul };
+    },
+
+    _vendorRollMul(entry, key) {
+        const vr = entry && entry.vendorRoll;
+        const n = vr && vr[key] != null ? Number(vr[key]) : 1;
+        return Number.isFinite(n) && n > 0 ? n : 1;
+    },
+
     getItemUpgradeBonuses(bucket, itemId, profile) {
         const p = profile || this.getActiveProfile();
+        const entry = p ? this._itemUpgradeEntry(bucket, itemId, p) : null;
         const ramp = (lv, base, accel) => {
             const n = Math.max(0, Math.round(Number(lv) || 0));
             if (n <= 0) return 0;
@@ -63964,7 +61680,7 @@ extendClass(ProfileManager, {
         };
         const trackLevel = (track) => p ? this.getItemTrackLevel(bucket, itemId, track, p) : 0;
         if (bucket === 'weapons') {
-            return {
+            const bonuses = {
                 damageMul: 1 + ramp(trackLevel('dmg'), 0.05, 0.02),
                 cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('rof'), 0.04, 0.015)),
                 rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015),
@@ -63973,20 +61689,34 @@ extendClass(ProfileManager, {
                     && (typeof economyConfig === 'undefined' || !economyConfig.itemTrackApplies
                         || economyConfig.itemTrackApplies('weapons', itemId, 'chain'))
             };
+            bonuses.damageMul *= this._vendorRollMul(entry, 'dmgMul');
+            bonuses.cooldownMul *= this._vendorRollMul(entry, 'cdMul');
+            bonuses.rangeMul *= this._vendorRollMul(entry, 'spdMul');
+            return bonuses;
         }
         if (bucket === 'defenses') {
-            return {
+            const bonuses = {
                 capacityMul: 1 + ramp(trackLevel('capacity'), 0.055, 0.025),
                 harden: Math.min(0.25, ramp(trackLevel('harden'), 0.025, 0.01)),
                 regenMul: 1 + ramp(trackLevel('regen'), 0.07, 0.03)
             };
+            const pot = this._vendorRollMul(entry, 'potencyMul');
+            bonuses.capacityMul *= pot;
+            bonuses.regenMul *= pot;
+            return bonuses;
         }
         // abilities / energy
-        return {
+        const bonuses = {
             cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('cooldown'), 0.04, 0.015)),
             potencyMul: 1 + ramp(trackLevel('potency'), 0.06, 0.025),
             durationMul: 1 + ramp(trackLevel('duration'), 0.055, 0.02)
         };
+        const pot = this._vendorRollMul(entry, 'potencyMul');
+        const dur = this._vendorRollMul(entry, 'durationMul');
+        bonuses.potencyMul *= pot;
+        bonuses.durationMul *= dur;
+        bonuses.cooldownMul *= this._vendorRollMul(entry, 'cdMul');
+        return bonuses;
     },
 });
 
@@ -64215,27 +61945,4 @@ extendClass(ProfileManager, {
     const gamepadCursor = new GamepadCursor();
     window.gamepadCursor = gamepadCursor;
 })();
-
-
-/* --- js/ui/content-viewer-stat-range.js --- */
-"use strict";
-
-/**
- * Shared by the weapon/ability/defense/energy library viewers: every equippable item's stats
- * are not fixed — they scale across the category's MODULES upgrade tracks (economyConfig
- * .moduleUpgradeDefs), so a flat number in the wiki would be wrong the moment the player
- * upgrades anything. This lists each track's own label/description — the real upgrade system,
- * not invented numbers — as "stat rows" so every item's page reads "this varies, upgradeable
- * via these tracks" instead of implying a fixed value.
- */
-function contentViewerUpgradeRangeRowsHtml(category) {
-    if (typeof economyConfig === 'undefined' || !economyConfig.moduleUpgradeDefs) return '';
-    const tracks = economyConfig.moduleUpgradeDefs[category];
-    if (!tracks) return '';
-    return Object.keys(tracks).map((track) => {
-        const meta = tracks[track];
-        return `<div class="stat-row"><span class="stat-label">Range: ${meta.label}</span>` +
-            `<span class="stat-value">${meta.desc} · L0–L${meta.maxLevel}</span></div>`;
-    }).join('');
-}
 

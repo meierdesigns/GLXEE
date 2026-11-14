@@ -434,7 +434,10 @@ var ObjectiveManager = class ObjectiveManager {
                 pm.invuln = Math.max(pm.invuln || 0, this.enter.dur + 400);
             }
             if (typeof bulletManager !== 'undefined' && bulletManager.enemyBullets) {
-                bulletManager.enemyBullets.length = 0;
+                const leftovers = bulletManager.enemyBullets.splice(0, bulletManager.enemyBullets.length);
+                if (bulletManager.releaseBullet) {
+                    for (let i = 0; i < leftovers.length; i++) bulletManager.releaseBullet(leftovers[i]);
+                }
             }
             if (typeof soundManager !== 'undefined' && soundManager.playGateEnter) {
                 soundManager.playGateEnter(g.kind || 'sluice');
@@ -1310,6 +1313,20 @@ extendClass(GameControlSystem, {
             this.bindVictoryButtons(victoryOverlay);
             victoryOverlay.dataset.bound = '1';
         }
+        // Kill the browser right-click menu anywhere on the victory screen.
+        // Capture on the overlay AND document while visible — empty grid cells /
+        // planet chrome were still leaking the native menu before.
+        if (victoryOverlay.dataset.ctxBound !== '2') {
+            victoryOverlay.dataset.ctxBound = '2';
+            const blockCtx = (event) => {
+                const ov = document.getElementById('victoryOverlay');
+                if (!ov || ov.classList.contains('hidden')) return;
+                event.preventDefault();
+                event.stopPropagation();
+            };
+            victoryOverlay.addEventListener('contextmenu', blockCtx, true);
+            document.addEventListener('contextmenu', blockCtx, true);
+        }
         this.bindVictoryLootList(victoryOverlay);
 
         this.updateVictoryNextButton();
@@ -1319,6 +1336,9 @@ extendClass(GameControlSystem, {
             uiManager.victoryMenuIndex = 0;
             uiManager.updateVictoryMenuDisplay();
         }
+
+        // DevMode / cheat: guarantee one random salvage part in FOUND ITEMS for take→ship tests.
+        if (this.seedDevVictoryFoundItem) this.seedDevVictoryFoundItem({ onlyIfEmpty: true });
 
         this.updateVictoryStats();
         if (this.applyOutcomeStepper) this.applyOutcomeStepper(victoryOverlay.querySelector('.victory-header'), 'won');
@@ -1405,6 +1425,146 @@ extendClass(GameControlSystem, {
         return undefined;
     },
 
+    /** Shop-class band helpers for found-item tooltips (ranges until loot reveals the roll). */
+    _lootFmtNum(n) {
+        const v = Math.round(Number(n) * 10) / 10;
+        if (!Number.isFinite(v)) return String(n);
+        return (Math.abs(v - Math.round(v)) < 0.05) ? String(Math.round(v)) : String(v);
+    },
+
+    _lootFmtSignedRange(a, b) {
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        const s = (n) => (n > 0 ? '+' : '') + this._lootFmtNum(n);
+        if (this._lootFmtNum(lo) === this._lootFmtNum(hi)) return s(lo);
+        return s(lo) + '…' + s(hi);
+    },
+
+    _lootFmtUnsignedRange(a, b) {
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        const s = (n) => this._lootFmtNum(n);
+        if (s(lo) === s(hi)) return s(lo);
+        return s(lo) + '…' + s(hi);
+    },
+
+    /** Expand a hangar tip line into a class-band range while the part is still found loot. */
+    expandVictoryStatLineToRange(line, kind, classDef) {
+        const text = String(line || '');
+        const def = classDef || {};
+        const pot = def.potency || [1, 1];
+        const weapon = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
+        if (weapon && kind === 'weapon') {
+            const dmg = Number(weapon[1]);
+            const spd = Number(weapon[2]);
+            const dmgBand = def.dmg || [1, 1];
+            const spdBand = def.spd || [1, 1];
+            const cdBand = def.cd || [1, 1];
+            let out = 'DMG ' + this._lootFmtUnsignedRange(dmg * dmgBand[0], dmg * dmgBand[1])
+                + ' · SPD ' + this._lootFmtUnsignedRange(spd * spdBand[0], spd * spdBand[1]);
+            if (weapon[3] && /\/S$/i.test(weapon[3])) {
+                const rate = Number(String(weapon[3]).replace(/\/S$/i, ''));
+                if (Number.isFinite(rate)) {
+                    // Higher cdMul → slower fire: invert band for displayed rate.
+                    const rLo = rate / (cdBand[1] || 1);
+                    const rHi = rate / (cdBand[0] || 1);
+                    out += ' · ' + this._lootFmtUnsignedRange(rLo, rHi) + '/S';
+                } else {
+                    out += ' · ' + weapon[3];
+                }
+            } else if (weapon[3]) {
+                out += ' · ' + weapon[3];
+            }
+            if (weapon[4]) out += ' · AMMO ' + weapon[4];
+            return out;
+        }
+        const deltaParts = text.split(' · ');
+        const mapped = deltaParts.map((part) => {
+            const m = part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/);
+            if (!m) {
+                const sh = part.match(/^(SHIELD|REGEN|DMG REDUCTION|REFLECT|MAX ENERGY)\s+([+]?\d+(?:\.\d+)?(?:\/s)?)$/i);
+                if (sh) {
+                    const raw = String(sh[2]);
+                    const suffix = raw.indexOf('/s') !== -1 ? '/s' : '';
+                    const n = Number(raw.replace('/s', ''));
+                    if (!Number.isFinite(n)) return part;
+                    return sh[1].toUpperCase() + ' '
+                        + this._lootFmtSignedRange(n * pot[0], n * pot[1]) + suffix;
+                }
+                return part;
+            }
+            const n = Number(m[1]);
+            return this._lootFmtSignedRange(n * pot[0], n * pot[1]) + ' ' + m[2];
+        });
+        if (mapped.join(' · ') !== text) return mapped.join(' · ');
+        return text;
+    },
+
+    /** Found-item tip: real part identity + CLASS RANGE bands (final roll on loot). */
+    victoryFoundTipLines(kind, id, isBlueprint) {
+        const fullTip = (typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip)
+            ? String(homeStationUI.hangarModuleTip(kind, id) || '')
+            : String(id || 'ITEM').toUpperCase();
+        const tipLines = fullTip.split('\n').filter((l, i, arr) => i === 0 || l);
+        const name = tipLines[0] + (isBlueprint ? ' (BP)' : '');
+        if (isBlueprint) {
+            return { name: name, lines: tipLines.slice(1).length ? tipLines.slice(1) : tipLines };
+        }
+        const classKey = (typeof profileManager !== 'undefined' && profileManager.salvageShopClassKey)
+            ? profileManager.salvageShopClassKey(kind, id)
+            : (kind === 'weapon' ? 'sustained' : (kind === 'defense' ? 'defense' : (kind === 'energy' ? 'energy' : 'ability')));
+        const bcm = typeof balanceConfigManager !== 'undefined' ? balanceConfigManager : null;
+        const def = (bcm && bcm.SHOP_ITEM_CLASSES && bcm.SHOP_ITEM_CLASSES[classKey]) || {};
+        const classLabel = def.label || String(classKey).toUpperCase();
+        const rangeLine = (bcm && bcm.shopClassRangeLine) ? bcm.shopClassRangeLine(classKey) : '';
+        const lines = ['CLASS · ' + classLabel];
+        if (rangeLine) lines.push(rangeLine);
+        tipLines.slice(1).forEach((line) => {
+            if (!line) return;
+            lines.push(this.expandVictoryStatLineToRange(line, kind, def));
+        });
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.partSizeLabel) {
+            lines.push('SIZE ' + shipLoadoutManager.partSizeLabel(kind, id));
+        }
+        return { name: name, lines: lines };
+    },
+
+    /**
+     * DevMode/cheat helper: inject one random salvageable part into profile.cargo.parts so
+     * FOUND ITEMS is never empty while testing take→ship. `onlyIfEmpty` skips when cargo
+     * already has a part; otherwise always adds one more.
+     */
+    seedDevVictoryFoundItem(opts) {
+        opts = opts || {};
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        const cheatOn = typeof cheatSystem !== 'undefined' && cheatSystem.cheats
+            && (cheatSystem.cheats.godMode || cheatSystem.cheats.instantKill || cheatSystem.cheatMenuVisible);
+        // Allow explicit cheat-menu spawn even if DevMode is off.
+        if (!opts.force && !devOn && !cheatOn) return false;
+        if (typeof profileManager === 'undefined' || !profileManager.addCargoPart) return false;
+        const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        if (!profile) return false;
+        if (profileManager.ensureEconomyDefaults) profileManager.ensureEconomyDefaults(profile);
+        const parts = (profile.cargo && profile.cargo.parts) || {};
+        const hasPart = Object.keys(parts).some((k) => (parts[k] || 0) > 0);
+        if (opts.onlyIfEmpty && hasPart) return false;
+        let pool = [];
+        if (profileManager.getEnemySalvagePool) {
+            pool = profileManager.getEnemySalvagePool(null) || [];
+        }
+        if (!pool.length && profileManager.getBlueprintPool) {
+            pool = (profileManager.getBlueprintPool() || []).map((key) => {
+                const bp = profileManager.parseBlueprintKey(key);
+                return bp ? { kind: bp.kind, id: bp.id, key: bp.key } : null;
+            }).filter(Boolean);
+        }
+        if (!pool.length) return false;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        if (!pick || !pick.kind || !pick.id) return false;
+        const n = profileManager.addCargoPart(pick.kind, pick.id, 1);
+        return n > 0;
+    },
+
     /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
      *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
      *  snapshot) since selling/taking changes it while this screen stays open. Click takes a
@@ -1451,51 +1611,69 @@ extendClass(GameControlSystem, {
         if (!entries.length) {
             return emptyGrid();
         }
-        const cells = entries.map((e) => {
+        // Same S/M/L footprints + physicalItem shell as ship/station bags (not a flat 1×1 icon).
+        const cellSpecs = entries.map((e) => {
             const id = 'part:' + e.key;
             const tint = this.victoryLootTint(id);
             const parsed = (typeof profileManager !== 'undefined' && profileManager.parseBlueprintKey)
                 ? profileManager.parseBlueprintKey(e.key) : null;
-            // Real name + stat lines (DMG/SPD, SHIELD, ARMOR, …) from the same lookup the
-            // home-station hangar uses — not just a bare id label.
-            const fullTip = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip)
-                ? homeStationUI.hangarModuleTip(parsed.kind, parsed.id)
-                : 'UNKNOWN ITEM';
-            const tipLines = fullTip.split('\n');
-            const name = tipLines[0] + (e.isBlueprint ? ' (BP)' : '');
-            const iconHtml = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml)
-                ? homeStationUI.moduleIconHtml(parsed.kind, parsed.id, cs - 20, 'victory-loot-pixel', false, tint)
-                : (typeof iconRenderer !== 'undefined')
-                    ? iconRenderer.imgHtml(this.victoryResourceIconKey(id), cs - 20, 'victory-loot-pixel', tint)
-                    : '';
+            const tipBuilt = (parsed && this.victoryFoundTipLines)
+                ? this.victoryFoundTipLines(parsed.kind, parsed.id, e.isBlueprint)
+                : { name: 'UNKNOWN ITEM', lines: ['UNKNOWN ITEM'] };
+            const tipLines = tipBuilt.lines;
+            const name = tipBuilt.name;
             const color = tint || '#ccc';
+            const span = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.shopPartSpan)
+                ? homeStationUI.shopPartSpan(parsed.kind, parsed.id)
+                : [1, 1];
+            const boxW = span[0] * cs - 6;
+            const boxH = span[1] * cs - 6;
+            let body = '';
+            if (parsed && typeof physicalItem !== 'undefined' && physicalItem.wrap) {
+                body = physicalItem.wrap(parsed.kind, parsed.id, boxW, boxH, color, '');
+            } else if (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml) {
+                body = homeStationUI.moduleIconHtml(parsed.kind, parsed.id, Math.min(boxW, boxH) - 8, 'victory-loot-pixel', false, tint);
+            } else if (typeof iconRenderer !== 'undefined') {
+                body = iconRenderer.imgHtml(this.victoryResourceIconKey(id), Math.min(boxW, boxH) - 8, 'victory-loot-pixel', tint);
+            }
             const sellValue = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0) * e.amount;
             const sellable = sellValue > 0 ? ' is-sellable' : '';
             const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
             const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
-            const unitSell = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0);
             const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
-                : (parsed ? `CLICK TO LOOT · DRAG TO SHIP · RIGHT-CLICK SELL 1 · ${unitSell}c`
+                : (parsed ? `LEFT-CLICK · MOVE TO SHIP`
                     : `CLICK TO SELL · ${sellValue}c`));
             const tip = tipLines.concat(actionLine.split('\n')).join('\n');
-            return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
-                `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" style="--pk-c:${color}" ` +
+            const html = `<button type="button" class="hs-storage-cell victory-loot-cell${e.isBlueprint ? ' is-blueprint' : ''}${sellable}${draggable}" ` +
+                `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" ` +
+                `${parsed ? `data-part-kind="${parsed.kind}" data-part-id="${parsed.id}" ` : ''}` +
+                `style="__SPAN__--pk-c:${color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${name.replace(/"/g, '&quot;')}" data-ui-tip="${tip.replace(/"/g, '&quot;')}" ` +
                 `aria-label="${name}">` +
-                iconHtml +
+                body +
                 qtyHtml +
                 `</button>`;
+            return { html: html, span: span };
+        });
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.packShopStockGrid) {
+            return homeStationUI.packShopStockGrid(cellSpecs, cols, rows, cs, gap, 'victory-loot-grid');
+        }
+        const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        const totalRows = Math.max(rows, Math.ceil(Math.max(used, 1) / cols));
+        const padCount = Math.max(0, cols * totalRows - used);
+        const cells = cellSpecs.map((c) => {
+            const [w, h] = c.span;
+            return c.html.replace('__SPAN__', `grid-column: span ${w}; grid-row: span ${h};`);
         }).join('');
-        const totalRows = Math.max(rows, Math.ceil(entries.length / cols));
-        const padCount = Math.max(0, cols * totalRows - entries.length);
         const padding = Array.from({ length: padCount })
             .map(() => '<span class="hs-storage-cell hs-storage-cell-empty"></span>')
             .join('');
-        const filledGridStyle = totalRows === rows
-            ? gridStyle
-            : `--cs:${cs}px;--hs-gap:${gap}px;` +
-                `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${totalRows},${cs}px);`;
-        return `<div class="hs-storage-grid victory-loot-grid" style="${filledGridStyle}">` +
+        const filledGridStyle = `--cs:${cs}px;--hs-gap:${gap}px;` +
+            `grid-auto-flow:row dense;` +
+            `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${totalRows},${cs}px);` +
+            `width:calc(${cols}*${cs}px + ${cols - 1}*${gap}px);` +
+            `height:calc(${totalRows}*${cs}px + ${totalRows - 1}*${gap}px);`;
+        return `<div class="hs-storage-grid victory-loot-grid" data-inv-cols="${cols}" data-inv-rows="${totalRows}" style="${filledGridStyle}">` +
             cells + padding +
             `</div>`;
     },
@@ -1539,7 +1717,11 @@ extendClass(GameControlSystem, {
             return;
         }
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-            levelInfoManager.showLootNotice('STORED ON SHIP');
+            const roll = res.rolls && res.rolls[0];
+            const notice = roll && roll.classKey
+                ? ('STORED · ' + String(roll.classKey).toUpperCase() + ' ROLL')
+                : 'STORED ON SHIP';
+            levelInfoManager.showLootNotice(notice);
         }
         this.updateVictoryStats();
     },
@@ -1553,7 +1735,7 @@ extendClass(GameControlSystem, {
         if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
         // growToFit: looted parts must stay visible even when the hangar bay is already full.
         const shipGrid = homeStationUI.renderShipStorage(profile, shipId, {
-            tipAction: false,
+            tipAction: 'equip',
             growToFit: true
         }) || '';
         return `<div class="victory-loadout-bags">` +
@@ -1600,12 +1782,41 @@ extendClass(GameControlSystem, {
         this._hsVictoryPrevCreate = null;
     },
 
+    /** Right-click a part in the victory SHIP bag: equip / unequip (same as station ship storage). */
+    equipVictoryShipCell(cell) {
+        if (!cell || typeof homeStationUI === 'undefined' || !homeStationUI._equipFromStorageCell) return;
+        this.patchHomeStationForVictory();
+        try {
+            homeStationUI._equipFromStorageCell(cell);
+        } catch (err) {
+            this.unpatchHomeStationForVictory();
+            this.updateVictoryStats();
+        }
+        // Successful equip calls createUI → our patch → updateVictoryStats + unpatch.
+        // Failed equip does not — refresh + unpatch here.
+        if (this._hsVictoryPatched) {
+            this.unpatchHomeStationForVictory();
+            this.updateVictoryStats();
+        }
+    },
+
     bindVictoryShipGridDrag(victoryOverlay) {
         if (!victoryOverlay || typeof homeStationUI === 'undefined') return;
         victoryOverlay.querySelectorAll('#victoryLoadoutList .hs-storage-cell[data-drag-key]').forEach((cell) => {
             cell.setAttribute('draggable', 'false');
             cell.addEventListener('dragstart', (e) => e.preventDefault());
+            cell.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
             cell.addEventListener('pointerdown', (ev) => {
+                // Right-click: equip / unequip while the part sits in ship inventory.
+                if (ev.button === 2) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    this.equipVictoryShipCell(cell);
+                    return;
+                }
                 if (ev.button !== 0) return;
                 this.patchHomeStationForVictory();
                 homeStationUI._storageDragStart(ev, cell);
@@ -1673,7 +1884,6 @@ extendClass(GameControlSystem, {
                         .forEach((g) => g.classList.toggle('is-drag-over', g === overShip));
                 };
                 const onUp = (ev) => {
-                    const wasDragging = dragging;
                     cleanup();
                     // setPointerCapture often eats the native click; always loot on release
                     // (drop on SHIP or plain click / drag-jitter — same take-to-ship action).
@@ -1692,19 +1902,19 @@ extendClass(GameControlSystem, {
 
     bindVictoryLootList(victoryOverlay) {
         const list = victoryOverlay.querySelector('#victoryLootList');
-        if (!list || list.dataset.sellBound) return;
-        list.dataset.sellBound = '1';
+        // v4: left-click moves found→ship; right-click does not take (equip is ship-bag only).
+        if (!list || list.dataset.sellBound === 'v4') return;
+        list.dataset.sellBound = 'v4';
         list.addEventListener('click', (event) => {
             // Right-click on a <button> can still fire a trailing click (button 2) after
-            // contextmenu/pointerdown sell — reject it or the part vanishes without a real loot.
+            // contextmenu/pointerdown — reject it so only left-click moves inventory.
             if (event.button !== 0) return;
             const btn = event.target.closest('.victory-loot-cell');
             if (!btn) return;
             event.preventDefault();
             event.stopPropagation();
             const isBlueprint = btn.dataset.cargoBlueprint === '1';
-            // Parts: click loots onto the active ship. Blueprints can't file on a ship
-            // (craft-only), so left-click still sells those.
+            // Parts: left-click moves into the ship bag. Blueprints stay sell-only.
             if (!isBlueprint && btn.classList.contains('is-draggable')) {
                 this.takeVictoryCargoItem(btn.dataset.cargoKey);
                 return;
@@ -1712,22 +1922,33 @@ extendClass(GameControlSystem, {
             if (!btn.classList.contains('is-sellable')) return;
             this.sellVictoryCargoItem(btn.dataset.cargoKey, isBlueprint);
         });
-        // Sell on pointerdown (button 2), not contextmenu alone: same pattern as the
-        // hangar storage grid — acting before the browser's trailing button-2 click
-        // keeps sell from racing a fake loot/take that then looks like "just gone".
+        // Right-click on FOUND ITEMS: only blueprints sell. Parts wait for left-click move;
+        // equip happens later via right-click in the SHIP bag.
         list.addEventListener('pointerdown', (event) => {
             if (event.button !== 2) return;
-            const btn = event.target.closest('.victory-loot-cell.is-sellable');
+            const btn = event.target.closest('.victory-loot-cell');
             if (!btn) return;
             event.preventDefault();
             event.stopPropagation();
-            this.sellVictoryCargoItem(btn.dataset.cargoKey, btn.dataset.cargoBlueprint === '1');
+            const isBlueprint = btn.dataset.cargoBlueprint === '1';
+            if (isBlueprint && btn.classList.contains('is-sellable')) {
+                this.sellVictoryCargoItem(btn.dataset.cargoKey, true);
+            }
         });
+        // Block the browser context menu on the whole FOUND ITEMS grid (cells + empties).
         list.addEventListener('contextmenu', (event) => {
-            if (!event.target.closest('.victory-loot-cell')) return;
             event.preventDefault();
             event.stopPropagation();
         });
+        // Same for SHIP loadout grid — no native context menu on slots or empty cells.
+        const loadout = victoryOverlay.querySelector('#victoryLoadoutList');
+        if (loadout && loadout.dataset.ctxBound !== '2') {
+            loadout.dataset.ctxBound = '2';
+            loadout.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+            });
+        }
     },
 
     applyVictoryPixelIcons(victoryOverlay) {
@@ -6758,9 +6979,12 @@ var VFTrackerManager = class VFTrackerManager {
         }
         // Scene/role change → always refresh tempo + AUTO STYLE before the swap
         // so the handoff is heard as a music update, not just a new pattern row.
-        if (!sameRole || (opts && opts.forceScene)) {
+        if (!sameRole || (opts && opts.forceScene) || (opts && opts.force)) {
             const galaxyFaction = (opts && opts.galaxyFaction)
-                || (typeof soundManager !== 'undefined' && soundManager._currentHostileFaction)
+                || (typeof soundManager !== 'undefined' && (
+                    soundManager._currentHostileFaction
+                    || soundManager._endMusicFaction
+                ))
                 || '';
             if (typeof soundManager !== 'undefined' && soundManager._applyMusicScene) {
                 soundManager._applyMusicScene(nextRole, galaxyFaction);
@@ -6907,13 +7131,14 @@ var VFTrackerManager = class VFTrackerManager {
 
     /**
      * Try keys in order; first playable wins.
-     * If that song is already playing, keep its position.
+     * If that song is already playing, keep its position (unless opts.force).
      */
-    playFirst(keys) {
+    playFirst(keys, opts) {
         const list = Array.isArray(keys) ? keys : [keys];
         const target = this.firstPlayableKey(list);
         if (!target) return null;
-        if (this.currentKey === target && this.player.isPlaying()) {
+        const force = !!(opts && opts.force);
+        if (!force && this.currentKey === target && this.player.isPlaying()) {
             // Keep playhead, but still push STYLE / scene feel to the live player.
             this._reassertMixerSettings();
             this._pushJungleToPlayers(this._effectiveJungleAmount());
@@ -6921,7 +7146,8 @@ var VFTrackerManager = class VFTrackerManager {
             return target;
         }
         // Same map/combat motif under an alias key — keep playhead.
-        if (this.player.isPlaying() && this._trackRole(this.currentKey) === this._trackRole(target)) {
+        if (!force && this.player.isPlaying()
+            && this._trackRole(this.currentKey) === this._trackRole(target)) {
             const track = this.getTrack(target);
             const fp = this._fingerprint(track);
             if (fp && fp === this._currentFingerprint) {
@@ -6932,7 +7158,7 @@ var VFTrackerManager = class VFTrackerManager {
                 return target;
             }
         }
-        if (this.play(target)) return target;
+        if (this.play(target, null, opts || null)) return target;
         return null;
     }
 
@@ -7394,7 +7620,12 @@ var PlayerManager = class PlayerManager {
         const diverting = typeof chargeSystem !== 'undefined'
             && chargeSystem.isWeaponCharging()
             && chargeSystem.stats.shieldDivert;
-        if (!diverting && this.shieldMax > 0 && this.shieldRegen > 0 && this.shield < this.shieldMax) {
+        // Same 2.5s post-hit pause as enemy shields — without it regen
+        // restocks the barrier between shots and dying becomes impossible.
+        const shieldRegenReady = !this.shieldHitAt
+            || (Date.now() - this.shieldHitAt > 2500);
+        if (!diverting && shieldRegenReady && this.shieldMax > 0
+            && this.shieldRegen > 0 && this.shield < this.shieldMax) {
             const mechs = this.defenseMechanisms || [];
             const canRegen = !mechs.length
                 || mechs.indexOf('shield_regen') !== -1
@@ -7437,6 +7668,7 @@ var PlayerManager = class PlayerManager {
                 defenseMechanisms: this.defenseMechanisms
             };
             hpDamage = enemyManager.applyDefenseToDamage(target, hpDamage);
+            if (target.shieldHitAt) this.shieldHitAt = target.shieldHitAt;
             shieldUsed = Math.max(0, usableShield - (target.shield || 0));
             this.shield = savedShield - shieldUsed;
             if (shieldUsed > 0) {
@@ -7448,6 +7680,9 @@ var PlayerManager = class PlayerManager {
             this.energy = Math.max(0, this.energy - absorbed * costPer);
             hpDamage -= absorbed;
             shieldUsed = absorbed;
+            this.shieldHitAt = Date.now();
+        } else if (hpDamage > 0) {
+            this.shieldHitAt = Date.now();
         }
 
         // Hull flash when armor eats damage; shield spark when the barrier soaks it.
@@ -7752,7 +7987,7 @@ extendClass(PlayerManager, {
 var playerManager = new PlayerManager();
 
 
-/* --- js/game/bullets/core.js?v=laser-flight-73t --- */
+/* --- js/game/bullets/core.js?v=shot-hang-75a --- */
 "use strict";
 
 // Bullet management
@@ -7802,7 +8037,10 @@ var BulletManager = class BulletManager {
         b.isBossShot = undefined;
         b.isEnemyShot = undefined;
         b.bonusGlow = undefined;
+        b._powerShot = undefined;
         b._ignoreObstacle = undefined;
+        b._reflectCount = undefined;
+        b._isShot = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
         b._vxAcc = 0;
@@ -7815,12 +8053,52 @@ var BulletManager = class BulletManager {
         b.lightRadius = undefined;
         b.lightIntensity = undefined;
         b.lightColor = undefined;
+        b.weaponId = undefined;
+        b.type = undefined;
+        b.speed = undefined;
+        b.reflected = undefined;
+        b.chainSlow = undefined;
+        b.reflectiveShots = undefined;
+        b.wavePhase = undefined;
+        b._spawnAt = undefined;
+        b._stall = undefined;
+        b._still = undefined;
+        b._radial = undefined;
+        b.moveSpeed = undefined;
+        b.vx = undefined;
+        b.vy = undefined;
         return b;
     }
 
     releaseBullet(b) {
         if (!b || this._bulletPool.length >= BULLET_POOL_MAX) return;
+        // Never pool a shell that is still live on either combat list —
+        // scrubDualMembership used to do that, and the next spawn overwrote
+        // mid-flight player shots (same object in both arrays).
+        if (this.bullets.indexOf(b) !== -1 || this.enemyBullets.indexOf(b) !== -1) return;
         this._bulletPool.push(b);
+    }
+
+    /** Keep projectile AABB tiny so tall lasers cannot hit a full screen early. */
+    clampLiveShotSize(bullet) {
+        if (!bullet) return bullet;
+        const bw = bullet.width != null ? bullet.width : bullet.w;
+        const bh = bullet.height != null ? bullet.height : bullet.h;
+        const powered = !!(bullet._powerShot || (bullet.bonusGlow != null && bullet.bonusGlow >= 0.85));
+        const maxW = powered ? 6 : 4;
+        const maxH = powered ? 22 : 16;
+        const cx = Number(bullet.x) + (Number(bw) || 0) / 2;
+        const nw = Math.max(1, Math.min(maxW, Number(bw) || 2));
+        const nh = Math.max(3, Math.min(maxH, Number(bh) || 8));
+        if (bullet.width != null) {
+            bullet.width = nw;
+            bullet.height = nh;
+        } else {
+            bullet.w = nw;
+            bullet.h = nh;
+        }
+        if (Number.isFinite(cx)) bullet.x = cx - nw / 2;
+        return bullet;
     }
 
     /**
@@ -7829,10 +8107,26 @@ var BulletManager = class BulletManager {
      * shots copy into recycled shells so long fights stop growing.
      */
     pushBullet(list, fields) {
-        const b = this._bulletPool.pop();
+        // Never insert a live reference that already sits on either combat list —
+        // dual membership let enemy step flip vy and rear autofire shots died.
+        let src = fields;
+        if (src && (this.bullets.indexOf(src) !== -1 || this.enemyBullets.indexOf(src) !== -1)) {
+            src = Object.assign({}, fields);
+        }
+        let b = null;
+        while (this._bulletPool.length) {
+            const cand = this._bulletPool.pop();
+            if (!cand) continue;
+            // Stale pool entry still referenced by a live list — skip it.
+            if (this.bullets.indexOf(cand) !== -1 || this.enemyBullets.indexOf(cand) !== -1) continue;
+            b = cand;
+            break;
+        }
         if (!b) {
-            list.push(fields);
-            return fields;
+            list.push(src);
+            this.normalizeBulletMotion(src, src);
+            this.clampLiveShotSize(src);
+            return src;
         }
         b.angle = undefined;
         b.waveAmp = undefined;
@@ -7842,7 +8136,10 @@ var BulletManager = class BulletManager {
         b.isBossShot = undefined;
         b.isEnemyShot = undefined;
         b.bonusGlow = undefined;
+        b._powerShot = undefined;
         b._ignoreObstacle = undefined;
+        b._reflectCount = undefined;
+        b._isShot = undefined;
         b._sweepDx = 0;
         b._sweepDy = 0;
         b._vxAcc = 0;
@@ -7852,11 +8149,225 @@ var BulletManager = class BulletManager {
         b._snapLastX = undefined;
         b._snapLastY = undefined;
         b._terrainRow = undefined;
-        for (const k in fields) {
-            if (Object.prototype.hasOwnProperty.call(fields, k)) b[k] = fields[k];
+        b.weaponId = undefined;
+        b.type = undefined;
+        b.speed = undefined;
+        b.reflected = undefined;
+        b.chainSlow = undefined;
+        b.reflectiveShots = undefined;
+        b.wavePhase = undefined;
+        b._spawnAt = undefined;
+        b._stall = undefined;
+        b._still = undefined;
+        b._radial = undefined;
+        b.moveSpeed = undefined;
+        b.vx = undefined;
+        b.vy = undefined;
+        for (const k in src) {
+            if (Object.prototype.hasOwnProperty.call(src, k)) b[k] = src[k];
         }
         list.push(b);
+        this.normalizeBulletMotion(b, src);
+        this.clampLiveShotSize(b);
         return b;
+    }
+
+    /** Drop any shot that somehow landed on both team lists. */
+    scrubDualMembership() {
+        const p = this.bullets;
+        const e = this.enemyBullets;
+        if (!p || !e || !p.length || !e.length) return;
+        for (let i = p.length - 1; i >= 0; i--) {
+            const b = p[i];
+            if (!b) continue;
+            const ei = e.indexOf(b);
+            if (ei === -1) continue;
+            // Keep the team that matches travel direction. Detach only — never
+            // releaseBullet here (the kept list still owns this object).
+            // Stalled/zero/NaN vy: trust isEnemyShot so enemy shells stay enemy.
+            const vy = Number(b.vy);
+            const keepEnemy = b.isEnemyShot
+                ? !(Number.isFinite(vy) && vy < 0)
+                : (Number.isFinite(vy) && vy > 0);
+            if (keepEnemy) {
+                this.detachBullet(p, i);
+                b.isEnemyShot = true;
+            } else {
+                this.detachBullet(e, ei);
+                b.isEnemyShot = false;
+            }
+        }
+    }
+
+    /**
+     * Lock a concrete velocity (vx/vy) once. Flight never re-derives from angle
+     * mid-air — that caused frozen / reversed / mid-lane vanishing beams.
+     */
+    normalizeBulletMotion(bullet, fields) {
+        if (!bullet) return bullet;
+        const hint = fields && Number(fields.speed);
+        let s = Number(bullet.moveSpeed);
+        if (!(s > 0)) s = Number(bullet.speed);
+        if (!Number.isFinite(s) || s === 0) {
+            s = (Number.isFinite(hint) && hint !== 0) ? Math.abs(hint)
+                : (bullet.isEnemyShot ? 5 : 6);
+        } else {
+            s = Math.abs(s);
+        }
+        s = Math.max(0.5, Math.min(24, s));
+        bullet.moveSpeed = s;
+        bullet.speed = s;
+
+        let vx = Number(bullet.vx);
+        let vy = Number(bullet.vy);
+        const hasVel = Number.isFinite(vx) && Number.isFinite(vy) && Math.hypot(vx, vy) > 0.01;
+        if (!hasVel) {
+            const upward = !bullet.isEnemyShot;
+            if (bullet.type === 'wave_beam' && bullet.waveAmp) {
+                vx = 0;
+                vy = upward ? -s : s;
+            } else if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
+                const a = Number(bullet.angle);
+                vx = Math.sin(a) * s;
+                vy = (upward ? -Math.cos(a) : Math.cos(a)) * s;
+            } else {
+                vx = 0;
+                vy = upward ? -s : s;
+            }
+        }
+        // Own-team primary axis must dominate (no sideways-parked lasers).
+        // Radial nova rings intentionally fly every direction — leave them alone.
+        const radial = !!(bullet._radial || bullet.type === 'nova_shot');
+        const forward = bullet.isEnemyShot ? 1 : -1;
+        if (!radial && (Math.abs(vy) < s * 0.55 || Math.sign(vy || forward) !== Math.sign(forward))) {
+            const lat = Number.isFinite(vx) ? Math.max(-s * 0.75, Math.min(s * 0.75, vx)) : 0;
+            const rem = Math.sqrt(Math.max(0.01, s * s - lat * lat));
+            vx = lat;
+            vy = forward * rem;
+            bullet.angle = undefined;
+        }
+        bullet.vx = vx;
+        bullet.vy = vy;
+        bullet.x = Number(bullet.x) || 0;
+        bullet.y = Number(bullet.y) || 0;
+        bullet._isShot = true;
+        return bullet;
+    }
+
+    /** @deprecated alias — keep call sites working */
+    stabilizeBulletSpeed(bullet, fields) {
+        return this.normalizeBulletMotion(bullet, fields);
+    }
+
+    getBulletMoveSpeed(bullet, fallback) {
+        if (!bullet) return fallback || 6;
+        const locked = Number(bullet.moveSpeed);
+        if (Number.isFinite(locked) && locked > 0) return locked;
+        const s = Number(bullet.speed);
+        if (Number.isFinite(s) && s !== 0) return Math.abs(s);
+        const v = Math.hypot(Number(bullet.vx) || 0, Number(bullet.vy) || 0);
+        if (v > 0) return v;
+        return fallback || (bullet.isEnemyShot ? 5 : 6);
+    }
+
+    /**
+     * One frame of travel from locked vx/vy. Wave sway is additive on X only.
+     */
+    computeBulletStep(bullet, spd, speedMultiplier, upward) {
+        // Lock vx/vy once at spawn — re-normalizing every frame made some
+        // beams drift faster/slower than others in the same stream.
+        const hasVel = Number.isFinite(bullet.vx) && Number.isFinite(bullet.vy)
+            && Math.hypot(bullet.vx, bullet.vy) > 0.01;
+        if (!hasVel) this.normalizeBulletMotion(bullet, { speed: spd });
+        const smRaw = Number(speedMultiplier);
+        const sm = Number.isFinite(smRaw) ? Math.max(0.05, smRaw) : 1;
+        let bdx = Number(bullet.vx) * sm;
+        let bdy = Number(bullet.vy) * sm;
+        if (bullet.type === 'wave_beam' && bullet.waveAmp) {
+            bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * sm;
+            bdx += Math.sin(bullet.wavePhase) * Number(bullet.waveAmp) * sm;
+        }
+        const radial = !!(bullet._radial || bullet.type === 'nova_shot');
+        const forward = upward ? -1 : 1;
+        if (!radial && (Math.abs(bdy) < 0.05 || Math.sign(bdy) !== Math.sign(forward))) {
+            const s = Math.max(0.5, Number(spd) || 6) * sm;
+            bdx = 0;
+            bdy = forward * s;
+            bullet.vx = 0;
+            bullet.vy = forward * Math.max(0.5, Number(spd) || 6);
+        }
+        return { bdx, bdy };
+    }
+
+    /** Leading tip of a shot (collision / terrain sample point). */
+    shotTip(bullet) {
+        const w = Math.max(1, Number(bullet.width != null ? bullet.width : bullet.w) || 1);
+        const h = Math.max(1, Number(bullet.height != null ? bullet.height : bullet.h) || 1);
+        const down = !!bullet.isEnemyShot;
+        return {
+            x: Number(bullet.x) + w / 2,
+            y: down ? Number(bullet.y) + h : Number(bullet.y)
+        };
+    }
+
+    /**
+     * Player shots move up: the muzzle point is the trail end (bottom of the AABB),
+     * not the leading tip. Spawning at muzzle Y put most of the bullet inside the hull.
+     */
+    playerShotY(muzzleY, height) {
+        const h = Math.max(1, Number(height) || 8);
+        return (Number(muzzleY) || 0) - h;
+    }
+
+    tagPlayerShotAtMuzzle(bullet, muzzleY) {
+        if (!bullet) return bullet;
+        bullet.isEnemyShot = false;
+        bullet._spawnAt = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (muzzleY != null && Number.isFinite(Number(muzzleY))) {
+            const h = bullet.height != null ? bullet.height : bullet.h;
+            bullet.y = this.playerShotY(muzzleY, h);
+        }
+        return bullet;
+    }
+
+    spawnPlayerBullet(fields, muzzleY) {
+        const fieldsWithTag = Object.assign({}, fields, { _isShot: true, isEnemyShot: false });
+        return this.tagPlayerShotAtMuzzle(this.pushBullet(this.bullets, fieldsWithTag), muzzleY);
+    }
+
+    bulletOverlapsFootprint(bullet, rect) {
+        if (!bullet || !rect) return false;
+        const bw = bullet.width != null ? bullet.width : (bullet.w || 0);
+        const bh = bullet.height != null ? bullet.height : (bullet.h || 0);
+        const pad = 1;
+        return bullet.x < rect.x + rect.width + pad
+            && bullet.x + bw > rect.x - pad
+            && bullet.y < rect.y + rect.height + pad
+            && bullet.y + bh > rect.y - pad;
+    }
+
+    /** Brief spawn grace while a shot still overlaps the player footprint. */
+    beginCollisionFrame(player) {
+        this._spawnBlockPlayer = player || null;
+    }
+
+    playerShotSpawnBlocked(bullet) {
+        if (!bullet || bullet.isEnemyShot) return false;
+        if (!bullet._spawnAt) return false;
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        if (now - bullet._spawnAt > 220) return false;
+        let p = this._spawnBlockPlayer;
+        if (!p && typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            p = playerManager.getPosition();
+        }
+        if (!p) return false;
+        return this.bulletOverlapsFootprint(bullet, p);
+    }
+
+    cullBulletAt(i, list) {
+        const last = list.length - 1;
+        if (i !== last) list[i] = list[last];
+        this.releaseBullet(list.pop());
     }
 
     /** In-stage shop purchase: fires `weaponId` for `shots` shots, then reverts to whatever was equipped before. */
@@ -8025,86 +8536,74 @@ var BulletManager = class BulletManager {
         const enemySpeed = ui ? ui.getShotSpeedMul('enemy') : 1;
         const bossSpeed = ui ? ui.getShotSpeedMul('boss') : 1;
 
-        // Shots move on continuous coords (same as the pilot). Lattice stepMove
-        // froze beams for whole frames whenever cell > per-frame travel — they
-        // looked stuck mid-lane and their sweep stayed 0 so clashes/hits missed.
-        // VOXEL still snaps them at draw time via fillCombatRect / drawBullet.
-
-        // Update player bullets
-        for (let i = this.bullets.length - 1; i >= 0; i--) {
-            const bullet = this.bullets[i];
-            const speedMultiplier = baseSpeedMultiplier * playerSpeed;
-            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 6;
-            let bdx = 0;
-            let bdy = 0;
-
-            // Handle angled bullets (spread shot) and wave sway
-            if (bullet.type === 'wave_beam' && bullet.waveAmp) {
-                bullet.wavePhase = (bullet.wavePhase || 0) + 0.25 * speedMultiplier;
-                bdx = Math.sin(bullet.wavePhase) * bullet.waveAmp * speedMultiplier;
-                bdy = -spd * speedMultiplier;
-            } else if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
-                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
-                bdy = -Math.cos(bullet.angle) * spd * speedMultiplier;
-            } else {
-                bdy = -spd * speedMultiplier;
-            }
-            const px0 = bullet.x, py0 = bullet.y;
-            bullet.x += bdx;
-            bullet.y += bdy;
-            bullet._sweepDx = bullet.x - px0;
-            bullet._sweepDy = bullet.y - py0;
-
-            // Cull only when the shot is fully off-screen. The pilot's guns can
-            // sit on the rim (player.x down to -halfW), so a fresh laser spawns
-            // with x ≈ -1.5 — culling on `x < 0` ate those shots instantly.
-            const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            const bw = bullet.width || 0;
-            const bh = bullet.height || 0;
-            if (!isFinite(bullet.x) || !isFinite(bullet.y)
-                || bullet.y + bh < 0
-                || bullet.x + bw < 0
-                || bullet.x > canvasWidth) {
-                const last = this.bullets.length - 1;
-                if (i !== last) this.bullets[i] = this.bullets[last];
-                this.releaseBullet(this.bullets.pop());
-            }
+        if (typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            this.beginCollisionFrame(playerManager.getPosition());
         }
 
-        // Update enemy bullets
-        for (let i = this.enemyBullets.length - 1; i >= 0; i--) {
-            const bullet = this.enemyBullets[i];
-            const speedMultiplier = baseSpeedMultiplier * (bullet.isBossShot ? bossSpeed : enemySpeed);
-            const spd = (Number(bullet.speed) > 0) ? Number(bullet.speed) : 5;
-            let bdx = 0;
-            let bdy = 0;
+        const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
+        const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
 
-            // Handle angled enemy bullets (after reflection)
-            if (bullet.angle !== undefined && Number.isFinite(Number(bullet.angle))) {
-                bdx = Math.sin(bullet.angle) * spd * speedMultiplier;
-                bdy = Math.cos(bullet.angle) * spd * speedMultiplier;
-            } else {
-                bdy = spd * speedMultiplier;
-            }
-            const px0 = bullet.x, py0 = bullet.y;
-            bullet.x += bdx;
-            bullet.y += bdy;
-            bullet._sweepDx = bullet.x - px0;
-            bullet._sweepDy = bullet.y - py0;
+        this.scrubDualMembership();
 
-            const canvasWidth = (typeof game !== 'undefined' && game.internalWidth) ? game.internalWidth : 200;
-            const canvasHeight = (typeof game !== 'undefined' && game.internalHeight) ? game.internalHeight : 300;
-            const bw = bullet.width || 0;
-            const bh = bullet.height || 0;
-            if (bullet.y > canvasHeight
-                || bullet.x + bw < 0
-                || bullet.x > canvasWidth
-                || bullet.y + bh < 0) {
-                const last = this.enemyBullets.length - 1;
-                if (i !== last) this.enemyBullets[i] = this.enemyBullets[last];
-                this.releaseBullet(this.enemyBullets.pop());
+        const stepList = (list, speedMulFor, upward) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const bullet = list[i];
+                if (!bullet) {
+                    this.cullBulletAt(i, list);
+                    continue;
+                }
+                bullet.isEnemyShot = !upward;
+                this.clampLiveShotSize(bullet);
+                const spd = this.getBulletMoveSpeed(bullet, upward ? 6 : 5);
+                const mul = speedMulFor(bullet);
+                const frameMul = baseSpeedMultiplier * mul;
+                // Hard lock: never park mid-air (zero/wrong-axis velocity).
+                // Radial nova pellets keep their ring direction.
+                const radial = !!(bullet._radial || bullet.type === 'nova_shot');
+                const forward = upward ? -1 : 1;
+                if (!radial && (!Number.isFinite(bullet.vx) || !Number.isFinite(bullet.vy)
+                    || Math.abs(bullet.vy) < spd * 0.35
+                    || Math.sign(bullet.vy || forward) !== Math.sign(forward))) {
+                    bullet.angle = undefined;
+                    bullet.vx = 0;
+                    bullet.vy = forward * spd;
+                    bullet.moveSpeed = spd;
+                    bullet.speed = spd;
+                }
+                const step = this.computeBulletStep(bullet, spd, frameMul, upward);
+                const px0 = bullet.x;
+                const py0 = bullet.y;
+                let bdx = step.bdx;
+                let bdy = step.bdy;
+                if (!radial && Math.abs(bdy) < 0.2 * frameMul) {
+                    bdx = 0;
+                    bdy = forward * spd * frameMul;
+                    bullet.vx = 0;
+                    bullet.vy = forward * spd;
+                }
+                bullet.x = px0 + bdx;
+                bullet.y = py0 + bdy;
+                bullet._sweepDx = bullet.x - px0;
+                bullet._sweepDy = bullet.y - py0;
+
+                const bw = bullet.width || 0;
+                const bh = bullet.height || 0;
+                // Radial shots leave in every direction — cull all screen edges.
+                const offY = radial
+                    ? (bullet.y + bh < -2 || bullet.y > canvasHeight + 2)
+                    : (upward ? (bullet.y + bh < -2) : (bullet.y > canvasHeight + 2 || bullet.y + bh < -2));
+                const off = !Number.isFinite(bullet.x) || !Number.isFinite(bullet.y)
+                    || bullet.x + bw < -4
+                    || bullet.x > canvasWidth + 4
+                    || offY;
+                if (off) {
+                    this.cullBulletAt(i, list);
+                }
             }
-        }
+        };
+
+        stepList(this.bullets, () => playerSpeed, true);
+        stepList(this.enemyBullets, (b) => (b && b.isBossShot ? bossSpeed : enemySpeed), false);
     }
 
     setShipModel(shipModel) {
@@ -8156,6 +8655,9 @@ var BulletManager = class BulletManager {
             this.fireMode = shipLoadoutManager.getFireMode(shipModel.id);
         }
         this.resetCharge();
+        this._firePosCache = null;
+        this._firePosFrame = -1;
+        this._firePosSig = '';
         // Update weapon display
         this.updateWeaponDisplay();
     }
@@ -8168,13 +8670,24 @@ var BulletManager = class BulletManager {
      * modular layout (legacy/non-modular ship models).
      */
     getWeaponFirePositions(playerPosition) {
+        const fc = (typeof game !== 'undefined' && game.gameState)
+            ? game.gameState.frameCount
+            : -1;
+        const sig = [playerPosition.x, playerPosition.y, playerPosition.width, playerPosition.height].join('|');
+        if (this._firePosCache && this._firePosFrame === fc && this._firePosSig === sig) {
+            return this._firePosCache;
+        }
         const model = this.currentShipModel;
         const layout = model && model.layout;
         const weaponModules = layout && Array.isArray(layout.modules)
             ? layout.modules.filter((m) => m && m.kind === 'weapon')
             : [];
         if (!weaponModules.length) {
-            return [{ id: this.currentWeapon, key: this.currentWeapon, position: playerPosition }];
+            const lone = [{ id: this.currentWeapon, key: this.currentWeapon, position: playerPosition }];
+            this._firePosFrame = fc;
+            this._firePosSig = sig;
+            this._firePosCache = lone;
+            return lone;
         }
         const lw = Math.max(1, layout.width || playerPosition.width);
         const lh = Math.max(1, layout.height || playerPosition.height);
@@ -8195,7 +8708,7 @@ var BulletManager = class BulletManager {
         };
         const muzzleUp = () => 1.4;
         const fireKeys = (model.loadout && model.loadout.weaponKeys) || {};
-        return weaponModules.map((m) => ({
+        const slots = weaponModules.map((m) => ({
             id: m.id,
             // Trigger of this slot: 'space' (default) or 'a' / 's' / 'd'.
             fireKey: (m.slotIndex != null && fireKeys[String(m.slotIndex)]) || 'space',
@@ -8223,20 +8736,28 @@ var BulletManager = class BulletManager {
                 height: Math.max(1, (m.height || 0) * scaleY)
             }
         }));
+        this._firePosFrame = fc;
+        this._firePosSig = sig;
+        this._firePosCache = slots;
+        return slots;
     }
 
-    switchWeapon() {
+    switchWeapon(direction) {
+        const step = direction < 0 ? -1 : 1;
         if (!this.currentShipModel || !this.currentShipModel.availableWeapons) {
             // Fallback to old system
-            this.shotType = (this.shotType + 1) % this.shotTypes.length;
+            const n = this.shotTypes.length || 1;
+            this.shotType = (this.shotType + step + n) % n;
             this.updateWeaponDisplay();
             const fallback = this.shotTypes[this.shotType];
             return fallback;
         }
 
-        const currentIndex = this.currentShipModel.availableWeapons.indexOf(this.currentWeapon);
-        const nextIndex = (currentIndex + 1) % this.currentShipModel.availableWeapons.length;
-        this.currentWeapon = this.currentShipModel.availableWeapons[nextIndex];
+        const list = this.currentShipModel.availableWeapons;
+        const n = list.length || 1;
+        const currentIndex = list.indexOf(this.currentWeapon);
+        const nextIndex = ((currentIndex < 0 ? 0 : currentIndex) + step + n) % n;
+        this.currentWeapon = list[nextIndex];
         this.updateWeaponDisplay();
         return this.currentWeapon;
     }
@@ -8734,16 +9255,9 @@ extendClass(BulletManager, {
     },
     shoot(playerPosition, options) {
         // FREEZE trap only slows movement — guns stay free.
+        // Beat-synced critical shots are disabled.
         const opts = Object.assign({}, options || {});
-        if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
-            const beatOpts = beatSyncManager.getShotOptions();
-            if (beatOpts.beatPower) {
-                const existing = opts.chargeMult != null ? opts.chargeMult : 1;
-                opts.chargeMult = Math.max(existing, beatOpts.chargeMult || 1);
-                opts.beatPower = true;
-                if (beatOpts.cooldownMul) opts.cooldownMul = beatOpts.cooldownMul;
-            }
-        }
+        delete opts.beatPower;
         const currentTime = Date.now();
         let shotFired = false;
 
@@ -8785,9 +9299,6 @@ extendClass(BulletManager, {
         // Play shooting sound only if a shot was actually fired
         if (shotFired && typeof soundManager !== 'undefined') {
             soundManager.playWeaponShoot(this.currentWeapon || 'laser');
-            if (opts.beatPower && soundManager.createBeep) {
-                soundManager.createBeep(1400, 0.04, 'square', 0.35);
-            }
         }
         return !!shotFired;
     },
@@ -8801,7 +9312,9 @@ extendClass(BulletManager, {
 extendClass(BulletManager, {
     shootWithShipWeapon(playerPosition, currentTime, options) {
         const opts = options || {};
-        let maxBullets = 18; // Shared cap across all weapon mounts on the ship
+        // High enough that sustained autofire never eats mid-stream shots to
+        // make room — old beams fly out the top; new ones spawn at the muzzle.
+        let maxBullets = 64;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
             maxBullets = 999;
         }
@@ -8863,13 +9376,10 @@ extendClass(BulletManager, {
             const powerMul = powerShot ? powerShot.damage : 1;
             cfg.damage = Math.max(1, Math.round((cfg.damage || 10) * mountMul * classMul * factionMul * abilityDmg * powerMul));
             if (opts.chargeMult && opts.chargeMult > 1) {
-                const cm = Math.min(1.75, opts.chargeMult);
                 cfg.damage = Math.round((cfg.damage || 10) * opts.chargeMult);
-                cfg.speed = (cfg.speed || 6) * (1 + (cm - 1) * 0.15);
-                // Bonus shots keep their size; they are drawn brighter instead
-                // (bullet.bonusGlow, see drawBullet).
                 cfg._charged = true;
                 cfg._chargeMult = opts.chargeMult;
+                cfg._beatPower = !!opts.beatPower;
             }
             if (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.clampWeaponShot) {
                 weaponConfigManager.clampWeaponShot(cfg);
@@ -8891,18 +9401,34 @@ extendClass(BulletManager, {
                 b.reflectiveShots = !!cfg.reflectiveShots;
                 // Spread-family CHAIN unlock: hits temporarily slow the target.
                 b.chainSlow = !!cfg.chainSlow;
-                // 0..1 brightness boost from the charge / beat bonus.
-                if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.8);
-                if (cfg._charged) b.bonusGlow = Math.max(0, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
-                if (powerSize !== 1) {
+                // Rare beat / charge shots must read as stronger: brighter + thicker.
+                if (powerShot) b.bonusGlow = Math.max(b.bonusGlow || 0, 0.85);
+                if (cfg._charged) {
+                    const glow = cfg._beatPower
+                        ? 1
+                        : Math.max(0.55, Math.min(1, ((cfg._chargeMult || 1) - 1) / 0.75));
+                    b.bonusGlow = Math.max(b.bonusGlow || 0, glow);
+                    b._powerShot = true;
+                }
+                let sizeMul = powerSize !== 1 ? powerSize : 1;
+                if (cfg._charged) sizeMul *= cfg._beatPower ? 1.55 : 1.3;
+                if (sizeMul !== 1) {
                     const cx = b.x + (b.width || 0) / 2;
-                    b.width = Math.max(1, (b.width || 2) * powerSize);
-                    b.height = Math.max(3, (b.height || 8) * powerSize);
+                    const maxW = b._powerShot ? 6 : 4;
+                    const maxH = b._powerShot ? 22 : 16;
+                    b.width = Math.max(1, Math.min(maxW, (b.width || 2) * sizeMul));
+                    b.height = Math.max(3, Math.min(maxH, (b.height || 8) * sizeMul));
                     b.x = cx - b.width / 2;
                 }
-                // Hangar close-up: mount width is already zoomed, so only speed
-                // needs shotScale (size comes from barrel fit).
-                if (shotScale !== 1) b.speed = (b.speed || 6) * shotScale;
+                this.tagPlayerShotAtMuzzle(b, slot.position.y);
+                if (shotScale !== 1) {
+                    b.moveSpeed = this.getBulletMoveSpeed(b, cfg.speed || 6) * shotScale;
+                    b.speed = b.moveSpeed;
+                    b.vx = undefined;
+                    b.vy = undefined;
+                }
+                this.normalizeBulletMotion(b, cfg);
+                this.clampLiveShotSize(b);
             }
             if (slot.muzzle) this.addMuzzleFlash(slot, cfg);
             firedAny = true;
@@ -8919,13 +9445,15 @@ extendClass(BulletManager, {
         }
         if (isEnemy) {
             switch (id) {
+                case 'nova':
+                    this.shootNova(position, Object.assign({ bulletCount: 8 }, cfg), true);
+                    break;
                 case 'spread':
                 case 'burst':
-                case 'nova':
                 case 'spike_burst':
                     this.enemyShootSpread(position, Object.assign({
-                        bulletCount: id === 'nova' ? 5 : (id === 'spike_burst' ? 4 : (id === 'burst' ? 2 : 2)),
-                        spreadAngle: id === 'nova' ? 0.5 : (id === 'spike_burst' ? 0.45 : (id === 'burst' ? 0.4 : 0.3))
+                        bulletCount: id === 'spike_burst' ? 4 : (id === 'burst' ? 2 : 2),
+                        spreadAngle: id === 'spike_burst' ? 0.45 : (id === 'burst' ? 0.4 : 0.3)
                     }, cfg));
                     break;
                 case 'rapid':
@@ -9001,7 +9529,7 @@ extendClass(BulletManager, {
     shootWithLegacySystem(playerPosition, options) {
         const opts = options || {};
         const currentType = this.shotTypes[this.shotType];
-        let maxBullets = 4;
+        let maxBullets = 64;
 
         // Check for infinite ammo cheat
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.infiniteAmmo) {
@@ -9050,7 +9578,8 @@ extendClass(BulletManager, {
             width: 2,
             height: 8,
             bonusGlow: Math.max(0, Math.min(1, (mult - 1) / 0.75)),
-            speed: 6 * (1 + (mult - 1) * 0.15),
+            _powerShot: mult > 1.2,
+            speed: 6,
             damage: Math.round(10 * mult),
             color: '#808080', // Grayscale base - will be colored by render system
             type: 'laser_beam',
@@ -9060,13 +9589,13 @@ extendClass(BulletManager, {
             lightIntensity: 1.2 * mult,
             lightColor: '#808080' // Grayscale base
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootSpread(playerPosition) {
         // Shoot 3 bullets in spread pattern (but respect bullet limit)
         const angles = [-0.3, 0, 0.3];
-        const maxBullets = 4;
+        const maxBullets = 64;
 
         angles.forEach(angle => {
             if (this.bullets.length < maxBullets) {
@@ -9085,14 +9614,14 @@ extendClass(BulletManager, {
                     lightIntensity: 1.0,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         });
     },
 
     shootRapid(playerPosition) {
         // Shoot 2 bullets rapidly (but respect bullet limit)
-        const maxBullets = 4;
+        const maxBullets = 64;
 
         for (let i = 0; i < 2; i++) {
             if (this.bullets.length < maxBullets) {
@@ -9110,7 +9639,7 @@ extendClass(BulletManager, {
                     lightIntensity: 0.9,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         }
     },
@@ -9136,7 +9665,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.2 * Math.max(1, mult * 0.85),
             lightColor: '#808080' // Grayscale base
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootSpreadWeapon(playerPosition, config) {
@@ -9151,7 +9680,7 @@ extendClass(BulletManager, {
         }
 
         angles.forEach(angle => {
-            if (this.bullets.length < 6) { // Max bullets for spread
+            if (this.bullets.length < 64) { // Max bullets for spread
                 const w = (config && config.width) || 2;
                 const h = (config && config.height) || 8;
                 const bullet = {
@@ -9169,7 +9698,7 @@ extendClass(BulletManager, {
                     lightIntensity: 1.0,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         });
     },
@@ -9180,7 +9709,7 @@ extendClass(BulletManager, {
         const h = (config && config.height) || 8;
 
         for (let i = 0; i < bulletCount; i++) {
-            if (this.bullets.length < 6) {
+            if (this.bullets.length < 64) {
                 const bullet = {
                     x: playerPosition.x + playerPosition.width / 2 - w / 2 + (i - (bulletCount - 1) / 2) * (w + 1),
                     y: playerPosition.y,
@@ -9195,7 +9724,7 @@ extendClass(BulletManager, {
                     lightIntensity: 0.9,
                     lightColor: '#808080' // Grayscale base
                 };
-                this.pushBullet(this.bullets, bullet);
+                this.spawnPlayerBullet(bullet, playerPosition.y);
             }
         }
     },
@@ -9214,7 +9743,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.5,
             lightColor: '#808080'
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootMissile(playerPosition, config) {
@@ -9231,7 +9760,7 @@ extendClass(BulletManager, {
             lightIntensity: 1.1,
             lightColor: '#808080'
         };
-        this.pushBullet(this.bullets, bullet);
+        this.spawnPlayerBullet(bullet, playerPosition.y);
     },
 
     shootIon(playerPosition, config) {
@@ -9239,8 +9768,8 @@ extendClass(BulletManager, {
         const spacing = config.bulletSpacing || 5;
         const start = playerPosition.x + playerPosition.width / 2 - ((count - 1) * spacing) / 2 - 1.5;
         for (let i = 0; i < count; i++) {
-            if (this.bullets.length >= 8) break;
-            this.pushBullet(this.bullets, {
+            if (this.bullets.length >= 64) break;
+            this.spawnPlayerBullet({
                 x: start + i * spacing,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -9252,12 +9781,12 @@ extendClass(BulletManager, {
                 lightRadius: 14,
                 lightIntensity: 1.0,
                 lightColor: '#808080'
-            });
+            }, playerPosition.y);
         }
     },
 
     shootWave(playerPosition, config) {
-        this.pushBullet(this.bullets, {
+        this.spawnPlayerBullet({
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 4) / 2,
             y: playerPosition.y,
             width: config.width || 4,
@@ -9271,7 +9800,7 @@ extendClass(BulletManager, {
             lightRadius: 18,
             lightIntensity: 1.1,
             lightColor: '#808080'
-        });
+        }, playerPosition.y);
     },
 });
 
@@ -9285,9 +9814,9 @@ extendClass(BulletManager, {
         const bulletCount = config.bulletCount || 5;
         const spreadAngle = config.spreadAngle || 0.45;
         for (let i = 0; i < bulletCount; i++) {
-            if (this.bullets.length >= 8) break;
+            if (this.bullets.length >= 64) break;
             const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.pushBullet(this.bullets, {
+            this.spawnPlayerBullet({
                 x: playerPosition.x + playerPosition.width / 2 - 1.5,
                 y: playerPosition.y,
                 width: config.width || 3,
@@ -9300,7 +9829,7 @@ extendClass(BulletManager, {
                 lightRadius: 12,
                 lightIntensity: 0.85,
                 lightColor: '#808080'
-            });
+            }, playerPosition.y);
         }
     },
 
@@ -9318,7 +9847,7 @@ extendClass(BulletManager, {
         const meet = h * 5;
         const angle = Math.atan2(half, meet);
         [-1, 1].forEach((side) => {
-            this.pushBullet(this.bullets, {
+            this.spawnPlayerBullet({
                 x: playerPosition.x + playerPosition.width / 2 + side * half - w / 2,
                 y: playerPosition.y,
                 width: w,
@@ -9333,12 +9862,12 @@ extendClass(BulletManager, {
                 lightRadius: config.lightRadius || 40,
                 lightIntensity: config.lightIntensity || 1.1,
                 lightColor: '#808080'
-            });
+            }, playerPosition.y);
         });
     },
 
     shootPierce(playerPosition, config) {
-        this.pushBullet(this.bullets, {
+        this.spawnPlayerBullet({
             x: playerPosition.x + playerPosition.width / 2 - (config.width || 2) / 2,
             y: playerPosition.y,
             width: config.width || 2,
@@ -9351,29 +9880,55 @@ extendClass(BulletManager, {
             lightRadius: 20,
             lightIntensity: 1.3,
             lightColor: '#808080'
-        });
+        }, playerPosition.y);
     },
 
-    shootNova(playerPosition, config) {
-        const bulletCount = config.bulletCount || 5;
-        const spreadAngle = config.spreadAngle || 0.55;
+    /**
+     * Expanding ring around the ship (full 360°), not a forward fan.
+     * Pellets keep radial vx/vy — motion locks skip `_radial` shots.
+     */
+    shootNova(playerPosition, config, isEnemy) {
+        const bulletCount = Math.max(6, Math.round(Number(config.bulletCount) || 8));
+        const speed = Math.max(2, Number(config.speed) || 7);
+        const w = Math.max(2, Number(config.width) || 4);
+        const h = Math.max(2, Number(config.height) || 8);
+        const cx = playerPosition.x + playerPosition.width / 2;
+        const cy = playerPosition.y + playerPosition.height / 2;
+        const ring = Math.max(playerPosition.width, playerPosition.height) * 0.55 + 2;
+        const list = isEnemy ? this.enemyBullets : this.bullets;
+        const maxBullets = 64;
         for (let i = 0; i < bulletCount; i++) {
-            if (this.bullets.length >= 8) break;
-            const angle = (i - (bulletCount - 1) / 2) * spreadAngle;
-            this.pushBullet(this.bullets, {
-                x: playerPosition.x + playerPosition.width / 2 - 2,
-                y: playerPosition.y,
-                width: config.width || 4,
-                height: config.height || 8,
-                speed: config.speed || 7,
-                damage: config.damage || 6,
-                angle: angle,
+            if (list.length >= maxBullets) break;
+            // angle 0 = up (player convention: vy = -cos, vx = sin)
+            const angle = (i / bulletCount) * Math.PI * 2;
+            const sx = Math.sin(angle);
+            const cyDir = Math.cos(angle);
+            const fields = {
+                x: cx + sx * ring - w / 2,
+                y: cy - cyDir * ring - h / 2,
+                width: w,
+                height: h,
+                speed: speed,
+                moveSpeed: speed,
+                vx: sx * speed,
+                vy: (isEnemy ? cyDir : -cyDir) * speed,
+                angle: isEnemy ? angle + Math.PI : angle,
+                damage: config.damage || 7,
                 color: '#808080',
                 type: 'nova_shot',
-                lightRadius: 22,
-                lightIntensity: 1.4,
+                _radial: true,
+                isEnemyShot: !!isEnemy,
+                charged: !!config._charged,
+                lightRadius: config.lightRadius || 22,
+                lightIntensity: config.lightIntensity || 1.4,
                 lightColor: '#808080'
-            });
+            };
+            if (isEnemy) {
+                this.pushBullet(this.enemyBullets, fields);
+            } else {
+                // null muzzleY — keep ring positions, do not snap to gun tip
+                this.spawnPlayerBullet(fields, null);
+            }
         }
     },
 
@@ -9402,6 +9957,10 @@ extendClass(BulletManager, {
         const grow = maxGrow != null && Number(maxGrow) > 0
             ? Math.max(0.3, Number(maxGrow))
             : Infinity;
+        // Hard cap: oversized lasers (tall AABB) hit the enemy / walls while the
+        // tip still looked mid-lane and vanished halfway up the field.
+        const maxW = 4;
+        const maxH = 16;
         for (let i = from; i < list.length; i++) {
             const b = list[i];
             const bw = b.width != null ? b.width : b.w;
@@ -9409,13 +9968,14 @@ extendClass(BulletManager, {
             const s = Math.max(0.3, Math.min(grow, target / bw));
             if (Math.abs(s - 1) < 0.001) continue;
             const cx = b.x + bw / 2;
-            const nw = Math.max(1, bw * s);
+            const nw = Math.min(maxW, Math.max(1, bw * s));
+            const nh = Math.min(maxH, Math.max(3, (b.height != null ? b.height : (b.h || 8)) * s));
             if (b.width != null) {
                 b.width = nw;
-                b.height = Math.max(3, (b.height || 8) * s);
+                b.height = nh;
             } else {
                 b.w = nw;
-                b.h = Math.max(3, (b.h || 8) * s);
+                b.h = nh;
             }
             b.x = cx - nw / 2;
         }
@@ -9427,6 +9987,8 @@ extendClass(BulletManager, {
         const mul = (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getShotSizeMul)
             ? uiAppearanceManager.getShotSizeMul(kind || 'enemy') : 1;
         if (!(mul > 0) || Math.abs(mul - 1) < 0.01) return;
+        const maxW = 4;
+        const maxH = 16;
         for (let i = from; i < list.length; i++) {
             const b = list[i];
             if (!b) continue;
@@ -9434,8 +9996,8 @@ extendClass(BulletManager, {
             const bh = b.height != null ? b.height : b.h;
             if (!(bw > 0)) continue;
             const cx = b.x + bw / 2;
-            const nw = Math.max(1, Math.round(bw * mul * 100) / 100);
-            const nh = Math.max(3, Math.round((bh || 8) * mul * 100) / 100);
+            const nw = Math.min(maxW, Math.max(1, Math.round(bw * mul * 100) / 100));
+            const nh = Math.min(maxH, Math.max(3, Math.round((bh || 8) * mul * 100) / 100));
             if (b.width != null) {
                 b.width = nw;
                 b.height = nh;
@@ -9740,24 +10302,114 @@ extendClass(BulletManager, {
         return this.enemyBullets;
     },
 
-    removeBullet(index) {
-        const list = this.bullets;
-        if (index < 0 || index >= list.length) return;
+    /**
+     * Pull a live shot out of `list` without pooling it. Use when the same
+     * object is about to be pushed onto the other side (reflect / optical) —
+     * releaseBullet here used to pool a still-live enemy/player bullet, so the
+     * next spawn reused it and one object lived in both arrays (looked like a
+     * top-of-screen bounce).
+     */
+    detachBullet(list, index) {
+        if (!list || index < 0 || index >= list.length) return null;
+        const b = list[index];
         const last = list.length - 1;
         if (index !== last) list[index] = list[last];
-        this.releaseBullet(list.pop());
+        list.pop();
+        return b;
+    },
+
+    removeBullet(index) {
+        const b = this.detachBullet(this.bullets, index);
+        if (b) this.releaseBullet(b);
     },
 
     removeEnemyBullet(index) {
-        const list = this.enemyBullets;
-        if (index < 0 || index >= list.length) return;
-        const last = list.length - 1;
-        if (index !== last) list[index] = list[last];
-        this.releaseBullet(list.pop());
+        const b = this.detachBullet(this.enemyBullets, index);
+        if (b) this.releaseBullet(b);
     },
 
-    switchShotType() {
-        return this.switchWeapon();
+    switchShotType(direction) {
+        return this.switchWeapon(direction);
+    },
+
+    /**
+     * DevMode combat cheat: Q/E cycle every registered weapon type and
+     * equip that gun in all available mount slots for this round only.
+     */
+    devCycleWeaponCheat(direction) {
+        const ids = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getIds)
+            ? weaponConfigManager.getIds()
+            : (this.shotTypes || []);
+        if (!ids.length) return this.currentWeapon || 'laser';
+
+        const step = direction < 0 ? -1 : 1;
+        let idx = ids.indexOf(this._devWeaponCheatId || this.currentWeapon);
+        if (idx < 0) idx = 0;
+        idx = (idx + step + ids.length) % ids.length;
+        const weaponId = ids[idx];
+        this._devWeaponCheatId = weaponId;
+
+        const model = this.currentShipModel
+            || (typeof graphicsManager !== 'undefined' && graphicsManager.currentPlayerModel)
+            || (typeof playerManager !== 'undefined' && playerManager.currentShipModel)
+            || null;
+        if (model && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+            model._devWeaponFillId = weaponId;
+            shipLoadoutManager.applyLayoutToModel(model, model.id || model.type);
+            model.weaponConfig = model.weaponConfig || {};
+            if (!model.weaponConfig[weaponId]
+                && typeof weaponConfigManager !== 'undefined'
+                && weaponConfigManager.getDefaultsForShip) {
+                const cfg = weaponConfigManager.getDefaultsForShip(weaponId);
+                if (cfg) model.weaponConfig[weaponId] = Object.assign({}, cfg);
+            }
+            this.setShipModel(model);
+            if (typeof graphicsManager !== 'undefined') {
+                graphicsManager.currentPlayerModel = model;
+                graphicsManager._shieldHullCache = Object.create(null);
+                graphicsManager._voxelShipBake = Object.create(null);
+            }
+            if (typeof playerManager !== 'undefined') {
+                playerManager.currentShipModel = model;
+                if (playerManager.applyFixedFootprint) playerManager.applyFixedFootprint();
+                if (playerManager.refreshPlayerHitMask) {
+                    playerManager._hitMaskKey = null;
+                    playerManager.refreshPlayerHitMask();
+                }
+            }
+        } else {
+            this.currentWeapon = weaponId;
+            this.updateWeaponDisplay();
+        }
+
+        this.currentWeapon = weaponId;
+        this.updateWeaponDisplay();
+        return weaponId;
+    },
+
+    /** Clear DevMode all-slots weapon fill and restore the real hangar loadout. */
+    clearDevWeaponFill() {
+        this._devWeaponCheatId = null;
+        const models = [];
+        if (this.currentShipModel) models.push(this.currentShipModel);
+        if (typeof graphicsManager !== 'undefined' && graphicsManager.currentPlayerModel) {
+            models.push(graphicsManager.currentPlayerModel);
+        }
+        if (typeof playerManager !== 'undefined' && playerManager.currentShipModel) {
+            models.push(playerManager.currentShipModel);
+        }
+        const seen = {};
+        models.forEach((model) => {
+            if (!model || seen[model.id || '']) return;
+            seen[model.id || ''] = true;
+            if (!model._devWeaponFillId) return;
+            delete model._devWeaponFillId;
+            if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+                shipLoadoutManager.applyLayoutToModel(model, model.id || model.type);
+            }
+        });
+        if (this.currentShipModel) this.setShipModel(this.currentShipModel);
+        this.updateWeaponDisplay();
     },
 
     getCurrentShotType() {
@@ -9786,14 +10438,17 @@ extendClass(BulletManager, {
 // BulletManager methods, split from bullets.js.
 extendClass(BulletManager, {
     reset() {
+        // Detach from live lists first — releaseBullet refuses shells that are
+        // still indexed on bullets/enemyBullets (dual-membership guard).
+        const playerShots = this.bullets.splice(0, this.bullets.length);
+        const enemyShots = this.enemyBullets.splice(0, this.enemyBullets.length);
         if (this.releaseBullet) {
-            for (let i = 0; i < this.bullets.length; i++) this.releaseBullet(this.bullets[i]);
-            for (let i = 0; i < this.enemyBullets.length; i++) this.releaseBullet(this.enemyBullets[i]);
+            for (let i = 0; i < playerShots.length; i++) this.releaseBullet(playerShots[i]);
+            for (let i = 0; i < enemyShots.length; i++) this.releaseBullet(enemyShots[i]);
         }
-        this.bullets.length = 0;
-        this.enemyBullets.length = 0;
         this.shotType = 0;
         this.tempWeapon = null;
+        this._devWeaponCheatId = null;
         this.resetCharge();
         // Reset weapon display
         this.updateWeaponDisplay();
@@ -10741,7 +11396,9 @@ extendClass(EnemyManager, {
 "use strict";
 
 /** Health of light-class side craft relative to their normal value: the lower the rank, the quicker it goes down. */
-var LIGHT_CLASS_HP_MUL = { scout: 0.4, assault: 0.55, heavy: 0.7 };
+var LIGHT_CLASS_HP_MUL = { scout: 0.32, assault: 0.42, heavy: 0.52 };
+/** Elite / capital side craft keep a kit, but still melt faster than a champion. */
+var ELITE_SIDE_HP_MUL = 0.65;
 
 // EnemyManager methods, split from enemies.js.
 extendClass(EnemyManager, {
@@ -10864,21 +11521,21 @@ extendClass(EnemyManager, {
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);
-        let baseHp = 18;
+        let baseHp = 12;
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
-            // Reduced TTK vs REF laser (balance-config); was 0.4.
-            if (cfg && cfg.maxHealth) baseHp = Math.max(8, Math.round(cfg.maxHealth * 0.28));
+            // Side TTK vs REF laser ~1–1.5s (balance-config); was 0.28.
+            if (cfg && cfg.maxHealth) baseHp = Math.max(6, Math.round(cfg.maxHealth * 0.16));
         }
         const role = entry.role || 'assault';
         if (role === 'repair' || role === 'shieldBattery') {
-            baseHp = Math.max(12, Math.round(baseHp * 0.55));
+            baseHp = Math.max(8, Math.round(baseHp * 0.5));
         } else if (role === 'blocker') {
-            baseHp = Math.round(baseHp * 2.2);
+            baseHp = Math.round(baseHp * 1.55);
         } else if (role === 'bomber') {
             // Bombers are kamikaze threats: dangerous on approach, fragile
             // when focused by the player.
-            baseHp = Math.max(6, Math.round(baseHp * 0.35));
+            baseHp = Math.max(4, Math.round(baseHp * 0.3));
         }
         // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
         const SIDE_HULL_SEEDS = 12;
@@ -11005,12 +11662,14 @@ extendClass(EnemyManager, {
             if (cfg) {
                 const ai = (typeof difficultyConfigManager !== 'undefined')
                     ? difficultyConfigManager.resolveEnemy(entry.faction, entry.tier, cfg, 'side') : null;
-                side.armor = cfg.armor || 0;
-                side.shieldMax = Math.round((cfg.shieldMax || 0) * 0.4 * scale);
+                // Sides inherit a thin slice of champion defense — full armor/DR
+                // made escorts sponge like mini-bosses.
+                side.armor = Math.round((cfg.armor || 0) * 0.25);
+                side.shieldMax = Math.round((cfg.shieldMax || 0) * 0.18 * scale);
                 side.shield = side.shieldMax;
-                side.shieldRegen = (cfg.shieldRegen || 0) * 0.4;
-                side.damageReduction = cfg.damageReduction || 0;
-                side.reflectChance = cfg.reflectChance || 0;
+                side.shieldRegen = (cfg.shieldRegen || 0) * 0.2;
+                side.damageReduction = Math.round((cfg.damageReduction || 0) * 0.35);
+                side.reflectChance = Math.round((cfg.reflectChance || 0) * 0.35);
                 side.damageMul = (ai ? ai.damageMul : 1) * tierMods.damage;
                 side.evasionChance = ai ? ai.evasionChance : 1;
                 side.predictionSkill = ai ? ai.predictionSkill : 0;
@@ -11054,7 +11713,7 @@ extendClass(EnemyManager, {
             side.damageMul = (side.damageMul || 1) * (0.6 + 0.4 * entry.transitScale);
         }
         // Light classes (scout / assault / heavy) do exactly one job — their event role — with no extras,
-        // and go down quicker. Elite / capital keep their full kit.
+        // and go down quicker. Elite / capital keep a thin kit, not champion tankiness.
         if (this.isLightClass(side.enemyClass)) {
             side.lightClass = true;
             side.shieldMax = 0;
@@ -11067,6 +11726,9 @@ extendClass(EnemyManager, {
             side.abilities = [];
             side.muzzleGroups = 1;
             side.maxHealth = Math.max(1, Math.round(side.maxHealth * (LIGHT_CLASS_HP_MUL[String(side.enemyClass).toLowerCase()] || 1)));
+            side.health = side.maxHealth;
+        } else {
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * ELITE_SIDE_HP_MUL));
             side.health = side.maxHealth;
         }
         this.sideEnemies.push(side);
@@ -11846,7 +12508,8 @@ extendClass(EnemyManager, {
                     faction: (entry && entry.faction) || (this.enemy && this.enemy.faction),
                     enemyClass: (entry && entry.enemyClass) || (this.enemy && this.enemy.enemyClass),
                     cluster: (entry && entry.cluster) || (this.enemy && this.enemy.cluster),
-                    champion: true,
+                    champion: !!(entry && entry.champion != null ? entry.champion : (this.enemy && this.enemy.champion)),
+                    isBoss: !!(this.enemy && this.enemy.isBoss),
                     pickupsSpawned: !!this.pickupsSpawnedAtDeath,
                     x: this.enemy ? this.enemy.x + this.enemy.width / 2 : undefined,
                     y: this.enemy ? this.enemy.y + this.enemy.height / 2 : undefined
@@ -12340,12 +13003,16 @@ extendClass(EnemyManager, {
         const floor = Math.max(1, Number(rawDamage) * 0.2);
         dmg = Math.max(floor, dmg);
 
-        // Shield first: a hit on a live shield never bleeds into the hull,
-        // not even the one that breaks it. Regen pauses after every hit.
+        // Shield first; overflow past a broken shield still hits the hull.
+        // Regen pauses after every hit (callers read shieldHitAt).
         target.shieldHitAt = Date.now();
         if (target.shield != null && target.shield > 0) {
-            target.shield = Math.max(0, target.shield - dmg);
-            return 0;
+            if (dmg <= target.shield) {
+                target.shield -= dmg;
+                return 0;
+            }
+            dmg -= target.shield;
+            target.shield = 0;
         }
 
         return Math.max(0, dmg);
@@ -12992,7 +13659,8 @@ extendClass(EnemyManager, {
                 faction: entry.faction || this.enemy.faction,
                 enemyClass: entry.enemyClass || this.enemy.enemyClass,
                 cluster: entry.cluster || this.enemy.cluster,
-                champion: true,
+                champion: !!(entry.champion != null ? entry.champion : this.enemy.champion),
+                isBoss: !!this.enemy.isBoss,
                 x: this.enemy.x + (this.enemy.width || 0) / 2,
                 y: this.enemy.y + (this.enemy.height || 0) / 2
             });
@@ -15106,11 +15774,21 @@ extendClass(ObstacleManager, {
     },
     /** Terrain art cell in logical px (shared by walls, ground and obstacles). */
     terrainCell() {
+        const coarse = typeof OBSTACLE_ART_DENSITY !== 'undefined' ? 1 / OBSTACLE_ART_DENSITY : 2.5;
+        let cell = coarse;
         if (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell) {
-            const cell = renderManager.getCombatVoxelCell();
-            if (cell != null && cell > 0) return cell;
+            const v = renderManager.getCombatVoxelCell();
+            if (v != null && v > 0) cell = v;
         }
-        return typeof OBSTACLE_ART_DENSITY !== 'undefined' ? 1 / OBSTACLE_ART_DENSITY : 2.5;
+        const lw = (typeof game !== 'undefined' && game && game.internalWidth)
+            || (typeof gameState !== 'undefined' && gameState && gameState.width)
+            || 240;
+        const perf = typeof document !== 'undefined'
+            && document.documentElement.hasAttribute('data-vf-performance');
+        const maxCols = perf ? 140 : 200;
+        // Global Pixel Size can push combat cells far below 1px; rebuilding the
+        // scroll floor at that resolution pegs CPU. Cap lattice columns, not ships.
+        return Math.max(cell, lw / maxCols, coarse * 0.45);
     },
     /** Deterministic 0..1 hash for terrain segments. */
     terrainHash(a, b) {
@@ -16771,10 +17449,10 @@ var PickupManager = class PickupManager {
     maybeDropFakeCrate(info) {
         if (this.lootPhase || typeof obstacleManager === 'undefined' || !obstacleManager.spawnFakeCrate) return;
         const cls = String(info.enemyClass || '').toLowerCase();
-        const boss = typeof enemyManager !== 'undefined' && enemyManager.levelMods && enemyManager.levelMods.isBoss;
         let chance = 0.03;
-        if (cls === 'elite' || cls === 'capital' || info.champion) chance = 0.12;
-        if (boss && info.champion) chance = 0.35;
+        if (info.isBoss) chance = 0.32;
+        else if (info.champion) chance = 0.14;
+        else if (cls === 'elite' || cls === 'capital') chance = 0.08;
         if (Math.random() >= chance) return;
         const x = Number(info.x);
         const y = Number(info.y);
@@ -17697,6 +18375,10 @@ var CollisionManager = class CollisionManager {
     }
 
     checkCollisions(gameState) {
+        if (typeof bulletManager !== 'undefined' && bulletManager.beginCollisionFrame
+            && typeof playerManager !== 'undefined' && playerManager.getPosition) {
+            bulletManager.beginCollisionFrame(playerManager.getPosition());
+        }
         // Each pair runs in its own try so one bad sprite/mask cannot abort
         // terrain wall hits (or the rest of the frame's collisions).
         const run = (fn) => {
@@ -17729,8 +18411,14 @@ var CollisionManager = class CollisionManager {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
                 if (!b) continue;
-                const cx = b.x + (b.width || 0) / 2;
-                const cy = b.y + (b.height || 0) / 2;
+                if (byPlayer && typeof bulletManager !== 'undefined'
+                    && bulletManager.playerShotSpawnBlocked
+                    && bulletManager.playerShotSpawnBlocked(b)) continue;
+                const tip = (typeof bulletManager !== 'undefined' && bulletManager.shotTip)
+                    ? bulletManager.shotTip(b)
+                    : { x: b.x + (b.width || 0) / 2, y: b.y + (b.height || 0) / 2 };
+                const cx = tip.x;
+                const cy = tip.y;
                 if (objectiveManager.isInGateDome(cx, cy)) {
                     remove(i);
                     this.createDetailedHitEffect(cx, cy, 'impact');
@@ -17738,8 +18426,11 @@ var CollisionManager = class CollisionManager {
                     // hitGateDome already plays coded gate SFX; skip generic hit.
                     continue;
                 }
+                // Only the solid bulkhead band kills shots — not everything
+                // above the gate (that erased mid-screen autofire streams).
                 const inOpening = Math.abs(cx - g.cx) <= g.open / 2;
-                if (cy <= g.y + g.h && (!inOpening || cy <= g.y)) {
+                const inGateBand = cy >= g.y - 2 && cy <= g.y + g.h + 2;
+                if (inGateBand && (!inOpening || cy <= g.y)) {
                     remove(i);
                     if (cy >= g.y - 4) this.createDetailedHitEffect(cx, g.y + g.h, 'impact');
                 }
@@ -17818,23 +18509,32 @@ var CollisionManager = class CollisionManager {
             for (let i = list.length - 1; i >= 0; i--) {
                 const b = list[i];
                 if (!b) continue;
-                const ex = b.x + (b.width || 0) / 2;
-                const ey = b.y + (b.height || 0) / 2;
+                if (byPlayer && typeof bulletManager !== 'undefined'
+                    && bulletManager.playerShotSpawnBlocked
+                    && bulletManager.playerShotSpawnBlocked(b)) continue;
+                // Leading tip — AABB centre made tall lasers vanish mid-lane.
+                const tip = (typeof bulletManager !== 'undefined' && bulletManager.shotTip)
+                    ? bulletManager.shotTip(b)
+                    : { x: b.x + (b.width || 0) / 2, y: b.y + (b.height || 0) / 2 };
+                const ex = tip.x;
+                const ey = tip.y;
                 // Sweep the path travelled this frame in half-cell steps: fast
                 // shots otherwise jump over 1–2 row thin ledges and hatch lips.
                 const sdx = b._sweepDx || 0;
                 const sdy = b._sweepDy || 0;
-                const steps = Math.max(1, Math.min(32, Math.ceil(Math.max(Math.abs(sdx), Math.abs(sdy)) / (cell / 2))));
+                const steps = Math.max(1, Math.min(16, Math.ceil(Math.max(Math.abs(sdx), Math.abs(sdy)) / (cell / 2))));
                 let side = -1;
                 let cx = ex, cy = ey, w = null, wrCheck = 0;
+                // Continuous flight: 1px lip only (never +cell).
+                const lip = 1;
                 for (let s = steps - 1; s >= 0 && side < 0; s--) {
                     const f = s / steps;
                     cx = ex - sdx * f;
                     cy = ey - sdy * f;
                     w = obstacleManager.terrainWallsAtY(cy, W);
                     if (!w) continue;
-                    if (cx <= w.left + cell) side = 0;
-                    else if (cx >= w.right - cell) side = 1;
+                    if (cx <= w.left + lip) side = 0;
+                    else if (cx >= w.right - lip) side = 1;
                     else continue;
                     // Skip if that side is already fully carved away.
                     wrCheck = obstacleManager.terrainRowAtY(cy);
@@ -17849,7 +18549,9 @@ var CollisionManager = class CollisionManager {
                 const row = wrCheck;
                 if (profile.pierce && b._terrainRow === row) continue;
                 b._terrainRow = row;
-                if (!profile.pierce) remove(i);
+                if (!profile.pierce) {
+                    remove(i);
+                }
                 const broke = obstacleManager.damageTerrain(cy, side, profile);
                 const lipX = side ? w.right : w.left;
                 this.createDetailedHitEffect(lipX, cy, broke ? 'destroy' : 'impact');
@@ -17911,15 +18613,18 @@ var CollisionManager = class CollisionManager {
         const bullets = bulletManager.getBullets();
         const sides = enemyManager.getSideEnemies();
         for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            if (!bullet) continue;
+            if (!(Number(bullet.vy) < 0) && !(Number(bullet._sweepDy) < 0)) continue;
+            if (typeof bulletManager !== 'undefined' && bulletManager.playerShotSpawnBlocked
+                && bulletManager.playerShotSpawnBlocked(bullet)) continue;
             for (let j = sides.length - 1; j >= 0; j--) {
                 // Still sliding in through the hangar gap: not a fair target yet.
                 if (sides[j].entering) continue;
-                if (this.isColliding(bullets[i], sides[j])) {
-                    const bullet = bullets[i];
-                    const hitX = bullet.x + (bullet.width || 0) / 2;
-                    const hitY = bullet.y + (bullet.height || 0) / 2;
-                    const sx = sides[j].x + sides[j].width / 2;
-                    const sy = sides[j].y + sides[j].height / 2;
+                if (this.isColliding(bullet, sides[j])) {
+                    const tip = this.shotImpactXY(bullet);
+                    const hitX = tip.x;
+                    const hitY = tip.y;
                     let damage = 10;
                     if (bullet && bullet.damage !== undefined) damage = bullet.damage;
                     if (bullet && bullet.chainSlow && enemyManager.applyChainSlow) {
@@ -17966,6 +18671,7 @@ var CollisionManager = class CollisionManager {
                 enemyClass: killed.enemyClass,
                 cluster: killed.cluster,
                 champion: false,
+                isBoss: false,
                 x: sx,
                 y: sy
             });
@@ -18031,10 +18737,16 @@ var CollisionManager = class CollisionManager {
         if (!enemy || enemyManager.isExploding()) return;
 
         for (let i = bullets.length - 1; i >= 0; i--) {
-            if (this.isColliding(bullets[i], enemy)) {
-                const bullet = bullets[i];
-                const hitX = bullet.x + (bullet.width || 0) / 2;
-                const hitY = bullet.y + (bullet.height || 0) / 2;
+            const bullet = bullets[i];
+            if (!bullet) continue;
+            // Wrong-way / dual-list ghosts must not consume hits or die mid-stream.
+            if (!(Number(bullet.vy) < 0) && !(Number(bullet._sweepDy) < 0)) continue;
+            if (typeof bulletManager !== 'undefined' && bulletManager.playerShotSpawnBlocked
+                && bulletManager.playerShotSpawnBlocked(bullet)) continue;
+            if (this.isColliding(bullet, enemy)) {
+                const tip = this.shotImpactXY(bullet);
+                const hitX = tip.x;
+                const hitY = tip.y;
                 const enemyX = enemy.x + enemy.width / 2;
                 const enemyY = enemy.y + enemy.height / 2;
 
@@ -18168,23 +18880,51 @@ var CollisionManager = class CollisionManager {
         }
     }
 
+    /** Travel vector for a live shot (vx/vy, else sweep, else team axis). */
+    shotTravelDir(b) {
+        if (!b) return { x: 0, y: 0 };
+        let dx = Number(b.vx);
+        let dy = Number(b.vy);
+        if (!(Math.hypot(dx, dy) > 0.01)) {
+            dx = Number(b._sweepDx) || 0;
+            dy = Number(b._sweepDy) || 0;
+        }
+        if (!(Math.hypot(dx, dy) > 0.01)) {
+            dy = (b.isEnemyShot || b.isBossShot) ? 1 : -1;
+            dx = 0;
+        }
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: dx / len, y: dy / len };
+    }
+
+    /** True only when two shots fly toward opposite directions. */
+    shotsOpposing(a, b) {
+        const da = this.shotTravelDir(a);
+        const db = this.shotTravelDir(b);
+        return (da.x * db.x + da.y * db.y) < -0.25;
+    }
+
     /**
      * Shot vs shot, swept over this frame: thin fast shots move further per
      * frame than their own length and used to pass through each other
      * without ever overlapping, so clashes/reflections rarely triggered.
-     * Player shots move up, enemy shots down; stretch each box back along
-     * its path by one frame of travel, and give thin shots a 2 px minimum.
+     * Only opposing travel directions may clash; same-way beams pass through.
      */
     shotsCrossed(pb, eb) {
+        if (!this.shotsOpposing(pb, eb)) return false;
         const minW = 2;
         const pw = Math.max(minW, pb.width || 0);
         const ew = Math.max(minW, eb.width || 0);
         const px = pb.x + (pb.width || 0) / 2 - pw / 2;
         const ex = eb.x + (eb.width || 0) / 2 - ew / 2;
         if (!(px < ex + ew && px + pw > ex)) return false;
+        const pSpd = (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+            ? bulletManager.getBulletMoveSpeed(pb, 6) : Math.abs(Number(pb.speed) || 6);
+        const eSpd = (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+            ? bulletManager.getBulletMoveSpeed(eb, 5) : Math.abs(Number(eb.speed) || 5);
         const pTop = pb.y;
-        const pBot = pb.y + (pb.height || 0) + Math.abs(pb.speed || 0);
-        const eTop = eb.y - Math.abs(eb.speed || 0);
+        const pBot = pb.y + (pb.height || 0) + pSpd;
+        const eTop = eb.y - eSpd;
         const eBot = eb.y + (eb.height || 0);
         return pTop < eBot && pBot > eTop;
     }
@@ -18195,44 +18935,22 @@ var CollisionManager = class CollisionManager {
 
         for (let i = playerBullets.length - 1; i >= 0; i--) {
             for (let j = enemyBullets.length - 1; j >= 0; j--) {
-                if (this.shotsCrossed(playerBullets[i], enemyBullets[j])) {
-                    const pb = playerBullets[i];
-                    const eb = enemyBullets[j];
-                    // Reflective shots is a per-weapon EQUIPMENT unlock — without it,
-                    // player and enemy fire pass through each other.
-                    if (!pb.reflectiveShots) continue;
-                    const playerBulletX = pb.x + pb.width / 2;
-                    const playerBulletY = pb.y + pb.height / 2;
-                    const enemyBulletX = eb.x + eb.width / 2;
-                    const enemyBulletY = eb.y + eb.height / 2;
-                    const hitX = (playerBulletX + enemyBulletX) / 2;
-                    const hitY = (playerBulletY + enemyBulletY) / 2;
-
-                    const playerPower = (pb.damage != null ? pb.damage : 10);
-                    const enemyPower = (eb.damage != null ? eb.damage : 10);
-
-                    if (playerPower !== enemyPower) {
-                        const weakerSide = playerPower < enemyPower ? 'player' : 'enemy';
-                        const strongerSide = weakerSide === 'player' ? 'enemy' : 'player';
-                        const weakerPower = Math.min(playerPower, enemyPower);
-                        const strongerPower = Math.max(playerPower, enemyPower);
-                        const powerGap = (strongerPower - weakerPower) / strongerPower;
-
-                        // A smaller shot has a comeback chance. The larger the gap,
-                        // the more likely the clash travels in the weaker shot's direction.
-                        const weakerDirectionChance = Math.min(0.75, 0.25 + powerGap * 0.5);
-                        const directionSide = Math.random() < weakerDirectionChance
-                            ? weakerSide
-                            : strongerSide;
-                        this.redirectLaserClash(pb, eb, directionSide, hitX, hitY);
-                    } else {
-                        // Equal power: reflect the clash in a random direction.
-                        const directionSide = Math.random() < 0.5 ? 'player' : 'enemy';
-                        this.redirectLaserClash(pb, eb, directionSide, hitX, hitY);
-                    }
-
-                    break;
-                }
+                const pb = playerBullets[i];
+                const eb = enemyBullets[j];
+                // Reflective unlock required; same-direction beams never clash.
+                if (!pb || !eb || !pb.reflectiveShots) continue;
+                if (!this.shotsCrossed(pb, eb)) continue;
+                const pTip = this.shotImpactXY(pb);
+                const eTip = this.shotImpactXY(eb);
+                const hitX = (pTip.x + eTip.x) / 2;
+                const hitY = (pTip.y + eTip.y) / 2;
+                const playerPower = (pb.damage != null ? pb.damage : 10);
+                const enemyPower = (eb.damage != null ? eb.damage : 10);
+                let winnerSide = null;
+                if (playerPower > enemyPower) winnerSide = 'player';
+                else if (enemyPower > playerPower) winnerSide = 'enemy';
+                this.redirectLaserClash(pb, eb, winnerSide, hitX, hitY);
+                break;
             }
         }
     }
@@ -18246,29 +18964,76 @@ var CollisionManager = class CollisionManager {
 // (this runs inside every nested bullet/obstacle/enemy collision loop, every frame).
 var _collisionBoundsScratch1 = { x: 0, y: 0, width: 0, height: 0 };
 var _collisionBoundsScratch2 = { x: 0, y: 0, width: 0, height: 0 };
+var _collisionSweptScratch = { x: 0, y: 0, width: 0, height: 0 };
 
 // CollisionManager methods, split from collisions.js.
 extendClass(CollisionManager, {
     /**
-     * Redirect the clash in the selected shot's travel direction.
-     * winnerSide 'player' → both become upward player shots;
-     * 'enemy' → both become downward enemy shots.
+     * Flip a live shot onto the other team with locked straight velocity.
+     * Caps bounce chains so mirrors cannot ping-pong forever.
+     */
+    reassignShotTeam(index, fromSide, asEnemy, obstacle) {
+        if (typeof bulletManager === 'undefined') return null;
+        const fromList = fromSide === 'player'
+            ? bulletManager.getBullets()
+            : bulletManager.getEnemyBullets();
+        const b = bulletManager.detachBullet
+            ? bulletManager.detachBullet(fromList, index)
+            : null;
+        if (!b) return null;
+        const tip = this.shotImpactXY(b);
+        const count = (Number(b._reflectCount) || 0) + 1;
+        if (count > 3) {
+            this.createDetailedHitEffect(tip.x, tip.y, 'impact');
+            if (bulletManager.releaseBullet) bulletManager.releaseBullet(b);
+            return null;
+        }
+        const spd = bulletManager.getBulletMoveSpeed
+            ? bulletManager.getBulletMoveSpeed(b, asEnemy ? 5 : 6)
+            : Math.abs(Number(b.speed) || (asEnemy ? 5 : 6));
+        const w = Math.max(1, Math.min(6, Number(b.width != null ? b.width : b.w) || 2));
+        const h = Math.max(3, Math.min(22, Number(b.height != null ? b.height : b.h) || 8));
+        b.width = w;
+        b.height = h;
+        b.isEnemyShot = !!asEnemy;
+        b.isBossShot = asEnemy ? b.isBossShot : undefined;
+        b.angle = undefined;
+        b.reflected = true;
+        b._reflectCount = count;
+        b._ignoreObstacle = obstacle || null;
+        b.moveSpeed = spd;
+        b.speed = spd;
+        b.vx = 0;
+        b.vy = asEnemy ? spd : -spd;
+        b._sweepDx = 0;
+        b._sweepDy = 0;
+        b._spawnAt = undefined;
+        // Bounced shots never re-enter laser clash (would eat the next volley).
+        b.reflectiveShots = false;
+        // Tip sits just past the bounce point along the new travel axis.
+        b.x = tip.x - w / 2;
+        b.y = asEnemy ? (tip.y + 2 - h) : (tip.y - 2);
+        const toList = asEnemy ? bulletManager.enemyBullets : bulletManager.bullets;
+        // Always copy into a fresh list entry — never reinsert the same ref.
+        if (bulletManager.pushBullet) {
+            bulletManager.pushBullet(toList, Object.assign({}, b));
+            if (bulletManager.releaseBullet) bulletManager.releaseBullet(b);
+        } else {
+            toList.push(b);
+        }
+        return toList[toList.length - 1];
+    },
+
+    /**
+     * Shot clash: stronger damage wins and continues as one beam.
+     * Equal power → both annihilate. No random bounce / dual spawn.
      */
     redirectLaserClash(playerBullet, enemyBullet, winnerSide, hitX, hitY) {
-        const combinedDamage = Math.max(
-            playerBullet.damage != null ? playerBullet.damage : 10,
-            enemyBullet.damage != null ? enemyBullet.damage : 10
-        ) + Math.floor(Math.min(
-            playerBullet.damage != null ? playerBullet.damage : 10,
-            enemyBullet.damage != null ? enemyBullet.damage : 10
-        ) * 0.35);
+        const pDmg = playerBullet.damage != null ? playerBullet.damage : 10;
+        const eDmg = enemyBullet.damage != null ? enemyBullet.damage : 10;
+        const combinedDamage = Math.max(pDmg, eDmg)
+            + Math.floor(Math.min(pDmg, eDmg) * 0.35);
 
-        const speed = Math.max(
-            Math.abs(playerBullet.speed || 6),
-            Math.abs(enemyBullet.speed || 6)
-        );
-
-        // Remove originals by identity from arrays
         const pList = bulletManager.getBullets();
         const eList = bulletManager.getEnemyBullets();
         const pi = pList.indexOf(playerBullet);
@@ -18276,55 +19041,51 @@ extendClass(CollisionManager, {
         if (pi !== -1) bulletManager.removeBullet(pi);
         if (ei !== -1) bulletManager.removeEnemyBullet(ei);
 
-        const makeBeam = (dx, side) => {
-            const w = Math.max(playerBullet.width || 3, enemyBullet.width || 3);
-            const h = Math.max(playerBullet.height || 12, enemyBullet.height || 12);
-            if (side === 'player') {
-                return {
-                    x: hitX - w / 2 + dx,
-                    y: hitY - h - 2,
-                    width: w,
-                    height: h,
-                    speed: speed,
-                    damage: combinedDamage,
-                    color: playerBullet.color || '#808080',
-                    type: playerBullet.type || 'laser_beam',
-                    reflected: true,
-                    lightRadius: Math.max(playerBullet.lightRadius || 60, 60),
-                    lightIntensity: 1.4,
-                    lightColor: playerBullet.lightColor || '#808080'
-                };
-            }
-            return {
-                x: hitX - w / 2 + dx,
-                y: hitY + 2,
-                width: w,
-                height: h,
-                speed: speed,
-                damage: combinedDamage,
-                color: enemyBullet.color || '#808080',
-                type: enemyBullet.type || 'enemy_laser',
-                reflected: true,
-                lightRadius: Math.max(enemyBullet.lightRadius || 50, 50),
-                lightIntensity: 1.4,
-                lightColor: enemyBullet.lightColor || '#808080'
-            };
-        };
-
-        if (winnerSide === 'player') {
-            pList.push(makeBeam(-4, 'player'));
-            pList.push(makeBeam(4, 'player'));
-            game.score += 8;
-        } else {
-            eList.push(makeBeam(-4, 'enemy'));
-            eList.push(makeBeam(4, 'enemy'));
-        }
-
-        if (typeof graphicsManager !== 'undefined') {
-            graphicsManager.createHitEffect(hitX, hitY, 10, 'var(--current-primary)');
-        }
         this.createDetailedHitEffect(hitX, hitY, 'reflect');
+        if (typeof graphicsManager !== 'undefined') {
+            graphicsManager.createHitEffect(hitX, hitY, 8, 'var(--current-primary)');
+        }
         if (typeof soundManager !== 'undefined') soundManager.playReflect();
+
+        // Tie: both die at the clash — no ghost beams.
+        if (!winnerSide || pDmg === eDmg) return;
+
+        const asEnemy = winnerSide === 'enemy';
+        const src = asEnemy ? enemyBullet : playerBullet;
+        const spd = Math.max(
+            (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+                ? bulletManager.getBulletMoveSpeed(playerBullet, 6) : Math.abs(Number(playerBullet.speed) || 6),
+            (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+                ? bulletManager.getBulletMoveSpeed(enemyBullet, 5) : Math.abs(Number(enemyBullet.speed) || 5)
+        );
+        const w = Math.max(2, Math.min(6, Number(src.width || 3)));
+        const h = Math.max(4, Math.min(18, Number(src.height || 10)));
+        const beam = {
+            x: hitX - w / 2,
+            y: asEnemy ? hitY + 2 : hitY - h - 2,
+            width: w,
+            height: h,
+            speed: spd,
+            moveSpeed: spd,
+            vx: 0,
+            vy: asEnemy ? spd : -spd,
+            damage: combinedDamage,
+            color: src.color,
+            type: src.type || (asEnemy ? 'enemy_laser' : 'laser_beam'),
+            weaponId: src.weaponId,
+            isEnemyShot: asEnemy,
+            reflected: true,
+            reflectiveShots: false,
+            lightRadius: Math.max(src.lightRadius || 50, 50),
+            lightIntensity: 1.35,
+            lightColor: src.lightColor || src.color,
+            _isShot: true,
+            _reflectCount: 1
+        };
+        const list = asEnemy ? eList : pList;
+        if (bulletManager.pushBullet) bulletManager.pushBullet(list, beam);
+        else list.push(beam);
+        if (!asEnemy && typeof game !== 'undefined') game.score += 8;
     },
 
     /**
@@ -18464,28 +19225,62 @@ extendClass(CollisionManager, {
      */
     isShotEntity(obj) {
         if (!obj) return false;
-        if (obj._sweepDx != null || obj._sweepDy != null) return true;
         if (obj.isEnemyShot || obj.isBossShot || obj._isShot) return true;
-        // Untagged projectile: has shot stats, no hull HP.
-        if (obj.damage != null && obj.speed != null && obj.health == null && obj.maxHealth == null
-            && !obj.collision) {
-            return true;
+        if (obj._sweepDx != null || obj._sweepDy != null) {
+            if (obj.moveSpeed != null || obj.weaponId || (obj.type && String(obj.type).includes('beam'))) return true;
+            if (obj.damage != null && (obj.width != null || obj.height != null) && !obj.kind && !obj.isFog) return true;
         }
         return false;
+    },
+
+    /** Impact point when a shot dies — always the leading tip. */
+    shotImpactXY(bullet) {
+        if (!bullet) return { x: 0, y: 0 };
+        if (typeof bulletManager !== 'undefined' && bulletManager.shotTip) {
+            return bulletManager.shotTip(bullet);
+        }
+        return {
+            x: Number(bullet.x) + (Number(bullet.width != null ? bullet.width : bullet.w) || 0) / 2,
+            y: Number(bullet.y) + (Number(bullet.height != null ? bullet.height : bullet.h) || 0) / 2
+        };
+    },
+
+    /** Remove a shot and pop a small impact at its tip. */
+    destroyShotAt(listSide, index, effectType) {
+        const list = listSide === 'enemy'
+            ? (bulletManager.getEnemyBullets ? bulletManager.getEnemyBullets() : null)
+            : (bulletManager.getBullets ? bulletManager.getBullets() : null);
+        const b = list && list[index];
+        if (!b) return;
+        const p = this.shotImpactXY(b);
+        if (listSide === 'enemy') bulletManager.removeEnemyBullet(index);
+        else bulletManager.removeBullet(index);
+        this.createDetailedHitEffect(p.x, p.y, effectType || 'impact');
+    },
+
+    isObstacleEntity(obj) {
+        return !!(obj && (obj.isFog || obj.kind
+            || obj.pushable != null || obj.reflectsShots != null
+            || (obj.isDestructible != null && obj.collisionDamage == null && !obj.maxHealth)));
     },
 
     /**
      * Shot vs hull: prefer the silhouette mask / opaque insets so empty
      * footprint padding (wing gaps, letterbox) does not count as a hit.
-     * Broken/sparse masks fall back to padded inset AABB instead of rejecting.
+     * Only missing mask data falls back to the padded inset AABB — a sparse
+     * mask that was actually sampled is trusted on its "no pixel here" result
+     * too, otherwise thin/sparse hulls (rails, wires, debris) ate shots well
+     * outside their visible silhouette.
      */
     confirmShotHit(shotBounds, hull) {
         if (!hull || !shotBounds) return true;
         const spr = this.getCollisionSprite(hull);
-        if (spr && spr.sprite && spr.sprite.length) {
+        // Sparse / tiny masks used to reject real visual hits — only trust a
+        // silhouette that has enough solid coverage; otherwise use the hull AABB.
+        if (spr && spr.sprite && spr.sprite.length && this.collisionMaskIsTrustworthy(hull, spr)) {
             try {
                 if (this.spriteOverlapsRect(hull, spr, shotBounds)) return true;
-                if (this.collisionMaskIsTrustworthy(hull, spr)) return false;
+                return false;
             } catch (e) {
                 // Mask path must never abort the frame's collision pass.
             }
@@ -18526,6 +19321,10 @@ extendClass(CollisionManager, {
     isColliding(obj1, obj2) {
         const shot1 = this.isShotEntity(obj1);
         const shot2 = this.isShotEntity(obj2);
+        // Shot↔shot: only opposing travel directions may interact.
+        if (shot1 && shot2) {
+            if (!this.shotsOpposing(obj1, obj2)) return false;
+        }
         const anyShot = shot1 || shot2;
         // Broadphase uses the full footprint so silhouette insets cannot drop a
         // glancing visual hit; confirmShotHit then tests the real hull mask.
@@ -18538,12 +19337,36 @@ extendClass(CollisionManager, {
             ignoreInsets: anyShot && !shot2,
             matchVoxelDraw: false
         });
+        // Shot vs hull/obstacle: tip only — full beam AABB killed trailing
+        // autofire shots while their tip was still behind the lead shot.
+        if (!(shot1 && shot2)) {
+            const tipBox = (obj, b) => {
+                const down = !!(obj.isEnemyShot || obj.isBossShot || Number(obj.vy) > 0);
+                const fullH = Number(obj.height != null ? obj.height : obj.h) || b.height || 4;
+                const fullW = Number(obj.width != null ? obj.width : obj.w) || b.width || 2;
+                const tw = Math.max(2, Math.min(4, fullW));
+                const th = Math.max(3, Math.min(5, fullH));
+                const cx = Number(obj.x) + fullW / 2;
+                b.width = tw;
+                b.height = th;
+                b.x = cx - tw / 2;
+                b.y = down ? (Number(obj.y) + fullH - th) : Number(obj.y);
+            };
+            if (shot1) tipBox(obj1, b1);
+            if (shot2) tipBox(obj2, b2);
+        }
         const basicCollision = b1.x < b2.x + b2.width &&
                                b1.x + b1.width > b2.x &&
                                b1.y < b2.y + b2.height &&
                                b1.y + b1.height > b2.y;
 
         if (!basicCollision) {
+            // Swept path vs obstacles grazes wide AABBs — only the live position counts.
+            if (anyShot) {
+                if (shot1 && shot2) return false;
+                if (shot1 && this.isObstacleEntity(obj2)) return false;
+                if (shot2 && this.isObstacleEntity(obj1)) return false;
+            }
             // Fast shots: also test the strip swept since last frame so they cannot jump over a target.
             const sx = obj1 && obj1._sweepDx, sy = obj1 && obj1._sweepDy;
             if (!(sx || sy)) return false;
@@ -18553,13 +19376,16 @@ extendClass(CollisionManager, {
             if (!sweptHit) return false;
             // Carved rocks: confirm the swept strip still touches remaining pixels
             // (previously skipped entirely → shots tunneled through thin lips).
-            const swept = { x: x0, y: y0, width: Math.max(1, x1 - x0), height: Math.max(1, y1 - y0) };
+            const swept = _collisionSweptScratch;
+            swept.x = x0;
+            swept.y = y0;
+            swept.width = Math.max(1, x1 - x0);
+            swept.height = Math.max(1, y1 - y0);
             if (typeof obstacleManager !== 'undefined' && obstacleManager.maskOverlapsRect) {
                 if (obj2 && obj2._mask && !obstacleManager.maskOverlapsRect(obj2, swept)) return false;
                 if (obj1 && obj1._mask && !obstacleManager.maskOverlapsRect(obj1, swept)) return false;
             }
             if (anyShot) {
-                if (shot1 && shot2) return true;
                 return this.confirmShotHit(shot1 ? swept : b2, shot1 ? obj2 : obj1);
             }
             return true;
@@ -18572,7 +19398,7 @@ extendClass(CollisionManager, {
 
         // Shots vs hull: refine against silhouette (not empty footprint padding).
         if (anyShot) {
-            if (shot1 && shot2) return true;
+            if (shot1 && shot2) return false;
             return this.confirmShotHit(shot1 ? b1 : b2, shot1 ? obj2 : obj1);
         }
 
@@ -18734,78 +19560,65 @@ extendClass(CollisionManager, {
         return this.isSpriteSolidAt(obj, null, x, y);
     },
 
-    reflectBullet(bullet, obstacle) {
-        // Calculate bullet center and obstacle center
-        const bulletCenterX = bullet.x + bullet.width / 2;
-        const bulletCenterY = bullet.y + bullet.height / 2;
-        const obstacleCenterX = obstacle.x + obstacle.width / 2;
-        const obstacleCenterY = obstacle.y + obstacle.height / 2;
-
-        // Calculate collision point relative to obstacle center
-        const relativeX = bulletCenterX - obstacleCenterX;
-        const relativeY = bulletCenterY - obstacleCenterY;
-
-        // Determine which side of the obstacle was hit
-        const absX = Math.abs(relativeX);
-        const absY = Math.abs(relativeY);
-
-        if (absX > absY) {
-            // Hit left or right side - reflect horizontally
-            if (bullet.angle !== undefined) {
-                // For angled bullets, reverse the horizontal component
-                bullet.angle = -bullet.angle;
-            } else {
-                // For straight bullets, add horizontal movement
-                bullet.angle = Math.PI / 2; // 90 degrees
-                bullet.speed = Math.abs(bullet.speed);
-            }
+    /**
+     * Bounce math for optical mirrors: keep a little lateral kick, but always
+     * lock the new team's forward axis so beams never park mid-lane.
+     */
+    reflectShotOffObstacle(bullet, obstacle, asEnemy) {
+        const fallback = asEnemy ? 5 : 6;
+        const keepSpd = (typeof bulletManager !== 'undefined' && bulletManager.getBulletMoveSpeed)
+            ? bulletManager.getBulletMoveSpeed(bullet, fallback)
+            : Math.abs(Number(bullet.speed) || fallback);
+        let vx = Number(bullet.vx);
+        let vy = Number(bullet.vy);
+        if (!(Math.hypot(vx, vy) > 0.05)) {
+            vx = Number(bullet._sweepDx) || 0;
+            vy = Number(bullet._sweepDy) || 0;
+        }
+        if (Math.hypot(vx, vy) < 0.05) {
+            vx = 0;
+            vy = asEnemy ? keepSpd : -keepSpd;
+        }
+        const tip = this.shotImpactXY(bullet);
+        const ocx = obstacle.x + obstacle.width / 2;
+        const ocy = obstacle.y + obstacle.height / 2;
+        const rx = tip.x - ocx;
+        const ry = tip.y - ocy;
+        let nx = 0;
+        let ny = 0;
+        if (Math.abs(rx) > Math.abs(ry)) nx = rx > 0 ? 1 : -1;
+        else ny = ry > 0 ? 1 : -1;
+        const dot = vx * nx + vy * ny;
+        vx -= 2 * dot * nx;
+        vy -= 2 * dot * ny;
+        const forward = asEnemy ? 1 : -1;
+        let lat = vx;
+        // Forward must dominate after a bounce.
+        if (Math.abs(vy) < keepSpd * 0.55 || Math.sign(vy || forward) !== Math.sign(forward)) {
+            lat = Math.max(-keepSpd * 0.55, Math.min(keepSpd * 0.55, lat));
+            const rem = Math.sqrt(Math.max(0.01, keepSpd * keepSpd - lat * lat));
+            vx = lat;
+            vy = forward * rem;
         } else {
-            // Hit top or bottom side - reflect vertically
-            if (bullet.angle !== undefined) {
-                // For angled bullets, reverse the vertical component
-                bullet.angle = Math.PI - bullet.angle;
-            } else {
-                // For straight bullets, reverse vertical direction
-                bullet.speed = -bullet.speed;
-            }
+            const len = Math.hypot(vx, vy) || 1;
+            vx = (vx / len) * keepSpd;
+            vy = (vy / len) * keepSpd;
         }
+        bullet.isEnemyShot = !!asEnemy;
+        bullet.angle = undefined;
+        bullet.moveSpeed = keepSpd;
+        bullet.speed = keepSpd;
+        bullet.vx = vx;
+        bullet.vy = vy;
+        bullet.reflected = true;
+    },
 
-        // Ensure bullet moves away from obstacle
-        if (bullet.angle !== undefined) {
-            // Adjust angle to ensure proper direction
-            if (relativeY > 0) { // Bullet hit from below
-                bullet.angle = Math.abs(bullet.angle);
-            } else { // Bullet hit from above
-                bullet.angle = -Math.abs(bullet.angle);
-            }
-        }
+    reflectBullet(bullet, obstacle) {
+        this.reflectShotOffObstacle(bullet, obstacle, false);
     },
 
     reflectEnemyBullet(bullet, obstacle) {
-        // Enemy bullets move straight down, so we need simpler reflection
-        // Calculate bullet center and obstacle center
-        const bulletCenterX = bullet.x + bullet.width / 2;
-        const bulletCenterY = bullet.y + bullet.height / 2;
-        const obstacleCenterX = obstacle.x + obstacle.width / 2;
-        const obstacleCenterY = obstacle.y + obstacle.height / 2;
-
-        // Calculate collision point relative to obstacle center
-        const relativeX = bulletCenterX - obstacleCenterX;
-        const relativeY = bulletCenterY - obstacleCenterY;
-
-        // Determine which side of the obstacle was hit
-        const absX = Math.abs(relativeX);
-        const absY = Math.abs(relativeY);
-
-        if (absX > absY) {
-            // Hit left or right side - reflect horizontally
-            // Add horizontal movement to enemy bullet
-            bullet.angle = relativeX > 0 ? Math.PI / 2 : -Math.PI / 2; // Right or left
-            bullet.speed = Math.abs(bullet.speed);
-        } else {
-            // Hit top or bottom side - reflect vertically
-            bullet.speed = -bullet.speed; // Reverse direction
-        }
+        this.reflectShotOffObstacle(bullet, obstacle, true);
     },
 
     /**
@@ -18829,9 +19642,8 @@ extendClass(CollisionManager, {
         obstacle.pushVx = Math.max(-2.5, Math.min(2.5, (obstacle.pushVx || 0) + dx * k));
         obstacle.pushVy = Math.max(-2.5, Math.min(2.5, (obstacle.pushVy || 0) + dy * k));
         obstacle.pushFlashMs = 120;
-        const hx = bullet.x + (bullet.width || 0) / 2;
-        const hy = bullet.y + (bullet.height || 0) / 2;
-        this.createDetailedHitEffect(hx, hy, 'impact');
+        const tip = this.shotImpactXY(bullet);
+        this.createDetailedHitEffect(tip.x, tip.y, 'impact');
         if (typeof soundManager !== 'undefined') soundManager.playHit();
     },
 
@@ -18842,16 +19654,23 @@ extendClass(CollisionManager, {
 
         // Check player bullets vs obstacles
         for (let i = bullets.length - 1; i >= 0; i--) {
+            const bullet = bullets[i];
+            if (!bullet) continue;
+            if (!(Number(bullet.vy) < 0) && !(Number(bullet._sweepDy) < 0)) continue;
+            if (typeof bulletManager !== 'undefined' && bulletManager.playerShotSpawnBlocked
+                && bulletManager.playerShotSpawnBlocked(bullet)) continue;
+            const bTop = bullet.y - 20;
+            const bBot = bullet.y + (bullet.height || 0) + 20;
             for (let j = obstacles.length - 1; j >= 0; j--) {
-                if (this.isColliding(bullets[i], obstacles[j])) {
-                    const obstacle = obstacles[j];
-                    if (obstacle.isFog || bullets[i]._ignoreObstacle === obstacle) continue;
-                    const bullet = bullets[i];
-                    const bulletX = bullet.x;
-                    const bulletY = bullet.y;
+                const obstacle = obstacles[j];
+                if (obstacle.y > bBot || obstacle.y + (obstacle.height || 0) < bTop) continue;
+                if (this.isColliding(bullet, obstacle)) {
+                    if (obstacle.isFog || bullet._ignoreObstacle === obstacle) continue;
+                    const tip = this.shotImpactXY(bullet);
+                    const bulletX = tip.x;
+                    const bulletY = tip.y;
                     const explosionId = obstacle.explosionId || 'asteroid_burst';
                     const optical = obstacle.opticalMode || 'none';
-
                     if (optical === 'mirror' || optical === 'prism' || optical === 'kaleidoscope') {
                         const handled = this.applyOpticalBulletHit(bullet, obstacle, 'player', i, j);
                         if (handled) break;
@@ -18864,22 +19683,8 @@ extendClass(CollisionManager, {
                     }
 
                     if (obstacle.reflectsShots) {
-                        // Convert reflected bullet to enemy bullet
-                        const reflectedBullet = bullets[i];
-                        reflectedBullet.speed = -reflectedBullet.speed; // Reverse direction
-                        reflectedBullet.y += 5; // Move away from obstacle
-                        reflectedBullet.reflected = true;
-
-                        // Add to enemy bullets array
-                        bulletManager.getEnemyBullets().push(reflectedBullet);
-
-                        // Remove from player bullets
-                        bulletManager.removeBullet(i);
-
-                        // Play reflection sound
+                        this.reassignShotTeam(i, 'player', true, obstacle);
                         if (typeof soundManager !== 'undefined') soundManager.playReflect();
-
-                        // Damage obstacle (shields are fragile)
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
@@ -18889,8 +19694,8 @@ extendClass(CollisionManager, {
                             this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
-                        const hx = bulletX + (bullet.width || 0) / 2;
-                        const hy = bulletY + (bullet.height || 0) / 2;
+                        const hx = bulletX;
+                        const hy = bulletY;
                         // Bomb crates: detonate immediately on shot contact.
                         if (obstacle.isCrate && obstacle.trap === 'bomb') {
                             bulletManager.removeBullet(i);
@@ -18923,9 +19728,8 @@ extendClass(CollisionManager, {
                         // Award points for destruction
                         game.score += 10;
                     } else {
-                        // Non-destructible obstacle - just remove bullet
-                        bulletManager.removeBullet(i);
-                        this.createDetailedHitEffect(bulletX, bulletY, 'impact');
+                        // Non-destructible obstacle - tip pop then cull
+                        this.destroyShotAt('player', i, 'impact');
                         if (typeof soundManager !== 'undefined') soundManager.playHit();
                     }
 
@@ -18936,13 +19740,17 @@ extendClass(CollisionManager, {
 
         // Check enemy bullets vs obstacles
         for (let i = enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = enemyBullets[i];
+            const bTop = bullet.y - 20;
+            const bBot = bullet.y + (bullet.height || 0) + 20;
             for (let j = obstacles.length - 1; j >= 0; j--) {
-                if (this.isColliding(enemyBullets[i], obstacles[j])) {
-                    const obstacle = obstacles[j];
-                    if (obstacle.isFog || enemyBullets[i]._ignoreObstacle === obstacle) continue;
-                    const bullet = enemyBullets[i];
-                    const bulletX = bullet.x;
-                    const bulletY = bullet.y;
+                const obstacle = obstacles[j];
+                if (obstacle.y > bBot || obstacle.y + (obstacle.height || 0) < bTop) continue;
+                if (this.isColliding(bullet, obstacle)) {
+                    if (obstacle.isFog || bullet._ignoreObstacle === obstacle) continue;
+                    const tip = this.shotImpactXY(bullet);
+                    const bulletX = tip.x;
+                    const bulletY = tip.y;
                     const explosionId = obstacle.explosionId || 'asteroid_burst';
                     const optical = obstacle.opticalMode || 'none';
 
@@ -18958,31 +19766,19 @@ extendClass(CollisionManager, {
                     }
 
                     if (obstacle.reflectsShots) {
-                        // Convert reflected enemy bullet to player bullet
-                        const reflectedBullet = enemyBullets[i];
-                        reflectedBullet.speed = -reflectedBullet.speed; // Reverse direction
-                        reflectedBullet.y -= 10; // Move away from obstacle
-                        reflectedBullet.reflected = true;
-
-                        // Add to player bullets array
-                        bulletManager.getBullets().push(reflectedBullet);
-
-                        // Remove from enemy bullets
-                        bulletManager.removeEnemyBullet(i);
-
-                        // Play reflection sound
+                        this.reassignShotTeam(i, 'enemy', false, obstacle);
                         if (typeof soundManager !== 'undefined') soundManager.playReflect();
-
-                        // Damage obstacle
                         obstacle.health--;
                         if (obstacle.health <= 0) {
                             obstacleManager.removeObstacle(j);
                             this.createDetailedHitEffect(bulletX, bulletY, 'destroy', explosionId, obstacle);
                             if (typeof soundManager !== 'undefined') soundManager.playExplosion(0.8);
+                        } else {
+                            this.createDetailedHitEffect(bulletX, bulletY, 'reflect');
                         }
                     } else if (obstacle.isDestructible) {
-                        const hx = bulletX + (bullet.width || 0) / 2;
-                        const hy = bulletY + (bullet.height || 0) / 2;
+                        const hx = bulletX;
+                        const hy = bulletY;
                         if (obstacle.isCrate && obstacle.trap === 'bomb') {
                             bulletManager.removeEnemyBullet(i);
                             if (typeof pickupManager !== 'undefined' && pickupManager.trapBlast) {
@@ -19006,9 +19802,8 @@ extendClass(CollisionManager, {
                         // Remove bullet
                         bulletManager.removeEnemyBullet(i);
                     } else {
-                        // Non-destructible obstacle - just remove bullet
-                        bulletManager.removeEnemyBullet(i);
-                        this.createExplosion(bulletX, bulletY, 'small_pop');
+                        // Non-destructible — tip impact only (never full small_pop).
+                        this.destroyShotAt('enemy', i, 'impact');
                         if (typeof soundManager !== 'undefined') soundManager.playHit();
                     }
 
@@ -19032,32 +19827,15 @@ extendClass(CollisionManager, {
     applyOpticalBulletHit(bullet, obstacle, sourceSide, bulletIndex, obstacleIndex) {
         const mode = obstacle.opticalMode || 'none';
         if (mode === 'none') return false;
-        const cx = bullet.x + (bullet.width || 0) / 2;
-        const cy = bullet.y + (bullet.height || 0) / 2;
+        const tip = this.shotImpactXY(bullet);
+        const cx = tip.x;
+        const cy = tip.y;
         const explosionId = obstacle.explosionId || 'crystal_shatter';
 
         if (mode === 'mirror') {
-            if (sourceSide === 'player') {
-                const reflectedBullet = bullet;
-                this.reflectBullet(reflectedBullet, obstacle);
-                if (reflectedBullet.angle === undefined) {
-                    reflectedBullet.speed = Math.abs(reflectedBullet.speed || 8);
-                }
-                reflectedBullet.y += 5;
-                reflectedBullet.reflected = true;
-                bulletManager.getEnemyBullets().push(reflectedBullet);
-                bulletManager.removeBullet(bulletIndex);
-            } else {
-                const reflectedBullet = bullet;
-                this.reflectEnemyBullet(reflectedBullet, obstacle);
-                if (reflectedBullet.angle === undefined) {
-                    reflectedBullet.speed = -Math.abs(reflectedBullet.speed || 5);
-                }
-                reflectedBullet.y -= 10;
-                reflectedBullet.reflected = true;
-                bulletManager.getBullets().push(reflectedBullet);
-                bulletManager.removeEnemyBullet(bulletIndex);
-            }
+            // Straight team flip — same path as shield reflects (no mid-air park).
+            const asEnemy = sourceSide === 'player';
+            this.reassignShotTeam(bulletIndex, sourceSide, asEnemy, obstacle);
             if (typeof soundManager !== 'undefined') soundManager.playReflect();
             this.damageObstacleOptical(obstacle, obstacleIndex, cx, cy, explosionId, 'reflect');
             return true;
@@ -19087,26 +19865,40 @@ extendClass(CollisionManager, {
         for (let s = 0; s < splitCount; s++) {
             const t = splitCount === 1 ? 0 : (s / (splitCount - 1)) - 0.5;
             const ang = baseAngle + t * angleSpread * 2;
+            const forward = toEnemy ? 1 : -1;
+            const shardW = Math.max(1, Math.min(4, bullet.width || 3));
+            const shardH = Math.max(3, Math.min(16, bullet.height || 8));
             const shard = {
-                x: cx - (bullet.width || 3) / 2,
-                y: cy - (bullet.height || 8) / 2,
-                width: bullet.width || 3,
-                height: bullet.height || 8,
-                speed: baseSpeed * (toEnemy ? 1 : -1),
+                x: cx - shardW / 2,
+                y: toEnemy ? cy + 2 : cy - shardH - 2,
+                width: shardW,
+                height: shardH,
+                speed: baseSpeed,
+                moveSpeed: baseSpeed,
                 angle: ang,
+                vx: Math.sin(ang) * baseSpeed,
+                vy: forward * Math.cos(ang) * baseSpeed,
+                isEnemyShot: !!toEnemy,
                 damage: Math.max(1, Math.round(baseDamage)),
                 color: bullet.color || (mode === 'kaleidoscope' ? 'var(--color-highlight)' : 'var(--color-accent)'),
                 type: bullet.type || 'laser_beam',
+                weaponId: bullet.weaponId,
                 reflected: true,
+                reflectiveShots: false,
+                _reflectCount: 1,
                 lightRadius: bullet.lightRadius || 50,
                 lightIntensity: 1.2,
                 lightColor: bullet.lightColor || 'var(--color-highlight)',
-                // Born inside this obstacle: never split on it again.
-                _ignoreObstacle: obstacle
+                _ignoreObstacle: obstacle,
+                _isShot: true
             };
-            // Use angled movement: ensure angle is set and speed is magnitude
-            shard.speed = baseSpeed;
-            if (toEnemy) {
+            if (typeof bulletManager !== 'undefined' && bulletManager.normalizeBulletMotion) {
+                bulletManager.normalizeBulletMotion(shard, { speed: baseSpeed });
+            }
+            if (typeof bulletManager !== 'undefined' && bulletManager.pushBullet) {
+                if (toEnemy) bulletManager.pushBullet(bulletManager.enemyBullets, shard);
+                else bulletManager.pushBullet(bulletManager.bullets, shard);
+            } else if (toEnemy) {
                 bulletManager.getEnemyBullets().push(shard);
             } else {
                 bulletManager.getBullets().push(shard);
@@ -19293,7 +20085,11 @@ var RenderManager = class RenderManager {
         const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
         const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
         // ~240×300 @2× ≈ 288k; tighter default so CSS upscales instead of GPU fill.
+        // PERFORMANCE MODE: cap harder — paint/composite of large canvases dominated FPS more than JS.
         let maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
+        if (document.documentElement.hasAttribute('data-vf-performance')) {
+            maxPx = Math.min(maxPx, 120000);
+        }
         if (gp > 0) {
             // gp 1/2 push the densest backing (shown/(gp·lw)). Keep fill cheap via CSS
             // nearest-neighbor upscale — wall-clock stutter was paint/composite, not JS.
@@ -21484,9 +22280,10 @@ extendClass(RenderManager, {
 
         let bulletColor = this.resolveCss(this.getBulletColor(bullet), '#ffffff');
 
-        // Bonus (charged / beat) shots: same size, brighter colour.
+        // Bonus (charged / beat) shots: hotter colour so rare power shots read.
         if (bullet.bonusGlow > 0) {
-            bulletColor = this.blendColors(bulletColor, '#ffffff', 0.25 + 0.45 * bullet.bonusGlow);
+            const g = Math.max(0, Math.min(1, Number(bullet.bonusGlow) || 0));
+            bulletColor = this.blendColors(bulletColor, '#ffffff', 0.3 + 0.55 * g);
         }
 
         if (lighting && lighting.intensity > 0 && lighting.color) {
@@ -21497,13 +22294,13 @@ extendClass(RenderManager, {
             );
         }
 
+        // Projectiles always fly/draw on continuous px — never the combat lattice
+        // (large VOXEL / Global-Pixel cells froze or stuttered shots mid-lane).
+        const x = bullet.x;
+        const y = bullet.y;
+        const w = Math.max(1, bullet.width != null ? bullet.width : bullet.w);
+        const h = Math.max(1, bullet.height != null ? bullet.height : bullet.h);
         const cell = this.getCombatVoxelCell();
-        // Continuous flight coords — never lattice-snap the draw origin (that
-        // froze beams mid-lane whenever cell > per-frame travel). Size may stay chunky.
-        const x = Math.floor(bullet.x);
-        const y = Math.floor(bullet.y);
-        const w = cell ? this.quantizeCombatSize(bullet.width, cell) : Math.max(1, Math.ceil(bullet.width));
-        const h = cell ? this.quantizeCombatSize(bullet.height, cell) : Math.max(1, Math.ceil(bullet.height));
 
         // Shots that know their weapon get its shape, so the type reads at a glance.
         if (bullet.weaponId) {
@@ -21527,6 +22324,13 @@ extendClass(RenderManager, {
                 Math.max(cell || 1, Math.ceil(w / 2)), Math.max(cell || 1, h - 2),
                 glow, 1, true
             );
+        }
+        // Untyped laser: bright leading tip (up for player, down for enemy).
+        if (h >= 3) {
+            const down = !!(bullet.isEnemyShot || String(bullet.type || '').indexOf('enemy') === 0);
+            const tipH = Math.max(2, Math.min(5, Math.round(h * 0.35)));
+            const tipY = down ? y + h - tipH : y;
+            this.fillCombatRect(ctx, x, tipY, w, tipH, glow, 1, true);
         }
 
         ctx.restore();
@@ -21553,6 +22357,15 @@ extendClass(RenderManager, {
         // Soft halo only on wide shots in FLAT — VOXEL keeps hard blocks.
         if (!cell && w >= 3) rect(x - 1, y - 1, w + 2, h + 2, color, 0.3);
         const tipY = (len) => (down ? lead - len : lead);
+        // Leading tip: brighter so the nose reads clearly when shot speeds differ.
+        const paintTip = (len, tw) => {
+            const L = Math.max(2, Math.min(h, Math.round(len || 3)));
+            const twid = Math.max(1, Math.min(w, tw != null ? tw : Math.max(1, w)));
+            rect(cx - twid / 2, tipY(L), twid, L, hot, 1);
+            if (twid + 2 <= w + 1 && !cell) {
+                rect(cx - (twid + 2) / 2, tipY(Math.max(1, L - 1)), twid + 2, Math.max(1, L - 1), hot, 0.45);
+            }
+        };
         switch (id) {
             case 'plasma':
             case 'nova': {
@@ -21596,6 +22409,7 @@ extendClass(RenderManager, {
                 // Core with bright ring bands.
                 rect(cx - w / 2, y, w, h, color, 0.8);
                 for (let i = 1; i < h - 1; i += 3) rect(cx - w / 2, y + i, w, 1, hot, 0.85);
+                paintTip(3, Math.max(1, w));
                 break;
             }
             case 'spread':
@@ -21633,13 +22447,22 @@ extendClass(RenderManager, {
                 rect(x, y, 1, h, color);
                 rect(x + w - 1, y, 1, h, color);
                 rect(cx - Math.max(0.5, w / 4), y, Math.max(1, w / 2), h, hot, 0.9);
+                paintTip(3, Math.max(1, w));
                 break;
             }
             default: {
-                // Laser: solid beam with a hot core line.
+                // Laser: solid beam, hot core, brightest nose.
                 rect(x, y, w, h, color);
-                if (w >= 2) rect(cx - Math.max(0.5, w / 4), y + 1, Math.max(1, w / 2), Math.max(1, h - 2), hot, 0.85);
-                else rect(x, tipY(2), w, 2, hot);
+                if (w >= 2) {
+                    rect(cx - Math.max(0.5, w / 4), y + 1, Math.max(1, w / 2), Math.max(1, h - 2), hot, 0.75);
+                }
+                const tipLen = Math.max(3, Math.min(6, Math.round(h * 0.35)));
+                paintTip(tipLen, Math.max(1, w));
+                // Rare powered shot: extra white flare at the tip.
+                if (bullet._powerShot || (bullet.bonusGlow != null && bullet.bonusGlow >= 0.85)) {
+                    paintTip(Math.max(4, tipLen + 1), Math.max(1, w + 1));
+                    if (!cell) rect(cx - (w + 2) / 2, tipY(2), w + 2, 2, hot, 0.55);
+                }
             }
         }
         ctx.globalAlpha = 1;
@@ -21958,6 +22781,770 @@ window.combatVoxels = {
         ctx.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
     }
 };
+
+
+/* --- js/ui/parallax/core.js --- */
+"use strict";
+
+// Parallax background system
+var ParallaxManager = class ParallaxManager {
+    constructor() {
+        this.layers = [];
+        this.scrollSpeed = 0.5;
+        this.currentPlanet = 'mars'; // Default planet
+        this.starsEnabled = true;
+        this.starsOpacity = 0.35;
+        this.globalLayerOpacity = 1;
+    }
+
+    init() {
+        this.createLayers();
+    }
+
+    setPlanet(planet) {
+        this.currentPlanet = planet;
+        if (typeof planetConfigManager !== 'undefined') {
+            planetConfigManager.applyToRuntime(planet);
+            return;
+        }
+        this.createLayers();
+    }
+
+    setBackground(background) {
+        // Alias for setPlanet to maintain compatibility
+        this.setPlanet(background);
+    }
+
+    applyPlanetConfig(cfg) {
+        if (!cfg) return;
+        this.currentPlanet = cfg.id || this.currentPlanet;
+        this.starsEnabled = cfg.starsEnabled !== false;
+        this.starsOpacity = cfg.starsOpacity != null ? cfg.starsOpacity : 0.35;
+        const sourceLayers = (typeof planetConfigManager !== 'undefined')
+            ? planetConfigManager.getResolvedLayers(this.currentPlanet)
+            : (cfg.backgroundLayers || []);
+        this.layers = sourceLayers.map(layer => ({
+            y: 0,
+            speed: layer.speed,
+            color: layer.color,
+            height: layer.height || 300,
+            pattern: layer.pattern,
+            opacity: layer.opacity != null ? layer.opacity : 0.15,
+            scale: layer.scale != null ? layer.scale : 1,
+            visible: layer.visible !== false,
+            colorSource: layer.colorSource || 'primary'
+        }));
+        if (this.horizontalOffset == null) this.horizontalOffset = 0;
+        if (this.horizontalSpeed == null) this.horizontalSpeed = 0.05;
+        if (this.starSpawnTimer == null) this.starSpawnTimer = 0;
+        if (this.starSpawnInterval == null) this.starSpawnInterval = 120;
+        if (!this.flyingStars || !this.flyingStars.length) this.seedFlyingStars();
+    }
+
+    setLayerOpacity(index, opacity) {
+        if (this.layers[index]) {
+            this.layers[index].opacity = Math.max(0, Math.min(1, Number(opacity)));
+        }
+    }
+
+    setLayerVisible(index, visible) {
+        if (this.layers[index]) {
+            this.layers[index].visible = !!visible;
+        }
+    }
+
+    setGlobalLayerOpacity(opacity) {
+        this.globalLayerOpacity = Math.max(0, Math.min(1, Number(opacity)));
+    }
+
+    createLayers() {
+        if (typeof planetConfigManager !== 'undefined') {
+            this.applyPlanetConfig(planetConfigManager.getConfig(this.currentPlanet));
+            return;
+        }
+
+        this.layers = this.getPlanetLayers(this.currentPlanet);
+        this.horizontalOffset = 0;
+        this.horizontalSpeed = 0.05;
+        this.starSpawnTimer = 0;
+        this.starSpawnInterval = 120;
+        this.seedFlyingStars();
+    }
+
+    /** Theme CSS variable, cached ~250ms: getComputedStyle() on every frame forces a style recalc. */
+    envVar(name) {
+        const now = performance.now();
+        const c = this._envCache || (this._envCache = {});
+        const hit = c[name];
+        if (hit && now - hit.t < 250) return hit.v;
+        const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        c[name] = { v: v, t: now };
+        return v;
+    }
+
+    getPlanetLayers(planet) {
+        if (typeof planetConfigManager !== 'undefined') {
+            return planetConfigManager.getResolvedLayers(planet);
+        }
+
+        const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--env-primary').trim() || '#808080';
+        const secondaryColor = getComputedStyle(document.documentElement).getPropertyValue('--env-secondary').trim() || '#606060';
+        const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--env-accent').trim() || '#808080';
+        const soft = (color, opacity) => ({ y: 0, speed: 0.2, color, height: 300, opacity, visible: true });
+
+        switch (planet) {
+            case 'mars':
+                return [
+                    Object.assign(soft(primaryColor, 0.18), { speed: 0.2, pattern: 'mars_surface' }),
+                    Object.assign(soft(secondaryColor, 0.12), { speed: 0.4, pattern: 'mars_dust' }),
+                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'mars_sky' })
+                ];
+            case 'jupiter':
+                return [
+                    Object.assign(soft(primaryColor, 0.16), { speed: 0.2, pattern: 'jupiter_bands' }),
+                    Object.assign(soft(secondaryColor, 0.12), { speed: 0.4, pattern: 'jupiter_storms' }),
+                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'jupiter_atmosphere' })
+                ];
+            case 'saturn':
+                return [
+                    Object.assign(soft(secondaryColor, 0.16), { speed: 0.2, pattern: 'saturn_rings' }),
+                    Object.assign(soft(primaryColor, 0.12), { speed: 0.4, pattern: 'saturn_clouds' }),
+                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'saturn_sky' })
+                ];
+            case 'neptune':
+                return [
+                    Object.assign(soft(primaryColor, 0.15), { speed: 0.2, pattern: 'neptune_deep' }),
+                    Object.assign(soft(secondaryColor, 0.11), { speed: 0.4, pattern: 'neptune_storms' }),
+                    Object.assign(soft(accentColor, 0.08), { speed: 0.6, pattern: 'neptune_ice' })
+                ];
+            default:
+                return [
+                    Object.assign(soft(primaryColor, 0.12), { speed: 0.2, pattern: 'grid' }),
+                    Object.assign(soft(secondaryColor, 0.1), { speed: 0.4, pattern: 'dots' }),
+                    Object.assign(soft(accentColor, 0.07), { speed: 0.6, pattern: 'lines' })
+                ];
+        }
+    }
+
+    update(deltaTime) {
+        const frameScale = Math.min(3, Math.max(0, Number(deltaTime) || 16.67) / 16.67);
+        // Never hard-reset scroll offsets: draws use modulo, and resets at
+        // layer.height (often 300) or horizontalOffset=400 jumped while patterns
+        // wrap at 600 / factor*offset (0.1/0.2).
+        // Boss arenas hold still; regular stages scroll towards the player.
+        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
+            || obstacleManager.isScrollStage();
+        if (scrolling) {
+            // Transit backtrack runs the background in reverse (obstacleManager.levelScrollMul).
+            const mul = typeof obstacleManager !== 'undefined' && obstacleManager.levelScrollMul
+                ? obstacleManager.levelScrollMul() : 1;
+            this.layers.forEach(layer => {
+                // Kept >= 0: the pattern draws wrap with %, which breaks on negatives.
+                layer.y = Math.max(0, layer.y + layer.speed * frameScale * mul);
+            });
+        }
+        this.horizontalOffset += this.horizontalSpeed * frameScale;
+        this.updateFlyingStars(deltaTime);
+    }
+
+    render(ctx) {
+        // Check if ctx is valid
+        if (!ctx) {
+            console.warn('ParallaxManager.render: ctx is undefined');
+            return;
+        }
+
+
+        // Set pixelated rendering first
+        ctx.imageSmoothingEnabled = false;
+        ctx.webkitImageSmoothingEnabled = false;
+        ctx.mozImageSmoothingEnabled = false;
+        ctx.msImageSmoothingEnabled = false;
+
+        // Fill base background with theme color
+        const backgroundColor = this.envVar('--env-background');
+        ctx.fillStyle = backgroundColor || '#0a0a0a';
+        // Logical playfield (transform already supersamples). Using backing width
+        // here filled k² more user-space pixels that the clip immediately discarded.
+        const cw = (typeof game !== 'undefined' && game && game.internalWidth) || 240;
+        const ch = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
+        // Stars keep the prior spawn box (backing px as user units) so density on
+        // screen matches the pre-bake look.
+        const starW = (ctx.canvas && ctx.canvas.width) || cw;
+        const starH = (ctx.canvas && ctx.canvas.height) || ch;
+        this._starFieldW = starW;
+        this._starFieldH = starH;
+        ctx.fillRect(0, 0, cw, ch);
+
+        // When the stage is frozen (boss / non-scroll), reuse a baked layer plate.
+        const scrolling = typeof obstacleManager === 'undefined' || !obstacleManager.isScrollStage
+            || obstacleManager.isScrollStage();
+        let layerKey = backgroundColor + '|' + (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
+        for (let i = 0; i < this.layers.length; i++) {
+            const L = this.layers[i];
+            layerKey += '|' + (L.pattern || '') + ':' + (L.y || 0) + ':' + (L.color || '') + ':' + (L.visible === false ? 0 : 1);
+        }
+        layerKey += '|h' + (this.horizontalOffset || 0);
+
+        const terrainScroll = scrolling
+            && typeof obstacleManager !== 'undefined'
+            && obstacleManager.hasTerrain
+            && obstacleManager.hasTerrain();
+
+        const drawLayers = (target) => {
+            for (let index = 0; index < this.layers.length; index++) {
+                const layer = this.layers[index];
+                if (layer.visible === false) continue;
+                if (terrainScroll && this._parallaxLayerRedundantOnTerrain(layer)) continue;
+                const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
+                if (opacity <= 0) continue;
+                target.save();
+                target.globalAlpha = Math.max(0, Math.min(1, opacity));
+                this.drawLayerPattern(target, layer, index);
+                target.restore();
+            }
+        };
+
+        if (!scrolling && this._frozenLayerKey === layerKey && this._frozenLayerCanvas) {
+            ctx.drawImage(this._frozenLayerCanvas, 0, 0);
+        } else {
+            if (!scrolling) {
+                if (!this._frozenLayerCanvas
+                    || this._frozenLayerCanvas.width !== cw
+                    || this._frozenLayerCanvas.height !== ch) {
+                    this._frozenLayerCanvas = document.createElement('canvas');
+                    this._frozenLayerCanvas.width = cw;
+                    this._frozenLayerCanvas.height = ch;
+                }
+                const fx = this._frozenLayerCanvas.getContext('2d');
+                if (fx) {
+                    fx.setTransform(1, 0, 0, 1, 0, 0);
+                    fx.imageSmoothingEnabled = false;
+                    fx.clearRect(0, 0, cw, ch);
+                    fx.fillStyle = backgroundColor || '#0a0a0a';
+                    fx.fillRect(0, 0, cw, ch);
+                    drawLayers(fx);
+                    this._frozenLayerKey = layerKey;
+                    ctx.drawImage(this._frozenLayerCanvas, 0, 0);
+                } else {
+                    drawLayers(ctx);
+                }
+            } else {
+                this._frozenLayerKey = '';
+                drawLayers(ctx);
+            }
+        }
+
+        // Draw flying stars
+        if (this.starsEnabled !== false) {
+            this.drawFlyingStars(ctx);
+        }
+
+        this.renderBossIntensity(ctx, cw, ch);
+    }
+
+    /** Scroll terrain replaces the parallax ground planes; keep only thin sky veils. */
+    _parallaxLayerRedundantOnTerrain(layer) {
+        const p = String((layer && layer.pattern) || '');
+        if (/_sky$|_atmosphere$/.test(p)) return false;
+        if (/_surface$|_dust$|_bands$|_storms$|_clouds$|_rings$|_deep$|_ice$/.test(p)) return true;
+        const speed = Number(layer && layer.speed);
+        return Number.isFinite(speed) && speed <= 0.45;
+    }
+
+    /**
+     * Boss arenas hold still (see update()), so they need their own visual
+     * drama: a phase-tinted vignette + slow pulse layered over the frozen
+     * background, ramping up as the boss loses health (phase 1→3).
+     */
+    renderBossIntensity(ctx, cw, ch) {
+        const em = typeof enemyManager !== 'undefined' ? enemyManager : null;
+        const e = em && em.enemy;
+        if (!e || !e.isBoss || em.exploding) return;
+        const phase = e.bossPhase || 1;
+        const col = ['#5a1018', '#7a2a10', '#7a0a3a'][Math.max(0, phase - 1)];
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() / (600 - phase * 120));
+        const baseAlpha = 0.08 + phase * 0.06;
+        const alpha = baseAlpha + pulse * 0.04;
+        ctx.save();
+        // Same radial falloff every frame for a given size/phase — rebuild only on change.
+        if (!this._bossGrad || this._bossGradW !== cw || this._bossGradH !== ch || this._bossGradPhase !== phase) {
+            const grad = ctx.createRadialGradient(
+                cw / 2, ch * 0.4, Math.min(cw, ch) * 0.2,
+                cw / 2, ch * 0.4, Math.max(cw, ch) * 0.75
+            );
+            grad.addColorStop(0, 'rgba(0,0,0,0)');
+            grad.addColorStop(1, col);
+            this._bossGrad = grad;
+            this._bossGradW = cw;
+            this._bossGradH = ch;
+            this._bossGradPhase = phase;
+        }
+        ctx.globalAlpha = Math.max(0, Math.min(0.55, alpha));
+        ctx.fillStyle = this._bossGrad;
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.restore();
+    }
+
+    drawLayerPattern(ctx, layer, index) {
+        // Refresh theme color if layer uses a color source
+        if (typeof planetConfigManager !== 'undefined' && layer.colorSource && layer.colorSource !== 'custom') {
+            layer.color = planetConfigManager.resolveLayerColor(layer);
+        }
+        const layerColor = layer.color || '#808080';
+        ctx.fillStyle = layerColor;
+
+        const scale = (layer.scale != null && Number(layer.scale) > 0) ? Number(layer.scale) : 1;
+        const drawContent = () => {
+            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.hasCustomPattern(layer.pattern)) {
+                this.drawCustomTile(ctx, layer, planetConfigManager.getCustomPattern(layer.pattern));
+                return;
+            }
+            switch (layer.pattern) {
+                case 'grid':
+                    this.drawGrid(ctx, layer, index);
+                    break;
+                case 'dots':
+                    this.drawDots(ctx, layer);
+                    break;
+                case 'lines':
+                    this.drawLines(ctx, layer);
+                    break;
+                case 'mars_surface':
+                    this.drawMarsSurface(ctx, layer);
+                    break;
+                case 'mars_dust':
+                    this.drawMarsDust(ctx, layer);
+                    break;
+                case 'mars_sky':
+                    this.drawMarsSky(ctx, layer);
+                    break;
+                case 'jupiter_bands':
+                    this.drawJupiterBands(ctx, layer);
+                    break;
+                case 'jupiter_storms':
+                    this.drawJupiterStorms(ctx, layer);
+                    break;
+                case 'jupiter_atmosphere':
+                    this.drawJupiterAtmosphere(ctx, layer);
+                    break;
+                case 'saturn_rings':
+                    this.drawSaturnRings(ctx, layer);
+                    break;
+                case 'saturn_clouds':
+                    this.drawSaturnClouds(ctx, layer);
+                    break;
+                case 'saturn_sky':
+                    this.drawSaturnSky(ctx, layer);
+                    break;
+                case 'neptune_deep':
+                    this.drawNeptuneDeep(ctx, layer);
+                    break;
+                case 'neptune_storms':
+                    this.drawNeptuneStorms(ctx, layer);
+                    break;
+                case 'neptune_ice':
+                    this.drawNeptuneIce(ctx, layer);
+                    break;
+            }
+        };
+
+        if (scale === 1) {
+            drawContent();
+            return;
+        }
+
+        const w = 400;
+        const h = 600;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, w, h);
+        ctx.clip();
+        ctx.translate(w / 2, h / 2);
+        ctx.scale(scale, scale);
+        ctx.translate(-w / 2, -h / 2);
+
+        const extent = scale < 1 ? Math.ceil(1 / scale) : 0;
+        for (let oy = -extent; oy <= extent; oy++) {
+            for (let ox = -extent; ox <= extent; ox++) {
+                if (ox === 0 && oy === 0) {
+                    drawContent();
+                } else {
+                    ctx.save();
+                    ctx.translate(ox * w, oy * h);
+                    drawContent();
+                    ctx.restore();
+                }
+            }
+        }
+        ctx.restore();
+    }
+}
+
+
+/* --- js/ui/parallax/draw-custom-tile.js --- */
+"use strict";
+
+// ParallaxManager methods, split from parallax.js.
+extendClass(ParallaxManager, {
+    /** One offscreen tile blit — same pixels as nested fillRect loops. */
+    bakePatternTile(key, tw, th, paint) {
+        if (!this._patternBake) this._patternBake = Object.create(null);
+        let entry = this._patternBake[key];
+        if (entry && entry.w === tw && entry.h === th) return entry;
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, tw);
+        c.height = Math.max(1, th);
+        const x = c.getContext('2d');
+        if (!x) return null;
+        x.imageSmoothingEnabled = false;
+        paint(x);
+        entry = { canvas: c, w: tw, h: th };
+        const keys = Object.keys(this._patternBake);
+        if (keys.length > 48) {
+            for (let i = 0; i < 12; i++) delete this._patternBake[keys[i]];
+        }
+        this._patternBake[key] = entry;
+        return entry;
+    },
+
+    /** Draw baked tile across the field. `scrollX/Y` are subtracted (custom-tile convention). */
+    blitTiled(ctx, tile, scrollX, scrollY, fieldW, fieldH) {
+        if (!tile) return;
+        const tw = tile.w;
+        const th = tile.h;
+        for (let ty = -th; ty < fieldH + th; ty += th) {
+            for (let tx = -tw; tx < fieldW + tw; tx += tw) {
+                ctx.drawImage(tile.canvas, Math.floor(tx - scrollX), Math.floor(ty - scrollY));
+            }
+        }
+    },
+
+    drawCustomTile(ctx, layer, def) {
+        if (!def || !def.cells) return;
+        const tw = def.width;
+        const th = def.height;
+        const cell = def.cellSize || 4;
+        const tilePxW = tw * cell;
+        const tilePxH = th * cell;
+        const ox = ((this.horizontalOffset * 0.1) % tilePxW + tilePxW) % tilePxW;
+        const oy = ((layer.y || 0) % tilePxH + tilePxH) % tilePxH;
+        const color = ctx.fillStyle || layer.color || '#808080';
+        const key = 'ct:' + (def.id || layer.pattern || 'x') + ':' + tilePxW + 'x' + tilePxH + ':' + color + ':' + cell;
+        const bake = this.bakePatternTile(key, tilePxW, tilePxH, (x) => {
+            x.fillStyle = color;
+            for (let cy = 0; cy < th; cy++) {
+                for (let cx = 0; cx < tw; cx++) {
+                    if (!def.cells[cy * tw + cx]) continue;
+                    x.fillRect(cx * cell, cy * cell, cell, cell);
+                }
+            }
+        });
+        const fieldW = (ctx.canvas && ctx.canvas.width) || 400;
+        const fieldH = (ctx.canvas && ctx.canvas.height) || 600;
+        this.blitTiled(ctx, bake, ox, oy, fieldW, fieldH);
+    },
+
+    drawGrid(ctx, layer, index) {
+        // Checker parity comes from the cell's own index, not from its
+        // scrolled position — the old version flipped the checker every time
+        // a cell crossed a 16 px boundary, so the dots jumped while scrolling.
+        // The period is two cells, so wrapping the offset at 2*gridSize is seamless.
+        // Depth by layer: slow (far) layers get a fine, small-dot grid, faster
+        // (near) ones a wider grid with bigger dots — stacked grid layers used
+        // to be identical in size and overlapped into a muddled pattern.
+        const depth = Math.max(0, Math.min(3, Math.round((Number(layer.speed) || 0.2) / 0.2) - 1 + (index || 0) % 2));
+        const gridSize = [12, 20, 28, 36][depth];
+        const dot = [2, 3, 4, 5][depth];
+        const period = gridSize * 2;
+        const w = (ctx.canvas && ctx.canvas.width) || 400;
+        const h = (ctx.canvas && ctx.canvas.height) || 600;
+        const ox = (((this.horizontalOffset * 0.1) % period) + period) % period;
+        const oy = (((layer.y || 0) % period) + period) % period;
+        const color = ctx.fillStyle || layer.color || '#808080';
+        const key = 'grid:' + gridSize + ':' + dot + ':' + color;
+        const bake = this.bakePatternTile(key, period, period, (x) => {
+            x.fillStyle = color;
+            const cols = Math.ceil(period / gridSize) + 1;
+            const rows = Math.ceil(period / gridSize) + 1;
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    if (((i + j) & 1) !== 0) continue;
+                    x.fillRect(i * gridSize, j * gridSize, dot, dot);
+                }
+            }
+        });
+        this.blitTiled(ctx, bake, -ox, -oy, w, h);
+    },
+
+    drawDots(ctx, layer) {
+        const dots = [
+            {x: 40, y: 80},
+            {x: 120, y: 160},
+            {x: 200, y: 240},
+            {x: 280, y: 320},
+            {x: 360, y: 400},
+            {x: 80, y: 480},
+            {x: 160, y: 560}
+        ];
+
+        const ox = ((this.horizontalOffset * 0.2) % 400 + 400) % 400;
+        const oy = ((layer.y || 0) % 600 + 600) % 600;
+        dots.forEach(dot => {
+            // Draw neighbouring tiles as well so a wrap never exposes a
+            // one-frame gap or makes the pattern appear to jump.
+            for (let tx = -1; tx <= 1; tx++) {
+                for (let ty = -1; ty <= 1; ty++) {
+                    const x = dot.x + ox + tx * 400;
+                    const y = dot.y + oy + ty * 600;
+                    if (x < -5 || x > 405 || y < -5 || y > 605) continue;
+                    ctx.fillRect(Math.floor(x), Math.floor(y), 5, 5);
+                }
+            }
+        });
+    },
+
+    drawLines(ctx, layer) {
+        const lines = [
+            {x: 0, y: 100, width: 400, height: 4},
+            {x: 0, y: 300, width: 400, height: 4},
+            {x: 0, y: 500, width: 400, height: 4}
+        ];
+
+        lines.forEach(line => {
+            const y = (line.y + layer.y) % 600;
+            ctx.fillRect(line.x, Math.floor(y), line.width, line.height);
+        });
+    },
+
+    darkenColor(color, factor) {
+        // Simple color darkening
+        const hex = color.replace('#', '');
+        const r = Math.floor(parseInt(hex.substr(0, 2), 16) * (1 - factor));
+        const g = Math.floor(parseInt(hex.substr(2, 2), 16) * (1 - factor));
+        const b = Math.floor(parseInt(hex.substr(4, 2), 16) * (1 - factor));
+        return `rgb(${r}, ${g}, ${b})`;
+    },
+
+    /** Fills the field immediately so a fresh stage never opens on empty space. */
+    seedFlyingStars(count) {
+        this.flyingStars = [];
+        if (!this._starFieldW || !this._starFieldH) {
+            // No render() yet this session (fresh load) — read the real canvas once
+            // so the very first seed isn't scattered across the old 400x600 default.
+            const cv = (typeof document !== 'undefined') && document.getElementById('gameCanvas');
+            if (cv && cv.width && cv.height) {
+                this._starFieldW = cv.width;
+                this._starFieldH = cv.height;
+            }
+        }
+        const n = count != null ? count : 70;
+        for (let i = 0; i < n; i++) this.spawnFlyingStar(true);
+    },
+
+    updateFlyingStars(deltaTime) {
+        this.starSpawnTimer += deltaTime;
+
+        // Spawn new stars, several at a time — a trickle of one every couple
+        // seconds reads as empty space instead of a starfield. Capped so a
+        // star that happens to drift at ~0 speed can't make this unbounded.
+        const maxStars = 140;
+        while (this.starSpawnTimer >= this.starSpawnInterval) {
+            if (this.flyingStars.length < maxStars) this.spawnFlyingStar();
+            this.starSpawnTimer -= this.starSpawnInterval;
+        }
+
+        // Update existing stars
+        const list = this.flyingStars;
+        const fw = this._starFieldW || 400;
+        const fh = this._starFieldH || 600;
+        for (let i = list.length - 1; i >= 0; i--) {
+            const star = list[i];
+            star.x += star.speedX;
+            star.y += star.speedY;
+            if (star.x < -10 || star.x > fw + 10 || star.y < -10 || star.y > fh + 10) {
+                const last = list.length - 1;
+                if (i !== last) list[i] = list[last];
+                list.pop();
+            }
+        }
+    },
+
+    /** `fromEdge` false (initial seed) scatters across the whole field instead of spawning at the rim. */
+    spawnFlyingStar(seeding) {
+        // Depth: smaller/dimmer stars drift slower (far background), bigger/brighter ones faster (near).
+        const depth = Math.random();
+        const size = depth < 0.6 ? 1 : (depth < 0.9 ? 2 : 3);
+        const speedScale = 0.3 + depth * 1.4;
+        const star = {
+            x: Math.floor(Math.random() * (this._starFieldW || 400)),
+            y: Math.floor(Math.random() * (this._starFieldH || 600)),
+            speedX: (Math.random() - 0.5) * 2 * speedScale,
+            speedY: (Math.random() - 0.5) * 2 * speedScale,
+            size: size,
+            alpha: 0.5 + depth * 0.5
+        };
+        this.flyingStars.push(star);
+        return star;
+    },
+
+    drawFlyingStars(ctx) {
+        const stars = this.flyingStars;
+        if (!stars || !stars.length) return;
+        ctx.save();
+        const baseOpacity = this.starsOpacity != null ? this.starsOpacity : 0.35;
+        ctx.fillStyle = this.envVar('--env-primary') || '#808080';
+        for (let i = 0; i < stars.length; i++) {
+            const star = stars[i];
+            ctx.globalAlpha = Math.max(0, Math.min(1, baseOpacity * (star.alpha != null ? star.alpha : 1)));
+            ctx.fillRect(star.x | 0, star.y | 0, star.size | 0, star.size | 0);
+        }
+        ctx.restore();
+    },
+
+    /**
+     * Bake a 400×600 planet plate once; scroll with the same wrap as
+     * `fillRect(..., (y + layer.y) % 600)` — identical pixels, one blit.
+     */
+    drawWrappedYField(ctx, layer, bakeKey, paint) {
+        const color = String(ctx.fillStyle || layer.color || '#808080');
+        const bake = this.bakePatternTile(bakeKey + ':' + color, 400, 600, (x) => {
+            x.fillStyle = color;
+            paint(x);
+        });
+        if (!bake) return;
+        const oy = ((layer.y || 0) % 600 + 600) % 600;
+        // Shift plate down by oy (wrap): matches (y + layer.y) % 600 placement.
+        ctx.drawImage(bake.canvas, 0, oy);
+        if (oy) ctx.drawImage(bake.canvas, 0, oy - 600);
+    },
+
+    // Planet-specific drawing methods
+    drawMarsSurface(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'mars_surface', (x) => {
+            for (let px = 0; px < 400; px += 8) {
+                for (let py = 0; py < 600; py += 8) {
+                    if (((px / 8) + (py / 8)) % 3 === 0) x.fillRect(px, py, 6, 6);
+                }
+            }
+        });
+    },
+
+    drawMarsDust(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'mars_dust', (x) => {
+            for (let px = 0; px < 400; px += 12) {
+                for (let py = 0; py < 600; py += 12) {
+                    if (((px / 12) + (py / 12)) % 4 === 0) x.fillRect(px, py, 4, 4);
+                }
+            }
+        });
+    },
+
+    drawMarsSky(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'mars_sky', (x) => {
+            for (let px = 0; px < 400; px += 16) {
+                x.fillRect(px, Math.floor((px * 0.1) % 600), 4, 4);
+            }
+        });
+    },
+
+    drawJupiterBands(ctx, layer) {
+        // x and y both phase with layer.y — keep the light O(30) loop (not a Y-only wrap).
+        for (let y = 0; y < 600; y += 20) {
+            const x = Math.floor((y * 0.05 + layer.y) % 400);
+            ctx.fillRect(x, Math.floor(y + layer.y) % 600, 6, 4);
+        }
+    },
+
+    drawJupiterStorms(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'jupiter_storms', (x) => {
+            for (let px = 0; px < 400; px += 16) {
+                for (let py = 0; py < 600; py += 16) {
+                    if (((px / 16) + (py / 16)) % 5 === 0) x.fillRect(px, py, 8, 8);
+                }
+            }
+        });
+    },
+
+    drawJupiterAtmosphere(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'jupiter_atmosphere', (x) => {
+            for (let px = 0; px < 400; px += 12) {
+                x.fillRect(px, Math.floor((px * 0.2) % 600), 4, 4);
+            }
+        });
+    },
+
+    drawSaturnRings(ctx, layer) {
+        for (let y = 0; y < 600; y += 15) {
+            const x = Math.floor((y * 0.1 + layer.y) % 400);
+            ctx.fillRect(x, Math.floor(y + layer.y) % 600, 4, 4);
+        }
+    },
+
+    drawSaturnClouds(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'saturn_clouds', (x) => {
+            for (let px = 0; px < 400; px += 14) {
+                for (let py = 0; py < 600; py += 14) {
+                    if (((px / 14) + (py / 14)) % 6 === 0) x.fillRect(px, py, 6, 6);
+                }
+            }
+        });
+    },
+
+    drawSaturnSky(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'saturn_sky', (x) => {
+            for (let px = 0; px < 400; px += 8) {
+                x.fillRect(px, Math.floor((px * 0.15) % 600), 4, 4);
+            }
+        });
+    },
+
+    drawNeptuneDeep(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'neptune_deep', (x) => {
+            for (let px = 0; px < 400; px += 6) {
+                for (let py = 0; py < 600; py += 6) {
+                    if (((px / 6) + (py / 6)) % 7 === 0) x.fillRect(px, py, 4, 4);
+                }
+            }
+        });
+    },
+
+    drawNeptuneStorms(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'neptune_storms', (x) => {
+            for (let px = 0; px < 400; px += 18) {
+                for (let py = 0; py < 600; py += 18) {
+                    if (((px / 18) + (py / 18)) % 8 === 0) x.fillRect(px, py, 6, 6);
+                }
+            }
+        });
+    },
+
+    drawNeptuneIce(ctx, layer) {
+        this.drawWrappedYField(ctx, layer, 'neptune_ice', (x) => {
+            for (let px = 0; px < 400; px += 10) {
+                x.fillRect(px, Math.floor((px * 0.3) % 600), 4, 4);
+            }
+        });
+    },
+
+    reset() {
+        this.layers.forEach(layer => {
+            layer.y = 0;
+        });
+        this.horizontalOffset = 0;
+        this.starSpawnTimer = 0;
+        this.seedFlyingStars();
+    },
+});
+
+
+/* --- js/ui/parallax.js --- */
+"use strict";
+
+// ParallaxManager is defined in parallax/core.js and extended by the other files in parallax/,
+// which index.html loads before this file.
+// Global parallax manager instance
+var parallaxManager = new ParallaxManager();
 
 
 /* --- js/ui/level-info-manager/core.js?v=field-1 --- */

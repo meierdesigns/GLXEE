@@ -3153,7 +3153,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: 6px;
+    gap: 4px;
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
@@ -3800,9 +3800,10 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
     align-content: start;
     align-items: stretch;
     padding: 4px;
-    gap: 4px;
-    flex: 1 1 0;
-    max-height: clamp(180px, calc(40 * var(--sv-h)), 320px);
+    gap: 6px;
+    /* Pack cards — flex-grow left huge empty bands between portraits. */
+    flex: 0 0 auto;
+    max-height: none;
 }
 .enemy-vitals-side .enemy-card-v .enemy-portrait {
     --shield-pct: 100%;
@@ -3895,10 +3896,10 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
     position: absolute;
     z-index: 3;
     pointer-events: none;
-    font-size: 8px;
-    letter-spacing: 1px;
-    line-height: 1;
-    padding: 2px 4px;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    line-height: 1.1;
+    padding: 3px 5px;
     background: #05060a;
     border: 1px solid currentColor;
     text-shadow: none;
@@ -3989,14 +3990,14 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbars {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    gap: 3px;
+    gap: 4px;
     flex: 0 0 auto;
-    padding-top: 14px;
+    padding-top: 16px;
 }
 body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar {
     position: relative;
     display: flex;
-    width: 18px;
+    width: 30px;
     min-height: 0;
 }
 .enemy-vitals-side .enemy-card-v .enemy-vbar.is-hull { --vital-color: var(--vital-hull, #c4a574); }
@@ -8898,6 +8899,40 @@ body.pe-resizing * {
     min-width: 0;
     max-width: min(calc(220px * var(--zk)), calc(48 * var(--cw)));
     gap: clamp(6px, calc(1.2 * var(--sv-w)), 10px);
+}
+
+/* DevMode: enemy viewer loot chance reference */
+.cv-drop-dev {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--color-text, #fff) 12%, transparent);
+}
+.cv-drop-dev-title {
+    margin: 0 0 8px;
+    font-size: var(--font-text);
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+}
+.cv-drop-dev-note {
+    margin: 0 0 8px;
+    font-size: var(--font-text);
+    opacity: 0.7;
+}
+.cv-drop-dev-scroll {
+    max-height: min(42vh, 360px);
+    overflow: auto;
+}
+.content-viewer-detail .cv-drop-dev-table {
+    font-size: var(--font-text);
+}
+.content-viewer-detail .cv-drop-dev-table th,
+.content-viewer-detail .cv-drop-dev-table td {
+    padding: 4px 8px;
+    height: auto;
+    white-space: nowrap;
+}
+.content-viewer-detail .cv-drop-dev-table tr.is-selected td {
+    background: color-mix(in srgb, var(--color-accent, #ffd24a) 18%, transparent);
 }
 
 
@@ -15567,10 +15602,13 @@ html body .onboarding-overlay .onboarding-preview-card > * {
     position: relative;
     z-index: 2;
 }
-/* Faction homeworld: fill remaining glass between stepper and bar. */
-html body .onboarding-overlay > .onboarding-homeworld-site.profile-selection-content {
+/* Faction homeworld: fill remaining glass between stepper and bar.
+   Must beat .profile-selection-name-mode's ~420px width cap if that class is present. */
+html body .onboarding-overlay > .onboarding-homeworld-site.profile-selection-content,
+html body .profile-selection-overlay.onboarding-overlay > .onboarding-homeworld-site.profile-selection-content,
+html body .profile-selection-overlay > .onboarding-homeworld-site.is-faction-homeworld {
     display: grid !important;
-    grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr) !important;
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr) !important;
     grid-template-rows: minmax(0, 1fr) !important;
     align-items: stretch !important;
     gap: 14px !important;
@@ -15590,6 +15628,18 @@ html body .onboarding-overlay > .onboarding-homeworld-site.profile-selection-con
     border: 0 !important;
     box-shadow: none !important;
     background: transparent !important;
+    text-align: left !important;
+}
+html body .profile-selection-overlay.onboarding-overlay > .profile-stepper {
+    position: relative !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 0 !important;
+    flex: 0 0 auto;
+    height: 92px !important;
+    padding-top: 14px !important;
+    background: #05060a !important;
+    border-bottom: 2px solid color-mix(in srgb, var(--faction-color, var(--color-primary)) 70%, #fff) !important;
 }
 html body .onboarding-overlay > .onboarding-ship-panel {
     flex: 1 1 auto !important;
@@ -24952,8 +25002,8 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     margin-right: 0;
 }
 .start-scoreboard {
-    width: min(420px, 100%);
-    min-width: 360px;
+    width: min(460px, 100%);
+    min-width: 380px;
     flex-shrink: 0;
     margin-top: clamp(2px, calc(0.6 * var(--sv-h)), 8px);
     padding: 10px 16px;
@@ -24974,7 +25024,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 .start-scoreboard-head,
 .start-scoreboard-row {
     display: grid;
-    grid-template-columns: 22px 28px minmax(0, 1fr) max-content;
+    grid-template-columns: 16px 40px minmax(0, 1fr) max-content;
     align-items: center;
     gap: 10px;
 }
@@ -25009,7 +25059,12 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 .start-scoreboard-row:nth-child(2) .start-scoreboard-rank { color: #c8d0dc; }
 .start-scoreboard-row:nth-child(3) .start-scoreboard-rank { color: #d08a4a; }
 .start-scoreboard-emblem { display: flex; }
-.start-scoreboard-emblem img { width: 24px; height: 24px; image-rendering: pixelated; }
+.start-scoreboard-emblem img { width: 32px; height: 32px; image-rendering: pixelated; }
+.start-scoreboard-emblem svg { width: 32px; height: 32px; image-rendering: pixelated; }
+/* Higher specificity than the globally injected canvas.hero-portrait.vx-portrait
+   rule (width:100%;height:auto) so the pilot portrait fits the same slot as
+   the faction-emblem icon it stands in for. */
+.start-scoreboard-emblem canvas.hero-portrait.vx-portrait { width: 32px; height: 32px; }
 .start-scoreboard-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .start-scoreboard-score {
     text-align: right;
@@ -25043,7 +25098,7 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
 .start-scoreboard-head span:nth-child(3) { text-align: left; }
 .start-scoreboard-row.is-empty { color: var(--color-text-secondary); opacity: 0.45; }
 .start-scoreboard-row.is-empty .start-scoreboard-rank { color: inherit; }
-.start-scoreboard-row .start-scoreboard-emblem { min-height: 24px; }
+.start-scoreboard-row .start-scoreboard-emblem { min-height: 32px; }
 .start-scoreboard-list { max-height: none; }
 .start-scoreboard-row.is-pickable { cursor: pointer; }
 .start-scoreboard-row.is-pickable:not(.is-active):hover,
@@ -25268,19 +25323,24 @@ button.hs-area-lv:not([disabled]):hover { filter: brightness(1.3); }
     height: clamp(44px, min(calc(5.6 * var(--sv-w)), calc(9 * var(--sv-h))), 90px) !important;
 }
 .start-screen-retro .start-scoreboard {
-    flex: 0 1 clamp(350px, calc(44 * var(--sv-w)), 600px);
-    max-width: 600px;
+    flex: 0 1 clamp(380px, calc(48 * var(--sv-w)), 640px);
+    max-width: 640px;
     margin-top: 0;
     padding: clamp(12px, calc(1.8 * var(--sv-h)), 24px) clamp(14px, calc(1.8 * var(--sv-w)), 28px);
 }
 .start-screen-retro .start-scoreboard-title { font-size: clamp(15px, min(calc(1.6 * var(--sv-w)), calc(2.3 * var(--sv-h))), 23px); }
 .start-screen-retro .start-scoreboard-head { font-size: clamp(10px, calc(1.15 * var(--sv-w)), 15px); }
+.start-screen-retro .start-scoreboard-head,
+.start-screen-retro .start-scoreboard-row {
+    grid-template-columns: 14px clamp(32px, calc(3.6 * var(--sv-w)), 48px) minmax(0, 1fr) max-content;
+}
 .start-screen-retro .start-scoreboard-row {
     font-size: clamp(14px, min(calc(1.5 * var(--sv-w)), calc(2.3 * var(--sv-h))), 21px);
     padding: clamp(6px, calc(1.3 * var(--sv-h)), 14px) 7px;
 }
 .start-screen-retro .start-scoreboard-emblem img,
-.start-screen-retro .start-scoreboard-emblem svg { width: clamp(25px, calc(2.7 * var(--sv-w)), 36px); height: clamp(25px, calc(2.7 * var(--sv-w)), 36px); }
+.start-screen-retro .start-scoreboard-emblem svg,
+.start-screen-retro .start-scoreboard-emblem canvas.hero-portrait.vx-portrait { width: clamp(32px, calc(3.6 * var(--sv-w)), 48px); height: clamp(32px, calc(3.6 * var(--sv-w)), 48px); }
 @media (max-width: 900px), (max-height: 560px) {
     .start-screen-content.start-screen-retro { height: auto; }
 }
@@ -31105,22 +31165,21 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bz: max(34px, calc(44 * var(--bz-u)));
     /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before).
-       Side/bottom/top 56u: metal + tooth art ate the outer glass px when the
-       hole was flush with a thinner rim. Top --bz-extra was 50 (open 94u) and
-       left a hull gutter under the rim art before BG/glass — keep 12 → 56u. */
-    --bz-extra: 12;
+       Side/bottom 56u: metal + tooth art ate the outer glass when the hole was
+       flush with a thinner rim. Top --bz-extra 24 → open 68u: 12 was too tight
+       (wizard/tabs cropped under the rim); 50 left a hull gutter under the art. */
+    --bz-extra: 24;
     --fr-open-side: calc(56 * var(--bz-u));
     --fr-open-bottom: calc(56 * var(--bz-u));
-    --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 24)) * var(--bz-u));
     --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
     --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
     /* Single glass-host zoom token (station / menus / fight). */
     --vf-glass-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    /* Pull glass just inside the rim. Metal factions use slice-16 (fully
-       opaque band) with --_art-th ≈ --fr-ol + 2u — no deep tooth, so inset
-       is only a thin gutter. (Old +14u tooth + 16u inset bloated 9-slice
-       corners and made the frame read as disconnected blocks.) */
-    --vf-glass-inset: calc(4 * var(--bz-u));
+    /* Pull glass inside the rim past faction tooth art. 4u (74P) sat under the
+       metal and cropped menus again; 16u bloated 9-slice corners. 10u clears
+       the opaque band without the old disconnected-block look. */
+    --vf-glass-inset: calc(10 * var(--bz-u));
 }
 
 /* One bezel-opening glass host. Body keeps stage-scale; this host is the only
@@ -31811,9 +31870,9 @@ html body .profile-selection-overlay.vf-glass > .profile-selection-content.profi
 @keyframes vf-pilot-noise { 0% { background-position: 0 0, 0 0; } 33% { background-position: 5px 3px, -3px 2px; } 66% { background-position: -4px 6px, 2px -4px; } }
 @media (prefers-reduced-motion: reduce) { .vf-pilot-empty i { animation: none; } }
 
-/* Top strip = side rim (56u); --bz-extra 12 on top of base 44. */
+/* Top strip: --bz-extra must match :root (glass --fr-open-top) or hole/glass diverge. */
 .vf-bezel {
-    --bz-extra: 12;
+    --bz-extra: 24;
     --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
 }
 /* ::before top/sides synced via --fr-ot / --fr-ol in the glass rule above */
@@ -38297,6 +38356,17 @@ html body .start-screen-retro .start-menu-row .menu-item:is(.disabled, [aria-dis
   padding: 3px 8px; cursor: pointer;
 }
 .start-station-dev-row button:hover { background: color-mix(in srgb, var(--color-primary) 45%, #05060a); }
+.start-station-dev-px button.is-active {
+  background: color-mix(in srgb, var(--color-primary) 70%, #05060a);
+  border-color: #fff;
+  color: #fff;
+}
+.start-station-dev-meta {
+  font-size: calc(var(--font-text) - 1px);
+  opacity: 0.8;
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
 
 /* The menu content fills the screen (no terminal bezel, transparent) so the station shows through the middle */
 html body .start-screen-content.start-screen-retro.start-screen-main {
@@ -38791,6 +38861,25 @@ html body .profile-selection-name-mode.is-pilot-step .pp-motion {
 }
 html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl {
     padding: 6px 8px;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 6px 10px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-name {
+    font-size: var(--font-text, 14px) !important;
+    gap: 8px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-name > span {
+    overflow: visible;
+    text-overflow: clip;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-val {
+    font-size: var(--font-text, 14px) !important;
+    min-width: 4.5em;
+    padding-right: 4px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-ico {
+    width: 22px;
+    height: 22px;
 }
 html body .onboarding-overlay .pp-motion {
     flex: 0 0 auto;
@@ -38923,6 +39012,44 @@ html:not([data-vf-pixel-size="on"]) .galaxy-map-svg .gm-px-only { display: none;
 
 /* Pixel screen: crests keep their size (no hover shrink/fade) so they stay readable. */
 html[data-vf-pixel-size="on"] .gm-node .gm-node-factions { transform: none; opacity: 1; transition: none; }
+
+/* Start menu: icons + Silkscreen sizes snap to the shared Global Pixel Size lattice
+   (16·k·gp for sprites; font sizes rounded to whole gp cells) so title / buttons /
+   scoreboard / icons don't mix different texel sizes. */
+html[data-vf-pixel-size="on"] .start-screen-retro .start-screen-title {
+    font-size: round(nearest, clamp(52px, calc(7.8 * var(--sv-w)), 86px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-screen-subtitle {
+    font-size: round(nearest, clamp(16px, calc(1.9 * var(--sv-w)), 23px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-menu-row .menu-item-label {
+    font-size: round(nearest, clamp(18px, min(calc(2.5 * var(--sv-w)), calc(3.6 * var(--sv-h))), 34px), var(--vf-px)) !important;
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-title {
+    font-size: round(nearest, clamp(15px, min(calc(1.6 * var(--sv-w)), calc(2.3 * var(--sv-h))), 23px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-head {
+    font-size: round(nearest, clamp(10px, calc(1.15 * var(--sv-w)), 15px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-row {
+    font-size: round(nearest, clamp(14px, min(calc(1.5 * var(--sv-w)), calc(2.3 * var(--sv-h))), 21px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-menu-row .menu-pixel-icon,
+html[data-vf-pixel-size="on"] .start-screen-retro .start-menu-row .menu-item-icon {
+    --vf-menu-icon: calc(16 * var(--vf-px));
+    width: round(nearest, clamp(44px, min(calc(5.6 * var(--sv-w)), calc(9 * var(--sv-h))), 90px), var(--vf-menu-icon)) !important;
+    height: round(nearest, clamp(44px, min(calc(5.6 * var(--sv-w)), calc(9 * var(--sv-h))), 90px), var(--vf-menu-icon)) !important;
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-emblem img,
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-emblem svg {
+    width: calc(16 * var(--vf-px)) !important;
+    height: calc(16 * var(--vf-px)) !important;
+}
+html[data-vf-pixel-size="on"] .start-station-canvas {
+    image-rendering: -moz-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
 
 /* Station map: galaxy ruler card beside the ship bar, enemy avatar + ship in the bottom bar. */
 .galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-ruler.is-header { display: flex; align-items: stretch; flex: 0 0 auto; }
@@ -39101,6 +39228,52 @@ html body .hs-res-buy-modal.hs-slot-picker .hs-pick-body > .hs-pick-inv {
 /* Start step: the ship / hull container fills its row exactly; a top margin pushed its bottom border under the clipped content edge. */
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { margin-top: 0 !important; margin-bottom: 0 !important; }
 
+/* SETUP centre: homeworld stage (planet + orbit ships) fills the black void; kit ship sits on top. */
+html body .profile-start-main .profile-setup-stage {
+    grid-column: 1;
+    grid-row: 3;
+    position: relative;
+    align-self: stretch;
+    justify-self: stretch;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #02040a;
+}
+html body .profile-start-main .profile-setup-stage .hero-planet-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+html body .profile-start-main .profile-setup-stage .profile-faction-ship-wrap {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    max-width: none;
+}
+html body .profile-selection-name-mode.is-name-step .profile-start-main .profile-setup-stage .profile-faction-ship.profile-faction-ship {
+    grid-column: auto;
+    grid-row: auto;
+    width: auto !important;
+    height: auto !important;
+    max-width: min(72%, 420px) !important;
+    max-height: min(72%, 320px) !important;
+    margin: 0 !important;
+    aspect-ratio: 320 / 224 !important;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+}
+
 /* Galaxy map: locked planets stay opaque (only darker); reachable ones wear their atmosphere
    as the real pixel-ring baked into the planet's own SVG sprite (js/graphics/planet-svgs/
    apply-rings.js applyAtmosphere) — no CSS circle/gradient overlay, so it is exactly as
@@ -39108,6 +39281,143 @@ html body .profile-selection-name-mode .profile-start-main .profile-faction-prev
 .gm-planet-lit.is-locked { opacity: 1; }
 html body .gm-node .gm-node-icon-wrap.has-atmo {
     filter: none !important;
+}
+
+/* ── SYSTEM / tools tab: remote-control launch pad ───────────────────────── */
+.vf-bezel-fx .vf-fx-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+.vf-bezel-fx .vf-fx-tools-sec {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px 8px 10px;
+    background: color-mix(in srgb, var(--rc-dark) 55%, transparent);
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -1px -1px 0 var(--rc-lit);
+}
+.vf-bezel-fx .vf-fx-tools-sec > .vf-fx-title {
+    margin: 0;
+    padding: 0;
+    color: color-mix(in srgb, var(--rc-acc) 70%, #cfd6e6);
+    letter-spacing: 0.14em;
+    font-size: var(--font-small);
+}
+.vf-bezel-fx .vf-fx-tools-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.vf-bezel-fx .vf-fx-tools-readout {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    padding: 5px 7px;
+    background: #05070c;
+    box-shadow: inset 2px 2px 0 #000, inset -1px -1px 0 color-mix(in srgb, var(--rc-acc) 22%, #1a2030);
+}
+.vf-bezel-fx .vf-fx-tools-readout > span {
+    color: color-mix(in srgb, var(--rc-acc) 55%, #8a93a8);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+.vf-bezel-fx .vf-fx-tools-readout > output {
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    flex: none;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    color: #e8eef8;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+}
+.vf-bezel-fx .vf-fx-tools-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.vf-bezel-fx .vf-fx-launch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px 7px;
+    border: 0;
+    border-radius: 0;
+    background: var(--rc-hull);
+    box-shadow:
+        inset 2px 2px 0 var(--rc-lit),
+        inset -2px -2px 0 var(--rc-dark),
+        0 2px 0 var(--rc-dark);
+    color: #e8eef8;
+    font: inherit;
+    font-size: var(--font-small);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+}
+.vf-bezel-fx .vf-fx-launch::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 10px;
+    height: 2px;
+    transform: translateX(-50%);
+    background: #000;
+}
+.vf-bezel-fx .vf-fx-launch > em {
+    font-style: normal;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vf-bezel-fx .vf-fx-launch > i {
+    flex: 0 0 auto;
+    font-style: normal;
+    color: var(--rc-acc);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--rc-acc) 60%, transparent);
+}
+.vf-bezel-fx .vf-fx-launch:hover,
+.vf-bezel-fx .vf-fx-launch:focus-visible {
+    color: #fff;
+    background: color-mix(in srgb, var(--rc-acc) 12%, var(--rc-hull));
+    outline: none;
+}
+.vf-bezel-fx .vf-fx-launch:hover::before,
+.vf-bezel-fx .vf-fx-launch:focus-visible::before {
+    background: var(--rc-acc);
+    box-shadow: 0 0 5px var(--rc-acc);
+}
+.vf-bezel-fx .vf-fx-launch:active {
+    transform: translateY(1px);
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit);
+}
+.vf-bezel-fx .vf-fx-tools-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 2px 0;
+}
+.vf-bezel-fx .vf-fx-tools-sliders .vf-fx-row {
+    min-width: 0;
 }
 
 
@@ -40087,9 +40397,11 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     max-width: none;
     max-height: none;
     flex: 1 1 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.9fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 8px 14px;
+    align-items: stretch;
     padding: 10px 12px 12px;
     box-sizing: border-box;
     background: #0a1018;
@@ -40139,11 +40451,25 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
         radial-gradient(50% 60% at 92% 88%, color-mix(in srgb, var(--iss-hull) 30%, transparent) 0 40%, transparent 70%),
         #0c0516;
 }
+#vf-in-stage-shop .vf-iss-primary, .hs-tps .vf-iss-primary{
+    grid-column: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
 #vf-in-stage-shop .vf-iss-head, .hs-tps .vf-iss-head{
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+}
+#vf-in-stage-shop .vf-iss-head-actions, .hs-tps .vf-iss-head-actions{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
 }
 #vf-in-stage-shop .vf-iss-trader, .hs-tps .vf-iss-trader{
     display: flex;
@@ -40181,9 +40507,123 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     margin-top: 2px;
 }
 #vf-in-stage-shop .vf-iss-trader-cash, .hs-tps .vf-iss-trader-cash{
-    font-size: 15px;
-    margin-top: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 3px 10px 3px 4px;
+    max-width: 100%;
     color: var(--iss-accent, var(--faction-accent, #f2c14e));
+    background: color-mix(in srgb, var(--iss-edge, #05060a) 72%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 40%, #2a3344);
+    box-shadow: 2px 2px 0 #05060a;
+}
+#vf-in-stage-shop .vf-iss-cash-chip-ico, .hs-tps .vf-iss-cash-chip-ico{
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 32px;
+    height: 32px;
+    background: color-mix(in srgb, var(--iss-accent, #f2c14e) 12%, #05060a);
+    border: 1px solid color-mix(in srgb, var(--iss-accent, #f2c14e) 35%, #2a3344);
+}
+#vf-in-stage-shop .vf-iss-cash-chip-ico :is(img, canvas), .hs-tps .vf-iss-cash-chip-ico :is(img, canvas){
+    width: 28px !important;
+    height: 28px !important;
+    image-rendering: pixelated;
+    display: block;
+}
+#vf-in-stage-shop .vf-iss-cash-stack, .hs-tps .vf-iss-cash-stack{
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    line-height: 1.15;
+}
+#vf-in-stage-shop .vf-iss-cash-row, .hs-tps .vf-iss-cash-row{
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px;
+    row-gap: 2px;
+}
+#vf-in-stage-shop .vf-iss-cash-amt, .hs-tps .vf-iss-cash-amt{
+    font-size: 20px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    font-variant-numeric: tabular-nums;
+    color: #fff;
+}
+#vf-in-stage-shop .vf-iss-cash-amt.is-next, .hs-tps .vf-iss-cash-amt.is-next{
+    color: var(--iss-accent, var(--faction-accent, #f2c14e));
+}
+#vf-in-stage-shop .vf-iss-cash-arrow, .hs-tps .vf-iss-cash-arrow{
+    font-size: 14px;
+    opacity: 0.65;
+    color: #b8c8e0;
+}
+#vf-in-stage-shop .vf-iss-cash-label, .hs-tps .vf-iss-cash-label{
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    opacity: 0.75;
+    color: #b8c8e0;
+}
+#vf-in-stage-shop .vf-iss-trader-cash.is-hover-preview, .hs-tps .vf-iss-trader-cash.is-hover-preview{
+    border-color: color-mix(in srgb, #4ec99a 55%, var(--iss-accent, #3a4a64));
+}
+#vf-in-stage-shop .vf-iss-cash-delta, .hs-tps .vf-iss-cash-delta{
+    margin-left: 2px;
+    padding: 1px 6px;
+    font-size: 13px;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+    vertical-align: baseline;
+    background: color-mix(in srgb, #05060a 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 35%, #2a3344);
+}
+#vf-in-stage-shop .vf-iss-cash-delta.is-gain, .hs-tps .vf-iss-cash-delta.is-gain{
+    color: #9ae8c8;
+    border-color: color-mix(in srgb, #4ec99a 55%, #2a3344);
+}
+#vf-in-stage-shop .vf-iss-cash-delta.is-spend, .hs-tps .vf-iss-cash-delta.is-spend{
+    color: #b8d8ff;
+    border-color: color-mix(in srgb, #6ec9e8 45%, #2a3344);
+}
+#vf-in-stage-shop .vf-iss-credit, .hs-tps .vf-iss-credit{
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    line-height: 1;
+    vertical-align: middle;
+}
+#vf-in-stage-shop .vf-iss-credit-sign, .hs-tps .vf-iss-credit-sign{
+    font-weight: bold;
+    opacity: 0.92;
+}
+#vf-in-stage-shop .vf-iss-credit-num, .hs-tps .vf-iss-credit-num{
+    font-variant-numeric: tabular-nums;
+}
+#vf-in-stage-shop .vf-iss-credit-icon, .hs-tps .vf-iss-credit-icon{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}
+#vf-in-stage-shop .vf-iss-credit-icon :is(img, canvas), .hs-tps .vf-iss-credit-icon :is(img, canvas){
+    display: block;
+    image-rendering: pixelated;
+}
+#vf-in-stage-shop .vf-iss-credit.is-compact, .hs-tps .vf-iss-credit.is-compact{
+    gap: 1px;
+    font-size: 10px;
+}
+#vf-in-stage-shop .vf-iss-stock-cost .vf-iss-credit-icon :is(img, canvas), .hs-tps .vf-iss-stock-cost .vf-iss-credit-icon :is(img, canvas){
+    width: 12px !important;
+    height: 12px !important;
+}
+#vf-in-stage-shop .vf-iss-sell-mark .vf-iss-credit-icon :is(img, canvas), .hs-tps .vf-iss-sell-mark .vf-iss-credit-icon :is(img, canvas){
+    width: 11px !important;
+    height: 11px !important;
 }
 #vf-in-stage-shop .vf-iss-close, .hs-tps .vf-iss-close{
     flex: none;
@@ -40202,11 +40642,44 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     outline: none;
     box-shadow: 0 0 0 2px var(--iss-accent, #f2c14e);
 }
+#vf-in-stage-shop .vf-iss-wallet-bar, .hs-tps .vf-iss-wallet-bar{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+#vf-in-stage-shop .vf-iss-info-btn, .hs-tps .vf-iss-info-btn{
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    font: inherit;
+    font-size: 16px;
+    font-weight: bold;
+    line-height: 1;
+    letter-spacing: 0;
+    text-align: center;
+    cursor: pointer;
+    color: var(--iss-accent, #b8d4ff);
+    background: color-mix(in srgb, var(--iss-edge, #05060a) 75%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 50%, #3a4a64);
+    border-radius: 50%;
+    box-shadow: 2px 2px 0 #05060a;
+}
+#vf-in-stage-shop .vf-iss-info-btn:is(:hover, :focus-visible, .nav-focused, .is-focused), .hs-tps .vf-iss-info-btn:is(:hover, :focus-visible, .nav-focused, .is-focused){
+    color: #fff;
+    border-color: var(--iss-accent, #f2c14e);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--iss-accent, #f2c14e) 45%, #05060a);
+}
 #vf-in-stage-shop .vf-iss-wallet, .hs-tps .vf-iss-wallet{
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
     align-items: stretch;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 #vf-in-stage-shop .vf-iss-wallet-item, .hs-tps .vf-iss-wallet-item{
     display: inline-flex;
@@ -40243,12 +40716,13 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     opacity: 0.8;
 }
 #vf-in-stage-shop .vf-iss-body, .hs-tps .vf-iss-body{
-    display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(240px, 0.9fr);
-    gap: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
     align-items: stretch;
     flex: 1 1 auto;
     min-height: 0;
+    min-width: 0;
     width: 100%;
 }
 #vf-in-stage-shop .vf-iss-main, .hs-tps .vf-iss-main{
@@ -40260,6 +40734,16 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     min-height: 0;
     height: 100%;
     overflow: hidden;
+    padding: 6px;
+    background:
+        linear-gradient(
+            165deg,
+            color-mix(in srgb, var(--iss-accent, #3a5a88) 18%, #0c1424) 0%,
+            #05060a 42%,
+            color-mix(in srgb, var(--iss-accent, #3a5a88) 12%, #070b14) 100%
+        );
+    border: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 38%, #1a2230);
+    box-shadow: inset 0 0 24px color-mix(in srgb, var(--iss-accent, #3a5a88) 8%, transparent);
 }
 #vf-in-stage-shop .vf-iss-bags, .hs-tps .vf-iss-bags{
     display: flex;
@@ -40308,9 +40792,12 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     opacity: 0.95;
 }
 #vf-in-stage-shop .vf-iss-detail, .hs-tps .vf-iss-detail{
+    grid-column: 2;
+    grid-row: 1;
     min-width: 0;
     max-width: none;
     width: 100%;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -40327,6 +40814,74 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     gap: 12px;
     min-height: 0;
     flex: 1 1 auto;
+}
+#vf-in-stage-shop .vf-iss-detail-rig-wrap{
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#vf-in-stage-shop .vf-iss-detail-rig{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#vf-in-stage-shop .vf-iss-detail-rig-head{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+#vf-in-stage-shop .vf-iss-detail-ship-kicker{
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    opacity: 0.55;
+}
+#vf-in-stage-shop .vf-iss-detail-ship-name{
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    color: #fff;
+}
+#vf-in-stage-shop .vf-iss-detail-ship-canvas{
+    display: block;
+    width: 100%;
+    max-width: 220px;
+    height: auto;
+    margin: 0 auto;
+    image-rendering: pixelated;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 45%, #3a4a64);
+}
+#vf-in-stage-shop .vf-iss-detail-slots .hs-slotview{
+    max-width: 100%;
+}
+#vf-in-stage-shop .vf-iss-detail-slots .hs-slotview-row{
+    flex-wrap: wrap;
+}
+#vf-in-stage-shop .vf-iss-detail-rig-hint{
+    margin: 0;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    opacity: 0.5;
+    line-height: 1.35;
+}
+#vf-in-stage-shop .vf-iss-detail-rig-empty{
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    opacity: 0.55;
+}
+#vf-in-stage-shop .vf-iss-detail-item{
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: 48%;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 35%, transparent);
+    padding-top: 10px;
 }
 #vf-in-stage-shop .vf-iss-detail-empty, .hs-tps .vf-iss-detail-empty{
     font-size: 16px;
@@ -40384,10 +40939,31 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     min-width: 0;
 }
 #vf-in-stage-shop .vf-iss-detail-name, .hs-tps .vf-iss-detail-name{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
     font-size: 18px;
     letter-spacing: 0.08em;
     line-height: 1.2;
     color: #fff;
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-detail-name-text, .hs-tps .vf-iss-detail-name-text{
+    min-width: 0;
+}
+#vf-in-stage-shop .vf-iss-detail-title-ico, .hs-tps .vf-iss-detail-title-ico{
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+}
+#vf-in-stage-shop .vf-iss-detail-title-ico :is(img, canvas),
+.hs-tps .vf-iss-detail-title-ico :is(img, canvas){
+    width: 20px !important;
+    height: 20px !important;
+    image-rendering: pixelated;
+    display: block;
 }
 #vf-in-stage-shop .vf-iss-detail-badge, .hs-tps .vf-iss-detail-badge{
     display: inline-block;
@@ -40413,6 +40989,51 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     gap: 6px;
     border-top: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 35%, transparent);
     padding-top: 10px;
+}
+#vf-in-stage-shop .vf-iss-detail-actions, .hs-tps .vf-iss-detail-actions{
+    display: flex;
+    justify-content: stretch;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 28%, transparent);
+}
+#vf-in-stage-shop .vf-iss-detail-buy, .hs-tps .vf-iss-detail-buy{
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 12px 16px;
+    font: inherit;
+    font-size: 13px;
+    letter-spacing: 0.12em;
+    line-height: 1.3;
+    cursor: pointer;
+    color: #f0fff8;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, #1a3d32 55%, #05060a) 0%, color-mix(in srgb, #0d221c 80%, #05060a) 100%);
+    border: 2px solid #4ec99a;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #4ec99a 35%, #05060a), 0 0 12px color-mix(in srgb, #4ec99a 18%, transparent);
+    transition: filter 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+#vf-in-stage-shop .vf-iss-detail-buy-label, .hs-tps .vf-iss-detail-buy-label{
+    font-weight: bold;
+}
+#vf-in-stage-shop .vf-iss-detail-buy-cost, .hs-tps .vf-iss-detail-buy-cost{
+    font-size: 14px;
+    color: #e8fff4;
+}
+#vf-in-stage-shop .vf-iss-detail-buy:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled), .hs-tps .vf-iss-detail-buy:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled){
+    filter: brightness(1.08);
+    border-color: #6fe0b0;
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #4ec99a 45%, #05060a), 0 0 16px color-mix(in srgb, #4ec99a 26%, transparent);
+}
+#vf-in-stage-shop .vf-iss-detail-buy:disabled, .hs-tps .vf-iss-detail-buy:disabled{
+    opacity: 0.38;
+    cursor: not-allowed;
+    box-shadow: none;
 }
 #vf-in-stage-shop .vf-iss-detail-line, .hs-tps .vf-iss-detail-line{
     font-size: 11px;
@@ -40446,6 +41067,101 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     color: var(--iss-accent, #f2c14e);
     opacity: 1;
 }
+#vf-in-stage-shop .vf-iss-detail-line.is-cluster, .hs-tps .vf-iss-detail-line.is-cluster{
+    opacity: 1;
+    padding: 0;
+}
+#vf-in-stage-shop .vf-iss-detail-line.is-desc, .hs-tps .vf-iss-detail-line.is-desc{
+    font-size: 12px;
+    line-height: 1.45;
+    letter-spacing: 0.04em;
+    opacity: 0.72;
+    color: color-mix(in srgb, #e8f0ff 82%, #9eb8d8);
+}
+#vf-in-stage-shop .vf-iss-detail-line.is-weapon-roll, .hs-tps .vf-iss-detail-line.is-weapon-roll{
+    opacity: 1;
+}
+#vf-in-stage-shop .vf-iss-detail-line.is-meta, .hs-tps .vf-iss-detail-line.is-meta{
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    opacity: 0.55;
+}
+#vf-in-stage-shop .vf-iss-detail-cluster, .hs-tps .vf-iss-detail-cluster{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--iss-accent, #3a4a64) 12%, #05060a);
+    border: 1px solid color-mix(in srgb, var(--iss-accent, #7ec8ff) 28%, transparent);
+}
+#vf-in-stage-shop .vf-iss-cluster-head, .hs-tps .vf-iss-cluster-head{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+#vf-in-stage-shop .vf-iss-cluster-kicker, .hs-tps .vf-iss-cluster-kicker{
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    opacity: 0.55;
+}
+#vf-in-stage-shop .vf-iss-class-pill, .hs-tps .vf-iss-class-pill{
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    color: #d8ecff;
+    padding: 2px 8px;
+    border: 1px solid color-mix(in srgb, #7ec8ff 45%, transparent);
+    background: color-mix(in srgb, #7ec8ff 12%, transparent);
+}
+#vf-in-stage-shop .vf-iss-cluster-sub, .hs-tps .vf-iss-cluster-sub{
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    opacity: 0.45;
+    margin-bottom: 4px;
+}
+#vf-in-stage-shop .vf-iss-detail-line .vf-iss-range-grid,
+.hs-tps .vf-iss-detail-line .vf-iss-range-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+    gap: 6px 10px;
+    width: 100%;
+}
+#vf-in-stage-shop .vf-iss-range-chip, .hs-tps .vf-iss-range-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    line-height: 1.2;
+    padding: 3px 0;
+}
+#vf-in-stage-shop .vf-iss-range-lbl, .hs-tps .vf-iss-range-lbl{
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    opacity: 0.65;
+}
+#vf-in-stage-shop .vf-iss-range-chip.is-mixed .hs-stat-num, .hs-tps .vf-iss-range-chip.is-mixed .hs-stat-num{
+    color: #ffe08a;
+}
+#vf-in-stage-shop .vf-iss-detail-line .hs-hangar-weapon-stats,
+.hs-tps .vf-iss-detail-line .hs-hangar-weapon-stats{
+    gap: 12px 14px;
+}
+#vf-in-stage-shop .vf-iss-detail-line .hs-hangar-weapon-stat,
+.hs-tps .vf-iss-detail-line .hs-hangar-weapon-stat{
+    font-size: 13px;
+    gap: 5px;
+}
+#vf-in-stage-shop .vf-iss-detail-line .hs-hangar-weapon-stat .hs-stat-num,
+.hs-tps .vf-iss-detail-line .hs-hangar-weapon-stat .hs-stat-num{
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+#vf-in-stage-shop .vf-iss-detail-stats, .hs-tps .vf-iss-detail-stats{
+    gap: 8px;
+}
 #vf-in-stage-shop .vf-iss-queued-title, .hs-tps .vf-iss-queued-title{
     margin-top: 4px;
     font-size: 12px;
@@ -40453,7 +41169,61 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     width: 100%;
 }
 #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell, .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell{
+    position: relative;
     overflow: hidden;
+    background: transparent;
+    transition: background-color 0.14s ease;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused):not(.is-locked):not(:disabled),
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused):not(.is-locked):not(:disabled){
+    box-shadow: none;
+    background-color: color-mix(in srgb, var(--pk-c, #6ec9e8) 28%, transparent);
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart:is(:hover, :focus-visible, .nav-focused, .is-focused),
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart:is(:hover, :focus-visible, .nav-focused, .is-focused){
+    background-color: color-mix(in srgb, var(--pk-c, #6ec9e8) 18%, color-mix(in srgb, #4ec99a 22%, transparent));
+}
+#vf-in-stage-shop .vf-iss-ship-inv .hs-storage-cell:not(.hs-storage-cell-empty):is(:hover, :focus-visible, .nav-focused, .is-focused),
+#vf-in-stage-shop .vf-iss-station-inv .hs-storage-cell:not(.hs-storage-cell-empty):is(:hover, :focus-visible, .nav-focused, .is-focused),
+#vf-in-stage-shop .vf-iss-station-grid .hs-storage-cell:not(.hs-storage-cell-empty):is(:hover, :focus-visible, .nav-focused, .is-focused),
+.hs-tps .vf-iss-ship-inv .hs-storage-cell:not(.hs-storage-cell-empty):is(:hover, :focus-visible, .nav-focused, .is-focused),
+.hs-tps .vf-iss-station-inv .hs-storage-cell:not(.hs-storage-cell-empty):is(:hover, :focus-visible, .nav-focused, .is-focused),
+.hs-tps .vf-iss-station-grid .hs-storage-cell:not(.hs-storage-cell-empty):is(:hover, :focus-visible, .nav-focused, .is-focused){
+    background-color: color-mix(in srgb, var(--pk-c, #6ec9e8) 26%, transparent);
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pk-c, #6ec9e8) 55%, transparent);
+}
+@keyframes vf-iss-stock-hover-frame {
+    0%, 100% {
+        border-color: color-mix(in srgb, var(--pk-c, #6ec9e8) 70%, #fff);
+        box-shadow:
+            inset 0 0 0 1px color-mix(in srgb, var(--pk-c, #6ec9e8) 30%, transparent),
+            0 0 6px color-mix(in srgb, var(--pk-c, #6ec9e8) 22%, transparent);
+        opacity: 0.92;
+    }
+    50% {
+        border-color: color-mix(in srgb, var(--pk-c, #6ec9e8) 100%, #e8f4ff);
+        box-shadow:
+            inset 0 0 0 2px color-mix(in srgb, var(--pk-c, #6ec9e8) 50%, #fff),
+            0 0 12px color-mix(in srgb, var(--pk-c, #6ec9e8) 40%, transparent);
+        opacity: 1;
+    }
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell::after,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell::after{
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    box-sizing: border-box;
+    border: 2px solid transparent;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused):not(.is-in-cart)::after,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused):not(.is-in-cart)::after{
+    opacity: 1;
+    animation: vf-iss-stock-hover-frame 1s ease-in-out infinite;
 }
 #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .hs-item-body, .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .hs-item-body{
     position: absolute;
@@ -40464,21 +41234,123 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     pointer-events: none;
 }
 #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .hs-storage-cell-icon, .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .hs-storage-cell-icon{
-    position: relative;
-    z-index: 1;
-    width: 55%;
-    height: 55%;
+    display: none;
 }
 #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-locked, #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:disabled, .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-locked, .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:disabled{
     opacity: 0.35;
     cursor: not-allowed;
 }
-#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(.nav-focused, .is-focused, :focus-visible), .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(.nav-focused, .is-focused, :focus-visible){
-    box-shadow: inset 0 0 0 2px var(--pk-c, var(--faction-accent, var(--color-primary)));
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, .nav-focused, .is-focused, :focus-visible):not(.is-in-cart),
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, .nav-focused, .is-focused, :focus-visible):not(.is-in-cart){
+    z-index: 2;
     outline: none;
-    z-index: 1;
 }
-#vf-in-stage-shop .vf-iss-stock-cost, .hs-tps .vf-iss-stock-cost{
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, .nav-focused, .is-focused, :focus-visible).is-in-cart,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, .nav-focused, .is-focused, :focus-visible).is-in-cart{
+    z-index: 2;
+    outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused):not(.is-in-cart)::after,
+    .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused):not(.is-in-cart)::after {
+        animation: none;
+        opacity: 1;
+        border-color: var(--pk-c, #6ec9e8);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pk-c, #6ec9e8) 45%, #fff);
+    }
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-hover-badges,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-hover-badges{
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(3px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico{
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    padding: 1px;
+    background: color-mix(in srgb, #05060a 75%, var(--pk-c, #4ec99a) 25%);
+    border: 1px solid color-mix(in srgb, var(--pk-c, #4ec99a) 50%, #2a3340);
+    box-shadow: 1px 1px 0 #05060a;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico :is(img, canvas),
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico :is(img, canvas){
+    width: 14px !important;
+    height: 14px !important;
+    image-rendering: pixelated;
+    display: block;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-cost,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-cost{
+    position: static;
+    flex: 0 1 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    line-height: 1.2;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+    color: #e8fff4;
+    padding: 2px 5px;
+    background: color-mix(in srgb, #05060a 82%, #4ec99a 18%);
+    border: 1px solid color-mix(in srgb, #4ec99a 55%, #2a3340);
+    box-shadow: 1px 1px 0 #05060a;
+    opacity: 1;
+    transform: none;
+}
+#vf-in-stage-shop .vf-iss-ship-inv .hs-storage-cell .hs-storage-cell-icon,
+#vf-in-stage-shop .vf-iss-station-inv .hs-storage-cell .hs-storage-cell-icon,
+#vf-in-stage-shop .vf-iss-station-grid .hs-storage-cell .hs-storage-cell-icon,
+#vf-in-stage-shop .vf-iss-inv-grid .hs-storage-cell .hs-storage-cell-icon,
+.hs-tps .vf-iss-ship-inv .hs-storage-cell .hs-storage-cell-icon,
+.hs-tps .vf-iss-station-inv .hs-storage-cell .hs-storage-cell-icon,
+.hs-tps .vf-iss-station-grid .hs-storage-cell .hs-storage-cell-icon,
+.hs-tps .vf-iss-inv-grid .hs-storage-cell .hs-storage-cell-icon{
+    display: none;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused) .vf-iss-stock-hover-badges,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell:is(:hover, :focus-visible, .nav-focused, .is-focused) .vf-iss-stock-hover-badges{
+    opacity: 1;
+    transform: translateY(0);
+}
+.hs-storage-drag-ghost.vf-iss-stock-drag-ghost .vf-iss-stock-hover-badges,
+.hs-storage-drag-ghost.vf-iss-stock-drag-ghost .vf-iss-stock-hover-badges.is-drag-visible{
+    opacity: 1;
+    transform: translateY(0);
+}
+#vf-in-stage-shop .vf-iss-ship-inv.is-shop-buy-over,
+#vf-in-stage-shop .vf-iss-station-inv.is-shop-buy-over,
+#vf-in-stage-shop section.vf-iss-station.is-shop-buy-over,
+#vf-in-stage-shop .vf-iss-complete.is-shop-buy-over:not(:disabled){
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, #4ec99a 55%, transparent), 0 0 12px color-mix(in srgb, #4ec99a 25%, transparent);
+}
+#vf-in-stage-shop .vf-iss-ship-inv.is-shop-buy-denied,
+#vf-in-stage-shop .vf-iss-station-inv.is-shop-buy-denied,
+#vf-in-stage-shop section.vf-iss-station.is-shop-buy-denied,
+#vf-in-stage-shop .vf-iss-complete.is-shop-buy-denied:not(:disabled){
+    box-shadow: inset 0 0 0 2px color-mix(in srgb, #e87878 55%, transparent), 0 0 10px color-mix(in srgb, #c85858 22%, transparent);
+}
+#vf-in-stage-shop .vf-iss-stock-cell.is-dragging{
+    opacity: 0.45;
+}
+.hs-tps .vf-iss-stock-cost{
     position: absolute;
     left: 2px;
     bottom: 2px;
@@ -40503,6 +41375,26 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
 #vf-in-stage-shop .vf-iss-stock-tag.is-temp, .hs-tps .vf-iss-stock-tag.is-temp{
     color: #ffe08a;
 }
+@keyframes vf-iss-cart-frame {
+    0%, 100% {
+        border-color: color-mix(in srgb, var(--cart-c, #4ec99a) 65%, #fff);
+        box-shadow:
+            inset 0 0 0 1px color-mix(in srgb, var(--cart-c, #4ec99a) 35%, transparent),
+            0 0 6px color-mix(in srgb, var(--cart-c, #4ec99a) 30%, transparent);
+        opacity: 0.88;
+    }
+    50% {
+        border-color: color-mix(in srgb, var(--cart-c, #4ec99a) 100%, #e8fff4);
+        box-shadow:
+            inset 0 0 0 2px color-mix(in srgb, var(--cart-c, #4ec99a) 55%, #fff),
+            0 0 14px color-mix(in srgb, var(--cart-c, #4ec99a) 50%, transparent);
+        opacity: 1;
+    }
+}
+@keyframes vf-iss-cart-mark-pulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
 #vf-in-stage-shop .vf-iss-cart-mark, .hs-tps .vf-iss-cart-mark{
     position: absolute;
     left: 2px;
@@ -40515,7 +41407,57 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     text-shadow: 1px 1px 0 #05060a;
     pointer-events: none;
 }
-#vf-in-stage-shop .hs-storage-cell.is-in-cart, .hs-tps .hs-storage-cell.is-in-cart{
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .vf-iss-cart-mark,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .vf-iss-cart-mark {
+    animation: vf-iss-cart-mark-pulse 1s ease-in-out infinite;
+    transform-origin: left top;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart {
+    --cart-c: #4ec99a;
+    position: relative;
+    z-index: 2;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart::before,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 6;
+    pointer-events: none;
+    box-sizing: border-box;
+    border: 2px solid var(--cart-c, #4ec99a);
+    animation: vf-iss-cart-frame 1s ease-in-out infinite;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .hs-item-body,
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .hs-storage-cell-icon,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .hs-item-body,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .hs-storage-cell-icon {
+    outline: none;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart:is(.nav-focused, .is-focused, :focus-visible)::before,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart:is(.nav-focused, .is-focused, :focus-visible)::before {
+    animation: vf-iss-cart-frame 1s ease-in-out infinite;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart:is(.nav-focused, .is-focused, :focus-visible),
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart:is(.nav-focused, .is-focused, :focus-visible) {
+    box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+    #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .vf-iss-cart-mark,
+    .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart .vf-iss-cart-mark,
+    #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart::before,
+    .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart::before {
+        animation: none;
+    }
+    #vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart::before,
+    .hs-tps .vf-iss-stock-grid .vf-iss-stock-cell.is-in-cart::before {
+        opacity: 1;
+        border-color: var(--cart-c, #4ec99a);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cart-c, #4ec99a) 50%, #fff);
+    }
+}
+#vf-in-stage-shop .hs-storage-cell.is-in-cart:not(.vf-iss-stock-cell), .hs-tps .hs-storage-cell.is-in-cart:not(.vf-iss-stock-cell){
     box-shadow: inset 0 0 0 2px #4fd8a8;
 }
 #vf-in-stage-shop .vf-iss-sub-title, .hs-tps .vf-iss-sub-title{
@@ -40554,28 +41496,57 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     box-shadow: inset 0 0 0 2px #4fd8e8;
 }
 #vf-in-stage-shop .hs-storage-cell.is-for-sale, .hs-tps .hs-storage-cell.is-for-sale{
-    box-shadow: inset 0 0 0 2px #e85a4f;
-    outline: 1px solid color-mix(in srgb, #e85a4f 70%, transparent);
+    box-shadow: inset 0 0 0 2px #4ec99a;
+    outline: 1px solid color-mix(in srgb, #4ec99a 55%, transparent);
 }
 #vf-in-stage-shop .hs-storage-cell.is-for-sale::after, .hs-tps .hs-storage-cell.is-for-sale::after{
     content: '';
     position: absolute;
     inset: 0;
-    background: color-mix(in srgb, #e85a4f 22%, transparent);
+    background: color-mix(in srgb, #4ec99a 16%, transparent);
     pointer-events: none;
     z-index: 2;
 }
+#vf-in-stage-shop .vf-iss-sell-cart, .hs-tps .vf-iss-sell-cart{
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    background: color-mix(in srgb, #05060a 78%, #4ec99a 22%);
+    border: 1px solid color-mix(in srgb, #4ec99a 65%, #2a3340);
+    box-shadow: 1px 1px 0 #05060a;
+    pointer-events: none;
+}
+#vf-in-stage-shop .vf-iss-sell-cart :is(img, canvas), .hs-tps .vf-iss-sell-cart :is(img, canvas){
+    width: 12px !important;
+    height: 12px !important;
+    image-rendering: pixelated;
+    display: block;
+}
 #vf-in-stage-shop .vf-iss-sell-mark, .hs-tps .vf-iss-sell-mark{
     position: absolute;
-    left: 2px;
+    left: auto;
     right: 2px;
     bottom: 2px;
     z-index: 3;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1px;
     font-size: 10px;
+    font-weight: bold;
     line-height: 1.1;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.04em;
     text-align: center;
-    color: #ffe8e4;
+    padding: 2px 4px;
+    color: #d8f5e8;
+    background: color-mix(in srgb, #05060a 82%, #4ec99a 18%);
+    border: 1px solid color-mix(in srgb, #4ec99a 50%, #2a3340);
     text-shadow: 1px 1px 0 #05060a;
     pointer-events: none;
 }
@@ -40586,50 +41557,150 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
 #vf-in-stage-shop .vf-iss-foot, .hs-tps .vf-iss-foot{
     display: flex;
     justify-content: flex-end;
+    align-items: center;
     gap: 10px;
-    margin-top: 4px;
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 32%, #1a2230);
+}
+#vf-in-stage-shop .vf-iss-main > .vf-iss-foot .vf-iss-complete, .hs-tps .vf-iss-main > .vf-iss-foot .vf-iss-complete{
+    width: 100%;
+    min-width: 0;
 }
 #vf-in-stage-shop .vf-iss-complete, .hs-tps .vf-iss-complete{
-    padding: 6px 14px;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    max-width: 100%;
+    min-width: min(100%, 280px);
+    padding: 12px 24px;
     font: inherit;
-    font-size: 12px;
+    font-size: 14px;
     letter-spacing: 0.12em;
+    line-height: 1.35;
+    text-align: center;
     cursor: pointer;
-    color: #c8d0dc;
-    background: color-mix(in srgb, var(--iss-edge, #05060a) 75%, #05060a);
-    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 45%, #3a4a64);
+    color: #b8c4d4;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--iss-edge, #10141c) 85%, #05060a) 0%, #05060a 100%);
+    border: 2px solid color-mix(in srgb, var(--iss-accent, #3a4a64) 40%, #2a3344);
+    box-shadow: 2px 2px 0 #05060a;
+    transition: color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+#vf-in-stage-shop .vf-iss-complete-main, .hs-tps .vf-iss-complete-main{
+    font-weight: bold;
+    font-size: 15px;
+    letter-spacing: 0.14em;
+}
+#vf-in-stage-shop .vf-iss-complete-meta, .hs-tps .vf-iss-complete-meta{
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    letter-spacing: 0.06em;
+    font-size: 12px;
+    opacity: 0.95;
+}
+#vf-in-stage-shop .vf-iss-complete-bit.is-buy, .hs-tps .vf-iss-complete-bit.is-buy{
+    color: #9ae8c8;
+}
+#vf-in-stage-shop .vf-iss-complete-bit.is-sell, .hs-tps .vf-iss-complete-bit.is-sell{
+    color: #f2d98a;
+}
+#vf-in-stage-shop .vf-iss-complete-bit.is-net, .hs-tps .vf-iss-complete-bit.is-net{
+    color: #e8f4ff;
+}
+#vf-in-stage-shop .vf-iss-complete-sep, .hs-tps .vf-iss-complete-sep{
+    opacity: 0.45;
 }
 #vf-in-stage-shop .vf-iss-complete:disabled, .hs-tps .vf-iss-complete:disabled{
     opacity: 0.4;
     cursor: not-allowed;
+    box-shadow: none;
 }
-#vf-in-stage-shop .vf-iss-complete.is-ready, #vf-in-stage-shop .vf-iss-complete:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled), .hs-tps .vf-iss-complete.is-ready, .hs-tps .vf-iss-complete:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled){
+#vf-in-stage-shop .vf-iss-complete.is-ready, .hs-tps .vf-iss-complete.is-ready{
+    color: #f0fff8;
+    border-color: #4ec99a;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, #1a3d32 55%, #05060a) 0%, color-mix(in srgb, #0d221c 80%, #05060a) 100%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, #4ec99a 35%, #05060a), 0 0 14px color-mix(in srgb, #4ec99a 22%, transparent);
+}
+#vf-in-stage-shop .vf-iss-complete.is-ready.is-trade-sell, .hs-tps .vf-iss-complete.is-ready.is-trade-sell{
+    border-color: #e8c55a;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, #3d3218 50%, #05060a) 0%, color-mix(in srgb, #221c0d 80%, #05060a) 100%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, #e8c55a 35%, #05060a), 0 0 12px color-mix(in srgb, #e8c55a 18%, transparent);
+}
+#vf-in-stage-shop .vf-iss-complete.is-ready.is-trade-mixed, .hs-tps .vf-iss-complete.is-ready.is-trade-mixed{
+    border-color: #6ec9e8;
+    background:
+        linear-gradient(180deg, color-mix(in srgb, #1a3340 50%, #05060a) 0%, color-mix(in srgb, #0d1a22 80%, #05060a) 100%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, #6ec9e8 30%, #05060a), 0 0 12px color-mix(in srgb, #4ec99a 15%, transparent);
+}
+#vf-in-stage-shop .vf-iss-complete:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled), .hs-tps .vf-iss-complete:is(:hover, :focus-visible, .nav-focused, .is-focused):not(:disabled){
     color: #fff;
-    border-color: #e85a4f;
-    box-shadow: 0 0 0 2px #e85a4f;
+    border-color: color-mix(in srgb, var(--iss-accent, #5a6a88) 70%, #5a6a88);
     outline: none;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--iss-accent, #5a6a88) 40%, #05060a);
+}
+#vf-in-stage-shop .vf-iss-complete.is-ready:is(:hover, :focus-visible, .nav-focused, .is-focused), .hs-tps .vf-iss-complete.is-ready:is(:hover, :focus-visible, .nav-focused, .is-focused){
+    filter: brightness(1.08);
+    border-color: #6fe0b0;
+    box-shadow: 0 0 0 2px color-mix(in srgb, #4ec99a 45%, #05060a), 0 0 18px color-mix(in srgb, #4ec99a 28%, transparent);
+}
+#vf-in-stage-shop .vf-iss-complete.is-ready.is-trade-sell:is(:hover, :focus-visible, .nav-focused, .is-focused), .hs-tps .vf-iss-complete.is-ready.is-trade-sell:is(:hover, :focus-visible, .nav-focused, .is-focused){
+    border-color: #f2d070;
+}
+#vf-in-stage-shop .vf-iss-complete .vf-iss-credit-icon :is(img, canvas), .hs-tps .vf-iss-complete .vf-iss-credit-icon :is(img, canvas){
+    width: 16px !important;
+    height: 16px !important;
+}
+#vf-in-stage-shop .vf-iss-detail-price .vf-iss-credit-icon :is(img, canvas), .hs-tps .vf-iss-detail-price .vf-iss-credit-icon :is(img, canvas){
+    width: 18px !important;
+    height: 18px !important;
 }
 #vf-in-stage-shop .hs-storage-grid, .hs-tps .hs-storage-grid{
-    border-color: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 55%, #05060a);
-    background-color: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 42%, #05060a);
-    --hs-line: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 42%, #05060a);
-    /* Diablo stash: deeper empty wells. */
-    box-shadow: inset 0 0 0 1px #05060a;
+    border-color: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 55%, #1a2230);
+    background-color: transparent;
+    --hs-line: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 42%, #141a24);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 28%, #0a0e14);
+}
+#vf-in-stage-shop .hs-storage-grid :is(.hs-storage-cell, .vf-iss-stock-cell, button.hs-storage-cell),
+.hs-tps .hs-storage-grid :is(.hs-storage-cell, .vf-iss-stock-cell, button.hs-storage-cell){
+    background: color-mix(in srgb, #05060a 12%, transparent) !important;
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 32%, #1c2430),
+        inset 0 0 0 2px color-mix(in srgb, #05060a 55%, transparent);
 }
 #vf-in-stage-shop .hs-storage-cell-empty, .hs-tps .hs-storage-cell-empty{
-    background:
-        linear-gradient(145deg, color-mix(in srgb, var(--iss-accent) 8%, #0a0c12) 0%, #05060a 55%) !important;
+    background: color-mix(in srgb, #05060a 22%, transparent) !important;
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 28%, #1a2230),
+        inset 0 0 0 2px color-mix(in srgb, #000 35%, transparent);
+}
+#vf-in-stage-shop .hs-storage-cell.is-equipped,
+.hs-tps .hs-storage-cell.is-equipped{
+    animation: hs-storage-cell-equipped-glow 1.8s ease-in-out infinite;
+    background: transparent !important;
 }
 #vf-in-stage-shop .vf-iss-empty-bag, .hs-tps .vf-iss-empty-bag{
     position: relative;
 }
 @media (max-width: 900px) {
-    #vf-in-stage-shop .vf-iss-body, .hs-tps .vf-iss-body{
+    #vf-in-stage-shop .vf-iss-panel, .hs-tps .vf-iss-panel{
         grid-template-columns: 1fr;
+        grid-template-rows: minmax(0, 1fr) auto;
     }
     #vf-in-stage-shop .vf-iss-detail, .hs-tps .vf-iss-detail{
+        grid-column: 1;
+        grid-row: 2;
         max-width: none;
         height: auto;
+        max-height: 42vh;
     }
 }
 
@@ -40753,11 +41824,15 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
 .hs-tps .vf-iss-stock-cell.is-owned .vf-iss-stock-tag { color: #b8ffe0; }
 
 /* Enemy card vitals: vertical HULL fill must win over older horizontal enemy-bar rules. */
+html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
+    flex: 0 0 auto !important;
+    max-height: none !important;
+}
 html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar.is-hull {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    width: 22px;
+    width: 32px;
     --vital-color: #e2b45a;
 }
 html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .health-fill {
@@ -40790,12 +41865,13 @@ html body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-hp-tex
 }
 html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-hull {
     color: #e2b45a;
+    font-size: 11px;
 }
 html body .enemy-vitals-side .enemy-card-v .enemy-vital-tag.is-shield {
-    font-size: 9px;
+    font-size: 11px;
     letter-spacing: 0.5px;
     color: var(--vital-shield, #6ec8e8);
-    max-width: calc(100% - 36px);
+    max-width: calc(100% - 40px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

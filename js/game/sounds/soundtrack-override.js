@@ -328,8 +328,14 @@ extendClass(SoundManager, {
         this._activeOverrideKey = null;
         this._pendingMissionIntro = false;
         this._introPlaying = false;
-        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
-        // Leave the tracker bus up so startMenuMusic can crossfade combat→menu
-        // (hard-stop made non-PLANET styles feel like the same loop continued).
+        // Drop non-tracker combat sources so end/menu motifs own the bus.
+        // Tracker stays up for a clean crossfade into victory/lose/menu/map.
+        if (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.stop) {
+            youtubeSoundtrackManager.stop();
+        }
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
     }
 });

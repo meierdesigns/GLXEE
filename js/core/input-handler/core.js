@@ -16,12 +16,27 @@ class InputHandler {
         document.addEventListener('pointerdown', (e) => {
             if (e.button != null && e.button !== 0) return;
             if (typeof missionStartManager === 'undefined' || !missionStartManager.isAwaitingFire()) return;
-            if (typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen()) return;
-            const stage = document.querySelector('.game-stage, .game-canvas-container, #gameCanvas, canvas');
-            if (stage && e.target && stage.contains(e.target)) {
+            if (this.missionStartInputBlockedByOverlay()) return;
+            const root = document.querySelector('.game-container');
+            if (!root || !e.target || root.contains(e.target)) {
                 missionStartManager.onFire();
             }
         });
+    }
+
+    /** Menus block mission-start except while the combat "FIRE TO START" prompt is up. */
+    missionStartInputBlockedByOverlay() {
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
+            return false;
+        }
+        return typeof menuNavHelper !== 'undefined' && menuNavHelper.isAnyOverlayOpen();
+    }
+
+    isMissionStartFireKey(event) {
+        if (!event || !event.key) return false;
+        const key = event.key;
+        if (key === ' ' || key === 'Enter') return true;
+        return key === 'a' || key === 'A' || key === 's' || key === 'S' || key === 'd' || key === 'D';
     }
 
     /** Victory loot scoop or win / lose overlay: combat is over, no firing. */
@@ -39,11 +54,14 @@ class InputHandler {
     handleKeyDown(event) {
         // Space still held from combat: end screens wait for its release.
         const spaceHeld = !!(this.keys[' '] || this.keys['Space']);
-        const blockShip = typeof menuNavHelper !== 'undefined' && menuNavHelper.shouldBlockShipControls();
-        if (!(blockShip && typeof menuNavHelper !== 'undefined' && menuNavHelper.isMoveKey(event.key))) {
+        const missionIntro = typeof missionStartManager !== 'undefined' && missionStartManager.isActive();
+        const blockShip = missionIntro
+            || (typeof menuNavHelper !== 'undefined' && menuNavHelper.shouldBlockShipControls());
+        const moveKey = typeof menuNavHelper !== 'undefined' && menuNavHelper.isMoveKey(event.key);
+        if (!(blockShip && moveKey)) {
             this.keys[event.key] = true;
         } else {
-            // Clear sticky movement while menus own the arrows
+            // Clear sticky movement while menus / mission intro own the arrows
             this.keys[event.key] = false;
             this.keys['ArrowUp'] = false;
             this.keys['ArrowDown'] = false;
@@ -99,6 +117,24 @@ class InputHandler {
             }
         }
 
+        // DevMode Shift+C during combat / anywhere the start screen / station /
+        // onboarding aren't owning the shortcut. The HUD layout editor also
+        // binds this, but that lives in the lazy editors bundle — without this
+        // boot-path handler the shortcut is dead until DevMode was already on.
+        if (event.shiftKey && (event.key === 'c' || event.key === 'C') && !event.repeat) {
+            const tag = event.target && event.target.tagName;
+            const stationOwns = typeof homeStationUI !== 'undefined' && homeStationUI.isVisible;
+            const onboardOwns = typeof onboardingManager !== 'undefined' && onboardingManager.isVisible;
+            const startOwns = typeof startScreenManager !== 'undefined' && startScreenManager.isVisible();
+            if (tag !== 'INPUT' && tag !== 'TEXTAREA'
+                && !startOwns && !stationOwns && !onboardOwns
+                && typeof startScreenManager !== 'undefined') {
+                event.preventDefault();
+                startScreenManager.toggleDevMode();
+                return;
+            }
+        }
+
         // Victory and game-over screens must receive the initial key directly.
         // The generic overlay guard below would otherwise consume it first.
         const gameOverOverlay = document.getElementById('gameOver');
@@ -140,6 +176,18 @@ class InputHandler {
                 items[next].focus();
                 return;
             }
+        }
+
+        // Mission intro must run before generic overlay / pause guards (held Space from
+        // stage select, or a stale isAnyOverlayOpen flag, otherwise FIRE TO START ignores input).
+        if (typeof missionStartManager !== 'undefined' && missionStartManager.isActive()) {
+            if (this.isMissionStartFireKey(event)) {
+                event.preventDefault();
+                if (missionStartManager.isAwaitingFire()) {
+                    missionStartManager.onFire();
+                }
+            }
+            return;
         }
 
         // Any other menu / archive / station overlay owns input (not ship)
@@ -232,17 +280,6 @@ class InputHandler {
             return;
         }
 
-        // Mission intro: SPACE = FIRE TO START (no combat yet)
-        if (typeof missionStartManager !== 'undefined' && missionStartManager.isActive()) {
-            if (event.key === ' ' || event.key === 'Enter') {
-                event.preventDefault();
-                if (missionStartManager.isAwaitingFire()) {
-                    missionStartManager.onFire();
-                }
-            }
-            return;
-        }
-
         // Shoot on spacebar (mode-dependent)
         if (event.key === ' ' && this.isCombatEnded()) {
             event.preventDefault();
@@ -284,18 +321,14 @@ class InputHandler {
             }
         }
 
-        // Switch shot type with Q and E
-        if (event.key === 'q' || event.key === 'Q') {
+        // Switch shot type with Q and E (DevMode: cycle all weapons into every slot)
+        if (event.key === 'q' || event.key === 'Q' || event.key === 'e' || event.key === 'E') {
             if (typeof bulletManager !== 'undefined') {
-                const newType = bulletManager.switchShotType();
-                if (typeof uiManager !== 'undefined') {
-                    uiManager.updateShotTypeDisplay(newType);
-                }
-            }
-        }
-        if (event.key === 'e' || event.key === 'E') {
-            if (typeof bulletManager !== 'undefined') {
-                const newType = bulletManager.switchShotType();
+                const dir = (event.key === 'q' || event.key === 'Q') ? -1 : 1;
+                const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+                const newType = (devOn && bulletManager.devCycleWeaponCheat)
+                    ? bulletManager.devCycleWeaponCheat(dir)
+                    : bulletManager.switchShotType(dir);
                 if (typeof uiManager !== 'undefined') {
                     uiManager.updateShotTypeDisplay(newType);
                 }

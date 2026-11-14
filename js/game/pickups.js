@@ -224,10 +224,10 @@ class PickupManager {
     maybeDropFakeCrate(info) {
         if (this.lootPhase || typeof obstacleManager === 'undefined' || !obstacleManager.spawnFakeCrate) return;
         const cls = String(info.enemyClass || '').toLowerCase();
-        const boss = typeof enemyManager !== 'undefined' && enemyManager.levelMods && enemyManager.levelMods.isBoss;
         let chance = 0.03;
-        if (cls === 'elite' || cls === 'capital' || info.champion) chance = 0.12;
-        if (boss && info.champion) chance = 0.35;
+        if (info.isBoss) chance = 0.32;
+        else if (info.champion) chance = 0.14;
+        else if (cls === 'elite' || cls === 'capital') chance = 0.08;
         if (Math.random() >= chance) return;
         const x = Number(info.x);
         const y = Number(info.y);

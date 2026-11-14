@@ -4,7 +4,7 @@
 extendClass(HomeStationUI, {
     resourceIconKey(id) {
         const map = {
-            credits: 'menuCredits',
+            credits: 'resCredits',
             scrap: 'resScrap',
             ore: 'resOre',
             crystal: 'resCrystal',

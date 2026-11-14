@@ -689,8 +689,27 @@
         document.documentElement.setAttribute('data-vf-frame-sil', '');
         silKey = silKeyNow;
     }
-    function scheduleSilhouette() {
-        if (!silhouetteRaf) silhouetteRaf = requestAnimationFrame(updateSilhouette);
+    let silhouetteDue = 0;
+    function scheduleSilhouette(force) {
+        // Coalesce resize/style storms: at most ~8 rebuilds/sec unless a faction swap forces sync.
+        const now = performance.now();
+        if (!force && silhouetteDue && now < silhouetteDue) {
+            if (!silhouetteRaf) {
+                silhouetteRaf = requestAnimationFrame(function () {
+                    silhouetteRaf = 0;
+                    updateSilhouette();
+                    silhouetteDue = performance.now() + 120;
+                });
+            }
+            return;
+        }
+        if (!silhouetteRaf) {
+            silhouetteRaf = requestAnimationFrame(function () {
+                silhouetteRaf = 0;
+                updateSilhouette();
+                silhouetteDue = performance.now() + 120;
+            });
+        }
     }
     (function watchSilhouette() {
         const frame = document.getElementById('vf-bezel');
@@ -699,18 +718,19 @@
         new MutationObserver(function () {
             if (silhouetteRaf) { cancelAnimationFrame(silhouetteRaf); silhouetteRaf = 0; }
             updateSilhouette();
+            silhouetteDue = performance.now() + 120;
         }).observe(frame, { attributes: true, attributeFilter: ['data-faction'] });
         // Colour / bevel overrides (FACTIONS tab) land as inline styles on the frame: re-shade the voxels.
-        new MutationObserver(scheduleSilhouette).observe(frame, { attributes: true, attributeFilter: ['style'] });
-        new MutationObserver(scheduleSilhouette).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
+        new MutationObserver(function () { scheduleSilhouette(false); }).observe(frame, { attributes: true, attributeFilter: ['style'] });
+        new MutationObserver(function () { scheduleSilhouette(false); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-vf-frame-px', 'style'] });
         if (window.ResizeObserver) {
-            const ro = new ResizeObserver(scheduleSilhouette);
+            const ro = new ResizeObserver(function () { scheduleSilhouette(false); });
             // Bezel size only — not body childList (menus/combat DOM thrash rebuilt the mask constantly).
             ro.observe(frame);
         }
-        window.addEventListener('resize', scheduleSilhouette);
-        window.addEventListener('vf-pilot-changed', scheduleSilhouette);
-        scheduleSilhouette();
+        window.addEventListener('resize', function () { scheduleSilhouette(false); });
+        window.addEventListener('vf-pilot-changed', function () { scheduleSilhouette(true); });
+        scheduleSilhouette(true);
     })();
     function hex(c) {
         const m = /(\d+)[^\d]+(\d+)[^\d]+(\d+)/.exec(c || '');
@@ -803,13 +823,19 @@
     // Default heavy OFF: SVG backdrop-filters over the whole shell were the main
     // full-app jank source when any CRT/chroma/bloom value was non-zero.
     const PERF_KEY = 'vf-perf';
-    const perf = { sway: 'AUTO', heavy: 'OFF', anim: 'ON' };
+    const PERF_VER = 2;
+    const perf = { v: PERF_VER, sway: 'AUTO', heavy: 'OFF', anim: 'ON' };
     try {
         const sp = JSON.parse(localStorage.getItem(PERF_KEY) || 'null');
         if (sp) {
             if (/^(AUTO|ON|OFF)$/.test(sp.sway)) perf.sway = sp.sway;
             if (/^(ON|OFF)$/.test(sp.heavy)) perf.heavy = sp.heavy;
             if (/^(ON|OFF)$/.test(sp.anim)) perf.anim = sp.anim;
+            // v2 migration: many installs left PERF→heavy ON (bloom/chroma SVG shell
+            // filters). That tanks runtime FPS even at tiny bloom values. Once.
+            if (Number(sp.v) < PERF_VER && perf.heavy === 'ON') {
+                perf.heavy = 'OFF';
+            }
         } else {
             // First boot: light path — heavy FX off; freeze decorative anim only
             // on genuinely low-end machines. dpr>=1.5 used to trigger this too,
@@ -821,10 +847,13 @@
             perf.anim = (cores <= 4 || mem <= 4) ? 'OFF' : 'ON';
         }
     } catch (e) { /* defaults */ }
+    perf.v = PERF_VER;
     function applyPerf() {
         const root = document.documentElement;
-        root.setAttribute('data-vf-perf-heavy', perf.heavy === 'OFF' ? 'off' : 'on');
-        root.setAttribute('data-vf-perf-anim', perf.anim === 'OFF' ? 'off' : 'on');
+        // PERFORMANCE MODE always kills heavy shell filters.
+        const forceLight = root.hasAttribute('data-vf-performance');
+        root.setAttribute('data-vf-perf-heavy', (forceLight || perf.heavy === 'OFF') ? 'off' : 'on');
+        root.setAttribute('data-vf-perf-anim', (forceLight || perf.anim === 'OFF') ? 'off' : 'on');
         try { localStorage.setItem(PERF_KEY, JSON.stringify(perf)); } catch (e) { /* ignore */ }
     }
     function setPerf(key, val) {

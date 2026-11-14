@@ -26,6 +26,7 @@ class MissionStartManager {
         this.sideTo = [];
         this._armed = false;
         this._introClock = 0;
+        this._awaitFireHeld = false;
     }
 
     /** Wall-clock countdown/GO — must not depend on the combat RAF (pause / FX remote / park). */
@@ -134,6 +135,11 @@ class MissionStartManager {
         this.syncFactionChrome();
         this.setText('FIRE TO START', true);
         this.showOverlay();
+        this._awaitFireHeld = false;
+        this.clearStickyShipKeys();
+        if (typeof gamepadManager !== 'undefined' && gamepadManager.primeMissionStartFire) {
+            gamepadManager.primeMissionStartFire();
+        }
 
         if (typeof levelInfoManager !== 'undefined') {
             if (typeof levelInfoManager.prepareForCombat === 'function') {
@@ -142,6 +148,21 @@ class MissionStartManager {
                 levelInfoManager.showPanel();
             }
         }
+    }
+
+    /** Drop latched move keys from menu stick / leftover keydowns before the pilot can steer. */
+    clearStickyShipKeys() {
+        if (typeof gamepadManager !== 'undefined' && gamepadManager.clearShipControlKeys) {
+            gamepadManager.clearShipControlKeys();
+            if (gamepadManager.releaseMenuDirections) gamepadManager.releaseMenuDirections();
+            return;
+        }
+        const ih = (typeof game !== 'undefined' && game.inputHandler) ? game.inputHandler : null;
+        if (!ih || !ih.keys) return;
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space',
+            'Shift', 'ShiftLeft', 'ShiftRight', 'a', 's', 'd', 'A', 'S', 'D'].forEach((k) => {
+            ih.keys[k] = false;
+        });
     }
 
     canvasWidth() {
@@ -328,8 +349,25 @@ class MissionStartManager {
         el.classList.add('mission-start-tick');
     }
 
+    _keysIndicateMissionFire(keys) {
+        if (!keys) return false;
+        if (keys[' '] || keys.Space || keys.Enter) return true;
+        return !!(keys.a || keys.A || keys.s || keys.S || keys.d || keys.D);
+    }
+
+    _pollAwaitFireFromKeys() {
+        if (!this.isAwaitingFire()) return;
+        const inputHandler = (typeof game !== 'undefined' && game.systemManager)
+            ? game.systemManager.getSubsystem('inputHandler')
+            : null;
+        const held = inputHandler ? this._keysIndicateMissionFire(inputHandler.keys) : false;
+        if (held && !this._awaitFireHeld) this.onFire();
+        this._awaitFireHeld = held;
+    }
+
     onFire() {
         if (!this.active || this.phase !== 'awaitFire') return false;
+        this._awaitFireHeld = true;
         this.setPhase('countdown');
         this.countdownValue = 3;
         this.countdownTimer = 0;
@@ -345,6 +383,10 @@ class MissionStartManager {
 
     update(deltaTime) {
         if (!this.active) return;
+
+        if (this.phase === 'awaitFire') {
+            this._pollAwaitFireFromKeys();
+        }
 
         // Countdown / GO advance via _armCountdownClock (setTimeout), so pause / FX remote
         // / parked combat RAF cannot freeze the "3…2…1…GO" beat.

@@ -1,7 +1,9 @@
 "use strict";
 
 /** Health of light-class side craft relative to their normal value: the lower the rank, the quicker it goes down. */
-const LIGHT_CLASS_HP_MUL = { scout: 0.4, assault: 0.55, heavy: 0.7 };
+const LIGHT_CLASS_HP_MUL = { scout: 0.32, assault: 0.42, heavy: 0.52 };
+/** Elite / capital side craft keep a kit, but still melt faster than a champion. */
+const ELITE_SIDE_HP_MUL = 0.65;
 
 // EnemyManager methods, split from enemies.js.
 extendClass(EnemyManager, {
@@ -124,21 +126,21 @@ extendClass(EnemyManager, {
         const canvasWidth = gameState.width || 200;
         const canvasHeight = gameState.height || 300;
         const scale = this.championScale(entry.level);
-        let baseHp = 18;
+        let baseHp = 12;
         if (typeof enemyConfigManager !== 'undefined') {
             const cfg = enemyConfigManager.getConfig(entry.type);
-            // Reduced TTK vs REF laser (balance-config); was 0.4.
-            if (cfg && cfg.maxHealth) baseHp = Math.max(8, Math.round(cfg.maxHealth * 0.28));
+            // Side TTK vs REF laser ~1–1.5s (balance-config); was 0.28.
+            if (cfg && cfg.maxHealth) baseHp = Math.max(6, Math.round(cfg.maxHealth * 0.16));
         }
         const role = entry.role || 'assault';
         if (role === 'repair' || role === 'shieldBattery') {
-            baseHp = Math.max(12, Math.round(baseHp * 0.55));
+            baseHp = Math.max(8, Math.round(baseHp * 0.5));
         } else if (role === 'blocker') {
-            baseHp = Math.round(baseHp * 2.2);
+            baseHp = Math.round(baseHp * 1.55);
         } else if (role === 'bomber') {
             // Bombers are kamikaze threats: dangerous on approach, fragile
             // when focused by the player.
-            baseHp = Math.max(6, Math.round(baseHp * 0.35));
+            baseHp = Math.max(4, Math.round(baseHp * 0.3));
         }
         // Side craft ~75–80% of the champion footprint — readable, not boss-sized.
         const SIDE_HULL_SEEDS = 12;
@@ -265,12 +267,14 @@ extendClass(EnemyManager, {
             if (cfg) {
                 const ai = (typeof difficultyConfigManager !== 'undefined')
                     ? difficultyConfigManager.resolveEnemy(entry.faction, entry.tier, cfg, 'side') : null;
-                side.armor = cfg.armor || 0;
-                side.shieldMax = Math.round((cfg.shieldMax || 0) * 0.4 * scale);
+                // Sides inherit a thin slice of champion defense — full armor/DR
+                // made escorts sponge like mini-bosses.
+                side.armor = Math.round((cfg.armor || 0) * 0.25);
+                side.shieldMax = Math.round((cfg.shieldMax || 0) * 0.18 * scale);
                 side.shield = side.shieldMax;
-                side.shieldRegen = (cfg.shieldRegen || 0) * 0.4;
-                side.damageReduction = cfg.damageReduction || 0;
-                side.reflectChance = cfg.reflectChance || 0;
+                side.shieldRegen = (cfg.shieldRegen || 0) * 0.2;
+                side.damageReduction = Math.round((cfg.damageReduction || 0) * 0.35);
+                side.reflectChance = Math.round((cfg.reflectChance || 0) * 0.35);
                 side.damageMul = (ai ? ai.damageMul : 1) * tierMods.damage;
                 side.evasionChance = ai ? ai.evasionChance : 1;
                 side.predictionSkill = ai ? ai.predictionSkill : 0;
@@ -314,7 +318,7 @@ extendClass(EnemyManager, {
             side.damageMul = (side.damageMul || 1) * (0.6 + 0.4 * entry.transitScale);
         }
         // Light classes (scout / assault / heavy) do exactly one job — their event role — with no extras,
-        // and go down quicker. Elite / capital keep their full kit.
+        // and go down quicker. Elite / capital keep a thin kit, not champion tankiness.
         if (this.isLightClass(side.enemyClass)) {
             side.lightClass = true;
             side.shieldMax = 0;
@@ -327,6 +331,9 @@ extendClass(EnemyManager, {
             side.abilities = [];
             side.muzzleGroups = 1;
             side.maxHealth = Math.max(1, Math.round(side.maxHealth * (LIGHT_CLASS_HP_MUL[String(side.enemyClass).toLowerCase()] || 1)));
+            side.health = side.maxHealth;
+        } else {
+            side.maxHealth = Math.max(1, Math.round(side.maxHealth * ELITE_SIDE_HP_MUL));
             side.health = side.maxHealth;
         }
         this.sideEnemies.push(side);

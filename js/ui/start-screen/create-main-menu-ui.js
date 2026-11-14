@@ -137,12 +137,13 @@ extendClass(StartScreenManager, {
         if (this.devMode) content.appendChild(footer);
         else utilRow.appendChild(footer);
     },
-    /** Top-5 style scoreboard of the last five played profiles. */
+    /** Arcade top-5 style scoreboard of all played profiles (scrolls past 5). */
     buildRecentPilotsBoard() {
         const pm = typeof profileManager !== 'undefined' ? profileManager : null;
         if (!pm || !pm.getRecentProfiles) return null;
-        // Last five played, ranked by score like an arcade top 5.
-        const recent = pm.getRecentProfiles(5)
+        // All played profiles, ranked by score like an arcade top list; the
+        // board stays 5 rows tall and scrolls for the rest.
+        const recent = pm.getRecentProfiles()
             .map((p) => ({ p, score: pm.getProfileScore(p) }))
             .sort((a, b) => b.score - a.score);
         const esc = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -151,8 +152,9 @@ extendClass(StartScreenManager, {
         board.className = 'start-scoreboard';
         const rows = recent.map(({ p, score: raw }, i) => {
             const faction = String(p.faction || 'pirate');
-            const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
-                ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '';
+            const portrait = p.portrait && typeof heroPortrait !== 'undefined' ? heroPortrait.html(p.portrait, null, { nobg: true }) : '';
+            const emblem = portrait || (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '');
             const score = raw.toLocaleString('en-US');
             return `<li class="start-scoreboard-row is-pickable${p.id === activeId ? ' is-active' : ''}" data-profile-id="${esc(p.id)}" tabindex="0" role="button" data-ui-tip="${p.id === activeId ? 'Active pilot' : 'Select pilot'}">` +
                 `<span class="start-scoreboard-rank">${i + 1}</span>` +
@@ -198,7 +200,8 @@ extendClass(StartScreenManager, {
                     open();
                 }
             };
-            const pilot = pm.getRecentProfiles(5).find((x) => x.id === row.getAttribute('data-profile-id'));
+            const found = recent.find((x) => x.p.id === row.getAttribute('data-profile-id'));
+            const pilot = found && found.p;
             const bd = () => this._stationBackdrop;
             row.addEventListener('mouseenter', () => { if (bd()) bd().hover(pilot); });
             row.addEventListener('focus', () => { if (bd()) bd().hover(pilot); });
@@ -211,6 +214,35 @@ extendClass(StartScreenManager, {
                 e.stopPropagation();
                 pick();
             });
+        });
+        // Portraits (deferred-station) and faction emblems (deferred-profiles)
+        // aren't loaded yet at boot — load them in the background and patch
+        // the rows once ready, instead of blocking the start screen on them.
+        if (recent.length) {
+            const patchEmblems = () => {
+                board.querySelectorAll('.start-scoreboard-row[data-profile-id]').forEach((row) => {
+                    const found = recent.find((x) => x.p.id === row.getAttribute('data-profile-id'));
+                    if (!found) return;
+                    const emblemEl = row.querySelector('.start-scoreboard-emblem');
+                    if (!emblemEl) return;
+                    const faction = String(found.p.faction || 'pirate');
+                    const portrait = found.p.portrait && typeof heroPortrait !== 'undefined' ? heroPortrait.html(found.p.portrait, null, { nobg: true }) : '';
+                    const emblem = portrait || (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
+                        ? profileSelectionManager.getFactionEmblemHtml(faction, 24) : '');
+                    if (emblem) emblemEl.innerHTML = emblem;
+                });
+            };
+            if (typeof window.ensureVfStation === 'function') window.ensureVfStation(patchEmblems);
+            if (typeof window.ensureVfProfiles === 'function') window.ensureVfProfiles(patchEmblems);
+        }
+        // Keep the board exactly 5 rows tall and let the rest scroll.
+        requestAnimationFrame(() => {
+            const list = board.querySelector('.start-scoreboard-list');
+            if (!list) return;
+            const visible = Array.from(list.children).slice(0, 5);
+            if (!visible.length) return;
+            const cap = visible.reduce((sum, el) => sum + el.offsetHeight, 0);
+            if (list.scrollHeight > cap) list.style.maxHeight = `${cap}px`;
         });
         return board;
     },

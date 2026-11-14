@@ -53,7 +53,7 @@ extendClass(GalaxyMapManager, {
         const costLabel = cost && typeof economyConfig !== 'undefined'
             ? economyConfig.formatCost(cost)
             : '';
-        const iconKeys = { credits: 'menuCredits', scrap: 'resScrap', ore: 'resOre', crystal: 'resCrystal', voltex: 'resVoltex' };
+        const iconKeys = { credits: 'resCredits', scrap: 'resScrap', ore: 'resOre', crystal: 'resCrystal', voltex: 'resVoltex' };
         const costIcons = cost && typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml
             ? Object.keys(cost).filter((id) => cost[id] > 0).map((id) =>
                 `<span class="gm-explore-cost">${iconRenderer.imgHtml(iconKeys[id] || 'resScrap', 16, 'gm-explore-cost-icon', undefined, false)}${cost[id]}</span>`).join('')

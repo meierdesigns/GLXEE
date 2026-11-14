@@ -150,6 +150,11 @@ extendClass(StartScreenManager, {
             try {
                 window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync'));
             } catch (e) { /* ignore */ }
+            // Combat Q/E weapon-fill cheat must not stick after DevMode is off.
+            if (!this.devMode && typeof bulletManager !== 'undefined'
+                && bulletManager.clearDevWeaponFill) {
+                bulletManager.clearDevWeaponFill();
+            }
         };
         // Editors (layout / component / asset-gen) live in the lazy bundle.
         if (this.devMode && typeof ensureVfEditors === 'function') {

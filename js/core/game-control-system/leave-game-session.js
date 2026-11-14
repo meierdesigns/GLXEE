@@ -57,6 +57,10 @@ extendClass(GameControlSystem, {
             abilityEditorUI.returnTo = null;
             abilityEditorUI.hide();
         }
+        if (typeof shotBehaviorEditorUI !== 'undefined' && shotBehaviorEditorUI.visible) {
+            shotBehaviorEditorUI.returnTo = null;
+            shotBehaviorEditorUI.hide();
+        }
 
         if (typeof themeContextManager !== 'undefined') {
             themeContextManager.restoreAppTheme();
@@ -300,12 +304,26 @@ extendClass(GameControlSystem, {
         if (s.endKind === 'victory') {
             this.lastVictoryLoot = s.endLoot || null;
             this.showVictoryOverlay();
+            if (typeof soundManager !== 'undefined' && soundManager.playVictory) {
+                soundManager.playVictory();
+            }
+            const reopenShop = () => {
+                if (typeof inStageShop === 'undefined' || !inStageShop.tryRestoreAfterVictoryBoot) return;
+                if (inStageShop.tryRestoreAfterVictoryBoot()) return;
+                if (s.issShopOpen && inStageShop.showFromVictory) {
+                    inStageShop.showFromVictory();
+                }
+            };
+            requestAnimationFrame(() => requestAnimationFrame(reopenShop));
         } else {
             const overlay = document.getElementById('gameOver');
             if (!overlay) return false;
             this.applyGameOverFaction(overlay, s.endLoot || {});
             overlay.classList.remove('hidden');
             if (typeof VFGameOverWreck !== 'undefined') VFGameOverWreck.start(overlay);
+            if (typeof soundManager !== 'undefined' && soundManager.playGameOver) {
+                soundManager.playGameOver();
+            }
         }
         return true;
     },

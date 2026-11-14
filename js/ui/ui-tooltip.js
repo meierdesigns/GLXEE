@@ -124,17 +124,25 @@ class UiTooltipManager {
             this.unbindMoveWatch();
             return;
         }
-        if (!this._active.isConnected) {
-            this.hide();
-            return;
-        }
-        const under = document.elementFromPoint(e.clientX, e.clientY);
-        const hit = this.resolveTip(under);
-        if (!hit) {
-            this.hide();
-            return;
-        }
-        if (hit.el !== this._active) this.show(hit.el, hit.tip);
+        // Coalesce: elementFromPoint every pointermove was a layout tax across the app.
+        this._moveX = e.clientX;
+        this._moveY = e.clientY;
+        if (this._moveRaf) return;
+        this._moveRaf = requestAnimationFrame(() => {
+            this._moveRaf = 0;
+            if (!this._active) return;
+            if (!this._active.isConnected) {
+                this.hide();
+                return;
+            }
+            const under = document.elementFromPoint(this._moveX, this._moveY);
+            const hit = this.resolveTip(under);
+            if (!hit) {
+                this.hide();
+                return;
+            }
+            if (hit.el !== this._active) this.show(hit.el, hit.tip);
+        });
     };
 
     show(anchor, text) {
@@ -279,7 +287,7 @@ class UiTooltipManager {
                 } else {
                     const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
                     const resIcon = {
-                        credits: 'menuCredits',
+                        credits: 'resCredits',
                         scrap: 'resScrap',
                         ore: 'resOre',
                         crystal: 'resCrystal',

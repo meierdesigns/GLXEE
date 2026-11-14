@@ -453,7 +453,9 @@ extendClass(StartScreenManager, {
             (item.type === 'action' && item.action !== 'difficultyEditor'
                 && item.action !== 'factionCommand'
                 && item.action !== 'startupSound'
-                && item.action !== 'soundtrackEditor') || item.type === 'assetStatus'
+                && item.action !== 'soundtrackEditor')
+                || item.type === 'assetStatus'
+                || item.type === 'comfySwitch'
         );
 
         if (!audioOnly) this.attachShipRenderPreview(bare ? left : middle);

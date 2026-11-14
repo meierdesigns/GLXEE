@@ -39,11 +39,14 @@ extendClass(GamepadManager, {
         inputHandler.keys['s'] = this.isButtonPressed(gamepad, 5) || this.isButtonPressed(gamepad, 3);
         inputHandler.keys['d'] = this.isButtonPressed(gamepad, 6) || this.isButtonPressed(gamepad, 1);
 
-        // R3 → switch shot type (was LB)
+        // R3 → switch shot type (was LB); DevMode fills all slots like keyboard E
         const switchHeld = this.isButtonPressed(gamepad, 11);
         if (switchHeld && !this._combatState.switchShot) {
             if (typeof bulletManager !== 'undefined') {
-                const newType = bulletManager.switchShotType();
+                const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+                const newType = (devOn && bulletManager.devCycleWeaponCheat)
+                    ? bulletManager.devCycleWeaponCheat(1)
+                    : bulletManager.switchShotType(1);
                 if (typeof uiManager !== 'undefined') uiManager.updateShotTypeDisplay(newType);
             }
         }

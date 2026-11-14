@@ -63,13 +63,16 @@ class StartStationBackdrop {
         this._planetCurFrame = null;
         this._raf = 0;
         this._lastFrameT = 0;
-        this._frameInterval = 1000 / 12;
+        // 8 fps is enough for bob/twinkle; 12fps + high RES was a main-thread tax on the whole app.
+        this._frameInterval = 1000 / 8;
+        this._visOk = true;
+        this._visAt = 0;
         // Dev-mode layout overrides (drag to move, wheel to scale) per element — session-only
         // for now; "adjust" holds the live values, _hit the last-drawn screen position/radius
         // of each element (refreshed every draw) used to hit-test pointer/wheel input against.
         this.adjust = StartStationBackdrop.cloneDefaults();
         this._hit = {};
-        this.devResMult = 1;
+        this.devResMult = StartStationBackdrop.DEFAULT_RES;
         this._dragKey = null;
         this._dragLast = null;
         this._initDevControls();
@@ -80,7 +83,53 @@ class StartStationBackdrop {
             this._ro = new ResizeObserver(() => this._syncSize());
             this._ro.observe(this.el);
         }
+        // Global Pixel Size: rebuild the low-res lattice when the setting changes.
+        window.addEventListener('vf:pixelsize', () => {
+            this.W = 0;
+            this.H = 0;
+            this._gpCell = 0;
+            try { this._loadPlanetImage(this._planetId, this._faction); } catch (e) { /* keep */ }
+            this._syncSize();
+        });
         this._startLoop();
+    }
+
+    /** Global Pixel Size in CSS px (0 = off). */
+    _gp() {
+        try {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) {
+                return uiAppearanceManager.getGlobalPixelPx() || 0;
+            }
+        } catch (e) { /* ignore */ }
+        return 0;
+    }
+
+    /**
+     * Draw a bitmap onto the shared art lattice: dest size is a whole multiple of
+     * `cell` (station zoom), via an intermediate nearest-neighbour downsample so
+     * ship/planet texels match station block size instead of reading finer.
+     */
+    _drawLatticeImage(c, img, dx, dy, dw, dh, cell) {
+        if (!img || !(dw > 0) || !(dh > 0)) return;
+        const k = Math.max(1, Math.round(cell) || 1);
+        const outW = Math.max(k, Math.round(dw / k) * k);
+        const outH = Math.max(k, Math.round(dh / k) * k);
+        const artW = Math.max(1, Math.round(outW / k));
+        const artH = Math.max(1, Math.round(outH / k));
+        c.imageSmoothingEnabled = false;
+        if (k <= 1) {
+            c.drawImage(img, dx, dy, outW, outH);
+            return;
+        }
+        if (!this._latticeTmp) this._latticeTmp = document.createElement('canvas');
+        const tmp = this._latticeTmp;
+        if (tmp.width !== artW) tmp.width = artW;
+        if (tmp.height !== artH) tmp.height = artH;
+        const tx = tmp.getContext('2d');
+        tx.imageSmoothingEnabled = false;
+        tx.clearRect(0, 0, artW, artH);
+        tx.drawImage(img, 0, 0, artW, artH);
+        c.drawImage(tmp, dx, dy, outW, outH);
     }
 
     /** True only while the start screen's own dev mode (Shift+C) is on. */
@@ -210,8 +259,17 @@ class StartStationBackdrop {
         this.devPanel.hidden = true;
         this.devPanel.innerHTML =
             '<div class="start-station-dev-row">' +
-            '<label>RES <input type="range" id="ssdRes" min="0.4" max="2" step="0.05" value="1"><span id="ssdResOut">1.00x</span></label>' +
+            '<label>RES <input type="range" id="ssdRes" min="0.25" max="3" step="0.05" value="' +
+            StartStationBackdrop.DEFAULT_RES + '"><span id="ssdResOut">' +
+            StartStationBackdrop.DEFAULT_RES.toFixed(2) + 'x</span></label>' +
             '</div>' +
+            '<div class="start-station-dev-row start-station-dev-px">' +
+            '<span>PIXEL</span>' +
+            '<button type="button" data-ssd-px="1">1</button>' +
+            '<button type="button" data-ssd-px="2">2</button>' +
+            '<button type="button" data-ssd-px="4">4</button>' +
+            '</div>' +
+            '<div class="start-station-dev-meta" id="ssdMeta"></div>' +
             '<div class="start-station-dev-vals" id="ssdVals"></div>' +
             '<div class="start-station-dev-row">' +
             '<button type="button" id="ssdReset">RESET</button>' +
@@ -225,18 +283,33 @@ class StartStationBackdrop {
             resOut.textContent = this.devResMult.toFixed(2) + 'x';
             this.W = 0; this.H = 0; // force _syncSize to re-apply at the new multiplier
             this._syncSize();
+            this._syncDevPanel();
+        });
+        this.devPanel.querySelectorAll('[data-ssd-px]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const v = String(btn.getAttribute('data-ssd-px') || '2');
+                try {
+                    if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setFx) {
+                        uiAppearanceManager.setFx('pixelSize', v);
+                    }
+                } catch (e) { /* ignore */ }
+                this.W = 0; this.H = 0; this._gpCell = 0;
+                this._syncSize();
+                this._syncDevPanel();
+            });
         });
         this.devPanel.querySelector('#ssdReset').addEventListener('click', () => {
             this.adjust = StartStationBackdrop.cloneDefaults();
-            this.devResMult = 1;
-            resInput.value = '1';
-            resOut.textContent = '1.00x';
+            this.devResMult = StartStationBackdrop.DEFAULT_RES;
+            resInput.value = String(StartStationBackdrop.DEFAULT_RES);
+            resOut.textContent = StartStationBackdrop.DEFAULT_RES.toFixed(2) + 'x';
             this.W = 0; this.H = 0;
             this._syncSize();
             this._syncDevPanel();
         });
         this.devPanel.querySelector('#ssdCopy').addEventListener('click', () => {
-            const text = 'Station backdrop dev values:\n' + JSON.stringify(this.adjust, null, 2) + '\nres: ' + this.devResMult;
+            const text = 'Station backdrop dev values:\n' + JSON.stringify(this.adjust, null, 2) +
+                '\nres: ' + this.devResMult + '\npixelSize: ' + this._gp();
             if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(() => {});
         });
     }
@@ -246,6 +319,17 @@ class StartStationBackdrop {
         const on = this.devMode;
         if (this.devPanel.hidden === on) this.devPanel.hidden = !on;
         if (!on) return;
+        const gp = this._gp();
+        const meta = this.devPanel.querySelector('#ssdMeta');
+        if (meta) {
+            meta.textContent = this.W + '×' + this.H +
+                (gp > 0 ? (' · gp ' + gp + 'px') : ' · full') +
+                ' · res ' + (Number(this.devResMult) || 1).toFixed(2) + 'x';
+        }
+        this.devPanel.querySelectorAll('[data-ssd-px]').forEach((btn) => {
+            const v = Number(btn.getAttribute('data-ssd-px'));
+            btn.classList.toggle('is-active', gp > 0 && v === gp);
+        });
         const vals = this.devPanel.querySelector('#ssdVals');
         if (vals) {
             vals.innerHTML = Object.keys(this.adjust).map((k) => {
@@ -259,32 +343,69 @@ class StartStationBackdrop {
     }
 
     _syncSize() {
-        // Match the container's aspect ratio (fixes the old crop-to-a-sliver bug) at the
-        // real 1:1 CSS-pixel resolution, but the canvas's actual backing buffer also needs
-        // to account for devicePixelRatio — on any HiDPI/scaled display, a buffer sized in
-        // plain CSS pixels gets stretched over more physical pixels by the browser itself,
-        // which (combined with `image-rendering: pixelated`) is exactly the blockiness that
-        // made the station look lower-res than the separately-rasterised ship image. All
-        // draw() math still works in plain CSS-pixel units (this.W/this.H); the extra
-        // resolution is handled by scaling the 2D context to match.
+        // Match the container's aspect ratio (fixes the old crop-to-a-sliver bug).
+        // Global Pixel Size on: one backing texel == one shared art pixel (== gp CSS px
+        // after CSS nearest-neighbour stretch) so station, ship and planet share a grid.
+        // Off: full CSS-pixel buffer × devicePixelRatio (previous HiDPI path).
         const w = Math.round(this.el.clientWidth), h = Math.round(this.el.clientHeight);
-        if (w < 10 || h < 10 || (w === this.W && h === this.H)) return;
+        if (w < 10 || h < 10) return;
         if (window.vfResizing) { this._deferSync(); return; }
-        this.W = w;
-        this.H = h;
+
+        const gp = this._gp();
+        let cell = 1;
+        if (gp > 0) {
+            try {
+                cell = (uiAppearanceManager.getMapPxCellCss && uiAppearanceManager.getMapPxCellCss()) || gp;
+            } catch (e) { cell = gp; }
+            if (!(cell > 0)) cell = gp;
+        }
+        // DevMode RES slider: scales art resolution. With Global Pixel Size, 1× = one
+        // backing texel per gp CSS px; below 1× coarsens, above 1× adds detail for previews.
+        // Without GP, it multiplies devicePixelRatio (legacy HiDPI path).
+        const mult = Math.max(0.25, Math.min(3, Number(this.devResMult) || 1));
+        let logicalW;
+        let logicalH;
+        let dpr;
+        if (gp > 0) {
+            logicalW = Math.max(1, Math.round((w / cell) * mult));
+            logicalH = Math.max(1, Math.round((h / cell) * mult));
+            dpr = 1;
+        } else {
+            logicalW = w;
+            logicalH = h;
+            // Snapped to a whole multiple: a fractional devicePixelRatio reselects different
+            // source pixels on every redraw under software/sub-pixel compositing (seen in
+            // embedded browsers such as VS Code's webview), which reads as the pixelated
+            // backdrop flickering even though nothing in the scene actually changed.
+            dpr = Math.max(1, Math.round((window.devicePixelRatio || 1) * mult));
+        }
+        // Soft-cap backing store: CSS still stretches full-bleed; oversize buffers
+        // (RES 2.4 × large window) made every idle frame dominate main-thread time.
+        const maxEdge = StartStationBackdrop.MAX_EDGE;
+        const longEdge = Math.max(logicalW, logicalH);
+        if (maxEdge > 0 && longEdge > maxEdge) {
+            const s = maxEdge / longEdge;
+            logicalW = Math.max(1, Math.round(logicalW * s));
+            logicalH = Math.max(1, Math.round(logicalH * s));
+        }
+        if (logicalW === this.W && logicalH === this.H && this._gpCell === cell &&
+            this._syncDpr === dpr && this._syncMult === mult) return;
+
+        this.W = logicalW;
+        this.H = logicalH;
+        this._gpCell = cell;
+        this._syncDpr = dpr;
+        this._syncMult = mult;
         this._stars = null; // rebuild layered starfield for the new aspect
-        // devResMult is the dev-panel's resolution slider (1 = native devicePixelRatio);
-        // below 1 intentionally under-samples the backing buffer (CSS still stretches it
-        // to the same on-screen size) to preview lower-res/perf-constrained rendering.
-        // Snapped to a whole multiple: a fractional devicePixelRatio reselects different
-        // source pixels on every redraw under software/sub-pixel compositing (seen in
-        // embedded browsers such as VS Code's webview), which reads as the pixelated
-        // backdrop flickering even though nothing in the scene actually changed.
-        const rawDpr = (window.devicePixelRatio || 1) * (this.devResMult || 1);
-        const dpr = Math.max(1, Math.round(rawDpr));
-        this.canvas.width = Math.round(w * dpr);
-        this.canvas.height = Math.round(h * dpr);
-        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (gp > 0) {
+            this.canvas.width = logicalW;
+            this.canvas.height = logicalH;
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        } else {
+            this.canvas.width = Math.round(w * dpr);
+            this.canvas.height = Math.round(h * dpr);
+            this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
         this.draw(this._faction, this._tier, this._seed, this._lastFrameT);
     }
 
@@ -296,38 +417,107 @@ class StartStationBackdrop {
     }
 
     _startLoop() {
-        if (this._raf) return;
+        if (this._raf || this._idleTimer) return;
+        const schedule = (delay) => {
+            this._clearIdleTimer();
+            if (delay > 16) {
+                this._idleTimer = setTimeout(() => {
+                    this._idleTimer = 0;
+                    this._raf = requestAnimationFrame(tick);
+                }, delay);
+            } else {
+                this._raf = requestAnimationFrame(tick);
+            }
+        };
         const tick = (now) => {
+            this._raf = 0;
             if (!this.canvas.isConnected) {
-                this._raf = 0;
+                this._clearIdleTimer();
                 return;
             }
-            this._raf = requestAnimationFrame(tick);
-            // Pause while the start screen is off-DOM or covered / display:none.
-            try {
-                const host = this.el.closest('.start-screen, .start-screen-overlay') || this.el;
-                if (host.classList.contains('hidden')) return;
-                const st = getComputedStyle(host);
-                if (st.display === 'none' || st.visibility === 'hidden') return;
-            } catch (e) { /* draw anyway */ }
-            if (document.hidden || window.vfResizing) return;
+            if (document.hidden || window.vfResizing) {
+                this._parkLoop(400);
+                return;
+            }
             // Settings → DEBUG → PERFORMANCE MODE, and OS-level reduced-motion: freeze the
             // idle float/breathe/spin redraw. In some embedded/software-rendered webviews
             // (e.g. VS Code's) clearing and repainting this canvas on every tick reads as
             // the whole backdrop flickering even though the scene itself barely moves —
             // this gives those setups a static (non-flickering) backdrop instead.
             if (document.documentElement.hasAttribute('data-vf-performance') ||
-                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
-            if (now - this._lastFrameT < this._frameInterval) return;
+                (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+                this._parkLoop(1000);
+                return;
+            }
+            // Pilot wizard / profile overlay sits on top — stop burning CPU on the menu backdrop.
+            try {
+                if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) {
+                    this._parkLoop(500);
+                    return;
+                }
+            } catch (e0) { /* continue */ }
+            // Pause while the start screen is off-DOM or covered / display:none.
+            // getComputedStyle every rAF forced layout; throttle visibility checks.
+            try {
+                const host = this.el.closest('.start-screen, .start-screen-overlay') || this.el;
+                if (host.classList.contains('hidden')) {
+                    this._parkLoop(500);
+                    return;
+                }
+                if (!this._visAt || now - this._visAt > 400) {
+                    this._visAt = now;
+                    const st = getComputedStyle(host);
+                    this._visOk = st.display !== 'none' && st.visibility !== 'hidden' && Number(st.opacity) > 0.02;
+                }
+                if (!this._visOk) {
+                    this._parkLoop(500);
+                    return;
+                }
+            } catch (e) { /* draw anyway */ }
+            const wait = this._frameInterval - (now - this._lastFrameT);
+            if (wait > 0) {
+                schedule(wait);
+                return;
+            }
             this._lastFrameT = now;
             this.draw(this._faction, this._tier, this._seed, now);
+            // ~8 Hz draw cadence — do not keep a 60 Hz rAF chain alive between frames.
+            schedule(this._frameInterval);
         };
         this._raf = requestAnimationFrame(tick);
+        if (!this._visBound) {
+            this._visBound = true;
+            document.addEventListener('visibilitychange', this._onDocVis = () => {
+                if (document.hidden) this._parkLoop(800);
+                else {
+                    this._clearIdleTimer();
+                    this._startLoop();
+                }
+            });
+        }
+    }
+
+    /** Sleep the scheduler while hidden/paused so idle menus do not burn 60 Hz rAF. */
+    _parkLoop(ms) {
+        this._stopLoop();
+        this._clearIdleTimer();
+        this._idleTimer = setTimeout(() => {
+            this._idleTimer = 0;
+            this._startLoop();
+        }, Math.max(200, ms || 500));
+    }
+
+    _clearIdleTimer() {
+        if (this._idleTimer) {
+            clearTimeout(this._idleTimer);
+            this._idleTimer = 0;
+        }
     }
 
     _stopLoop() {
         if (this._raf) cancelAnimationFrame(this._raf);
         this._raf = 0;
+        this._clearIdleTimer();
     }
 
     /** Sum of all station upgrade levels -> 0..5 build stage. */
@@ -685,7 +875,8 @@ class StartStationBackdrop {
         // (dx/dy tracks the cursor, but the drawn position also drifted from bob/shipBob
         // underneath it) — that mismatch is what read as "buggy" jitter while dragging.
         const devEditing = !!(this._dragKey || this._dragHandle);
-        const bob = devEditing ? 0 : Math.sin(tt * 0.7) * 3;
+        const gpOn = this._gp() > 0;
+        const bob = devEditing ? 0 : (gpOn ? Math.round(Math.sin(tt * 0.7) * 3) : Math.sin(tt * 0.7) * 3);
 
         this._drawSpace(c, pal, tt, bob);
         // A real planet: a sphere whose cap rises from the bottom edge, rendered with
@@ -699,12 +890,13 @@ class StartStationBackdrop {
         // thin crescent + bottom strip stayed visible). Cap fraction is high
         // enough that the globe reads as a planet, not a flat horizon line.
         const pAdj = this.adjust.planet;
-        const pr = Math.min(this.W, this.H) * 0.82 * pAdj.scale;
+        let pr = Math.min(this.W, this.H) * 0.82 * pAdj.scale;
+        if (gpOn) pr = Math.max(1, Math.round(pr));
         const capFrac = 0.58;
         // Keep the disc mostly on-screen: centre sits near the station column,
         // but never so far left that (planetCx - pr) eats most of the sphere.
-        const planetCx = Math.round(Math.max(pr * 0.7, Math.min(this.W * 0.36, cx))) + pAdj.dx;
-        const pcy = this.H + pr * (1 - capFrac) + bob * 0.4 + pAdj.dy;
+        const planetCx = Math.round(Math.max(pr * 0.7, Math.min(this.W * 0.36, cx))) + Math.round(pAdj.dx);
+        const pcy = Math.round(this.H + pr * (1 - capFrac) + bob * 0.4 + pAdj.dy);
         this._hit.planet = { x: planetCx, y: pcy - pr * (1 - capFrac), r: pr * capFrac + 20 };
         const planetFrame = this._currentPlanetFrame();
         if (planetFrame) {
@@ -716,8 +908,12 @@ class StartStationBackdrop {
             c.beginPath();
             c.arc(planetCx, pcy, pr, 0, Math.PI * 2);
             c.clip();
-            c.imageSmoothingEnabled = false;
-            c.drawImage(planetFrame.img, planetCx - dr, pcy - dr, dr * 2, dr * 2);
+            // Fit is computed below for the station; for the planet use the same
+            // integer lattice cell so globe texels match hull blocks.
+            const planetCell = gpOn
+                ? Math.max(1, Math.round(Math.max(0.9, Math.min(7.5, Math.min(this.W, this.H) / 90)) * sAdj.scale))
+                : 1;
+            this._drawLatticeImage(c, planetFrame.img, planetCx - dr, pcy - dr, dr * 2, dr * 2, planetCell);
             c.restore();
         }
         // Empty title (no pilot): planet + living starfield only — the old default
@@ -733,8 +929,10 @@ class StartStationBackdrop {
         // Everything below is drawn in fixed "station units"; scale it with however
         // big the column actually is so a wide/tall column gets a bigger, more
         // detailed station instead of the same small silhouette floating in more
-        // empty space.
-        const fit = Math.max(0.9, Math.min(7.5, Math.min(this.W, this.H) / 90)) * sAdj.scale;
+        // empty space. Global Pixel Size: keep zoom on whole lattice cells so
+        // hull blocks never land between art pixels.
+        let fit = Math.max(0.9, Math.min(7.5, Math.min(this.W, this.H) / 90)) * sAdj.scale;
+        if (gpOn) fit = Math.max(1, Math.round(fit));
         // soft faction-colored halo behind the station, breathing gently
         const haloR = (92 + Math.sin(tt * 0.9) * 6) * fit;
         this._hit.station = { x: cx, y: cy + bob, r: haloR };
@@ -746,7 +944,8 @@ class StartStationBackdrop {
         // the station itself floats a little and scales with the available space
         c.save();
         c.translate(cx, cy + bob);
-        const zoom = (1.05 - tier * 0.09) * fit;
+        let zoom = (1.05 - tier * 0.09) * fit;
+        if (gpOn) zoom = Math.max(1, Math.round(zoom));
         c.scale(zoom, zoom);
         c.translate(-cx, -cy);
 
@@ -963,15 +1162,15 @@ class StartStationBackdrop {
             // which is what showed up as "falscher Pivot": the handles assumed a fixed
             // center while the actual drawn center kept sliding as you resized.
             const baseFit = Math.min(5, fit);
-            const shipBob = devEditing ? 0 : Math.sin(tt * 1.3 + 0.6) * 4;
-            const sh = Math.min(400, 20 * baseFit * shAdj.scale);
+            const shipBob = devEditing ? 0 : (gpOn ? Math.round(Math.sin(tt * 1.3 + 0.6) * 4) : Math.sin(tt * 1.3 + 0.6) * 4);
+            let sh = Math.min(400, 20 * baseFit * shAdj.scale);
+            if (gpOn) sh = Math.max(zoom, Math.round(sh / zoom) * zoom);
             const sw = sh * (this._shipImg.width / this._shipImg.height || 0.73);
-            const sy = cy + bob + (34 * baseFit) + shipBob + shAdj.dy;
-            const sx = Math.max(sw / 2 + 4, cx - (28 + tier * 2) * baseFit) + shAdj.dx;
+            const sy = Math.round(cy + bob + (34 * baseFit) + shipBob + shAdj.dy);
+            const sx = Math.round(Math.max(sw / 2 + 4, cx - (28 + tier * 2) * baseFit) + shAdj.dx);
             this._hit.ship = { x: sx, y: sy, r: Math.max(sw, sh) / 2 };
             c.save();
-            c.imageSmoothingEnabled = false;
-            c.drawImage(this._shipImg, sx - sw / 2, sy - sh / 2, sw, sh);
+            this._drawLatticeImage(c, this._shipImg, sx - sw / 2, sy - sh / 2, sw, sh, gpOn ? zoom : 1);
             c.restore();
         } else {
             this._hit.ship = null;
@@ -1031,6 +1230,10 @@ StartStationBackdrop.DEFAULT_ADJUST = {
     ship: { dx: -1.7306609313578178, dy: 25.100620544578646, scale: 1.25 },
     planet: { dx: 0, dy: 0, scale: 1 }
 };
+/** DevMode RES baseline (COPY VALUES → paste here). pixelSize stays on uiAppearance (2). */
+StartStationBackdrop.DEFAULT_RES = 2.4;
+/** Soft cap on canvas long-edge texels (CSS still fills). Keeps RES>1 from melting the main thread. */
+StartStationBackdrop.MAX_EDGE = 640;
 
 extendClass(StartScreenManager, {
     /** Mounts the station as a full-bleed backdrop behind the main menu content. */

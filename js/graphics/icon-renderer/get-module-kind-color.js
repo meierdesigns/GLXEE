@@ -165,8 +165,20 @@ extendClass(IconRenderer, {
      * sprite grid. At fractional display scaling (e.g. 125%) 32 CSS px are
      * 40 device px = 2.5 per sprite pixel, so pixels alternate 2/3 px wide
      * and look distorted. Snap to 16·k device px instead (k ≥ 1).
+     * Global Pixel Size: one sprite texel == gp CSS px (× integer k).
      */
     devicePixelSnap(cssPx) {
+        let gp = 0;
+        try {
+            if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getGlobalPixelPx) {
+                gp = uiAppearanceManager.getGlobalPixelPx() || 0;
+            }
+        } catch (e) { gp = 0; }
+        if (gp > 0) {
+            const step = 16 * gp;
+            const k = Math.max(1, Math.round((Number(cssPx) || 16) / step));
+            return step * k;
+        }
         let dpr = 1;
         try { dpr = Number(window.devicePixelRatio) || 1; } catch (e) { dpr = 1; }
         if (!(dpr > 0)) dpr = 1;
@@ -176,7 +188,7 @@ extendClass(IconRenderer, {
 
     /** Resource icons: fixed resource color (16x16 sprite grid, shown at 16·k px), never theme/faction tinted. */
     resourceIconColor(key) {
-        const ids = { menuCredits: 'credits', resScrap: 'scrap', resOre: 'ore', resCrystal: 'crystal', resVoltex: 'voltex' };
+        const ids = { menuCredits: 'credits', resCredits: 'credits', resScrap: 'scrap', resOre: 'ore', resCrystal: 'crystal', resVoltex: 'voltex' };
         const id = ids[key];
         if (!id) return null;
         if (id === 'credits') return '#e8c85a';

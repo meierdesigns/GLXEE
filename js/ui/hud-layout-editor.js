@@ -609,30 +609,16 @@ const hudLayoutEditor = (function () {
         if (!isActive() && editing) exitEdit();
     }
 
-    // Shift+C already toggles dev mode on the start screen / station (see
-    // js/ui/start-screen/build-controls-show-btn.js and bind-controls-toggle-part2.js), but both of
-    // those handlers only run while their own screen is on top, so the shortcut is dead once a run
-    // is in progress. This mirrors it for everywhere else (in combat): only acts while the start
-    // screen isn't the one handling it, so the same keypress is never toggled twice.
+    // Shift+C in combat is handled by js/core/input-handler/core.js (boot path).
+    // This mirror stays for when the editors bundle loads mid-session (HUD edit
+    // sync); toggleDevMode's same-press lock prevents double flips.
     function bindGlobalToggle() {
         window.addEventListener('keydown', function (e) {
             if (!e.shiftKey || (e.key !== 'c' && e.key !== 'C')) return;
             if (e.repeat) return;
             if (typeof startScreenManager === 'undefined' || startScreenManager.visible) return;
-            // The home station (js/ui/home-station/bind-controls-toggle-part2.js) has its own,
-            // entirely separate `document` keydown listener for Shift+C, and it keeps handling the
-            // key on its own tab rows even while `startScreenManager.visible` is false (that flag
-            // only tracks the start screen's OWN menu, which is merely one tab the station can
-            // embed — embeddedMode/visible both go false again the moment a different tab is
-            // selected). Missing this meant both listeners fired for one keypress whenever the
-            // station was open on any tab but its embedded menu: two toggleDevMode() calls
-            // cancelled each other out, so devMode net stayed unchanged while the station's own
-            // toast still reported "DEV MODE ON" — a clean double-fire, not a dev-mode bug.
             if (typeof homeStationUI !== 'undefined' && homeStationUI.isVisible) return;
-            // Profile overlay (js/core/input-handler/core.js) already toggles Shift+C itself;
-            // firing again here flipped the mode straight back off.
             if (typeof profileSelectionManager !== 'undefined' && profileSelectionManager.isVisible) return;
-            // Onboarding has its own Shift+C handler (start screen is hidden there).
             if (typeof onboardingManager !== 'undefined' && onboardingManager.isVisible) return;
             const tag = e.target && e.target.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA') return;

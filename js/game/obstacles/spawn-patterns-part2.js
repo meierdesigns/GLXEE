@@ -111,11 +111,21 @@ extendClass(ObstacleManager, {
     },
     /** Terrain art cell in logical px (shared by walls, ground and obstacles). */
     terrainCell() {
+        const coarse = typeof OBSTACLE_ART_DENSITY !== 'undefined' ? 1 / OBSTACLE_ART_DENSITY : 2.5;
+        let cell = coarse;
         if (typeof renderManager !== 'undefined' && renderManager.getCombatVoxelCell) {
-            const cell = renderManager.getCombatVoxelCell();
-            if (cell != null && cell > 0) return cell;
+            const v = renderManager.getCombatVoxelCell();
+            if (v != null && v > 0) cell = v;
         }
-        return typeof OBSTACLE_ART_DENSITY !== 'undefined' ? 1 / OBSTACLE_ART_DENSITY : 2.5;
+        const lw = (typeof game !== 'undefined' && game && game.internalWidth)
+            || (typeof gameState !== 'undefined' && gameState && gameState.width)
+            || 240;
+        const perf = typeof document !== 'undefined'
+            && document.documentElement.hasAttribute('data-vf-performance');
+        const maxCols = perf ? 140 : 200;
+        // Global Pixel Size can push combat cells far below 1px; rebuilding the
+        // scroll floor at that resolution pegs CPU. Cap lattice columns, not ships.
+        return Math.max(cell, lw / maxCols, coarse * 0.45);
     },
     /** Deterministic 0..1 hash for terrain segments. */
     terrainHash(a, b) {

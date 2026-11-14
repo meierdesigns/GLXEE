@@ -165,7 +165,14 @@
         const u = Math.min(real.vw / 1640, real.vh / 1110);
         const openL = 56 * u;          // keep in sync with --fr-open-side (part-19)
         const openR = 56 * u;
-        const openT = (44 + 50) * u;   // keep in sync with --bz-extra (styles part-19)
+        // Prefer live CSS --bz-extra so fight layout tracks part-19 (was hard-coded 50).
+        let bzExtra = 24;
+        try {
+            const raw = getComputedStyle(ROOT).getPropertyValue('--bz-extra').trim();
+            const n = parseFloat(raw);
+            if (Number.isFinite(n) && n >= 0) bzExtra = n;
+        } catch (e) { /* default */ }
+        const openT = (44 + bzExtra) * u; // keep in sync with --fr-open-top (part-19)
         const openB = 56 * u;          // keep in sync with --fr-open-bottom (part-19)
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;

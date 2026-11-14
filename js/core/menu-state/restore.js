@@ -128,6 +128,16 @@ extendClass(MenuStateManager, {
                     return true;
                 }
                 break;
+            case 'shot-behavior-editor':
+                if (typeof shotBehaviorEditorUI !== 'undefined') {
+                    if (typeof startScreenManager !== 'undefined') {
+                        startScreenManager.show({ skipPersist: true });
+                    }
+                    shotBehaviorEditorUI.returnTo = s.returnTo || null;
+                    shotBehaviorEditorUI.show(s.weaponId || 'laser', true);
+                    return true;
+                }
+                break;
             case 'settings':
                 if (typeof startScreenManager !== 'undefined') {
                     startScreenManager.showSettings = true;
@@ -272,8 +282,13 @@ extendClass(MenuStateManager, {
                 }
                 break;
             case 'onboarding':
+                // Legacy first-run screen → unified Profile Selection create wizard.
+                this.hideStartShell();
+                if (typeof startScreenManager !== 'undefined' && startScreenManager.openProfileCreate) {
+                    startScreenManager.openProfileCreate(s && s.pfaction);
+                    return true;
+                }
                 if (typeof onboardingManager !== 'undefined') {
-                    this.hideStartShell();
                     onboardingManager.show({
                         onComplete: () => {
                             if (typeof startScreenManager !== 'undefined') {

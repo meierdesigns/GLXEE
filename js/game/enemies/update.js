@@ -56,7 +56,8 @@ extendClass(EnemyManager, {
                     faction: (entry && entry.faction) || (this.enemy && this.enemy.faction),
                     enemyClass: (entry && entry.enemyClass) || (this.enemy && this.enemy.enemyClass),
                     cluster: (entry && entry.cluster) || (this.enemy && this.enemy.cluster),
-                    champion: true,
+                    champion: !!(entry && entry.champion != null ? entry.champion : (this.enemy && this.enemy.champion)),
+                    isBoss: !!(this.enemy && this.enemy.isBoss),
                     pickupsSpawned: !!this.pickupsSpawnedAtDeath,
                     x: this.enemy ? this.enemy.x + this.enemy.width / 2 : undefined,
                     y: this.enemy ? this.enemy.y + this.enemy.height / 2 : undefined

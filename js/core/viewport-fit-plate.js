@@ -550,17 +550,32 @@
         } else if (vfs.fxTab === 'tools') {
             const soundCode = (typeof startupSound !== 'undefined' && startupSound.toCode) ? startupSound.toCode() : '';
             const menuUrl = (typeof youtubeSoundtrackManager !== 'undefined' && youtubeSoundtrackManager.getMenuUrl) ? (youtubeSoundtrackManager.getMenuUrl() || '') : '';
-            h += '<div class="vf-fx-title">AUDIO ASSETS</div>' +
-                '<div class="vf-fx-row"><span>SOUND CODE</span><output>' + (soundCode || '—') + '</output></div>' +
-                '<div class="vf-fx-row"><span>MENU SOUNDTRACK</span><output>' + (menuUrl || '—') + '</output></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="startupSound">STARTUP SOUND ›</button></div>' +
-                (fxDevModeOn() ? '<div class="vf-fx-row"><button type="button" data-tools-action="soundtrackEditor">SOUNDTRACK EDITOR ›</button></div>' : '') +
+            const escHtml = function (s) {
+                return String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            };
+            const soundCodeShow = escHtml(soundCode || '—');
+            const menuUrlShow = escHtml(menuUrl || '—');
+            h += '<div class="vf-fx-tools">' +
+                '<section class="vf-fx-tools-sec">' +
+                '<div class="vf-fx-title">AUDIO ASSETS</div>' +
+                '<div class="vf-fx-tools-meta">' +
+                '<div class="vf-fx-tools-readout"><span>SOUND CODE</span><output title="' + soundCodeShow + '">' + soundCodeShow + '</output></div>' +
+                '<div class="vf-fx-tools-readout"><span>MENU SOUNDTRACK</span><output title="' + menuUrlShow + '">' + menuUrlShow + '</output></div>' +
+                '</div>' +
+                '<div class="vf-fx-tools-actions">' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="startupSound"><em>STARTUP SOUND</em><i aria-hidden="true">›</i></button>' +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="soundtrackEditor"><em>SOUNDTRACK EDITOR</em><i aria-hidden="true">›</i></button>' : '') +
+                '</div></section>' +
+                '<section class="vf-fx-tools-sec">' +
                 '<div class="vf-fx-title">EDITORS</div>' +
-                (fxDevModeOn() ? '<div class="vf-fx-row"><button type="button" data-tools-action="faceEditor">FACE EDITOR · FLUX ›</button></div>' : '') +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="factionCommand">FACTION COMMAND ›</button></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGen">ASSET GENERATOR ›</button></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGenFaction">FACTION EMBLEMS ›</button></div>' +
-                '<div class="vf-fx-row"><button type="button" data-tools-action="assetGenFactionShips">FACTION SHIPS ›</button></div>';
+                '<div class="vf-fx-tools-actions">' +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="faceEditor"><em>FACE EDITOR · FLUX</em><i aria-hidden="true">›</i></button>' : '') +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="shotBehavior"><em>SHOT BEHAVIOR</em><i aria-hidden="true">›</i></button>' : '') +
+                '<button type="button" class="vf-fx-launch" data-tools-action="factionCommand"><em>FACTION COMMAND</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="assetGen"><em>ASSET GENERATOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFaction"><em>FACTION EMBLEMS</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFactionShips"><em>FACTION SHIPS</em><i aria-hidden="true">›</i></button>' +
+                '</div></section>';
             if (fxDevModeOn()) {
                 let ppBgv = 0, ppBga = 2;
                 try {
@@ -579,12 +594,16 @@
                 const bgaNames = (typeof heroPortrait !== 'undefined' && heroPortrait.NAMES && heroPortrait.NAMES.bga)
                     ? heroPortrait.NAMES.bga
                     : ['OFF', 'SLOW', 'NORMAL', 'FAST', 'TURBO'];
-                h += '<div class="vf-fx-title">PILOT PORTRAIT</div>' +
+                h += '<section class="vf-fx-tools-sec">' +
+                    '<div class="vf-fx-title">PILOT PORTRAIT</div>' +
+                    '<div class="vf-fx-tools-sliders">' +
                     fxSlider('BACKDROP', 'pp:bgv', 0, 31, 1, ppBgv, '',
                         String(ppBgv + 1).padStart(2, '0') + ' / 32') +
                     fxSlider('ANIMATION', 'pp:bga', 0, 4, 1, ppBga, '',
-                        bgaNames[ppBga] || String(ppBga));
+                        bgaNames[ppBga] || String(ppBga)) +
+                    '</div></section>';
             }
+            h += '</div>';
         }
         h += '</div>';
         plate.innerHTML = h;

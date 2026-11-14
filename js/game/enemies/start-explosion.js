@@ -29,7 +29,8 @@ extendClass(EnemyManager, {
                 faction: entry.faction || this.enemy.faction,
                 enemyClass: entry.enemyClass || this.enemy.enemyClass,
                 cluster: entry.cluster || this.enemy.cluster,
-                champion: true,
+                champion: !!(entry.champion != null ? entry.champion : this.enemy.champion),
+                isBoss: !!this.enemy.isBoss,
                 x: this.enemy.x + (this.enemy.width || 0) / 2,
                 y: this.enemy.y + (this.enemy.height || 0) / 2
             });

@@ -154,7 +154,12 @@ class PlayerManager {
         const diverting = typeof chargeSystem !== 'undefined'
             && chargeSystem.isWeaponCharging()
             && chargeSystem.stats.shieldDivert;
-        if (!diverting && this.shieldMax > 0 && this.shieldRegen > 0 && this.shield < this.shieldMax) {
+        // Same 2.5s post-hit pause as enemy shields — without it regen
+        // restocks the barrier between shots and dying becomes impossible.
+        const shieldRegenReady = !this.shieldHitAt
+            || (Date.now() - this.shieldHitAt > 2500);
+        if (!diverting && shieldRegenReady && this.shieldMax > 0
+            && this.shieldRegen > 0 && this.shield < this.shieldMax) {
             const mechs = this.defenseMechanisms || [];
             const canRegen = !mechs.length
                 || mechs.indexOf('shield_regen') !== -1
@@ -197,6 +202,7 @@ class PlayerManager {
                 defenseMechanisms: this.defenseMechanisms
             };
             hpDamage = enemyManager.applyDefenseToDamage(target, hpDamage);
+            if (target.shieldHitAt) this.shieldHitAt = target.shieldHitAt;
             shieldUsed = Math.max(0, usableShield - (target.shield || 0));
             this.shield = savedShield - shieldUsed;
             if (shieldUsed > 0) {
@@ -208,6 +214,9 @@ class PlayerManager {
             this.energy = Math.max(0, this.energy - absorbed * costPer);
             hpDamage -= absorbed;
             shieldUsed = absorbed;
+            this.shieldHitAt = Date.now();
+        } else if (hpDamage > 0) {
+            this.shieldHitAt = Date.now();
         }
 
         // Hull flash when armor eats damage; shield spark when the barrier soaks it.

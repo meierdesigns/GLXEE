@@ -808,9 +808,12 @@ class VFTrackerManager {
         }
         // Scene/role change → always refresh tempo + AUTO STYLE before the swap
         // so the handoff is heard as a music update, not just a new pattern row.
-        if (!sameRole || (opts && opts.forceScene)) {
+        if (!sameRole || (opts && opts.forceScene) || (opts && opts.force)) {
             const galaxyFaction = (opts && opts.galaxyFaction)
-                || (typeof soundManager !== 'undefined' && soundManager._currentHostileFaction)
+                || (typeof soundManager !== 'undefined' && (
+                    soundManager._currentHostileFaction
+                    || soundManager._endMusicFaction
+                ))
                 || '';
             if (typeof soundManager !== 'undefined' && soundManager._applyMusicScene) {
                 soundManager._applyMusicScene(nextRole, galaxyFaction);
@@ -957,13 +960,14 @@ class VFTrackerManager {
 
     /**
      * Try keys in order; first playable wins.
-     * If that song is already playing, keep its position.
+     * If that song is already playing, keep its position (unless opts.force).
      */
-    playFirst(keys) {
+    playFirst(keys, opts) {
         const list = Array.isArray(keys) ? keys : [keys];
         const target = this.firstPlayableKey(list);
         if (!target) return null;
-        if (this.currentKey === target && this.player.isPlaying()) {
+        const force = !!(opts && opts.force);
+        if (!force && this.currentKey === target && this.player.isPlaying()) {
             // Keep playhead, but still push STYLE / scene feel to the live player.
             this._reassertMixerSettings();
             this._pushJungleToPlayers(this._effectiveJungleAmount());
@@ -971,7 +975,8 @@ class VFTrackerManager {
             return target;
         }
         // Same map/combat motif under an alias key — keep playhead.
-        if (this.player.isPlaying() && this._trackRole(this.currentKey) === this._trackRole(target)) {
+        if (!force && this.player.isPlaying()
+            && this._trackRole(this.currentKey) === this._trackRole(target)) {
             const track = this.getTrack(target);
             const fp = this._fingerprint(track);
             if (fp && fp === this._currentFingerprint) {
@@ -982,7 +987,7 @@ class VFTrackerManager {
                 return target;
             }
         }
-        if (this.play(target)) return target;
+        if (this.play(target, null, opts || null)) return target;
         return null;
     }
 

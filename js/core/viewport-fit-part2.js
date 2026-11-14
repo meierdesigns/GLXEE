@@ -349,6 +349,13 @@
             setFxOpen(false);
             if (d.toolsAction === 'startupSound' && typeof startupSoundEditorUI !== 'undefined') startupSoundEditorUI.show();
             else if (d.toolsAction === 'soundtrackEditor' && typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            else if (d.toolsAction === 'shotBehavior') {
+                const openShot = () => {
+                    if (typeof shotBehaviorEditorUI !== 'undefined') shotBehaviorEditorUI.show('laser');
+                };
+                if (typeof ensureVfEditors === 'function') ensureVfEditors(() => openShot());
+                else openShot();
+            }
             else if (d.toolsAction === 'factionCommand' && typeof factionCommandUI !== 'undefined' && factionCommandUI.show) factionCommandUI.show();
             else if (d.toolsAction === 'faceEditor' && typeof startScreenManager !== 'undefined') {
                 if (startScreenManager.openFaceEditor) startScreenManager.openFaceEditor();

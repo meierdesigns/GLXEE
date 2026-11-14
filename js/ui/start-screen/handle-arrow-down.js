@@ -146,6 +146,11 @@ extendClass(StartScreenManager, {
             return;
         }
 
+        if (item.type === 'comfySwitch') {
+            this.toggleComfySwitch(direction);
+            return;
+        }
+
         if (item.type === 'volume') {
             return;
         }
@@ -257,8 +262,15 @@ extendClass(StartScreenManager, {
             return;
         }
         if (item.action === 'difficultyEditor') {
-            if (typeof difficultyEditorUI !== 'undefined' && difficultyEditorUI.show) {
-                difficultyEditorUI.show();
+            const openDiff = () => {
+                if (typeof difficultyEditorUI !== 'undefined' && difficultyEditorUI.show) {
+                    difficultyEditorUI.show();
+                }
+            };
+            if (typeof difficultyEditorUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(openDiff);
+            } else {
+                openDiff();
             }
             return;
         }
@@ -267,8 +279,15 @@ extendClass(StartScreenManager, {
             return;
         }
         if (item.action === 'factionCommand') {
-            if (typeof factionCommandUI !== 'undefined' && factionCommandUI.show) {
-                factionCommandUI.show();
+            const openCmd = () => {
+                if (typeof factionCommandUI !== 'undefined' && factionCommandUI.show) {
+                    factionCommandUI.show();
+                }
+            };
+            if (typeof factionCommandUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(openCmd);
+            } else {
+                openCmd();
             }
             return;
         }

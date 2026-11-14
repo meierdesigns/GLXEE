@@ -43,6 +43,44 @@ class GamepadManager {
         requestAnimationFrame(tick);
     }
 
+    /** Drop sticky menu arrows so a held stick cannot keep ArrowRight latched into combat. */
+    releaseMenuDirections() {
+        this.updateMenuDirection('up', 'ArrowUp', false);
+        this.updateMenuDirection('down', 'ArrowDown', false);
+        this.updateMenuDirection('left', 'ArrowLeft', false);
+        this.updateMenuDirection('right', 'ArrowRight', false);
+    }
+
+    /** Clear ship move / fire keys without requiring a prior combat frame. */
+    clearShipControlKeys() {
+        const g = (typeof window !== 'undefined') ? window.game : null;
+        const inputHandler = g && g.inputHandler;
+        if (!inputHandler || !inputHandler.keys) return;
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Space',
+            'Shift', 'ShiftLeft', 'ShiftRight', 'a', 's', 'd', 'A', 'S', 'D'].forEach((k) => {
+            inputHandler.keys[k] = false;
+        });
+        this._combatState = {};
+    }
+
+    /** Sync A/RT edge tracker when "FIRE TO START" appears (avoids a held menu confirm blocking fire). */
+    primeMissionStartFire() {
+        this.releaseMenuDirections();
+        this.clearShipControlKeys();
+        if (typeof navigator === 'undefined' || !navigator.getGamepads) {
+            this._menuState.a = false;
+            return;
+        }
+        const pads = navigator.getGamepads();
+        let held = false;
+        for (let i = 0; i < pads.length; i++) {
+            if (!pads[i] || !pads[i].connected) continue;
+            held = this.isButtonPressed(pads[i], 0) || this.isButtonPressed(pads[i], 7);
+            break;
+        }
+        this._menuState.a = held;
+    }
+
     _bindDisplayWake() {
         if (typeof document === 'undefined') return;
         const self = this;
@@ -287,6 +325,8 @@ class GamepadManager {
         // is already true there) but wants a discrete confirm press like a
         // menu, not held-key combat state, so it's special-cased here.
         if (typeof missionStartManager !== 'undefined' && missionStartManager.isAwaitingFire()) {
+            // Stick release must not be skipped here — otherwise menu Arrow* keydowns stick into combat.
+            this.releaseMenuDirections();
             const fireHeld = this.isButtonPressed(gamepad, 0) || this.isButtonPressed(gamepad, 7); // A / RT
             if (fireHeld && !this._menuState.a) missionStartManager.onFire();
             this._menuState.a = fireHeld;

@@ -180,6 +180,11 @@ extendClass(StartScreenManager, {
                 value: 'FLUX ›',
                 type: 'action',
                 action: 'faceEditor'
+            }, {
+                name: 'ComfyUI',
+                value: 'OFF',
+                options: ['ON', 'OFF'],
+                type: 'comfySwitch'
             }] : []),
             {
                 name: 'Faction Command',

@@ -79,6 +79,7 @@ const IconLabels = {
     navTrophy: 'SCORE',
     navClock: 'TIME',
     navSkull: 'KILLS',
+    resCredits: 'CREDITS',
     resScrap: 'SCRAP',
     resOre: 'ORE',
     resCrystal: 'CRYSTAL',

@@ -431,7 +431,10 @@ class ObjectiveManager {
                 pm.invuln = Math.max(pm.invuln || 0, this.enter.dur + 400);
             }
             if (typeof bulletManager !== 'undefined' && bulletManager.enemyBullets) {
-                bulletManager.enemyBullets.length = 0;
+                const leftovers = bulletManager.enemyBullets.splice(0, bulletManager.enemyBullets.length);
+                if (bulletManager.releaseBullet) {
+                    for (let i = 0; i < leftovers.length; i++) bulletManager.releaseBullet(leftovers[i]);
+                }
             }
             if (typeof soundManager !== 'undefined' && soundManager.playGateEnter) {
                 soundManager.playGateEnter(g.kind || 'sluice');

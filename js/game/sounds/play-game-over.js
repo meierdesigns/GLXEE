@@ -14,27 +14,27 @@ extendClass(SoundManager, {
         this.schedule(() => this.createBeep(250, 0.3, 'sine', 0.85), 300);
         this.schedule(() => this.createBeep(200, 0.5, 'sine', 0.9), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        this.schedule(() => this.startEndMusic('lose'), 950);
+        // Crossfade into defeat as soon as the sting lands — do not leave
+        // combat/YouTube rolling under the game-over screen.
+        this.schedule(() => this.startEndMusic('lose'), 650);
     },
 
     playVictory() {
         this._endMusicPlanet = this._currentPlanetId || this.ambientPlanetId || null;
         this._endMusicFaction = this._currentHostileFaction || null;
-        // Keep combat loop rolling through the victory screen. Swapping to the
-        // victory fanfare (then back on next stage) felt like the old intro
-        // fanfare every clear. Beeps still celebrate; music stays on the bus.
+        // Stop combat reevaluation so victory motif is not yanked back to stage BGM.
+        if (this.clearMusicContext) this.clearMusicContext();
         this.clearActiveTimeouts();
-        this.stopPlanetAmbientNodesOnly({ keepTracker: true, keepLocal: true });
+        this.stopPlanetAmbientNodesOnly({ keepTracker: true });
+        this.ambientPlanetId = null;
         this.createBeep(500, 0.2, 'sine', 0.85);
         this.schedule(() => this.createBeep(600, 0.2, 'sine', 0.85), 200);
         this.schedule(() => this.createBeep(700, 0.2, 'sine', 0.9), 400);
         this.schedule(() => this.createBeep(800, 0.3, 'sine', 1), 600);
         if (typeof beatSyncManager !== 'undefined') beatSyncManager.stop();
-        // Soft duck only — no track swap (55% of current music bus).
-        if (this.pushMusicBusVolume) this.pushMusicBusVolume(0.55);
-        else if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.setVolume) {
-            vfTrackerManager.setVolume((this.musicBusVolume ? this.musicBusVolume() : VFVolume.busDefault()) * 0.55);
-        }
+        // Full bus + victory fanfare (shop close / next stage re-bind combat).
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        this.schedule(() => this.startEndMusic('victory'), 500);
     },
 
     /** Menu difficulty + planet tier for scene-feel (tempo / STYLE intensity). */
@@ -83,7 +83,11 @@ extendClass(SoundManager, {
         this.notePendingMusic(mode, mode);
         if (!this.ensureContext()) return;
         const faction = String(this._endMusicFaction || this._currentHostileFaction || '').toLowerCase();
-        const planet = String(this._endMusicPlanet || this._currentPlanetId || '').toLowerCase().split('-')[0];
+        let planet = String(this._endMusicPlanet || this._currentPlanetId || this.ambientPlanetId || '')
+            .toLowerCase().split('-')[0];
+        if (planet && typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey) {
+            planet = VFTrackerDefaults.normalizePlanetKey(planet);
+        }
         // Prefer planet Hauptmelodie; faction only skins instruments when both known.
         const keys = [];
         if (planet && faction) keys.push(mode + ':' + faction + ':' + planet);
@@ -91,12 +95,20 @@ extendClass(SoundManager, {
         if (faction) keys.push(mode + ':' + faction);
         keys.push(mode);
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
-        if (typeof localAudioManager !== 'undefined') localAudioManager.stop();
+        if (typeof localAudioManager !== 'undefined') {
+            if (localAudioManager.fadeOut) localAudioManager.fadeOut();
+            else localAudioManager.stop();
+        }
         if (typeof vfTrackerManager === 'undefined') return;
-        this._applyMusicScene(mode);
+        // Keep end-screen identity for AUTO STYLE even after clearMusicContext.
+        this._applyMusicScene(mode, faction);
         if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
-        if (vfTrackerManager.playFirst(keys)) this.clearPendingMusic();
+        // Force role swap: combat/YouTube must not keep playhead into end screens.
+        const played = vfTrackerManager.playFirst
+            ? vfTrackerManager.playFirst(keys, { force: true, galaxyFaction: faction })
+            : null;
+        if (played) this.clearPendingMusic();
     },
 
     /**

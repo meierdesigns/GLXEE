@@ -41,6 +41,7 @@ class MenuNavHelper {
             () => typeof planetEditorUI !== 'undefined' && planetEditorUI.visible,
             () => typeof enemyEditorUI !== 'undefined' && enemyEditorUI.visible,
             () => typeof abilityEditorUI !== 'undefined' && abilityEditorUI.visible,
+            () => typeof shotBehaviorEditorUI !== 'undefined' && shotBehaviorEditorUI.visible,
             () => typeof uiDialog !== 'undefined' && uiDialog.isOpen,
             () => typeof onboardingManager !== 'undefined' && onboardingManager.isVisible
         ];

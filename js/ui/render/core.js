@@ -77,7 +77,11 @@ class RenderManager {
         const lh = (typeof game !== 'undefined' && game && game.internalHeight) || 300;
         const budget = Number(window.PLAYFIELD_MAX_BACKING_PX);
         // ~240×300 @2× ≈ 288k; tighter default so CSS upscales instead of GPU fill.
+        // PERFORMANCE MODE: cap harder — paint/composite of large canvases dominated FPS more than JS.
         let maxPx = Number.isFinite(budget) && budget > 50000 ? budget : 200000;
+        if (document.documentElement.hasAttribute('data-vf-performance')) {
+            maxPx = Math.min(maxPx, 120000);
+        }
         if (gp > 0) {
             // gp 1/2 push the densest backing (shown/(gp·lw)). Keep fill cheap via CSS
             // nearest-neighbor upscale — wall-clock stutter was paint/composite, not JS.

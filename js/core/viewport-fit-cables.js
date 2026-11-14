@@ -129,7 +129,10 @@
             machine:  { out: '#020706', body: '#0f3331', hi: '#3ff0d6', route: 'chamfer', led: '#3ff0d6', plugFill: '#041211', plugLine: '#1a5a54', thick: 2, hiDash: true, hiW: 1 }
         };
         const S = STY[fac] || STY.terran;
-        const wiggle = fac === 'voidborn';
+        // feTurbulence displacement is a GPU tax; only when PERF → heavy FX is ON.
+        const wiggle = fac === 'voidborn'
+            && typeof document !== 'undefined'
+            && document.documentElement.getAttribute('data-vf-perf-heavy') === 'on';
         // Each faction plugs its cables in at its own spots: h = [left, right], v = [top, bottom].
         const LAY = {
             terran:   { h: [[0.2, 0.55, 0.8], [0.3, 0.7]], v: [[0.25, 0.75], [0.5]] },

@@ -147,6 +147,7 @@ extendClass(MissionStartManager, {
             if (enemyManager.enemy && this.enemyFrom) enemyManager.enemy.introEntry = true;
             (enemyManager.sideEnemies || []).forEach((s, i) => { if (this.sideFrom && this.sideFrom[i]) s.introEntry = true; });
         }
+        if (typeof this.clearStickyShipKeys === 'function') this.clearStickyShipKeys();
         this.active = false;
         this.phase = null;
         this._armed = false;

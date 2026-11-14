@@ -200,10 +200,16 @@ class ParallaxManager {
         }
         layerKey += '|h' + (this.horizontalOffset || 0);
 
+        const terrainScroll = scrolling
+            && typeof obstacleManager !== 'undefined'
+            && obstacleManager.hasTerrain
+            && obstacleManager.hasTerrain();
+
         const drawLayers = (target) => {
             for (let index = 0; index < this.layers.length; index++) {
                 const layer = this.layers[index];
                 if (layer.visible === false) continue;
+                if (terrainScroll && this._parallaxLayerRedundantOnTerrain(layer)) continue;
                 const opacity = (layer.opacity != null ? layer.opacity : 0.15) * (this.globalLayerOpacity != null ? this.globalLayerOpacity : 1);
                 if (opacity <= 0) continue;
                 target.save();
@@ -249,6 +255,15 @@ class ParallaxManager {
         }
 
         this.renderBossIntensity(ctx, cw, ch);
+    }
+
+    /** Scroll terrain replaces the parallax ground planes; keep only thin sky veils. */
+    _parallaxLayerRedundantOnTerrain(layer) {
+        const p = String((layer && layer.pattern) || '');
+        if (/_sky$|_atmosphere$/.test(p)) return false;
+        if (/_surface$|_dust$|_bands$|_storms$|_clouds$|_rings$|_deep$|_ice$/.test(p)) return true;
+        const speed = Number(layer && layer.speed);
+        return Number.isFinite(speed) && speed <= 0.45;
     }
 
     /**

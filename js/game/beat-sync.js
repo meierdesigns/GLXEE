@@ -22,9 +22,11 @@ class BeatSyncManager {
         this.justDownbeat = false;
         this._lastBeatIndex = -1;
 
-        this.powerWindow = 0.18; // fraction of beat near attack
-        this.powerDamageMul = 1.85;
-        this.powerCooldownMul = 0.72;
+        // Beat-synced critical / power shots removed — groove still drives enemy motion.
+        this.powerWindow = 0;
+        this.powerDamageMul = 1;
+        this.powerCooldownMul = 1;
+        this._powerConsumedBeat = -1;
 
         // Curated to match the tempo/feel of the procedural ambient drone in
         // sounds.js (planetAmbient lfo/filter/base) used when no YouTube
@@ -58,6 +60,7 @@ class BeatSyncManager {
         this.offsetMs = 0;
         this.active = true;
         this._lastBeatIndex = -1;
+        this._powerConsumedBeat = -1;
         this.justBeat = false;
         this.justDownbeat = false;
         this.update(0);
@@ -67,6 +70,7 @@ class BeatSyncManager {
         if (!this.active) return;
         this.startMs = performance.now();
         this._lastBeatIndex = -1;
+        this._powerConsumedBeat = -1;
     }
 
     stop() {
@@ -76,6 +80,7 @@ class BeatSyncManager {
         this.justBeat = false;
         this.justDownbeat = false;
         this._lastBeatIndex = -1;
+        this._powerConsumedBeat = -1;
     }
 
     setBpm(bpm) {
@@ -120,12 +125,10 @@ class BeatSyncManager {
     }
 
     isPowerBeatWindow() {
-        if (!this.active) return false;
-        // Stronger shots on downbeats (beat 1 of bar) and mid-bar accents (beat 3)
-        const accent = this.barBeat === 0 || this.barBeat === 2;
-        if (!accent) return false;
-        return this.phase < this.powerWindow || this.phase > (1 - this.powerWindow * 0.35);
+        return false;
     }
+
+    consumePowerShot() {}
 
     getEnemySpeedMul() {
         if (!this.active) return 1;
@@ -165,14 +168,7 @@ class BeatSyncManager {
     }
 
     getShotOptions() {
-        if (!this.isPowerBeatWindow()) {
-            return { chargeMult: 1, beatPower: false };
-        }
-        return {
-            chargeMult: this.powerDamageMul,
-            beatPower: true,
-            cooldownMul: this.powerCooldownMul
-        };
+        return { chargeMult: 1, beatPower: false };
     }
 
     getPulse() {

@@ -227,26 +227,35 @@ extendClass(HomeStationUI, {
             });
             return;
         }
-        // Inside the station: show the viewer in the WIKI area itself.
-        if (this.openExplorationInline(kind)) return;
-        const openers = {
-            ships: () => typeof shipViewerUI !== 'undefined' && shipViewerUI.show({ onClose: returnToExplorations }),
-            planets: () => typeof planetViewerUI !== 'undefined' && planetViewerUI.show({ onClose: returnToExplorations }),
-            enemies: () => typeof enemyViewerUI !== 'undefined' && enemyViewerUI.show({ onClose: returnToExplorations }),
-            factions: () => typeof factionViewerUI !== 'undefined' && factionViewerUI.show({ onClose: returnToExplorations }),
-            events: () => typeof eventViewerUI !== 'undefined' && eventViewerUI.show({ onClose: returnToExplorations }),
-            weapons: () => typeof weaponViewerUI !== 'undefined' && weaponViewerUI.show({ onClose: returnToExplorations }),
-            abilities: () => typeof abilityViewerUI !== 'undefined' && abilityViewerUI.show({ onClose: returnToExplorations }),
-            defenses: () => typeof defenseViewerUI !== 'undefined' && defenseViewerUI.show({ onClose: returnToExplorations }),
-            energy: () => typeof energyViewerUI !== 'undefined' && energyViewerUI.show({ onClose: returnToExplorations }),
-            explosions: () => typeof explosionViewerUI !== 'undefined' && explosionViewerUI.show({ onClose: returnToExplorations })
+        const run = () => {
+            // Inside the station: show the viewer in the WIKI area itself.
+            if (this.openExplorationInline(kind)) return;
+            const openers = {
+                ships: () => typeof shipViewerUI !== 'undefined' && shipViewerUI.show({ onClose: returnToExplorations }),
+                planets: () => typeof planetViewerUI !== 'undefined' && planetViewerUI.show({ onClose: returnToExplorations }),
+                enemies: () => typeof enemyViewerUI !== 'undefined' && enemyViewerUI.show({ onClose: returnToExplorations }),
+                factions: () => typeof factionViewerUI !== 'undefined' && factionViewerUI.show({ onClose: returnToExplorations }),
+                events: () => typeof eventViewerUI !== 'undefined' && eventViewerUI.show({ onClose: returnToExplorations }),
+                weapons: () => typeof weaponViewerUI !== 'undefined' && weaponViewerUI.show({ onClose: returnToExplorations }),
+                abilities: () => typeof abilityViewerUI !== 'undefined' && abilityViewerUI.show({ onClose: returnToExplorations }),
+                defenses: () => typeof defenseViewerUI !== 'undefined' && defenseViewerUI.show({ onClose: returnToExplorations }),
+                energy: () => typeof energyViewerUI !== 'undefined' && energyViewerUI.show({ onClose: returnToExplorations }),
+                explosions: () => typeof explosionViewerUI !== 'undefined' && explosionViewerUI.show({ onClose: returnToExplorations })
+            };
+            const open = openers[kind];
+            if (!open) return;
+            this.tab = 'explorations';
+            this.persistTab();
+            this.hide();
+            open();
         };
-        const open = openers[kind];
-        if (!open) return;
-        this.tab = 'explorations';
-        this.persistTab();
-        this.hide();
-        open();
+        // Viewers live in deferred-editors.js — warm that chunk before opening.
+        if (typeof window.ensureVfEditors === 'function' && typeof window.vfEditorsReady === 'function'
+            && !window.vfEditorsReady()) {
+            window.ensureVfEditors(run);
+            return;
+        }
+        run();
     },
 
     /** Viewer object per WIKI category (all render a .content-viewer-overlay). */

@@ -269,12 +269,16 @@ extendClass(EnemyManager, {
         const floor = Math.max(1, Number(rawDamage) * 0.2);
         dmg = Math.max(floor, dmg);
 
-        // Shield first: a hit on a live shield never bleeds into the hull,
-        // not even the one that breaks it. Regen pauses after every hit.
+        // Shield first; overflow past a broken shield still hits the hull.
+        // Regen pauses after every hit (callers read shieldHitAt).
         target.shieldHitAt = Date.now();
         if (target.shield != null && target.shield > 0) {
-            target.shield = Math.max(0, target.shield - dmg);
-            return 0;
+            if (dmg <= target.shield) {
+                target.shield -= dmg;
+                return 0;
+            }
+            dmg -= target.shield;
+            target.shield = 0;
         }
 
         return Math.max(0, dmg);

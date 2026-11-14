@@ -167,6 +167,8 @@ class GameLoop {
                 objectiveManager.updateArrivalIntro(deltaTime, missionStartManager.phase);
             }
             if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
+            if (typeof bulletManager !== 'undefined') bulletManager.update(deltaTime, null);
+            if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
             if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
             if (typeof explosionSystem !== 'undefined') explosionSystem.update(16);
             if (typeof uiManager !== 'undefined') uiManager.updateUI();

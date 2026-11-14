@@ -102,6 +102,19 @@ extendClass(ShipLoadoutManager, {
         }
         if (model.segmentUv) loadout.segmentUv = model.segmentUv;
         const caps = this.getSlotCaps(id, model.modelClass);
+        // DevMode combat cheat: fill every mount slot with one weapon id
+        // (runtime only — loadout came from getLoadout's clamp copy).
+        const devFillOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        if (model._devWeaponFillId && devFillOn) {
+            const wid = String(model._devWeaponFillId);
+            const n = Math.max(1, this.weaponMountSlots(caps.weapons));
+            const filled = [];
+            for (let i = 0; i < n; i++) filled.push(wid);
+            loadout.weaponSlots = filled;
+            loadout.weapons = filled.slice();
+        } else if (model._devWeaponFillId && !devFillOn) {
+            delete model._devWeaponFillId;
+        }
         // Same wing rows as the hangar markers (see buildHangarSlots).
         const layout = this.buildLayout(coreSize.width, coreSize.height, Object.assign(
             this.withWeaponSlotScales ? this.withWeaponSlotScales(id, loadout) : Object.assign({}, loadout),

@@ -1089,6 +1089,15 @@ be reviewed or reverted independently.
 | 74U | Onboarding hangar layout | Onboarding name/pilot panel layout; bay inventory ship+station side-by-side hug grids |
 | 74V | Deferred bundle rebuild | Rebuild deferred + CSS app packs for shot flight, victory chrome, onboarding/hangar (74S–74U) |
 | 74W | Release 1.14.14 | Deploy ZIP `.claude/GLXEE-V1.14.14.zip` — shot flight, victory chrome, hangar layout (74S–74V) |
+| 74X | Victory found-item UX | Range tip → final salvage roll on take; size/gfx; LMB ship / RMB equip; no context menu; FOUND LOOT cheat |
+| 74Y | Shot hang / behavior | Shot Behavior editor; bullet flight hang + collision/laser clash polish; weapon icon keys |
+| 74Z | Planet trader shop | In-stage shop drag-buy, right-click equip, ship pane, seed rolls, reopen after F5 |
+| 75A | Onboarding → wizard | Fold first-run onboarding into ProfileSelection create wizard; slim onboarding stub |
+| 75B | Station chrome polish | Hangar bay/tooltips, station backdrop, viewport-fit, gamepad/input, mission start handoff |
+| 75C | Asset-gen portraits | Face Editor URL boot, portrait Flux batch, bridge/status, asset-gen CSS |
+| 75D | Dev helpers + CSS | DOM helpers, enemy drop table, balance/economy tweaks, style pack polish |
+| 75E | Deferred bundle rebuild | Rebuild feature + CSS app packs for 74X–75D |
+| 75F | Release 1.14.15 | Deploy ZIP `.claude/GLXEE-V1.14.15.zip` — found loot, shot hang, trader, wizard, station, asset-gen (74X–75E) |
 
 The wave commit convention is:
 

@@ -235,8 +235,22 @@ extendClass(ProfileManager, {
         const left = available - n;
         if (left > 0) profile.cargo.parts[key] = left;
         else delete profile.cargo.parts[key];
+        // Reveal final salvage rolls on the new copies (found tip only showed ranges).
+        const rolls = [];
+        if (shipBucket && this.rollSalvageVendorStats && this.setShopVendorRoll && this.getPartInstanceLayout) {
+            const layoutNow = this.getPartInstanceLayout(profile, shipBucket, bp.id);
+            const shipUnitsNow = (layoutNow.ships && layoutNow.ships[shipId]) || [];
+            const eqNow = this._equippedStorageCount
+                ? this._equippedStorageCount(profile, shipId, shipBucket, bp.id) : 0;
+            const newUnits = shipUnitsNow.slice(eqNow).slice(-n);
+            newUnits.forEach((unit) => {
+                const roll = this.rollSalvageVendorStats(bp.kind, bp.id);
+                this.setShopVendorRoll(shipBucket, bp.id + '#' + unit, roll.mul, roll.classKey);
+                rolls.push({ unit: unit, classKey: roll.classKey, mul: roll.mul });
+            });
+        }
         this.save();
-        return { ok: true, amount: n };
+        return { ok: true, amount: n, rolls: rolls };
     },
 
     /** Drops whatever found parts/blueprints the player never took or sold — called when the

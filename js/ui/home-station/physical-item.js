@@ -13,7 +13,8 @@ const physicalItem = (() => {
     const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     const css = (c, a) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a == null ? 1 : a})`;
 
-    function render(kind, id, w, h, color) {
+    function render(kind, id, w, h, color, opts) {
+        const plain = !!(opts && opts.plain);
         const cw = Math.max(8, Math.round(w / PX)), ch = Math.max(8, Math.round(h / PX));
         const cv = document.createElement('canvas');
         cv.width = cw; cv.height = ch;
@@ -70,7 +71,7 @@ const physicalItem = (() => {
             const r = Math.max(2, Math.round(Math.min(bw, bh) * 0.2));
             const chev = rnd() < 0.5;
             if (chev) for (let i = 0; i < 3; i++) { rect(mx + 4, my + 4 + i * 2, bw - 8, 1, OUT, 0.35); }
-            glowCore(cx, my + Math.floor(bh / 2), r);
+            if (!plain) glowCore(cx, my + Math.floor(bh / 2), r);
             [[mx + 3, my + 3], [mx + bw - 4, my + 3], [mx + 3, my + bh - 4], [mx + bw - 4, my + bh - 4]].forEach(([x, y]) => rivet(x, y));
         } else if (kind === 'energy') {
             const bwid = Math.max(6, Math.round(bw * 0.62)), x = cx - Math.floor(bwid / 2);
@@ -92,11 +93,13 @@ const physicalItem = (() => {
                 dot(x, y, K, 0.9);
             }
             for (let i = 0; i < 4; i++) { rect(mx, my + 2 + i * 3, 1, 2, [210, 190, 90]); rect(mx + bw - 1, my + 2 + i * 3, 1, 2, [210, 190, 90]); }
-            const r = Math.max(3, Math.round(Math.min(bw, bh) * 0.28)), cy = my + Math.floor(bh / 2);
-            for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
-                const d = Math.abs(x) + Math.abs(y);
-                if (d > r) continue;
-                dot(cx + x, cy + y, d === r ? OUT : mix(shade(kc, 0.72 - (x + y) * 0.07 / r * 3), [255, 255, 255], d <= 1 ? 0.7 : 0));
+            if (!plain) {
+                const r = Math.max(3, Math.round(Math.min(bw, bh) * 0.28)), cy = my + Math.floor(bh / 2);
+                for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+                    const d = Math.abs(x) + Math.abs(y);
+                    if (d > r) continue;
+                    dot(cx + x, cy + y, d === r ? OUT : mix(shade(kc, 0.72 - (x + y) * 0.07 / r * 3), [255, 255, 255], d <= 1 ? 0.7 : 0));
+                }
             }
         }
         // Wear.
@@ -177,10 +180,11 @@ const physicalItem = (() => {
 
     return {
         /** Wrap `innerHtml` (the part icon) in its generated casing; w/h = footprint in screen px. */
-        wrap(kind, id, w, h, color, innerHtml) {
-            const key = kind + ':' + id + ':' + w + 'x' + h + ':' + color;
+        wrap(kind, id, w, h, color, innerHtml, opts) {
+            const plain = !!(opts && opts.plain);
+            const key = kind + ':' + id + ':' + w + 'x' + h + ':' + color + (plain ? ':plain' : '');
             let url = cache.get(key);
-            if (!url) { try { url = render(kind, id, w, h, color); } catch (e) { url = ''; } cache.set(key, url); }
+            if (!url) { try { url = render(kind, id, w, h, color, opts); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>${innerHtml}` : innerHtml;
         },
         /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100).

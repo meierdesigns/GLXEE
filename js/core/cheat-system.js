@@ -7,7 +7,7 @@ class CheatSystem {
         this.cheatSequence = '';
         this.cheatMenuVisible = false;
         this.cheatMenuIndex = 0;
-        this.cheatMenuItems = ['GOD MODE', 'INFINITE AMMO', 'FAST FIRE', 'SLOW MOTION', 'INSTANT KILL', 'SHIP SELECT', 'LEVEL SELECT', 'CLOSE'];
+        this.cheatMenuItems = ['GOD MODE', 'INFINITE AMMO', 'FAST FIRE', 'SLOW MOTION', 'INSTANT KILL', 'FOUND LOOT', 'SHIP SELECT', 'LEVEL SELECT', 'CLOSE'];
         this.cheats = {
             godMode: false,
             infiniteAmmo: false,
@@ -121,6 +121,16 @@ class CheatSystem {
             case 'INSTANT KILL':
                 this.cheats.instantKill = !this.cheats.instantKill;
                 break;
+            case 'FOUND LOOT': {
+                // Inject a random salvage part into FOUND ITEMS (victory cargo).
+                const gc = (typeof gameControl !== 'undefined') ? gameControl
+                    : (typeof game !== 'undefined' && game.gameControl) ? game.gameControl : null;
+                if (gc && gc.seedDevVictoryFoundItem) {
+                    gc.seedDevVictoryFoundItem({ force: true });
+                    if (gc.updateVictoryStats) gc.updateVictoryStats();
+                }
+                break;
+            }
             case 'SHIP SELECT':
                 this.cheats.shipSelect = !this.cheats.shipSelect;
                 break;

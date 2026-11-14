@@ -174,12 +174,19 @@ class CoreRenderManager {
                 this.ctx.fillText(item, this.width / 2, 50 + index * 20);
             }
             
-            // Show cheat status
-            if (index < cheatSystem.cheatMenuItems.length - 1) { // Not for CLOSE
-                const cheatKey = Object.keys(cheatSystem.cheats)[index];
-                const status = cheatSystem.cheats[cheatKey] ? 'ON' : 'OFF';
-                this.ctx.fillStyle = this.resolveFill(cheatSystem.cheats[cheatKey] ? 'var(--status-success)' : 'var(--status-error)');
-                this.ctx.fillText(status, this.width / 2 + 80, 50 + index * 20);
+            // Show ON/OFF only for toggle cheats (skip one-shot actions like FOUND LOOT).
+            const toggleKey = ({
+                'GOD MODE': 'godMode',
+                'INFINITE AMMO': 'infiniteAmmo',
+                'FAST FIRE': 'fastFire',
+                'SLOW MOTION': 'slowMotion',
+                'INSTANT KILL': 'instantKill',
+                'SHIP SELECT': 'shipSelect'
+            })[item];
+            if (toggleKey) {
+                const on = !!cheatSystem.cheats[toggleKey];
+                this.ctx.fillStyle = this.resolveFill(on ? 'var(--status-success)' : 'var(--status-error)');
+                this.ctx.fillText(on ? 'ON' : 'OFF', this.width / 2 + 80, 50 + index * 20);
             }
         });
         

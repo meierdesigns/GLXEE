@@ -123,6 +123,20 @@ extendClass(GameControlSystem, {
             this.bindVictoryButtons(victoryOverlay);
             victoryOverlay.dataset.bound = '1';
         }
+        // Kill the browser right-click menu anywhere on the victory screen.
+        // Capture on the overlay AND document while visible — empty grid cells /
+        // planet chrome were still leaking the native menu before.
+        if (victoryOverlay.dataset.ctxBound !== '2') {
+            victoryOverlay.dataset.ctxBound = '2';
+            const blockCtx = (event) => {
+                const ov = document.getElementById('victoryOverlay');
+                if (!ov || ov.classList.contains('hidden')) return;
+                event.preventDefault();
+                event.stopPropagation();
+            };
+            victoryOverlay.addEventListener('contextmenu', blockCtx, true);
+            document.addEventListener('contextmenu', blockCtx, true);
+        }
         this.bindVictoryLootList(victoryOverlay);
 
         this.updateVictoryNextButton();
@@ -132,6 +146,9 @@ extendClass(GameControlSystem, {
             uiManager.victoryMenuIndex = 0;
             uiManager.updateVictoryMenuDisplay();
         }
+
+        // DevMode / cheat: guarantee one random salvage part in FOUND ITEMS for take→ship tests.
+        if (this.seedDevVictoryFoundItem) this.seedDevVictoryFoundItem({ onlyIfEmpty: true });
 
         this.updateVictoryStats();
         if (this.applyOutcomeStepper) this.applyOutcomeStepper(victoryOverlay.querySelector('.victory-header'), 'won');
@@ -218,6 +235,146 @@ extendClass(GameControlSystem, {
         return undefined;
     },
 
+    /** Shop-class band helpers for found-item tooltips (ranges until loot reveals the roll). */
+    _lootFmtNum(n) {
+        const v = Math.round(Number(n) * 10) / 10;
+        if (!Number.isFinite(v)) return String(n);
+        return (Math.abs(v - Math.round(v)) < 0.05) ? String(Math.round(v)) : String(v);
+    },
+
+    _lootFmtSignedRange(a, b) {
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        const s = (n) => (n > 0 ? '+' : '') + this._lootFmtNum(n);
+        if (this._lootFmtNum(lo) === this._lootFmtNum(hi)) return s(lo);
+        return s(lo) + '…' + s(hi);
+    },
+
+    _lootFmtUnsignedRange(a, b) {
+        const lo = Math.min(a, b);
+        const hi = Math.max(a, b);
+        const s = (n) => this._lootFmtNum(n);
+        if (s(lo) === s(hi)) return s(lo);
+        return s(lo) + '…' + s(hi);
+    },
+
+    /** Expand a hangar tip line into a class-band range while the part is still found loot. */
+    expandVictoryStatLineToRange(line, kind, classDef) {
+        const text = String(line || '');
+        const def = classDef || {};
+        const pot = def.potency || [1, 1];
+        const weapon = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
+        if (weapon && kind === 'weapon') {
+            const dmg = Number(weapon[1]);
+            const spd = Number(weapon[2]);
+            const dmgBand = def.dmg || [1, 1];
+            const spdBand = def.spd || [1, 1];
+            const cdBand = def.cd || [1, 1];
+            let out = 'DMG ' + this._lootFmtUnsignedRange(dmg * dmgBand[0], dmg * dmgBand[1])
+                + ' · SPD ' + this._lootFmtUnsignedRange(spd * spdBand[0], spd * spdBand[1]);
+            if (weapon[3] && /\/S$/i.test(weapon[3])) {
+                const rate = Number(String(weapon[3]).replace(/\/S$/i, ''));
+                if (Number.isFinite(rate)) {
+                    // Higher cdMul → slower fire: invert band for displayed rate.
+                    const rLo = rate / (cdBand[1] || 1);
+                    const rHi = rate / (cdBand[0] || 1);
+                    out += ' · ' + this._lootFmtUnsignedRange(rLo, rHi) + '/S';
+                } else {
+                    out += ' · ' + weapon[3];
+                }
+            } else if (weapon[3]) {
+                out += ' · ' + weapon[3];
+            }
+            if (weapon[4]) out += ' · AMMO ' + weapon[4];
+            return out;
+        }
+        const deltaParts = text.split(' · ');
+        const mapped = deltaParts.map((part) => {
+            const m = part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/);
+            if (!m) {
+                const sh = part.match(/^(SHIELD|REGEN|DMG REDUCTION|REFLECT|MAX ENERGY)\s+([+]?\d+(?:\.\d+)?(?:\/s)?)$/i);
+                if (sh) {
+                    const raw = String(sh[2]);
+                    const suffix = raw.indexOf('/s') !== -1 ? '/s' : '';
+                    const n = Number(raw.replace('/s', ''));
+                    if (!Number.isFinite(n)) return part;
+                    return sh[1].toUpperCase() + ' '
+                        + this._lootFmtSignedRange(n * pot[0], n * pot[1]) + suffix;
+                }
+                return part;
+            }
+            const n = Number(m[1]);
+            return this._lootFmtSignedRange(n * pot[0], n * pot[1]) + ' ' + m[2];
+        });
+        if (mapped.join(' · ') !== text) return mapped.join(' · ');
+        return text;
+    },
+
+    /** Found-item tip: real part identity + CLASS RANGE bands (final roll on loot). */
+    victoryFoundTipLines(kind, id, isBlueprint) {
+        const fullTip = (typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip)
+            ? String(homeStationUI.hangarModuleTip(kind, id) || '')
+            : String(id || 'ITEM').toUpperCase();
+        const tipLines = fullTip.split('\n').filter((l, i, arr) => i === 0 || l);
+        const name = tipLines[0] + (isBlueprint ? ' (BP)' : '');
+        if (isBlueprint) {
+            return { name: name, lines: tipLines.slice(1).length ? tipLines.slice(1) : tipLines };
+        }
+        const classKey = (typeof profileManager !== 'undefined' && profileManager.salvageShopClassKey)
+            ? profileManager.salvageShopClassKey(kind, id)
+            : (kind === 'weapon' ? 'sustained' : (kind === 'defense' ? 'defense' : (kind === 'energy' ? 'energy' : 'ability')));
+        const bcm = typeof balanceConfigManager !== 'undefined' ? balanceConfigManager : null;
+        const def = (bcm && bcm.SHOP_ITEM_CLASSES && bcm.SHOP_ITEM_CLASSES[classKey]) || {};
+        const classLabel = def.label || String(classKey).toUpperCase();
+        const rangeLine = (bcm && bcm.shopClassRangeLine) ? bcm.shopClassRangeLine(classKey) : '';
+        const lines = ['CLASS · ' + classLabel];
+        if (rangeLine) lines.push(rangeLine);
+        tipLines.slice(1).forEach((line) => {
+            if (!line) return;
+            lines.push(this.expandVictoryStatLineToRange(line, kind, def));
+        });
+        if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.partSizeLabel) {
+            lines.push('SIZE ' + shipLoadoutManager.partSizeLabel(kind, id));
+        }
+        return { name: name, lines: lines };
+    },
+
+    /**
+     * DevMode/cheat helper: inject one random salvageable part into profile.cargo.parts so
+     * FOUND ITEMS is never empty while testing take→ship. `onlyIfEmpty` skips when cargo
+     * already has a part; otherwise always adds one more.
+     */
+    seedDevVictoryFoundItem(opts) {
+        opts = opts || {};
+        const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        const cheatOn = typeof cheatSystem !== 'undefined' && cheatSystem.cheats
+            && (cheatSystem.cheats.godMode || cheatSystem.cheats.instantKill || cheatSystem.cheatMenuVisible);
+        // Allow explicit cheat-menu spawn even if DevMode is off.
+        if (!opts.force && !devOn && !cheatOn) return false;
+        if (typeof profileManager === 'undefined' || !profileManager.addCargoPart) return false;
+        const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
+        if (!profile) return false;
+        if (profileManager.ensureEconomyDefaults) profileManager.ensureEconomyDefaults(profile);
+        const parts = (profile.cargo && profile.cargo.parts) || {};
+        const hasPart = Object.keys(parts).some((k) => (parts[k] || 0) > 0);
+        if (opts.onlyIfEmpty && hasPart) return false;
+        let pool = [];
+        if (profileManager.getEnemySalvagePool) {
+            pool = profileManager.getEnemySalvagePool(null) || [];
+        }
+        if (!pool.length && profileManager.getBlueprintPool) {
+            pool = (profileManager.getBlueprintPool() || []).map((key) => {
+                const bp = profileManager.parseBlueprintKey(key);
+                return bp ? { kind: bp.kind, id: bp.id, key: bp.key } : null;
+            }).filter(Boolean);
+        }
+        if (!pool.length) return false;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        if (!pick || !pick.kind || !pick.id) return false;
+        const n = profileManager.addCargoPart(pick.kind, pick.id, 1);
+        return n > 0;
+    },
+
     /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
      *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
      *  snapshot) since selling/taking changes it while this screen stays open. Click takes a
@@ -264,51 +421,69 @@ extendClass(GameControlSystem, {
         if (!entries.length) {
             return emptyGrid();
         }
-        const cells = entries.map((e) => {
+        // Same S/M/L footprints + physicalItem shell as ship/station bags (not a flat 1×1 icon).
+        const cellSpecs = entries.map((e) => {
             const id = 'part:' + e.key;
             const tint = this.victoryLootTint(id);
             const parsed = (typeof profileManager !== 'undefined' && profileManager.parseBlueprintKey)
                 ? profileManager.parseBlueprintKey(e.key) : null;
-            // Real name + stat lines (DMG/SPD, SHIELD, ARMOR, …) from the same lookup the
-            // home-station hangar uses — not just a bare id label.
-            const fullTip = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.hangarModuleTip)
-                ? homeStationUI.hangarModuleTip(parsed.kind, parsed.id)
-                : 'UNKNOWN ITEM';
-            const tipLines = fullTip.split('\n');
-            const name = tipLines[0] + (e.isBlueprint ? ' (BP)' : '');
-            const iconHtml = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml)
-                ? homeStationUI.moduleIconHtml(parsed.kind, parsed.id, cs - 20, 'victory-loot-pixel', false, tint)
-                : (typeof iconRenderer !== 'undefined')
-                    ? iconRenderer.imgHtml(this.victoryResourceIconKey(id), cs - 20, 'victory-loot-pixel', tint)
-                    : '';
+            const tipBuilt = (parsed && this.victoryFoundTipLines)
+                ? this.victoryFoundTipLines(parsed.kind, parsed.id, e.isBlueprint)
+                : { name: 'UNKNOWN ITEM', lines: ['UNKNOWN ITEM'] };
+            const tipLines = tipBuilt.lines;
+            const name = tipBuilt.name;
             const color = tint || '#ccc';
+            const span = (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.shopPartSpan)
+                ? homeStationUI.shopPartSpan(parsed.kind, parsed.id)
+                : [1, 1];
+            const boxW = span[0] * cs - 6;
+            const boxH = span[1] * cs - 6;
+            let body = '';
+            if (parsed && typeof physicalItem !== 'undefined' && physicalItem.wrap) {
+                body = physicalItem.wrap(parsed.kind, parsed.id, boxW, boxH, color, '');
+            } else if (parsed && typeof homeStationUI !== 'undefined' && homeStationUI.moduleIconHtml) {
+                body = homeStationUI.moduleIconHtml(parsed.kind, parsed.id, Math.min(boxW, boxH) - 8, 'victory-loot-pixel', false, tint);
+            } else if (typeof iconRenderer !== 'undefined') {
+                body = iconRenderer.imgHtml(this.victoryResourceIconKey(id), Math.min(boxW, boxH) - 8, 'victory-loot-pixel', tint);
+            }
             const sellValue = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0) * e.amount;
             const sellable = sellValue > 0 ? ' is-sellable' : '';
             const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
             const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
-            const unitSell = (profileManager.getCargoPartSellValue ? profileManager.getCargoPartSellValue(e.key) : 0);
             const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
-                : (parsed ? `CLICK TO LOOT · DRAG TO SHIP · RIGHT-CLICK SELL 1 · ${unitSell}c`
+                : (parsed ? `LEFT-CLICK · MOVE TO SHIP`
                     : `CLICK TO SELL · ${sellValue}c`));
             const tip = tipLines.concat(actionLine.split('\n')).join('\n');
-            return `<button type="button" class="hs-storage-cell victory-loot-cell${sellable}${draggable}" ` +
-                `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" style="--pk-c:${color}" ` +
+            const html = `<button type="button" class="hs-storage-cell victory-loot-cell${e.isBlueprint ? ' is-blueprint' : ''}${sellable}${draggable}" ` +
+                `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" ` +
+                `${parsed ? `data-part-kind="${parsed.kind}" data-part-id="${parsed.id}" ` : ''}` +
+                `style="__SPAN__--pk-c:${color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${name.replace(/"/g, '&quot;')}" data-ui-tip="${tip.replace(/"/g, '&quot;')}" ` +
                 `aria-label="${name}">` +
-                iconHtml +
+                body +
                 qtyHtml +
                 `</button>`;
+            return { html: html, span: span };
+        });
+        if (typeof homeStationUI !== 'undefined' && homeStationUI.packShopStockGrid) {
+            return homeStationUI.packShopStockGrid(cellSpecs, cols, rows, cs, gap, 'victory-loot-grid');
+        }
+        const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        const totalRows = Math.max(rows, Math.ceil(Math.max(used, 1) / cols));
+        const padCount = Math.max(0, cols * totalRows - used);
+        const cells = cellSpecs.map((c) => {
+            const [w, h] = c.span;
+            return c.html.replace('__SPAN__', `grid-column: span ${w}; grid-row: span ${h};`);
         }).join('');
-        const totalRows = Math.max(rows, Math.ceil(entries.length / cols));
-        const padCount = Math.max(0, cols * totalRows - entries.length);
         const padding = Array.from({ length: padCount })
             .map(() => '<span class="hs-storage-cell hs-storage-cell-empty"></span>')
             .join('');
-        const filledGridStyle = totalRows === rows
-            ? gridStyle
-            : `--cs:${cs}px;--hs-gap:${gap}px;` +
-                `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${totalRows},${cs}px);`;
-        return `<div class="hs-storage-grid victory-loot-grid" style="${filledGridStyle}">` +
+        const filledGridStyle = `--cs:${cs}px;--hs-gap:${gap}px;` +
+            `grid-auto-flow:row dense;` +
+            `grid-template-columns:repeat(${cols},${cs}px);grid-template-rows:repeat(${totalRows},${cs}px);` +
+            `width:calc(${cols}*${cs}px + ${cols - 1}*${gap}px);` +
+            `height:calc(${totalRows}*${cs}px + ${totalRows - 1}*${gap}px);`;
+        return `<div class="hs-storage-grid victory-loot-grid" data-inv-cols="${cols}" data-inv-rows="${totalRows}" style="${filledGridStyle}">` +
             cells + padding +
             `</div>`;
     },
@@ -352,7 +527,11 @@ extendClass(GameControlSystem, {
             return;
         }
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-            levelInfoManager.showLootNotice('STORED ON SHIP');
+            const roll = res.rolls && res.rolls[0];
+            const notice = roll && roll.classKey
+                ? ('STORED · ' + String(roll.classKey).toUpperCase() + ' ROLL')
+                : 'STORED ON SHIP';
+            levelInfoManager.showLootNotice(notice);
         }
         this.updateVictoryStats();
     },
@@ -366,7 +545,7 @@ extendClass(GameControlSystem, {
         if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
         // growToFit: looted parts must stay visible even when the hangar bay is already full.
         const shipGrid = homeStationUI.renderShipStorage(profile, shipId, {
-            tipAction: false,
+            tipAction: 'equip',
             growToFit: true
         }) || '';
         return `<div class="victory-loadout-bags">` +
@@ -413,12 +592,41 @@ extendClass(GameControlSystem, {
         this._hsVictoryPrevCreate = null;
     },
 
+    /** Right-click a part in the victory SHIP bag: equip / unequip (same as station ship storage). */
+    equipVictoryShipCell(cell) {
+        if (!cell || typeof homeStationUI === 'undefined' || !homeStationUI._equipFromStorageCell) return;
+        this.patchHomeStationForVictory();
+        try {
+            homeStationUI._equipFromStorageCell(cell);
+        } catch (err) {
+            this.unpatchHomeStationForVictory();
+            this.updateVictoryStats();
+        }
+        // Successful equip calls createUI → our patch → updateVictoryStats + unpatch.
+        // Failed equip does not — refresh + unpatch here.
+        if (this._hsVictoryPatched) {
+            this.unpatchHomeStationForVictory();
+            this.updateVictoryStats();
+        }
+    },
+
     bindVictoryShipGridDrag(victoryOverlay) {
         if (!victoryOverlay || typeof homeStationUI === 'undefined') return;
         victoryOverlay.querySelectorAll('#victoryLoadoutList .hs-storage-cell[data-drag-key]').forEach((cell) => {
             cell.setAttribute('draggable', 'false');
             cell.addEventListener('dragstart', (e) => e.preventDefault());
+            cell.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
             cell.addEventListener('pointerdown', (ev) => {
+                // Right-click: equip / unequip while the part sits in ship inventory.
+                if (ev.button === 2) {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    this.equipVictoryShipCell(cell);
+                    return;
+                }
                 if (ev.button !== 0) return;
                 this.patchHomeStationForVictory();
                 homeStationUI._storageDragStart(ev, cell);
@@ -486,7 +694,6 @@ extendClass(GameControlSystem, {
                         .forEach((g) => g.classList.toggle('is-drag-over', g === overShip));
                 };
                 const onUp = (ev) => {
-                    const wasDragging = dragging;
                     cleanup();
                     // setPointerCapture often eats the native click; always loot on release
                     // (drop on SHIP or plain click / drag-jitter — same take-to-ship action).
@@ -505,19 +712,19 @@ extendClass(GameControlSystem, {
 
     bindVictoryLootList(victoryOverlay) {
         const list = victoryOverlay.querySelector('#victoryLootList');
-        if (!list || list.dataset.sellBound) return;
-        list.dataset.sellBound = '1';
+        // v4: left-click moves found→ship; right-click does not take (equip is ship-bag only).
+        if (!list || list.dataset.sellBound === 'v4') return;
+        list.dataset.sellBound = 'v4';
         list.addEventListener('click', (event) => {
             // Right-click on a <button> can still fire a trailing click (button 2) after
-            // contextmenu/pointerdown sell — reject it or the part vanishes without a real loot.
+            // contextmenu/pointerdown — reject it so only left-click moves inventory.
             if (event.button !== 0) return;
             const btn = event.target.closest('.victory-loot-cell');
             if (!btn) return;
             event.preventDefault();
             event.stopPropagation();
             const isBlueprint = btn.dataset.cargoBlueprint === '1';
-            // Parts: click loots onto the active ship. Blueprints can't file on a ship
-            // (craft-only), so left-click still sells those.
+            // Parts: left-click moves into the ship bag. Blueprints stay sell-only.
             if (!isBlueprint && btn.classList.contains('is-draggable')) {
                 this.takeVictoryCargoItem(btn.dataset.cargoKey);
                 return;
@@ -525,22 +732,33 @@ extendClass(GameControlSystem, {
             if (!btn.classList.contains('is-sellable')) return;
             this.sellVictoryCargoItem(btn.dataset.cargoKey, isBlueprint);
         });
-        // Sell on pointerdown (button 2), not contextmenu alone: same pattern as the
-        // hangar storage grid — acting before the browser's trailing button-2 click
-        // keeps sell from racing a fake loot/take that then looks like "just gone".
+        // Right-click on FOUND ITEMS: only blueprints sell. Parts wait for left-click move;
+        // equip happens later via right-click in the SHIP bag.
         list.addEventListener('pointerdown', (event) => {
             if (event.button !== 2) return;
-            const btn = event.target.closest('.victory-loot-cell.is-sellable');
+            const btn = event.target.closest('.victory-loot-cell');
             if (!btn) return;
             event.preventDefault();
             event.stopPropagation();
-            this.sellVictoryCargoItem(btn.dataset.cargoKey, btn.dataset.cargoBlueprint === '1');
+            const isBlueprint = btn.dataset.cargoBlueprint === '1';
+            if (isBlueprint && btn.classList.contains('is-sellable')) {
+                this.sellVictoryCargoItem(btn.dataset.cargoKey, true);
+            }
         });
+        // Block the browser context menu on the whole FOUND ITEMS grid (cells + empties).
         list.addEventListener('contextmenu', (event) => {
-            if (!event.target.closest('.victory-loot-cell')) return;
             event.preventDefault();
             event.stopPropagation();
         });
+        // Same for SHIP loadout grid — no native context menu on slots or empty cells.
+        const loadout = victoryOverlay.querySelector('#victoryLoadoutList');
+        if (loadout && loadout.dataset.ctxBound !== '2') {
+            loadout.dataset.ctxBound = '2';
+            loadout.addEventListener('contextmenu', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+            });
+        }
     },
 
     applyVictoryPixelIcons(victoryOverlay) {

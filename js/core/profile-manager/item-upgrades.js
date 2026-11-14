@@ -317,8 +317,59 @@ extendClass(ProfileManager, {
     },
 
     /** Same progressive ramp as getModuleUpgradeBonuses, scoped to one item's own track levels. */
+    /** Vendor roll from planet shop (stored on the bought copy). */
+    setShopVendorRoll(bucket, instanceId, mul, classKey) {
+        const profile = this.getActiveProfile();
+        if (!profile) return;
+        this.ensureEconomyDefaults(profile);
+        const entry = this._itemUpgradeEntry(bucket, instanceId, profile);
+        if (!entry) return;
+        entry.vendorRoll = Object.assign({}, mul || {});
+        if (classKey) entry.vendorClass = String(classKey);
+        this.save();
+    },
+
+    /** Shop-class key for a salvage/found part (same bands as planet shop). */
+    salvageShopClassKey(kind, id) {
+        const k = String(kind || '');
+        if (k === 'weapon' && typeof balanceConfigManager !== 'undefined' && balanceConfigManager.getWeaponRole) {
+            return balanceConfigManager.getWeaponRole(id) || 'sustained';
+        }
+        if (k === 'defense') return 'defense';
+        if (k === 'energy') return 'energy';
+        return 'ability';
+    },
+
+    /** Roll final salvage multipliers inside the class band (revealed on loot-to-ship). */
+    rollSalvageVendorStats(kind, id) {
+        const classKey = this.salvageShopClassKey(kind, id);
+        const bcm = typeof balanceConfigManager !== 'undefined' ? balanceConfigManager : null;
+        const def = (bcm && bcm.SHOP_ITEM_CLASSES && bcm.SHOP_ITEM_CLASSES[classKey])
+            || { label: String(classKey).toUpperCase() };
+        const pick = (pair) => {
+            if (!pair || pair.length < 2) return 1;
+            const t = Math.random();
+            return Math.round((pair[0] + t * (pair[1] - pair[0])) * 1000) / 1000;
+        };
+        const mul = {};
+        if (def.dmg) mul.dmgMul = pick(def.dmg);
+        if (def.spd) mul.spdMul = pick(def.spd);
+        if (def.cd) mul.cdMul = pick(def.cd);
+        if (def.potency) mul.potencyMul = pick(def.potency);
+        if (def.duration) mul.durationMul = pick(def.duration);
+        if (def.ammo) mul.ammoMul = pick(def.ammo);
+        return { classKey: classKey, classLabel: def.label || String(classKey).toUpperCase(), mul: mul };
+    },
+
+    _vendorRollMul(entry, key) {
+        const vr = entry && entry.vendorRoll;
+        const n = vr && vr[key] != null ? Number(vr[key]) : 1;
+        return Number.isFinite(n) && n > 0 ? n : 1;
+    },
+
     getItemUpgradeBonuses(bucket, itemId, profile) {
         const p = profile || this.getActiveProfile();
+        const entry = p ? this._itemUpgradeEntry(bucket, itemId, p) : null;
         const ramp = (lv, base, accel) => {
             const n = Math.max(0, Math.round(Number(lv) || 0));
             if (n <= 0) return 0;
@@ -328,7 +379,7 @@ extendClass(ProfileManager, {
         };
         const trackLevel = (track) => p ? this.getItemTrackLevel(bucket, itemId, track, p) : 0;
         if (bucket === 'weapons') {
-            return {
+            const bonuses = {
                 damageMul: 1 + ramp(trackLevel('dmg'), 0.05, 0.02),
                 cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('rof'), 0.04, 0.015)),
                 rangeMul: 1 + ramp(trackLevel('range'), 0.04, 0.015),
@@ -337,19 +388,33 @@ extendClass(ProfileManager, {
                     && (typeof economyConfig === 'undefined' || !economyConfig.itemTrackApplies
                         || economyConfig.itemTrackApplies('weapons', itemId, 'chain'))
             };
+            bonuses.damageMul *= this._vendorRollMul(entry, 'dmgMul');
+            bonuses.cooldownMul *= this._vendorRollMul(entry, 'cdMul');
+            bonuses.rangeMul *= this._vendorRollMul(entry, 'spdMul');
+            return bonuses;
         }
         if (bucket === 'defenses') {
-            return {
+            const bonuses = {
                 capacityMul: 1 + ramp(trackLevel('capacity'), 0.055, 0.025),
                 harden: Math.min(0.25, ramp(trackLevel('harden'), 0.025, 0.01)),
                 regenMul: 1 + ramp(trackLevel('regen'), 0.07, 0.03)
             };
+            const pot = this._vendorRollMul(entry, 'potencyMul');
+            bonuses.capacityMul *= pot;
+            bonuses.regenMul *= pot;
+            return bonuses;
         }
         // abilities / energy
-        return {
+        const bonuses = {
             cooldownMul: Math.max(0.6, 1 - ramp(trackLevel('cooldown'), 0.04, 0.015)),
             potencyMul: 1 + ramp(trackLevel('potency'), 0.06, 0.025),
             durationMul: 1 + ramp(trackLevel('duration'), 0.055, 0.02)
         };
+        const pot = this._vendorRollMul(entry, 'potencyMul');
+        const dur = this._vendorRollMul(entry, 'durationMul');
+        bonuses.potencyMul *= pot;
+        bonuses.durationMul *= dur;
+        bonuses.cooldownMul *= this._vendorRollMul(entry, 'cdMul');
+        return bonuses;
     },
 });

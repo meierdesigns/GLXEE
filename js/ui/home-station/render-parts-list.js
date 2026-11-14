@@ -558,7 +558,20 @@ extendClass(HomeStationUI, {
             const cs = this._storageLayoutPx().cell;
             const body = (typeof physicalItem !== 'undefined')
                 ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '') : '';
-            const stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
+            let stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
+            if (!isBp && e.unit != null && typeof profileManager !== 'undefined' && profileManager._itemUpgradeEntry) {
+                const up = profileManager._itemUpgradeEntry(e.bucket, e.id, profile);
+                if (up && up.vendorRoll && this.applyVendorRollToStatLines) {
+                    stats = this.applyVendorRollToStatLines(meta.kind, meta.physId, stats, up.vendorRoll);
+                }
+                if (up && up.vendorClass) {
+                    const bcm = typeof balanceConfigManager !== 'undefined' ? balanceConfigManager : null;
+                    const label = (bcm && bcm.SHOP_ITEM_CLASSES && bcm.SHOP_ITEM_CLASSES[up.vendorClass]
+                        && bcm.SHOP_ITEM_CLASSES[up.vendorClass].label)
+                        || String(up.vendorClass).toUpperCase();
+                    stats.unshift('CLASS · ' + label);
+                }
+            }
             if (e.bucket === 'weapons' && typeof shipLoadoutManager !== 'undefined') {
                 const L2 = shipLoadoutManager.getLoadout(shipId);
                 stats.push('MODE ' + (L2 && L2.fireMode === 'charge' ? 'CHARGE' : 'AUTO'));
@@ -587,16 +600,20 @@ extendClass(HomeStationUI, {
                 && this._stationRejectsItem(profile, e.bucket, defId);
             const destFull = slotsFull || stationFull;
             const tipAction = selectMode ? 'SELECT'
-                : (opts.tipAction === false ? (slotsFull ? 'SLOTS FULL' : null)
-                    : (stationFull ? 'STATION FULL' : (slotsFull ? 'SLOTS FULL' : '→ STATION')));
+                : (opts.tipAction === 'equip'
+                    ? (slotsFull ? 'SLOTS FULL' : 'RIGHT-CLICK · EQUIP')
+                    : (opts.tipAction === false ? (slotsFull ? 'SLOTS FULL' : null)
+                        : (stationFull ? 'STATION FULL' : (slotsFull ? 'SLOTS FULL' : '→ STATION'))));
             const tip = (isBp ? stats.concat(this._blueprintCostLines(profile, defId)).concat(qty > 1 ? ['×' + qty] : [])
                 : stats.concat([equipped ? 'EQUIPPED' : null, tipAction].filter(Boolean))).join('\n').replace(/"/g, '&quot;');
             const lockReason = stationFull ? 'station storage full' : (slotsFull ? 'all slots full' : null);
             const ariaLabel = isBp ? `Craft ${meta.label}`
                 : (selectMode ? `Select ${meta.label}`
-                    : (opts.tipAction === false
-                        ? (slotsFull ? `${meta.label} — all slots full` : meta.label)
-                        : (lockReason ? `${meta.label} — ${lockReason}` : `Move ${meta.label} to station storage`)));
+                    : (opts.tipAction === 'equip'
+                        ? (slotsFull ? `${meta.label} — all slots full` : `Equip ${meta.label}`)
+                        : (opts.tipAction === false
+                            ? (slotsFull ? `${meta.label} — all slots full` : meta.label)
+                            : (lockReason ? `${meta.label} — ${lockReason}` : `Move ${meta.label} to station storage`))));
             const dragAttrs = `draggable="true" data-drag-key="${key}" data-drag-source="ship" data-drag-ship="${shipId}"`;
             // data-part-kind/-id: see renderStationStorage above — same reason, needed here too
             // since this is the function the hangar bay-inventory grid actually calls.

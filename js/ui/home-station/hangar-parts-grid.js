@@ -290,6 +290,69 @@ extendClass(HomeStationUI, {
             `<span class="hs-hangar-weapon-stat" data-stat="energy" data-ui-tip="ENERGY RECOVERY PER SECOND">${this.iconHtml('statEnergy', 16, 'hs-pixel', false, this.hangarStatColor('energy'))}+${regen}/S</span>` +
             `</span>`;
     },
+    /** CSS row kind for iss/tps detail stat lines. */
+    detailStatLineClass(text, index) {
+        const t = String(text || '').trim();
+        if (index === 0 && /^(PERMANENT PART|TEMP|INVENTORY)/i.test(t)) return ' is-tag';
+        if (/\d+c$/i.test(t) || /^MARKED FOR SALE ·/i.test(t)) return ' is-cost';
+        if (/^CLASS RANGE ·/i.test(t)) return ' is-class-range';
+        if (/^CLASS ·/i.test(t)) return ' is-shop-class';
+        if (/^DMG \d/.test(t)) return ' is-weapon-roll';
+        if (/^(REVERTS|DURATION|AMMO \d)/i.test(t)) return ' is-meta';
+        return ' is-desc';
+    },
+
+    /** Icon chips for "CLASS RANGE · DMG -4…+8% · …" shop spread lines. */
+    formatClassRangeChipsHtml(rangeLine) {
+        const rest = String(rangeLine || '').replace(/^CLASS RANGE ·\s*/i, '');
+        if (!rest) return '';
+        const iconMap = {
+            DMG: 'statDamage', SPD: 'statSpeed', RATE: 'shotRapid',
+            POTENCY: 'statAbilities', TIME: 'shotRapid', AMMO: 'statWeapon'
+        };
+        const typeMap = {
+            DMG: 'damage', SPD: 'shotspeed', RATE: 'firerate',
+            POTENCY: 'power', TIME: 'firerate', AMMO: 'power'
+        };
+        const toneFor = (val) => {
+            const m = String(val).match(/([+-]?\d+)(?:…|\.\.\.)([+-]?\d+)%/);
+            if (!m) return '';
+            const lo = Number(m[1]);
+            const hi = Number(m[2]);
+            if (hi > 0 && lo >= 0) return ' is-good';
+            if (hi <= 0 && lo < 0) return ' is-bad';
+            return ' is-mixed';
+        };
+        const chip = (label, val, type) =>
+            `<span class="hs-hangar-weapon-stat vf-iss-range-chip${toneFor(val)}" data-stat="${type}">` +
+            `${this.iconHtml(iconMap[label] || 'statWeapon', 14, 'hs-pixel', false, this.hangarStatColor(type))}` +
+            `<span class="vf-iss-range-lbl">${label}</span>` +
+            `<b class="hs-stat-num">${String(val).replace(/</g, '&lt;')}</b></span>`;
+        return `<span class="hs-hangar-weapon-stats vf-iss-range-grid">` +
+            rest.split(' · ').map((part) => {
+                const m = part.match(/^(DMG|SPD|RATE|POTENCY|TIME|AMMO)\s+(.+)$/);
+                if (!m) {
+                    return `<span class="vf-iss-range-fallback">${part.replace(/</g, '&lt;')}</span>`;
+                }
+                return chip(m[1], m[2], typeMap[m[1]] || 'power');
+            }).join('') +
+            `</span>`;
+    },
+
+    /** Shop class label + roll range in one readable cluster. */
+    formatDetailClassClusterHtml(classLine, rangeLine) {
+        const label = String(classLine || '').replace(/^CLASS ·\s*/i, '').trim();
+        return `<section class="vf-iss-detail-cluster vf-iss-class-cluster" aria-label="Shop class">` +
+            `<header class="vf-iss-cluster-head">` +
+            `<span class="vf-iss-cluster-kicker">CLASS</span>` +
+            `<strong class="vf-iss-class-pill">${label.replace(/</g, '&lt;')}</strong>` +
+            `</header>` +
+            `<div class="vf-iss-cluster-body">` +
+            `<span class="vf-iss-cluster-sub">Roll band</span>` +
+            this.formatClassRangeChipsHtml(rangeLine) +
+            `</div></section>`;
+    },
+
     /**
      * Tip/detail text → hangar-style icon chips with coloured values.
      * Matches "DMG 10 · SPD 12 · 4.0/S" (optional rate / AMMO) and ability
@@ -297,6 +360,13 @@ extendClass(HomeStationUI, {
      */
     formatDetailStatLineHtml(line) {
         const text = String(line || '');
+        if (/^CLASS RANGE ·/i.test(text)) return this.formatClassRangeChipsHtml(text);
+        if (/^CLASS ·/i.test(text)) {
+            const label = text.replace(/^CLASS ·\s*/i, '').trim();
+            return `<span class="vf-iss-class-inline">` +
+                `<span class="vf-iss-cluster-kicker">CLASS</span>` +
+                `<strong class="vf-iss-class-pill">${label.replace(/</g, '&lt;')}</strong></span>`;
+        }
         const chip = (icon, val, type, worse, better) =>
             `<span class="hs-hangar-weapon-stat${worse ? ' is-bad' : ''}${better ? ' is-good' : ''}" data-stat="${type}">` +
             `${this.iconHtml(icon, 14, 'hs-pixel', false, this.hangarStatColor(type))}` +
@@ -322,17 +392,75 @@ extendClass(HomeStationUI, {
                 return chip(statIcon[pm[2]], pm[1], statType[pm[2]], worse, better);
             }).join(''));
         }
+        // Found-loot ranges: "+1.8…+2.2 ARMOR" / "-0.2…-0.18 SPEED"
+        const rangeParts = text.split(' · ').map((part) =>
+            part.match(/^([+-]?\d+(?:\.\d+)?)…([+-]?\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/));
+        if (rangeParts.length && rangeParts.every(Boolean)) {
+            return wrap(rangeParts.map((pm) => {
+                const lo = Number(pm[1]);
+                const hi = Number(pm[2]);
+                const worse = Number.isFinite(hi) && hi < 0;
+                const better = Number.isFinite(lo) && lo > 0;
+                return chip(statIcon[pm[3]], pm[1] + '…' + pm[2], statType[pm[3]], worse, better);
+            }).join(''));
+        }
         return text.replace(/</g, '&lt;');
+    },
+
+    /** Apply a salvage/shop vendorRoll to hangar tip stat lines (final numbers after loot). */
+    applyVendorRollToStatLines(kind, partId, lines, mul) {
+        const m = mul || {};
+        const scaleNum = (n, factor) => Math.round(Number(n) * (Number(factor) || 1) * 10) / 10;
+        const fmt = (n) => {
+            const v = scaleNum(n, 1);
+            return (Math.abs(v - Math.round(v)) < 0.05) ? String(Math.round(v)) : String(v);
+        };
+        const scaleSigned = (raw, factor) => {
+            const n = Number(raw);
+            if (!Number.isFinite(n)) return raw;
+            const v = scaleNum(n, factor);
+            const s = fmt(v);
+            return (v > 0 && !String(raw).startsWith('-') ? (String(raw).startsWith('+') ? '+' : '') : '') + s;
+        };
+        return (lines || []).map((line) => {
+            const text = String(line || '');
+            const weapon = text.match(/^DMG (\S+) · SPD (\S+)(?: · (\S+))?(?: · AMMO (\S+))?$/);
+            if (weapon && kind === 'weapon') {
+                const dmg = scaleNum(weapon[1], m.dmgMul || 1);
+                const spd = scaleNum(weapon[2], m.spdMul || 1);
+                let out = 'DMG ' + fmt(dmg) + ' · SPD ' + fmt(spd);
+                if (weapon[3] && /\/S$/i.test(weapon[3])) {
+                    const rate = Number(String(weapon[3]).replace(/\/S$/i, ''));
+                    if (Number.isFinite(rate)) {
+                        const cdMul = Number(m.cdMul) || 1;
+                        out += ' · ' + fmt(rate / cdMul) + '/S';
+                    } else out += ' · ' + weapon[3];
+                } else if (weapon[3]) out += ' · ' + weapon[3];
+                if (weapon[4]) out += ' · AMMO ' + weapon[4];
+                return out;
+            }
+            const pot = m.potencyMul || 1;
+            return text.split(' · ').map((part) => {
+                const dm = part.match(/^([+-]\d+(?:\.\d+)?) (SPEED|DAMAGE|ARMOR|FIRE RATE)$/);
+                if (dm) return scaleSigned(dm[1], pot) + ' ' + dm[2];
+                const sh = part.match(/^(SHIELD|REGEN|DMG REDUCTION|REFLECT|MAX ENERGY)\s+(\+?\d+(?:\.\d+)?)(\/s)?$/i);
+                if (sh) return sh[1].toUpperCase() + ' ' + scaleSigned(sh[2], pot) + (sh[3] || '');
+                return part;
+            }).join(' · ');
+        });
     },
     /** Compact DMG / SPD / fire-rate line for a weapon row.
      *  `compareId`: when set (e.g. currently equipped gun), stats that are worse
      *  than that baseline get `is-bad` / better get `is-good`. */
-    hangarWeaponStatsHtml(id, compareId) {
+    hangarWeaponStatsHtml(id, compareId, statMul) {
         if (typeof weaponConfigManager === 'undefined') return '';
         const w = weaponConfigManager.getWeapon(id);
         if (!w) return '';
-        const rateNum = w.cooldown ? (1000 / w.cooldown) : 0;
-        const rate = w.cooldown ? rateNum.toFixed(1) : '—';
+        const mul = statMul || {};
+        const cd = Math.max(50, Number(w.cooldown || 300) * (mul.cdMul || 1));
+        const shotSpd = Math.round((Number(w.speed) || 0) * (mul.spdMul || 1) * 10) / 10;
+        const rateNum = 1000 / cd;
+        const rate = rateNum.toFixed(1);
         // Icon instead of a text label (same icons as the details panel); label stays in the tooltip.
         const stat = (icon, tip, value, type, boosted, worse, better) =>
             `<span class="hs-hangar-weapon-stat${boosted ? ' is-boosted' : ''}${worse ? ' is-bad' : ''}${better ? ' is-good' : ''}" data-stat="${type}" data-ui-tip="${tip}">${this.iconHtml(icon, 16, 'hs-pixel', false, this.hangarStatColor(type))}<b class="hs-stat-num">${value}</b>${boosted ? '<span class="hs-stat-boost">▲</span>' : ''}${worse ? '<span class="hs-stat-worse">▼</span>' : ''}${better ? '<span class="hs-stat-better">▲</span>' : ''}</span>`;
@@ -348,7 +476,7 @@ extendClass(HomeStationUI, {
         const sources = [];
         if (classMul > 1) sources.push('SHIP +' + Math.round((classMul - 1) * 100) + '%');
         if (factionMul > 1) sources.push(String(faction).toUpperCase() + ' +' + Math.round((factionMul - 1) * 100) + '%');
-        const dmg = Math.round((w.damage || 0) * classMul * factionMul);
+        const dmg = Math.round((w.damage || 0) * classMul * factionMul * (mul.dmgMul || 1));
         const dmgTip = sources.length ? 'DAMAGE ' + w.damage + ' → ' + dmg + ' (' + sources.join(' · ') + ')' : 'DAMAGE';
         const cmp = (compareId && compareId !== id) ? weaponConfigManager.getWeapon(compareId) : null;
         let cDmg = null;
@@ -367,8 +495,13 @@ extendClass(HomeStationUI, {
         const better = (mine, theirs) => (theirs != null && mine != null && Number(mine) > Number(theirs));
         let powerHtml = '';
         if (typeof balanceConfigManager !== 'undefined' && balanceConfigManager.computeWeaponPower) {
-            const power = balanceConfigManager.computeWeaponPower(w, id);
-            const eDps = Math.round(balanceConfigManager.volleyDps(w) * balanceConfigManager.getHitRate(id, w));
+            const wRoll = Object.assign({}, w, {
+                damage: (w.damage || 0) * (mul.dmgMul || 1),
+                cooldown: cd,
+                speed: shotSpd
+            });
+            const power = balanceConfigManager.computeWeaponPower(wRoll, id);
+            const eDps = Math.round(balanceConfigManager.volleyDps(wRoll) * balanceConfigManager.getHitRate(id, wRoll));
             let powerWorse = false;
             let powerBetter = false;
             if (cmp && balanceConfigManager.computeWeaponPower) {
@@ -380,7 +513,7 @@ extendClass(HomeStationUI, {
         }
         return `<span class="hs-hangar-weapon-stats">` +
             stat('statDamage', dmgTip, dmg, 'damage', sources.length > 0, worse(dmg, cDmg), better(dmg, cDmg)) +
-            stat('statSpeed', 'SHOT SPEED', w.speed, 'shotspeed', false, worse(w.speed, cSpd), better(w.speed, cSpd)) +
+            stat('statSpeed', 'SHOT SPEED', shotSpd, 'shotspeed', false, worse(shotSpd, cSpd), better(shotSpd, cSpd)) +
             stat('shotRapid', 'SHOTS PER SECOND', rate + '/S', 'firerate', false, worse(rateNum, cRate), better(rateNum, cRate)) +
             powerHtml +
             `</span>`;

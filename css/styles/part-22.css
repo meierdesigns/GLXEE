@@ -846,6 +846,17 @@ html body .start-screen-retro .start-menu-row .menu-item:is(.disabled, [aria-dis
   padding: 3px 8px; cursor: pointer;
 }
 .start-station-dev-row button:hover { background: color-mix(in srgb, var(--color-primary) 45%, #05060a); }
+.start-station-dev-px button.is-active {
+  background: color-mix(in srgb, var(--color-primary) 70%, #05060a);
+  border-color: #fff;
+  color: #fff;
+}
+.start-station-dev-meta {
+  font-size: calc(var(--font-text) - 1px);
+  opacity: 0.8;
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+}
 
 /* The menu content fills the screen (no terminal bezel, transparent) so the station shows through the middle */
 html body .start-screen-content.start-screen-retro.start-screen-main {
@@ -1340,6 +1351,25 @@ html body .profile-selection-name-mode.is-pilot-step .pp-motion {
 }
 html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl {
     padding: 6px 8px;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    gap: 6px 10px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-name {
+    font-size: var(--font-text, 14px) !important;
+    gap: 8px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-name > span {
+    overflow: visible;
+    text-overflow: clip;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-val {
+    font-size: var(--font-text, 14px) !important;
+    min-width: 4.5em;
+    padding-right: 4px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-ico {
+    width: 22px;
+    height: 22px;
 }
 html body .onboarding-overlay .pp-motion {
     flex: 0 0 auto;
@@ -1472,6 +1502,44 @@ html:not([data-vf-pixel-size="on"]) .galaxy-map-svg .gm-px-only { display: none;
 
 /* Pixel screen: crests keep their size (no hover shrink/fade) so they stay readable. */
 html[data-vf-pixel-size="on"] .gm-node .gm-node-factions { transform: none; opacity: 1; transition: none; }
+
+/* Start menu: icons + Silkscreen sizes snap to the shared Global Pixel Size lattice
+   (16·k·gp for sprites; font sizes rounded to whole gp cells) so title / buttons /
+   scoreboard / icons don't mix different texel sizes. */
+html[data-vf-pixel-size="on"] .start-screen-retro .start-screen-title {
+    font-size: round(nearest, clamp(52px, calc(7.8 * var(--sv-w)), 86px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-screen-subtitle {
+    font-size: round(nearest, clamp(16px, calc(1.9 * var(--sv-w)), 23px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-menu-row .menu-item-label {
+    font-size: round(nearest, clamp(18px, min(calc(2.5 * var(--sv-w)), calc(3.6 * var(--sv-h))), 34px), var(--vf-px)) !important;
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-title {
+    font-size: round(nearest, clamp(15px, min(calc(1.6 * var(--sv-w)), calc(2.3 * var(--sv-h))), 23px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-head {
+    font-size: round(nearest, clamp(10px, calc(1.15 * var(--sv-w)), 15px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-row {
+    font-size: round(nearest, clamp(14px, min(calc(1.5 * var(--sv-w)), calc(2.3 * var(--sv-h))), 21px), var(--vf-px));
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-menu-row .menu-pixel-icon,
+html[data-vf-pixel-size="on"] .start-screen-retro .start-menu-row .menu-item-icon {
+    --vf-menu-icon: calc(16 * var(--vf-px));
+    width: round(nearest, clamp(44px, min(calc(5.6 * var(--sv-w)), calc(9 * var(--sv-h))), 90px), var(--vf-menu-icon)) !important;
+    height: round(nearest, clamp(44px, min(calc(5.6 * var(--sv-w)), calc(9 * var(--sv-h))), 90px), var(--vf-menu-icon)) !important;
+}
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-emblem img,
+html[data-vf-pixel-size="on"] .start-screen-retro .start-scoreboard-emblem svg {
+    width: calc(16 * var(--vf-px)) !important;
+    height: calc(16 * var(--vf-px)) !important;
+}
+html[data-vf-pixel-size="on"] .start-station-canvas {
+    image-rendering: -moz-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
 
 /* Station map: galaxy ruler card beside the ship bar, enemy avatar + ship in the bottom bar. */
 .galaxy-map-embedded .galaxy-map-toolbar .galaxy-map-ruler.is-header { display: flex; align-items: stretch; flex: 0 0 auto; }
@@ -1650,6 +1718,52 @@ html body .hs-res-buy-modal.hs-slot-picker .hs-pick-body > .hs-pick-inv {
 /* Start step: the ship / hull container fills its row exactly; a top margin pushed its bottom border under the clipped content edge. */
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview { margin-top: 0 !important; margin-bottom: 0 !important; }
 
+/* SETUP centre: homeworld stage (planet + orbit ships) fills the black void; kit ship sits on top. */
+html body .profile-start-main .profile-setup-stage {
+    grid-column: 1;
+    grid-row: 3;
+    position: relative;
+    align-self: stretch;
+    justify-self: stretch;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: #02040a;
+}
+html body .profile-start-main .profile-setup-stage .hero-planet-canvas {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none;
+    image-rendering: pixelated;
+}
+html body .profile-start-main .profile-setup-stage .profile-faction-ship-wrap {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    max-width: none;
+}
+html body .profile-selection-name-mode.is-name-step .profile-start-main .profile-setup-stage .profile-faction-ship.profile-faction-ship {
+    grid-column: auto;
+    grid-row: auto;
+    width: auto !important;
+    height: auto !important;
+    max-width: min(72%, 420px) !important;
+    max-height: min(72%, 320px) !important;
+    margin: 0 !important;
+    aspect-ratio: 320 / 224 !important;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+}
+
 /* Galaxy map: locked planets stay opaque (only darker); reachable ones wear their atmosphere
    as the real pixel-ring baked into the planet's own SVG sprite (js/graphics/planet-svgs/
    apply-rings.js applyAtmosphere) — no CSS circle/gradient overlay, so it is exactly as
@@ -1657,4 +1771,141 @@ html body .profile-selection-name-mode .profile-start-main .profile-faction-prev
 .gm-planet-lit.is-locked { opacity: 1; }
 html body .gm-node .gm-node-icon-wrap.has-atmo {
     filter: none !important;
+}
+
+/* ── SYSTEM / tools tab: remote-control launch pad ───────────────────────── */
+.vf-bezel-fx .vf-fx-tools {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+.vf-bezel-fx .vf-fx-tools-sec {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+    padding: 10px 8px 10px;
+    background: color-mix(in srgb, var(--rc-dark) 55%, transparent);
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -1px -1px 0 var(--rc-lit);
+}
+.vf-bezel-fx .vf-fx-tools-sec > .vf-fx-title {
+    margin: 0;
+    padding: 0;
+    color: color-mix(in srgb, var(--rc-acc) 70%, #cfd6e6);
+    letter-spacing: 0.14em;
+    font-size: var(--font-small);
+}
+.vf-bezel-fx .vf-fx-tools-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.vf-bezel-fx .vf-fx-tools-readout {
+    display: grid;
+    grid-template-columns: 78px 1fr;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    padding: 5px 7px;
+    background: #05070c;
+    box-shadow: inset 2px 2px 0 #000, inset -1px -1px 0 color-mix(in srgb, var(--rc-acc) 22%, #1a2030);
+}
+.vf-bezel-fx .vf-fx-tools-readout > span {
+    color: color-mix(in srgb, var(--rc-acc) 55%, #8a93a8);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+}
+.vf-bezel-fx .vf-fx-tools-readout > output {
+    min-width: 0;
+    width: auto;
+    max-width: none;
+    flex: none;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+    color: #e8eef8;
+    font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+}
+.vf-bezel-fx .vf-fx-tools-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.vf-bezel-fx .vf-fx-launch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    margin: 0;
+    padding: 8px 10px 7px;
+    border: 0;
+    border-radius: 0;
+    background: var(--rc-hull);
+    box-shadow:
+        inset 2px 2px 0 var(--rc-lit),
+        inset -2px -2px 0 var(--rc-dark),
+        0 2px 0 var(--rc-dark);
+    color: #e8eef8;
+    font: inherit;
+    font-size: var(--font-small);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+    position: relative;
+}
+.vf-bezel-fx .vf-fx-launch::before {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 50%;
+    width: 10px;
+    height: 2px;
+    transform: translateX(-50%);
+    background: #000;
+}
+.vf-bezel-fx .vf-fx-launch > em {
+    font-style: normal;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.vf-bezel-fx .vf-fx-launch > i {
+    flex: 0 0 auto;
+    font-style: normal;
+    color: var(--rc-acc);
+    text-shadow: 0 0 6px color-mix(in srgb, var(--rc-acc) 60%, transparent);
+}
+.vf-bezel-fx .vf-fx-launch:hover,
+.vf-bezel-fx .vf-fx-launch:focus-visible {
+    color: #fff;
+    background: color-mix(in srgb, var(--rc-acc) 12%, var(--rc-hull));
+    outline: none;
+}
+.vf-bezel-fx .vf-fx-launch:hover::before,
+.vf-bezel-fx .vf-fx-launch:focus-visible::before {
+    background: var(--rc-acc);
+    box-shadow: 0 0 5px var(--rc-acc);
+}
+.vf-bezel-fx .vf-fx-launch:active {
+    transform: translateY(1px);
+    box-shadow: inset 2px 2px 0 var(--rc-dark), inset -2px -2px 0 var(--rc-lit);
+}
+.vf-bezel-fx .vf-fx-tools-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 2px 0;
+}
+.vf-bezel-fx .vf-fx-tools-sliders .vf-fx-row {
+    min-width: 0;
 }

@@ -29,11 +29,7 @@ extendClass(PlanetEditorUI, {
         head.className = 'pe-pattern-modal-header';
         const title = document.createElement('h3');
         title.textContent = 'PATTERN EDITOR';
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'pe-btn';
-        closeBtn.textContent = '✕';
-        closeBtn.addEventListener('click', () => this.closePatternEditor());
+        const closeBtn = createCloseButton(() => this.closePatternEditor(), 'pe-btn');
         head.appendChild(title);
         head.appendChild(closeBtn);
 
@@ -235,9 +231,7 @@ extendClass(PlanetEditorUI, {
         dialog.appendChild(hint);
         dialog.appendChild(actions);
         modal.appendChild(dialog);
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) this.closePatternEditor();
-        });
+        bindBackdropClose(modal, () => this.closePatternEditor());
 
         const overlay = document.getElementById('planetEditorOverlay');
         if (overlay) overlay.appendChild(modal);

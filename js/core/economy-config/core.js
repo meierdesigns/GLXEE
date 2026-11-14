@@ -47,6 +47,7 @@ class EconomyConfig {
             elite: 0.10,
             capital: 0.15,
             champion: 0.15,
+            boss: 0.22,
             default: 0.03
         };
         /** Finished parts shed less often than schematics. */
@@ -57,6 +58,7 @@ class EconomyConfig {
             elite: 0.04,
             capital: 0.06,
             champion: 0.08,
+            boss: 0.10,
             default: 0.012
         };
         this.defaultPlanetResources = {
@@ -226,6 +228,7 @@ class EconomyConfig {
             elite: 1.45,
             capital: 1.9,
             champion: 2.4,
+            boss: 3.0,
             default: 0.75
         };
     }

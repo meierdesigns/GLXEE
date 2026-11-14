@@ -175,6 +175,16 @@ extendClass(EnemyViewerUI, {
         if (!root || !e) return;
         const cfg = typeof enemyConfigManager !== 'undefined' ? enemyConfigManager.getConfig(e.id) : null;
         const abilities = (cfg && (cfg.abilities || cfg.defenseMechanisms)) || [];
+        const devOn = typeof startScreenManager !== 'undefined' && startScreenManager.devMode;
+        let dropDev = '';
+        if (devOn && typeof economyConfig !== 'undefined' && economyConfig.buildEnemyDropDevTableHtml) {
+            let dropBonus = 0;
+            if (typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+                const stats = profileManager.getStationStats();
+                dropBonus = stats && stats.dropBonus ? stats.dropBonus : 0;
+            }
+            dropDev = economyConfig.buildEnemyDropDevTableHtml(dropBonus, e.id);
+        }
         root.innerHTML = `
             <div class="content-viewer-hero">
                 <canvas class="cv-ship-preview" width="32" height="32" id="evHeroCanvas"></canvas>
@@ -200,6 +210,7 @@ extendClass(EnemyViewerUI, {
                         : (abilities.length ? abilities.join(', ') : '—')
                 }</span></div>
             </div>
+            ${dropDev}
         `;
         const hero = root.querySelector('#evHeroCanvas');
         this.paintShipIcon(hero, e.id);

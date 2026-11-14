@@ -131,22 +131,21 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     --bz-u: min(calc(var(--vw, calc(100 * var(--sv-w))) / 1640), calc(var(--vh, calc(100 * var(--sv-h))) / 1110));
     --bz: max(34px, calc(44 * var(--bz-u)));
     /* Screen glass opening inside the bezel (matches .vf-fr-hole / ::before).
-       Side/bottom/top 56u: metal + tooth art ate the outer glass px when the
-       hole was flush with a thinner rim. Top --bz-extra was 50 (open 94u) and
-       left a hull gutter under the rim art before BG/glass — keep 12 → 56u. */
-    --bz-extra: 12;
+       Side/bottom 56u: metal + tooth art ate the outer glass when the hole was
+       flush with a thinner rim. Top --bz-extra 24 → open 68u: 12 was too tight
+       (wizard/tabs cropped under the rim); 50 left a hull gutter under the art. */
+    --bz-extra: 24;
     --fr-open-side: calc(56 * var(--bz-u));
     --fr-open-bottom: calc(56 * var(--bz-u));
-    --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 24)) * var(--bz-u));
     --fr-open-w: calc(var(--vw, 1280px) - 2 * var(--fr-open-side));
     --fr-open-h: calc(var(--vh, 960px) - var(--fr-open-top) - var(--fr-open-bottom));
     /* Single glass-host zoom token (station / menus / fight). */
     --vf-glass-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
-    /* Pull glass just inside the rim. Metal factions use slice-16 (fully
-       opaque band) with --_art-th ≈ --fr-ol + 2u — no deep tooth, so inset
-       is only a thin gutter. (Old +14u tooth + 16u inset bloated 9-slice
-       corners and made the frame read as disconnected blocks.) */
-    --vf-glass-inset: calc(4 * var(--bz-u));
+    /* Pull glass inside the rim past faction tooth art. 4u (74P) sat under the
+       metal and cropped menus again; 16u bloated 9-slice corners. 10u clears
+       the opaque band without the old disconnected-block look. */
+    --vf-glass-inset: calc(10 * var(--bz-u));
 }
 
 /* One bezel-opening glass host. Body keeps stage-scale; this host is the only
@@ -837,9 +836,9 @@ html body .profile-selection-overlay.vf-glass > .profile-selection-content.profi
 @keyframes vf-pilot-noise { 0% { background-position: 0 0, 0 0; } 33% { background-position: 5px 3px, -3px 2px; } 66% { background-position: -4px 6px, 2px -4px; } }
 @media (prefers-reduced-motion: reduce) { .vf-pilot-empty i { animation: none; } }
 
-/* Top strip = side rim (56u); --bz-extra 12 on top of base 44. */
+/* Top strip: --bz-extra must match :root (glass --fr-open-top) or hole/glass diverge. */
 .vf-bezel {
-    --bz-extra: 12;
+    --bz-extra: 24;
     --hole: linear-gradient(#000 0 0) var(--bezel) calc(var(--bezel) + var(--bz-extra) * var(--u)) / calc(100% - 2 * var(--bezel)) calc(100% - 2 * var(--bezel) - var(--bz-extra) * var(--u)) no-repeat;
 }
 /* ::before top/sides synced via --fr-ot / --fr-ol in the glass rule above */

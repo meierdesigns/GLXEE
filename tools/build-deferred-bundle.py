@@ -22,6 +22,8 @@ EDITOR_PREFIXES = (
     "js/graphics/asset-gen-",
     "js/ui/asset-gen-ui",
     "js/ui/planet-editor",
+    "js/ui/planet-viewer",
+    "js/ui/planet-viewer.js",
     "js/ui/component-editor",
     "js/ui/ship-editor",
     "js/ui/enemy-editor",
@@ -35,6 +37,12 @@ EDITOR_PREFIXES = (
     "js/ui/defense-viewer",
     "js/ui/ability-viewer",
     "js/ui/explosion-viewer",
+    "js/ui/event-viewer.js",
+    "js/ui/ability-editor.js",
+    "js/ui/shot-behavior-editor.js",
+    "js/ui/difficulty-editor.js",
+    "js/ui/faction-command.js",
+    "js/ui/content-viewer-stat-range.js",
     "js/ui/enhanced-palette-ui",
     "js/ui/hud-layout-editor",
     "js/ui/soundtrack-editor.js",
@@ -88,6 +96,9 @@ COMBAT_PREFIXES = (
     "js/ui/level-info-manager.js",
     "js/ui/render/",
     "js/ui/render.js",
+    # Combat backdrop only — menu uses station-backdrop / bg-mouse-parallax instead.
+    "js/ui/parallax/",
+    "js/ui/parallax.js",
 )
 
 # Replaced by feature-loaders.js (defines ensureVfEditors too).

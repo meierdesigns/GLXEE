@@ -37,9 +37,9 @@
     let finished = false;
     let raf = 0;
     let lastPaint = -1;
-    // Stable denominator: index.html currently ships ~500 scripts + a handful of stylesheets.
-    // Using live querySelectorAll mid-parse made progress fall as new <script> tags appeared.
-    let expectedTotal = 510;
+    // Stable denominator: production ships a few head assets + deferred feature bundles
+    // (not ~500 individual scripts). Mid-parse querySelectorAll used to reverse the bar.
+    let expectedTotal = 24;
 
     function $(id) {
         return document.getElementById(id);

@@ -21,6 +21,60 @@ _activity_lock = threading.Lock()
 _activity_last = 0.0
 
 
+def _is_local_client(handler):
+    host = handler.client_address[0] if handler.client_address else ""
+    return host in ("127.0.0.1", "::1", "localhost")
+
+
+def _asset_bridge_scripts():
+    root = os.getcwd()
+    return (
+        os.path.join(root, "tools", "asset-gen", "start.sh"),
+        os.path.join(root, "tools", "asset-gen", "stop.sh"),
+        os.path.join(root, "tools", "asset-gen", "bridge.pid"),
+    )
+
+
+def _asset_bridge_running():
+    _start, _stop, pid_file = _asset_bridge_scripts()
+    try:
+        with open(pid_file, "r", encoding="utf-8") as handle:
+            pid = int((handle.read() or "").strip() or "0")
+        if pid > 0:
+            os.kill(pid, 0)
+            return True, pid
+    except (OSError, ValueError):
+        pass
+    return False, None
+
+
+def _run_asset_bridge_script(which):
+    start_sh, stop_sh, _pid = _asset_bridge_scripts()
+    script = start_sh if which == "start" else stop_sh
+    if not os.path.isfile(script):
+        return {"ok": False, "error": "missing " + script}
+    try:
+        result = subprocess.run(
+            ["bash", script],
+            cwd=os.getcwd(),
+            timeout=20,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as err:
+        return {"ok": False, "error": str(err)}
+    running, pid = _asset_bridge_running()
+    out = ((result.stdout or "") + (result.stderr or "")).strip()
+    return {
+        "ok": result.returncode == 0 or (which == "start" and running),
+        "running": running,
+        "pid": pid,
+        "code": result.returncode,
+        "log": out[-800:],
+    }
+
+
 def poke_linux_user_activity():
     """Reset the DE idle timer the same way a real mouse/key event would.
 
@@ -151,8 +205,53 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
     def do_GET(self):
         self._respond(write_body=True)
 
+    def do_POST(self):
+        path = self.path.split("?")[0]
+        if path in ("/__asset-bridge/start", "/__asset-bridge/stop"):
+            if not _is_local_client(self):
+                body = b'{"ok":false,"error":"local only"}'
+                self.send_response(403)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            # Drain body if any (browsers may send Content-Length: 0 or "{}").
+            try:
+                length = int(self.headers.get("Content-Length") or "0")
+            except ValueError:
+                length = 0
+            if length > 0:
+                try:
+                    self.rfile.read(min(length, 65536))
+                except OSError:
+                    pass
+            which = "start" if path.endswith("/start") else "stop"
+            payload = _run_asset_bridge_script(which)
+            body = json.dumps(payload).encode()
+            self.send_response(200 if payload.get("ok") else 500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_error(404)
+
     def _respond(self, write_body=True):
         path = self.path.split("?")[0]
+        if path == "/__asset-bridge/status":
+            running, pid = _asset_bridge_running()
+            body = json.dumps({"ok": True, "running": running, "pid": pid}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if write_body:
+                self.wfile.write(body)
+            return
         # Explicit cache wipe for browsers that ignore Clear-Site-Data (Safari / some embedded).
         if path == "/__cache-clear":
             body = b'{"ok":true,"boot":"' + BOOT_ID.encode() + b'"}'
@@ -496,7 +595,10 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
         path, _, query = self.path.partition("?")
         if path.startswith("/__bundle/"):
             pass  # send_bundle set its own (immutable) headers
-        elif path in ("/", "/index.html", "/__boot", "/__cache-clear", "/__user-activity"):
+        elif path in (
+            "/", "/index.html", "/__boot", "/__cache-clear", "/__user-activity",
+            "/__asset-bridge/status", "/__asset-bridge/start", "/__asset-bridge/stop",
+        ):
             self.send_header("Cache-Control", "no-store")
         elif self.stamp_matches(path, query):
             self.send_header("Cache-Control", "public, max-age=31536000, immutable")

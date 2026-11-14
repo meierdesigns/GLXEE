@@ -26,9 +26,9 @@ extendClass(EconomyConfig, {
         const table = this.getPlanetResourceTable(planetId);
         const scale = this.getEnemyDropScale(info);
         const mul = Math.max(0.5, Number(yieldMul) || 1);
-        const rollCount = info && info.champion
-            ? 2 + Math.floor(Math.random() * 2)
-            : (scale >= 1.4 ? 1 + Math.floor(Math.random() * 2) : 1);
+        let rollCount = scale >= 1.4 ? 1 + Math.floor(Math.random() * 2) : 1;
+        if (info && info.isBoss) rollCount = 3 + Math.floor(Math.random() * 2);
+        else if (info && info.champion) rollCount = 2 + Math.floor(Math.random() * 2);
         const drops = [];
         for (let i = 0; i < rollCount; i++) {
             const id = this.pickWeightedResourceId(table);

@@ -230,6 +230,7 @@ extendClass(EconomyConfig, {
 
     getBlueprintDropChance(info) {
         if (!info) return this.blueprintDropChance.default;
+        if (info.isBoss && this.blueprintDropChance.boss != null) return this.blueprintDropChance.boss;
         if (info.champion) return this.blueprintDropChance.champion;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.blueprintDropChance[cls] != null) return this.blueprintDropChance[cls];
@@ -239,6 +240,7 @@ extendClass(EconomyConfig, {
     getPartDropChance(info) {
         const table = this.partDropChance || {};
         if (!info) return table.default != null ? table.default : 0.012;
+        if (info.isBoss && table.boss != null) return table.boss;
         if (info.champion) return table.champion != null ? table.champion : 0.08;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (table[cls] != null) return table[cls];
@@ -281,9 +283,25 @@ extendClass(EconomyConfig, {
 
     getEnemyDropScale(info) {
         if (!info) return this.enemyDropScale.default;
+        if (info.isBoss && this.enemyDropScale.boss != null) return this.enemyDropScale.boss;
         if (info.champion) return this.enemyDropScale.champion;
         const cls = String(info.enemyClass || '').toLowerCase();
         if (this.enemyDropScale[cls] != null) return this.enemyDropScale[cls];
         return this.enemyDropScale.default;
+    },
+
+    /** Effective roll chances after station dropBonus (for dev HUD / viewer). */
+    previewKillDropRates(info, dropBonus) {
+        const bonus = Math.max(0, Number(dropBonus) || 0);
+        return {
+            blueprint: Math.min(0.5, this.getBlueprintDropChance(info) + bonus),
+            part: Math.min(0.35, this.getPartDropChance(info) + bonus * 0.5),
+            resourceScale: this.getEnemyDropScale(info)
+        };
+    },
+
+    formatDropPct(rate) {
+        const n = Math.max(0, Math.min(1, Number(rate) || 0));
+        return (Math.round(n * 1000) / 10).toFixed(1) + '%';
     },
 });

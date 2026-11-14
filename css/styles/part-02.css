@@ -1575,7 +1575,7 @@ html[data-vf-ship-render="VOXEL"] .settings-ship-render-canvas {
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: 6px;
+    gap: 4px;
     flex: 1 1 auto;
     width: 100%;
     min-height: 0;
@@ -2222,9 +2222,10 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
     align-content: start;
     align-items: stretch;
     padding: 4px;
-    gap: 4px;
-    flex: 1 1 0;
-    max-height: clamp(180px, calc(40 * var(--sv-h)), 320px);
+    gap: 6px;
+    /* Pack cards — flex-grow left huge empty bands between portraits. */
+    flex: 0 0 auto;
+    max-height: none;
 }
 .enemy-vitals-side .enemy-card-v .enemy-portrait {
     --shield-pct: 100%;
@@ -2317,10 +2318,10 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v {
     position: absolute;
     z-index: 3;
     pointer-events: none;
-    font-size: 8px;
-    letter-spacing: 1px;
-    line-height: 1;
-    padding: 2px 4px;
+    font-size: 11px;
+    letter-spacing: 0.6px;
+    line-height: 1.1;
+    padding: 3px 5px;
     background: #05060a;
     border: 1px solid currentColor;
     text-shadow: none;
@@ -2411,14 +2412,14 @@ body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbars {
     display: flex;
     flex-direction: row;
     align-items: stretch;
-    gap: 3px;
+    gap: 4px;
     flex: 0 0 auto;
-    padding-top: 14px;
+    padding-top: 16px;
 }
 body .enemy-vitals-side .health-bar.enemy-health.enemy-card-v .enemy-vbar {
     position: relative;
     display: flex;
-    width: 18px;
+    width: 30px;
     min-height: 0;
 }
 .enemy-vitals-side .enemy-card-v .enemy-vbar.is-hull { --vital-color: var(--vital-hull, #c4a574); }

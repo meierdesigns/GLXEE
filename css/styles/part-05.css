@@ -1603,3 +1603,37 @@
     max-width: min(calc(220px * var(--zk)), calc(48 * var(--cw)));
     gap: clamp(6px, calc(1.2 * var(--sv-w)), 10px);
 }
+
+/* DevMode: enemy viewer loot chance reference */
+.cv-drop-dev {
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--color-text, #fff) 12%, transparent);
+}
+.cv-drop-dev-title {
+    margin: 0 0 8px;
+    font-size: var(--font-text);
+    letter-spacing: 0.08em;
+    opacity: 0.85;
+}
+.cv-drop-dev-note {
+    margin: 0 0 8px;
+    font-size: var(--font-text);
+    opacity: 0.7;
+}
+.cv-drop-dev-scroll {
+    max-height: min(42vh, 360px);
+    overflow: auto;
+}
+.content-viewer-detail .cv-drop-dev-table {
+    font-size: var(--font-text);
+}
+.content-viewer-detail .cv-drop-dev-table th,
+.content-viewer-detail .cv-drop-dev-table td {
+    padding: 4px 8px;
+    height: auto;
+    white-space: nowrap;
+}
+.content-viewer-detail .cv-drop-dev-table tr.is-selected td {
+    background: color-mix(in srgb, var(--color-accent, #ffd24a) 18%, transparent);
+}

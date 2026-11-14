@@ -203,6 +203,7 @@ extendClass(HomeStationUI, {
             : Math.max(0, Math.round(Number((profile && profile.credits) || 0)));
         const variant = this.tradingPostPortraitVariant(post);
         return `<div class="vf-iss-panel" data-faction="${faction}" data-tps-cat="${cat}" role="dialog" aria-modal="true" aria-label="${post.name} shop">` +
+            `<div class="vf-iss-primary">` +
             `<header class="vf-iss-head">` +
             `<div class="vf-iss-trader">` +
             `<div class="vf-iss-portrait">${this.tradingPostPortraitHtml(faction, variant)}</div>` +
@@ -226,8 +227,8 @@ extendClass(HomeStationUI, {
                 ? this.renderTradingPostPortalInventory(profile)
                 : this.renderTradingPostBags(profile)) +
             `</div>` +
+            `</div></div>` +
             this.renderTradingPostDetailShell() +
-            `</div>` +
             `</div>`;
     },
 
@@ -1093,15 +1094,26 @@ extendClass(HomeStationUI, {
             const cost = payload.cost
                 ? `<div class="vf-iss-detail-price">${payload.cost}</div>`
                 : '';
-            const lines = (payload.lines || []).map((line, i) => {
-                const text = String(line || '');
-                const cls = i === 0 ? ' is-tag'
-                    : (/\d/.test(text) && /(c|SCR|ORE|CRY|VOL)/i.test(text) ? ' is-cost' : '');
+            const src = (payload.lines || []).slice();
+            const statBits = [];
+            for (let i = 0; i < src.length; i++) {
+                const text = String(src[i] || '');
+                if (/^CLASS ·/i.test(text) && i + 1 < src.length && /^CLASS RANGE ·/i.test(src[i + 1])
+                    && typeof this.formatDetailClassClusterHtml === 'function') {
+                    statBits.push(`<div class="vf-iss-detail-line is-cluster">${this.formatDetailClassClusterHtml(text, src[i + 1])}</div>`);
+                    i += 1;
+                    continue;
+                }
+                const cls = (typeof this.detailStatLineClass === 'function')
+                    ? this.detailStatLineClass(text, i)
+                    : (i === 0 ? ' is-tag'
+                        : (/\d/.test(text) && /(c|SCR|ORE|CRY|VOL)/i.test(text) ? ' is-cost' : ''));
                 const body = (typeof this.formatDetailStatLineHtml === 'function')
                     ? this.formatDetailStatLineHtml(text)
                     : text.replace(/</g, '&lt;');
-                return `<div class="vf-iss-detail-line${cls}">${body}</div>`;
-            }).join('');
+                statBits.push(`<div class="vf-iss-detail-line${cls}">${body}</div>`);
+            }
+            const lines = statBits.join('');
             const visual = payload.visualHtml || '';
             el.innerHTML =
                 `<div class="vf-iss-detail-hero">` +

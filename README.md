@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.16 · HANGAR INV · FIRE MODE · LOOT · EMBASSY            │
+│  BUILD           1.14.17 · BEZEL VOL · HUB BGM · HANGAR · FIRE MODE           │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,9 +717,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.16** ships hangar bay inventory drag, equipment fire-mode unlock
-(DAMAGE/ROF gates), victory keep/sell chrome, embassy station tree, galaxy map
-and pilot backdrop polish — on top of the 1.14.15 found-loot / trader work.
+Build **1.14.17** ships bezel volume STYLE/SPEED, hub/map BGM via boot-loaded
+vftrack, hangar inventory drag, equipment fire-mode unlock, and victory/embassy
+polish — on top of the 1.14.16 hangar / loot work.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -1103,6 +1103,10 @@ be reviewed or reverted independently.
 | 75I | Loot embassy map pilot | Victory keep/sell chrome, embassy tree, galaxy map explore, pilot backdrop, transmission editor |
 | 75J | Deferred bundle rebuild | Rebuild feature + CSS app packs for 75G–75I |
 | 75K | Release 1.14.16 | Deploy ZIP `.claude/GLXEE-V1.14.16.zip` — hangar inv, fire mode, loot, embassy, map/pilot (75G–75J) |
+| 75L | Bezel vol STYLE/SPEED | Vol head STYLE cycle and SPEED row; station upgrade tip dock polish |
+| 75M | Hub music boot | vftrack loads with boot for hub/map BGM; game-over music context clears |
+| 75N | Deferred bundle rebuild | Rebuild feature + CSS app packs for 75L–75M (tracker → boot) |
+| 75O | Release 1.14.17 | Deploy ZIP `.claude/GLXEE-V1.14.17.zip` — bezel vol, hub BGM, hangar, fire mode (75G–75N) |
 
 The wave commit convention is:
 
@@ -1152,5 +1156,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.16** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.17** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

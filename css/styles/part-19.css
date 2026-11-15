@@ -253,7 +253,7 @@ html body .game-container {
     image-rendering: pixelated;
 }
 .vf-bezel-vol {
-    /* Child of <html>, dropdown under the mute key: MUTE + VOL + SND + MUS. */
+    /* Child of <html>, dropdown under the mute key: MUTE + STYLE + VOL + SND + MUS + SPD. */
     position: fixed;
     z-index: 9996;
     display: flex;
@@ -274,12 +274,20 @@ html body .game-container {
     line-height: 1;
     image-rendering: pixelated;
 }
+.vf-bezel-vol .vf-bezel-vol-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 2px;
+    min-width: 0;
+}
 .vf-bezel-vol .vf-bezel-vol-mute {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 1 1 auto;
     height: 22px;
-    margin: 0 0 2px;
+    margin: 0;
     padding: 0 8px;
     border: 2px solid var(--color-primary, #3dff6a);
     border-radius: 0;
@@ -299,6 +307,33 @@ html body .game-container {
     background: color-mix(in srgb, var(--color-primary, #3dff6a) 28%, #05060a);
     color: #fff;
 }
+.vf-bezel-vol .vf-bezel-vol-style {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    margin: 0;
+    padding: 0;
+    border: 2px solid #2c313b;
+    border-radius: calc(4 * var(--bz-u, 1px));
+    background: #0c0e12;
+    color: #fff;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+.vf-bezel-vol .vf-bezel-vol-style:is(:hover, :focus-visible) {
+    border-color: var(--color-primary, #3dff6a);
+    color: #fff;
+    outline: none;
+}
+.vf-bezel-vol .vf-bezel-vol-style > * {
+    display: block;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+}
 .vf-bezel-vol .vf-bezel-vol-row {
     display: inline-flex;
     align-items: center;
@@ -311,7 +346,7 @@ html body .game-container {
     flex: 0 0 2.6em;
     text-align: left;
 }
-.vf-bezel-vol output { min-width: 3em; color: var(--color-text, #fff); text-align: right; }
+.vf-bezel-vol output { min-width: 3.2em; color: var(--color-text, #fff); text-align: right; }
 :is(.vf-bezel-res, .vf-bezel-fx, .vf-bezel-vol) input {
     width: 140px;
     height: 10px;

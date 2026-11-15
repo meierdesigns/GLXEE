@@ -665,9 +665,9 @@ class VolumeControlsManager {
      * Dragging a VOL/SND/MUS slider above 0 is the player asking for that
      * channel to be audible — undo a stale soundEnabled/musicEnabled=false
      * left over from an earlier mute, or the slider alone would stay silent.
-     * Only called from the explicit setters below (real user action) — never
-     * from applyVolumes()/boot, or a persisted mute would be undone on every
-     * page load just because the sliders themselves sit above 0.
+     * Also used when opening the volume plate / unmuting: MUS>0 + VOL>0 means
+     * the player expects music, not a silent leftover musicEnabled=false.
+     * Never call from applyVolumes()/boot alone.
      */
     autoUnmuteOnSliderMove() {
         if (typeof soundManager === 'undefined') return;
@@ -710,6 +710,19 @@ class VolumeControlsManager {
             const plate = document.getElementById('vf-vol');
             if (plate) plate.dispatchEvent(new Event('vf-vol-sync'));
         } catch (e2) { /* optional */ }
+    }
+
+    /**
+     * Volume plate open / MUTE toggle: volumes already say "play music" but a
+     * stale musicEnabled=false or a never-unlocked AudioContext left silence.
+     */
+    kickMusicIfWanted() {
+        this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
+        if (this.masterVolume > 0 && this.musicVolume > 0 && typeof soundManager !== 'undefined') {
+            if (soundManager.pushMusicBusVolume) soundManager.pushMusicBusVolume();
+            if (soundManager.ensureMusicPlaying) soundManager.ensureMusicPlaying();
+        }
     }
 
     _normVol(volume) {

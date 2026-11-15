@@ -1032,10 +1032,11 @@
     flex: 0 0 auto;
 }
 .hs-upgrade-root .hs-upg-tree-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
+    /* Fill leftover tab height and pan both axes (taller trees need Y scroll). */
+    flex: 1 1 0;
+    min-height: 280px;
     max-height: none;
-    overflow-y: auto;
+    overflow: auto;
 }
 .hs-upgrade-root .hs-upg-dock {
     flex: 0 0 auto;
@@ -1074,8 +1075,8 @@
     overflow-x: auto;
     overflow-y: auto;
     max-width: 100%;
-    padding: 16px 8px 20px;
-    min-height: 120px;
+    padding: 20px 12px 28px;
+    min-height: 200px;
     cursor: grab;
     user-select: none;
     overscroll-behavior: contain;
@@ -1092,6 +1093,41 @@
 .hs-upg-tree-scroll::-webkit-scrollbar-thumb {
     background: var(--color-primary);
     border: var(--ui-border-width) solid var(--color-background);
+}
+.hs-upg-branch-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 0 0 10px;
+}
+.hs-upg-branch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--font-text);
+    letter-spacing: 0.08em;
+    color: var(--upg-branch, var(--color-primary));
+    text-shadow: 0 1px 0 #000;
+}
+.hs-upg-branch-chip > i {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid #050308;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--upg-branch) 70%, #fff);
+}
+.hs-upg-col-label {
+    position: absolute;
+    top: 4px;
+    transform: translateX(-50%);
+    z-index: 2;
+    font-size: var(--font-text);
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    color: var(--upg-branch, var(--color-primary));
+    text-shadow: 0 2px 0 #000;
+    pointer-events: none;
+    white-space: nowrap;
 }
 .hs-upg-tree {
     position: relative;
@@ -1113,9 +1149,15 @@
     stroke-linejoin: miter;
     vector-effect: non-scaling-stroke;
 }
+.hs-upg-link[data-branch] {
+    stroke: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 70%, #667);
+}
 .hs-upg-link.lit {
     stroke: color-mix(in srgb, var(--color-primary) 90%, #fff);
     stroke-width: 4;
+}
+.hs-upg-link[data-branch].lit {
+    stroke: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 92%, #fff);
 }
 .hs-upg-joint {
     fill: color-mix(in srgb, var(--color-primary) 55%, #889);
@@ -1144,16 +1186,16 @@
 .hs-upg-face {
     position: absolute;
     inset: 0;
-    border: var(--ui-border-width-thick) solid color-mix(in srgb, var(--color-primary) 72%, #ccc);
+    border: var(--ui-border-width-thick) solid color-mix(in srgb, var(--upg-branch, var(--color-primary)) 78%, #ccc);
     border-radius: 0;
     background: #141018;
-    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 45%, #fff), inset -2px -2px 0 0 #050308, 2px 0 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent), -2px 0 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent), 0 2px 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent), 0 -2px 0 0 color-mix(in srgb, var(--color-primary) 25%, transparent);
+    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 50%, #fff), inset -2px -2px 0 0 #050308, 2px 0 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 28%, transparent), -2px 0 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 28%, transparent), 0 2px 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 28%, transparent), 0 -2px 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 28%, transparent);
     pointer-events: none;
 }
 .hs-upg-node.available .hs-upg-face {
-    border-color: color-mix(in srgb, var(--color-primary) 95%, #fff);
+    border-color: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 95%, #fff);
     background: #1c1424;
-    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, var(--color-primary) 70%, #fff), inset -2px -2px 0 0 #050308, 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--color-primary) 55%, transparent), 0 0 0 var(--ui-border-width-thick) color-mix(in srgb, var(--color-primary) 30%, transparent);
+    box-shadow: inset 2px 2px 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 70%, #fff), inset -2px -2px 0 0 #050308, 0 0 0 var(--ui-border-width) color-mix(in srgb, var(--upg-branch, var(--color-primary)) 55%, transparent), 0 0 0 var(--ui-border-width-thick) color-mix(in srgb, var(--upg-branch, var(--color-primary)) 30%, transparent);
 }
 .hs-upg-node.available .hs-upg-icon .hs-pixel {
     animation: hs-upg-afford-icon 1.2s steps(2, end) infinite;

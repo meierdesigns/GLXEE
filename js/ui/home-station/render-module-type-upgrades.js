@@ -59,22 +59,34 @@ extendClass(HomeStationUI, {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsUpgrade', 'UPGRADES')}` +
                 `<p class="hs-muted">Upgrade system unavailable.</p></div>`;
         }
-        // Legacy saves may still point at removed ships/modules sub-tabs.
-        if (this.upgradeSubTab === 'ships' || this.upgradeSubTab === 'modules'
-            || this.upgradeSubTab === 'factions' || this.upgradeSubTab === 'hangar') {
-            this.upgradeSubTab = 'station';
-        }
+        // Old "hangar" sub-tab → SHIPS (hull areas).
+        if (this.upgradeSubTab === 'hangar') this.upgradeSubTab = 'ships';
         let inner = '';
         let title = 'STATION UPGRADE TREE';
-        let hint = 'Station systems, hangar bays, drives — plus hangar hull/module upgrades and the factions wing on one tree.';
+        let hint = 'Station systems, hangar bays, drives — pick a node, then UPGRADE.';
         let showHead = true;
         if (this.upgradeSubTab === 'equipment') {
             showHead = false;
             inner = this.renderEquipmentUpgrades(profile);
+        } else if (this.upgradeSubTab === 'ships') {
+            title = 'SHIP HULL UPGRADES';
+            hint = 'Per-ship hull areas — nose, core, aft, wings.';
+            inner = this.renderShipFrameUpgrades
+                ? this.renderShipFrameUpgrades(profile)
+                : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
+        } else if (this.upgradeSubTab === 'modules') {
+            title = 'MODULE TRACKS';
+            hint = 'Global weapon / defense / ability / energy tracks.';
+            inner = this.renderModuleTypeUpgrades
+                ? this.renderModuleTypeUpgrades(profile)
+                : '';
+        } else if (this.upgradeSubTab === 'factions') {
+            title = 'FACTIONS UPGRADES';
+            hint = 'Embassy, Trade Desk, War Room — levels and live bonuses.';
+            inner = this.renderTreeFactionUpgrades(profile);
         } else {
-            inner = this.renderStationUpgradeTree(profile) +
-                this.renderTreeHangarUpgrades(profile) +
-                this.renderTreeFactionUpgrades(profile);
+            // TREE: graphical station nodes only.
+            inner = this.renderStationUpgradeTree(profile);
         }
 
         return `<div class="hs-section hs-panel hs-upgrade-root">` +
@@ -87,22 +99,7 @@ extendClass(HomeStationUI, {
             `</div>`;
     },
 
-    /** Hull areas + module tracks — hangar upgrades embedded under the station tree. */
-    renderTreeHangarUpgrades(profile) {
-        const ships = this.renderShipFrameUpgrades
-            ? this.renderShipFrameUpgrades(profile)
-            : '';
-        const modules = this.renderModuleTypeUpgrades
-            ? this.renderModuleTypeUpgrades(profile)
-            : '';
-        return `<div class="hs-upg-branch hs-upg-branch-hangar">` +
-            `${this.panelTitle('hsShip', 'HANGAR UPGRADES')}` +
-            `<p class="hs-muted hs-hint">Hull areas and global module tracks — same buys as before, now on the station tree page.</p>` +
-            `<div class="hs-upg-branch-body">${ships}${modules}</div>` +
-            `</div>`;
-    },
-
-    /** Factions wing status — nodes are on the tree; this lists levels + live bonuses. */
+    /** Factions wing status — nodes are also on the TREE; this tab lists levels + live bonuses. */
     renderTreeFactionUpgrades(profile) {
         const ids = ['embassy', 'trade_desk', 'war_room'];
         const stats = profileManager.getStationStats ? profileManager.getStationStats(profile) : {};
@@ -134,11 +131,8 @@ extendClass(HomeStationUI, {
             stats.tradeBonus > 0 ? ('TRADE +' + Math.round(stats.tradeBonus * 100) + '%') : '',
             stats.contractRepBonus > 0 ? ('CONTRACT REP +' + stats.contractRepBonus) : ''
         ].filter(Boolean).join(' · ') || 'BUILD EMBASSY ON THE TREE TO START';
-        return `<div class="hs-upg-branch hs-upg-branch-factions">` +
-            `${this.panelTitle('menuPeoples', 'FACTIONS UPGRADES')}` +
-            `<p class="hs-muted hs-hint">Embassy → Trade Desk / War Room on the tree. Live bonuses: ${bonusLine}</p>` +
-            `<div class="hs-upg-branch-body">${rows}</div>` +
-            `</div>`;
+        return `<p class="hs-muted hs-hint">Embassy → Trade Desk / War Room also on TREE. Live bonuses: ${bonusLine}</p>` +
+            `<div class="hs-upg-branch-body">${rows}</div>`;
     },
 
     renderTravelTab(profile) {

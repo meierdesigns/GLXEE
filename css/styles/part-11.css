@@ -836,7 +836,15 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     overflow-y: auto;
     scroll-padding: 12px 0;
 }
-.hs-upgrade-root .hs-tab-fill > :is(.hs-panel, .hs-line, .hs-empty-slot, .hs-upg-branch) {
+.hs-upgrade-root .hs-tab-fill > :is(.hs-panel, .hs-line, .hs-empty-slot, .hs-upg-branch, .hs-upg-stats, .hs-upg-dock) {
+    flex: 0 0 auto;
+}
+.hs-upgrade-root .hs-tab-fill > .hs-upg-tree-scroll {
+    flex: 1 1 0;
+    min-height: 280px;
+    overflow: auto;
+}
+.hs-upgrade-root .hs-tab-fill > .hs-upg-branch-legend {
     flex: 0 0 auto;
 }
 .hs-upg-branch {

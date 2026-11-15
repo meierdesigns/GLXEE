@@ -854,7 +854,7 @@ extendClass(HomeStationUI, {
             && typeof galaxyMapManager !== 'undefined'
             && galaxyMapManager.isVisible
             && soundManager.startMapMusic) {
-            soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
+            soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars', { immediate: true });
             return;
         }
         const ck = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey)

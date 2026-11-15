@@ -1441,9 +1441,11 @@ button.hs-ship-icon-btn:is(:hover, .nav-focused) {
     display: flex;
     flex-direction: column;
 }
-/* Upgrade tree fits horizontally; only vertical scrolling. */
+/* Multi-column forest: pan both axes when the tree exceeds the panel. */
 .hs-upgrade-root .hs-upg-tree-scroll {
-    overflow-x: hidden;
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: auto;
 }
 
 /* EQUIPMENT: outer .hs-upgrade-root keeps the faction frame. Inner cards must

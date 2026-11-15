@@ -194,7 +194,7 @@
         return el;
     }
 
-    // Volume dropdown under the mute key: MUTE + MASTER + SOUNDS + MUSIC (child of <html>).
+    // Volume dropdown under the mute key: MUTE + STYLE + VOL + SND + MUS + SPD (child of <html>).
     function ensureVolPlate() {
         let el = document.getElementById('vf-vol');
         const row = function (id, key, label, aria) {
@@ -249,7 +249,17 @@
             }
         };
         const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+        const ensureVolHead = function (plate) {
+            let head = plate.querySelector('.vf-bezel-vol-head');
+            if (!head) {
+                head = document.createElement('div');
+                head.className = 'vf-bezel-vol-head';
+                plate.insertBefore(head, plate.firstChild);
+            }
+            return head;
+        };
         const ensureMuteBtn = function (plate) {
+            const head = ensureVolHead(plate);
             let btn = plate.querySelector('#vfVolMuteBtn');
             if (!btn) {
                 btn = document.createElement('button');
@@ -257,7 +267,9 @@
                 btn.className = 'vf-bezel-vol-mute';
                 btn.id = 'vfVolMuteBtn';
                 btn.textContent = 'MUTE';
-                plate.insertBefore(btn, plate.firstChild);
+                head.appendChild(btn);
+            } else if (btn.parentElement !== head) {
+                head.insertBefore(btn, head.firstChild);
             }
             if (btn.dataset.muteWired !== '1') {
                 btn.dataset.muteWired = '1';
@@ -265,6 +277,10 @@
                     e.stopPropagation();
                     togglePureMute(mgr);
                     syncMuteBtn(btn, mgr);
+                    if (mgr && mgr.getMasterVolume && mgr.getMasterVolume() > 0
+                        && mgr.kickMusicIfWanted) {
+                        mgr.kickMusicIfWanted();
+                    }
                     plate.dispatchEvent(new Event('vf-vol-sync'));
                 });
                 plate.addEventListener('vf-vol-sync', function () { syncMuteBtn(btn, mgr); });
@@ -272,8 +288,132 @@
             syncMuteBtn(btn, mgr);
             return btn;
         };
+        const themeCount = function () {
+            return (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+                ? Math.max(1, VFTrackerThemes.count()) : 9;
+        };
+        const themeLabel = function (idx) {
+            if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.labelOf) {
+                return VFTrackerThemes.labelOf(idx);
+            }
+            return 'PLANET';
+        };
+        const ensureStyleBtn = function (plate) {
+            const head = ensureVolHead(plate);
+            let btn = plate.querySelector('#vfVolStyleBtn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'vf-bezel-vol-style';
+                btn.id = 'vfVolStyleBtn';
+                btn.innerHTML = (typeof STYLE_VOXEL !== 'undefined' && STYLE_VOXEL)
+                    ? STYLE_VOXEL
+                    : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15 2 11.5v-7z"/><path d="M8 8v7M2 4.5l6 3.5 6-3.5"/></svg>';
+                head.appendChild(btn);
+            } else if (btn.parentElement !== head) {
+                head.appendChild(btn);
+            }
+            const syncStyleBtn = function () {
+                const cur = (mgr && mgr.getMusicTheme != null) ? Math.round(Number(mgr.getMusicTheme()) || 0) : 0;
+                const label = themeLabel(cur);
+                btn.title = 'Sound style · ' + label;
+                btn.setAttribute('aria-label', btn.title);
+                btn.dataset.theme = String(cur);
+            };
+            if (btn.dataset.styleWired !== '1') {
+                btn.dataset.styleWired = '1';
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (!mgr || !mgr.setMusicTheme) return;
+                    const max = themeCount() - 1;
+                    const cur = Math.round(Number(mgr.getMusicTheme()) || 0);
+                    const next = cur >= max ? 0 : cur + 1;
+                    mgr.setMusicTheme(next);
+                    if (mgr.updateUI) mgr.updateUI();
+                    syncStyleBtn();
+                    plate.dispatchEvent(new Event('vf-vol-sync'));
+                });
+                plate.addEventListener('vf-vol-sync', syncStyleBtn);
+            }
+            syncStyleBtn();
+            return btn;
+        };
+        const ensureSpeedRow = function (plate) {
+            let lab = plate.querySelector('#vfVolSpeedRow');
+            if (!lab) {
+                lab = document.createElement('label');
+                lab.className = 'vf-bezel-vol-row';
+                lab.id = 'vfVolSpeedRow';
+                lab.title = 'Game + music tempo (BPM)';
+                lab.innerHTML =
+                    '<span>SPD</span>' +
+                    '<input type="range" id="vfVolSpeedSlider" min="20" max="200" step="1" aria-label="Game and music tempo">' +
+                    '<output></output>';
+                plate.appendChild(lab);
+            }
+            let inp = lab.querySelector('input');
+            let out = lab.querySelector('output');
+            // Stale / partial row from older markup — rebuild so the slider wires.
+            if (!inp || !out) {
+                lab.title = 'Game + music tempo (BPM)';
+                lab.innerHTML =
+                    '<span>SPD</span>' +
+                    '<input type="range" id="vfVolSpeedSlider" min="20" max="200" step="1" aria-label="Game and music tempo">' +
+                    '<output></output>';
+                inp = lab.querySelector('input');
+                out = lab.querySelector('output');
+            }
+            if (!inp || !out) return lab;
+            // Migrate coarse step / old min=50 so 30 BPM is reachable.
+            if (inp.step !== '1') inp.step = '1';
+            if (inp.min !== '20') inp.min = '20';
+            const syncSpeedUi = function () {
+                // Thumb = target. While dragging, do not fight the pointer with value writes.
+                const target = (typeof window.vfGetGameSpeedTarget === 'function')
+                    ? window.vfGetGameSpeedTarget()
+                    : ((typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : 1);
+                const heard = (typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : target;
+                const pct = Math.round(target * 100);
+                const dragging = !!(inp.matches && inp.matches(':active'));
+                if (!dragging && String(inp.value) !== String(pct)) inp.value = String(pct);
+                out.textContent = (typeof formatSpeedBpm === 'function')
+                    ? formatSpeedBpm(heard)
+                    : (Math.round(132 * heard) + ' BPM');
+                // Slider span 20–200% (≈30–264 BPM @ 132).
+                inp.style.setProperty('--look-fill', ((pct - 20) / 180 * 100) + '%');
+            };
+            if (inp.dataset.speedWired !== '1') {
+                inp.dataset.speedWired = '1';
+                // One audio unlock per gesture — not on every 25% step mid-ease.
+                inp.addEventListener('pointerdown', function () {
+                    if (typeof volumeControlsManager !== 'undefined'
+                        && volumeControlsManager.kickMusicIfWanted) {
+                        volumeControlsManager.kickMusicIfWanted();
+                    }
+                });
+                inp.addEventListener('input', function (e) {
+                    e.stopPropagation();
+                    const pct = parseInt(inp.value, 10) || 100;
+                    if (typeof window.vfSetGameSpeed === 'function') window.vfSetGameSpeed(pct / 100);
+                    const heard = (typeof window.vfGetGameSpeed === 'function')
+                        ? window.vfGetGameSpeed() : pct / 100;
+                    out.textContent = (typeof formatSpeedBpm === 'function')
+                        ? formatSpeedBpm(heard)
+                        : (Math.round(132 * heard) + ' BPM');
+                    inp.style.setProperty('--look-fill', ((pct - 20) / 180 * 100) + '%');
+                });
+                ['keydown', 'keyup', 'click', 'mousedown', 'pointerdown'].forEach(function (t) {
+                    inp.addEventListener(t, function (e) { e.stopPropagation(); });
+                });
+                plate.addEventListener('vf-vol-sync', syncSpeedUi);
+            }
+            syncSpeedUi();
+            return lab;
+        };
         if (el) {
             ensureMuteBtn(el);
+            ensureStyleBtn(el);
+            ensureSpeedRow(el);
             return el;
         }
         el = document.createElement('div');
@@ -281,12 +421,13 @@
         el.className = 'vf-bezel-vol';
         el.style.display = 'none';
         el.innerHTML =
-            '<button type="button" class="vf-bezel-vol-mute" id="vfVolMuteBtn">MUTE</button>' +
             row('vfVolSlider', 'master', 'VOL', 'Master volume') +
             row('vfSoundSlider', 'sound', 'SND', 'Sounds volume') +
             row('vfMusicSlider', 'music', 'MUS', 'Music volume');
         document.documentElement.appendChild(el);
         const muteBtn = ensureMuteBtn(el);
+        ensureStyleBtn(el);
+        ensureSpeedRow(el);
         const readPct = function (key) {
             if (!mgr) {
                 return key === 'master' ? 10 : key === 'sound' ? 50 : 65;
@@ -371,23 +512,136 @@
     vfs.fxOpen = false;
     vfs.volOpen = false;
     // Combat / sim speed (0.5×–2×). Read by game-loop via window.vfGetGameSpeed.
+    // Target is persisted; heard value eases so SPD changes transition (music + sim).
     const SPEED_KEY = 'vf_game_speed';
+    const SPEED_EASE_MS = 900;
     (function initGameSpeed() {
         let n = 1;
         try {
             const raw = parseFloat(localStorage.getItem(SPEED_KEY));
-            if (Number.isFinite(raw)) n = Math.max(0.5, Math.min(2, raw));
+            // 0.2× ≈ 30 BPM at default MUSIC 132.
+            if (Number.isFinite(raw)) n = Math.max(0.2, Math.min(2, raw));
         } catch (e) { /* ignore */ }
         vfs.gameSpeed = n;
+        vfs.gameSpeedHeard = n;
+        vfs._speedRaf = 0;
+        vfs._speedGen = 0;
+        vfs._speedFrom = n;
+        vfs._speedTo = n;
+        vfs._speedT0 = 0;
+        vfs._speedUiAt = 0;
     })();
-    window.vfGetGameSpeed = function () {
-        const n = Number(vfs.gameSpeed);
-        return Number.isFinite(n) ? Math.max(0.5, Math.min(2, n)) : 1;
+    const clampSpeed = function (v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.max(0.2, Math.min(2, n)) : 1;
     };
-    window.vfSetGameSpeed = function (v) {
-        const n = Math.max(0.5, Math.min(2, Number(v) || 1));
+    const pushSpeedTempo = function (mode) {
+        try {
+            if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager._applyPlaybackTempo) return;
+            if (mode === 'soft') vfTrackerManager._applyPlaybackTempo({ soft: true });
+            else if (mode === 'finalize') vfTrackerManager._applyPlaybackTempo({ finalize: true });
+            else vfTrackerManager._applyPlaybackTempo();
+        } catch (e) { /* ignore */ }
+    };
+    const formatSpeedBpm = function (speedMul) {
+        const mul = clampSpeed(speedMul != null ? speedMul : vfs.gameSpeedHeard);
+        // Prefer live tracker BPM (includes STYLE/scene); else MUSIC BPM × SPD.
+        try {
+            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.getPlaybackBpm) {
+                const live = Number(vfTrackerManager.getPlaybackBpm());
+                if (Number.isFinite(live) && live > 0) return Math.round(live) + ' BPM';
+            }
+        } catch (e) { /* ignore */ }
+        let base = 132;
+        try {
+            if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicBpm) {
+                base = Number(volumeControlsManager.getMusicBpm()) || base;
+            } else if (typeof volumeControlsManager !== 'undefined') {
+                base = Number(volumeControlsManager.musicBpm) || base;
+            }
+        } catch (e2) { /* ignore */ }
+        return Math.round(Math.max(30, Math.min(300, base * mul))) + ' BPM';
+    };
+    const syncSpeedReadout = function () {
+        const now = performance.now();
+        if (now - (Number(vfs._speedUiAt) || 0) < 48) return;
+        vfs._speedUiAt = now;
+        try {
+            const out = document.querySelector('#vfVolSpeedRow output');
+            if (!out) return;
+            out.textContent = formatSpeedBpm(vfs.gameSpeedHeard);
+        } catch (e) { /* ignore */ }
+    };
+    const tickSpeedEase = function (now) {
+        const gen = vfs._speedTickGen;
+        if (gen !== vfs._speedGen) {
+            // Stale RAF after a newer scrub — drop.
+            return;
+        }
+        const from = Number(vfs._speedFrom) || 1;
+        const to = Number(vfs._speedTo) || 1;
+        const t0 = Number(vfs._speedT0) || now;
+        const u = Math.max(0, Math.min(1, (now - t0) / SPEED_EASE_MS));
+        // Quintic smootherstep — gentler than quadratic at the ends.
+        const e = u * u * u * (u * (u * 6 - 15) + 10);
+        vfs.gameSpeedHeard = from + (to - from) * e;
+        if (u < 1) {
+            pushSpeedTempo('soft');
+            syncSpeedReadout();
+            vfs._speedRaf = requestAnimationFrame(tickSpeedEase);
+            vfs._speedTickGen = gen;
+            return;
+        }
+        vfs._speedRaf = 0;
+        vfs.gameSpeedHeard = to;
+        pushSpeedTempo('finalize');
+        syncSpeedReadout();
+        try {
+            const plate = document.getElementById('vf-vol');
+            if (plate) plate.dispatchEvent(new Event('vf-vol-sync'));
+        } catch (e2) { /* ignore */ }
+    };
+    const startSpeedEase = function (from, to) {
+        vfs._speedGen = (vfs._speedGen | 0) + 1;
+        if (vfs._speedRaf) {
+            try { cancelAnimationFrame(vfs._speedRaf); } catch (e) { /* ignore */ }
+            vfs._speedRaf = 0;
+        }
+        vfs._speedFrom = clampSpeed(from);
+        vfs._speedTo = clampSpeed(to);
+        vfs._speedT0 = performance.now();
+        if (Math.abs(vfs._speedFrom - vfs._speedTo) < 0.0005) {
+            vfs.gameSpeedHeard = vfs._speedTo;
+            pushSpeedTempo('finalize');
+            syncSpeedReadout();
+            return;
+        }
+        vfs._speedTickGen = vfs._speedGen;
+        vfs._speedRaf = requestAnimationFrame(tickSpeedEase);
+    };
+    window.vfGetGameSpeed = function () {
+        const n = Number(vfs.gameSpeedHeard != null ? vfs.gameSpeedHeard : vfs.gameSpeed);
+        return Number.isFinite(n) ? Math.max(0.2, Math.min(2, n)) : 1;
+    };
+    window.vfGetGameSpeedTarget = function () {
+        return clampSpeed(vfs.gameSpeed);
+    };
+    window.vfSetGameSpeed = function (v, opts) {
+        const n = clampSpeed(v);
         vfs.gameSpeed = n;
         try { localStorage.setItem(SPEED_KEY, String(n)); } catch (e) { /* ignore */ }
+        if (opts && opts.immediate) {
+            vfs._speedGen = (vfs._speedGen | 0) + 1;
+            if (vfs._speedRaf) {
+                try { cancelAnimationFrame(vfs._speedRaf); } catch (e3) { /* ignore */ }
+                vfs._speedRaf = 0;
+            }
+            vfs.gameSpeedHeard = n;
+            pushSpeedTempo('finalize');
+            return n;
+        }
+        const from = Number(vfs.gameSpeedHeard != null ? vfs.gameSpeedHeard : vfs.gameSpeed) || 1;
+        startSpeedEase(from, n);
         return n;
     };
 

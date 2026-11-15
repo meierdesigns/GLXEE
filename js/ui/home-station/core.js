@@ -17,7 +17,7 @@ class HomeStationUI {
         this._escMenuCoolKeyUp = null;
         this.onClose = null;
         this.tab = 'station'; // station | upgrade | hangar | components | shop | craft | travel | explorations | play
-        this.upgradeSubTab = 'station'; // station | ships | modules
+        this.upgradeSubTab = 'station'; // station | ships | modules | factions | equipment
         this.shopCategory = 'resources'; // resources | ships | blueprints | parts | portals | styles
         this.shopFilter = 'all';
         this.shopSort = 'name'; // name | cost | tier
@@ -75,7 +75,7 @@ class HomeStationUI {
         } catch (e) { /* ignore */ }
         this.applyMenuOrder();
         // Hangar + factions upgrades live inside the station tree page.
-        this._upgradeSubTabs = ['station', 'equipment'];
+        this._upgradeSubTabs = ['station', 'ships', 'modules', 'factions', 'equipment'];
         this.selectedUpgradeNode = null;
         this.expandedEquipItem = null;
         this._upgTipHost = null;
@@ -90,6 +90,9 @@ class HomeStationUI {
         this._navPreferAreaKey = null;
         this._upgradeSubMeta = {
             station: { label: 'TREE', icon: 'hsStation' },
+            ships: { label: 'SHIPS', icon: 'hsShip' },
+            modules: { label: 'MODULES', icon: 'hsCraft' },
+            factions: { label: 'FACTIONS', icon: 'menuPeoples' },
             equipment: { label: 'EQUIPMENT', icon: 'hsHangar' }
         };
         this._shopCategories = ['resources', 'ships', 'blueprints', 'parts', 'portals', 'styles'];

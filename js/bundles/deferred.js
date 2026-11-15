@@ -1409,6 +1409,63 @@ function createAdvancedStationUpgradeNodes() {
                 { scrap: 680, ore: 320, crystal: 200, voltex: 130 },
                 { scrap: 920, ore: 440, crystal: 280, voltex: 190 }
             ]
+        },
+        // FACTIONS branch — diplomacy / trade / war council live on the station tree.
+        embassy: {
+            id: 'embassy',
+            label: 'EMBASSY',
+            icon: 'menuPeoples',
+            maxLevel: 5,
+            requires: 'core',
+            requireLevel: 2,
+            treeX: 88,
+            treeY: 28,
+            desc: 'Open a diplomatic wing. Reputation gains from contracts scale up.',
+            effect: (lv) => ({ repGainMul: 1 + lv * 0.12 }),
+            costs: [
+                { scrap: 90, crystal: 40 },
+                { scrap: 150, ore: 40, crystal: 70 },
+                { scrap: 230, ore: 70, crystal: 110, voltex: 25 },
+                { scrap: 330, ore: 110, crystal: 155, voltex: 50 },
+                { scrap: 460, ore: 160, crystal: 210, voltex: 80 }
+            ]
+        },
+        trade_desk: {
+            id: 'trade_desk',
+            label: 'TRADE DESK',
+            icon: 'hsShop',
+            maxLevel: 5,
+            requires: 'embassy',
+            requireLevel: 1,
+            treeX: 92,
+            treeY: 48,
+            desc: 'Better faction trade prices (buy cheaper / sell higher).',
+            effect: (lv) => ({ tradeBonus: lv * 0.04 }),
+            costs: [
+                { scrap: 110, ore: 40, crystal: 35 },
+                { scrap: 180, ore: 70, crystal: 60 },
+                { scrap: 270, ore: 110, crystal: 95, voltex: 30 },
+                { scrap: 380, ore: 160, crystal: 135, voltex: 55 },
+                { scrap: 520, ore: 220, crystal: 180, voltex: 85 }
+            ]
+        },
+        war_room: {
+            id: 'war_room',
+            label: 'WAR ROOM',
+            icon: 'navCrosshair',
+            maxLevel: 4,
+            requires: 'embassy',
+            requireLevel: 2,
+            treeX: 84,
+            treeY: 52,
+            desc: 'Faction contract payouts and reputation rewards rise.',
+            effect: (lv) => ({ contractRepBonus: lv * 2, contractPayMul: 1 + lv * 0.08 }),
+            costs: [
+                { scrap: 140, ore: 50, crystal: 45 },
+                { scrap: 220, ore: 90, crystal: 80, voltex: 25 },
+                { scrap: 330, ore: 140, crystal: 120, voltex: 50 },
+                { scrap: 470, ore: 200, crystal: 170, voltex: 85 }
+            ]
         }
     };
 }
@@ -1521,7 +1578,8 @@ var EconomyConfig = class EconomyConfig {
             'core', 'storage', 'hangar', 'cargo', 'impulse_drive', 'reactor',
             'compactor', 'docking_ring', 'fabricator', 'warp_drive', 'cooling',
             'refinery', 'drone_bay', 'sensors', 'nav_computer', 'foundry',
-            'vault_omega', 'fleet_yard', 'quantum_array', 'stargate'
+            'vault_omega', 'fleet_yard', 'quantum_array', 'stargate',
+            'embassy', 'trade_desk', 'war_room'
         ];
         /** Warp level required to travel to each galaxy (milky_way always free). */
         this.galaxyWarpRequirement = {
@@ -1865,7 +1923,11 @@ extendClass(EconomyConfig, {
         const stats = Object.assign({}, this.stationBaseStats, {
             impulseDrive: 0,
             warpDrive: 0,
-            exploreBudget: 1
+            exploreBudget: 1,
+            repGainMul: 1,
+            tradeBonus: 0,
+            contractRepBonus: 0,
+            contractPayMul: 1
         });
         this.stationUpgradeOrder.forEach((id) => {
             const node = this.stationUpgradeNodes[id];
@@ -1874,7 +1936,12 @@ extendClass(EconomyConfig, {
             if (n <= 0) return;
             const bonus = node.effect(n) || {};
             Object.keys(bonus).forEach((k) => {
-                stats[k] = (stats[k] || 0) + (bonus[k] || 0);
+                // Multipliers replace (take max), additive stats sum.
+                if (k === 'repGainMul' || k === 'contractPayMul') {
+                    stats[k] = Math.max(stats[k] || 1, bonus[k] || 1);
+                } else {
+                    stats[k] = (stats[k] || 0) + (bonus[k] || 0);
+                }
             });
         });
         stats.resourceCap = Math.max(1, Math.round(stats.resourceCap));
@@ -1886,6 +1953,10 @@ extendClass(EconomyConfig, {
         stats.impulseDrive = Math.max(0, Math.round(stats.impulseDrive || 0));
         stats.warpDrive = Math.max(0, Math.round(stats.warpDrive || 0));
         stats.exploreBudget = Math.max(1, Math.round(this.getExploreBudget(lv)));
+        stats.repGainMul = Math.max(1, Number(stats.repGainMul) || 1);
+        stats.tradeBonus = Math.max(0, Math.min(0.35, Number(stats.tradeBonus) || 0));
+        stats.contractRepBonus = Math.max(0, Math.round(stats.contractRepBonus || 0));
+        stats.contractPayMul = Math.max(1, Number(stats.contractPayMul) || 1);
         return stats;
     },
 
@@ -7794,9 +7865,33 @@ extendClass(ProfileManager, {
         return { ok: true, credits: credits, amount: n };
     },
 
+    /** Moves a pending cargo blueprint into station inventory (`profile.blueprints`).
+     *  Blueprints are craft-only — they never board the ship. `amount` defaults to the
+     *  full stack; pass 1 for one victory-grid cell (or the whole stacked ×N cell). */
+    takeCargoBlueprintToStation(key, amount) {
+        const profile = this.getActiveProfile();
+        if (!profile) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const available = (profile.cargo.blueprints || {})[key] || 0;
+        if (available <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const n = amount == null
+            ? available
+            : Math.max(1, Math.min(available, Math.round(Number(amount) || 1)));
+        profile.blueprints[bp.key] = (profile.blueprints[bp.key] || 0) + n;
+        const left = available - n;
+        if (left > 0) profile.cargo.blueprints[key] = left;
+        else delete profile.cargo.blueprints[key];
+        const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+        if (discoverCat && this.discover) this.discover(discoverCat, bp.id);
+        this.save();
+        return { ok: true, amount: n, blueprint: true };
+    },
+
     /** Files a pending cargo part onto `shipId`'s storage: grants real ownership (profile.parts)
      *  and marks it filed on that ship in one step, then clears it out of cargo. Blueprints
-     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way.
+     *  use takeCargoBlueprintToStation instead.
      *  `amount` defaults to the full stack; pass 1 for one victory-grid cell. */
     takeCargoPartToShip(shipId, key, amount) {
         const profile = this.getActiveProfile();
@@ -7839,15 +7934,28 @@ extendClass(ProfileManager, {
         return { ok: true, amount: n, rolls: rolls };
     },
 
-    /** Drops whatever found parts/blueprints the player never took or sold — called when the
-     *  victory screen closes (next stage / leave planet), so the decision can't be skipped. */
+    /** Sells whatever found parts/blueprints the player never took into ship inventory —
+     *  called when the victory screen closes (next stage / leave planet). */
     clearPendingCargo() {
         const profile = this.getActiveProfile();
         if (!profile) return;
         this.ensureEconomyDefaults(profile);
+        let credits = 0;
+        const sellBucket = (bucket, asBlueprint) => {
+            Object.keys(bucket || {}).forEach((key) => {
+                const n = Math.max(0, Math.round(Number(bucket[key]) || 0));
+                if (n <= 0) return;
+                const unit = this.getCargoPartSellValue ? this.getCargoPartSellValue(key) : 0;
+                credits += unit * n;
+            });
+        };
+        sellBucket(profile.cargo.parts, false);
+        sellBucket(profile.cargo.blueprints, true);
+        if (credits > 0 && this.addCredits) this.addCredits(credits, true);
         profile.cargo.parts = {};
         profile.cargo.blueprints = {};
         this.save();
+        return { ok: true, credits: credits };
     },
 
     spendResources(costMap) {
@@ -8654,6 +8762,31 @@ extendClass(ProfileManager, {
         if (entry[bucket][defId] <= 0) delete entry[bucket][defId];
         this.save();
         return { ok: true, moved: move };
+    },
+
+    /** Safety net: a part must never be invisible. Starter-loadout parts (owned<=0) only live in
+     *  the ship's "filed" ledger once unequipped; if an older/buggy unequip skipped that, the part
+     *  is in no grid. Re-file every default-loadout part of this ship that is neither equipped nor
+     *  stored anywhere. Cheap and idempotent. */
+    reconcileShipParts(profile, shipId) {
+        if (!profile || !shipId || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.defaultLoadoutFromShip) return 0;
+        let def;
+        try { def = shipLoadoutManager.defaultLoadoutFromShip(shipId); } catch (e) { return 0; }
+        if (!def) return 0;
+        const map = { weapons: def.weaponSlots || def.weapons, defenses: def.defenses, abilities: def.abilities, energy: def.energy };
+        let fixed = 0;
+        Object.keys(map).forEach((bucket) => {
+            (map[bucket] || []).forEach((id) => {
+                if (!id) return;
+                if (this._ownedStorageCount(profile, bucket, id) > 0) return; // owned parts always show (station/ship)
+                if (this.getShipStorageQty(profile, shipId, bucket, id) > 0) return; // filed or equipped here
+                // Starter part not equipped/filed on this ship: only restore if no other ship holds it.
+                if (this._allocatedStorageCount(profile, bucket, id) > 0 || this._equippedStorageCountAll(profile, bucket, id) > 0) return;
+                this.fileUnequippedPart(profile, shipId, bucket, id);
+                fixed++;
+            });
+        });
+        return fixed;
     }
 });
 
@@ -10353,7 +10486,13 @@ extendClass(FactionManager, {
         const key = String(id || '').toLowerCase();
         if (!this.factions[key]) return 0;
         if (!this.state.reputation) this.state.reputation = {};
-        const next = Math.max(FACTION_REP_MIN, Math.min(FACTION_REP_MAX, this.getReputation(key) + (Number(delta) || 0)));
+        let d = Number(delta) || 0;
+        // Station EMBASSY scales positive reputation gains.
+        if (d > 0 && typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+            const st = profileManager.getStationStats(profileManager.getActiveProfile());
+            if (st && st.repGainMul > 1) d = Math.round(d * st.repGainMul);
+        }
+        const next = Math.max(FACTION_REP_MIN, Math.min(FACTION_REP_MAX, this.getReputation(key) + d));
         this.state.reputation[key] = next;
         this.save();
         return next;
@@ -10406,8 +10545,13 @@ extendClass(FactionManager, {
         const t = this.getTradeTerms(id);
         const buyBase = (economyConfig.getResourceBuyCost(mat, 10) || { credits: 0 }).credits / 10;
         const sellBase = (economyConfig.getResourceSellPayout(mat, 10) || { credits: 0 }).credits / 10;
-        const buyMult = (mat === t.specialty ? 0.6 : 1) * (1 - t.discount);
-        const sellMult = (mat === t.demand ? 1.5 : (mat === t.specialty ? 0.6 : 1)) * (1 + t.discount);
+        let desk = 0;
+        if (typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+            const st = profileManager.getStationStats(profileManager.getActiveProfile());
+            desk = (st && st.tradeBonus) || 0;
+        }
+        const buyMult = (mat === t.specialty ? 0.6 : 1) * (1 - t.discount - desk);
+        const sellMult = (mat === t.demand ? 1.5 : (mat === t.specialty ? 0.6 : 1)) * (1 + t.discount + desk);
         return {
             buy: Math.max(1, Math.ceil(buyBase * buyMult)),
             sell: Math.max(1, Math.floor(sellBase * sellMult))
@@ -10629,7 +10773,12 @@ extendClass(ProfileManager, {
     ProfileManager.prototype.completeMissionFor = function (planetId, profile) {
         const paid = base.call(this, planetId, profile);
         if (paid && paid.factionId && typeof factionManager !== 'undefined') {
-            factionManager.addReputation(paid.factionId, paid.repGain || 5);
+            let rep = paid.repGain || 5;
+            if (typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+                const st = profileManager.getStationStats(profile || this.getActiveProfile());
+                if (st && st.contractRepBonus) rep += st.contractRepBonus;
+            }
+            factionManager.addReputation(paid.factionId, rep);
             // Conquest: the issuer now holds the planet; the loser resents it.
             if (paid.kind === 'conquer') {
                 const p = profile || this.getActiveProfile();
@@ -11841,7 +11990,7 @@ var WeaponConfigManager = class WeaponConfigManager {
 }
 
 
-/* --- js/core/weapon-config/make-weapon.js?v=shot-size-2 --- */
+/* --- js/core/weapon-config/make-weapon.js?v=faction-part-1 --- */
 "use strict";
 
 // WeaponConfigManager methods, split from weapon-config.js.
@@ -11957,6 +12106,21 @@ extendClass(WeaponConfigManager, {
     /** Damage multiplier for a weapon fired by a ship of this faction. */
     getFactionWeaponMul(factionId, weaponId) {
         return this.getFactionWeaponAffinity(factionId).indexOf(String(weaponId || '')) !== -1 ? 1.2 : 1;
+    },
+
+    /**
+     * Faction that prefers this weapon (reverse of getFactionWeaponAffinity).
+     * Used by part art / shade ramps so a laser reads Terran even on a Pirate hull.
+     */
+    getWeaponPreferredFaction(weaponId) {
+        const id = String(weaponId || '').toLowerCase().replace(/[\s-]+/g, '_');
+        return ({
+            laser: 'terran', laser_twin: 'terran', railgun: 'terran',
+            plasma: 'kronax', claw_beam: 'kronax', spike_burst: 'kronax',
+            ion: 'voidborn', wave: 'voidborn', nova: 'voidborn',
+            spread: 'pirate', rapid: 'pirate', burst: 'pirate',
+            missile: 'machine', pierce: 'machine'
+        })[id] || null;
     },
 
     /**
@@ -17833,14 +17997,10 @@ extendClass(ShipLoadoutManager, {
     /** Does this part fit this ship's slots of its kind? */
     partFitsSlot(shipId, kind, moduleId, index) {
         const need = this.getPartSizeLevel(kind, moduleId);
-        let have = this.getSlotSizeLevel(shipId, kind, index);
-        // A split weapon mount represents two mirrored sockets. Its displayed
-        // mount size is the size of the complete mount, not the half-width
-        // geometry of either mirrored socket.
-        if (kind === 'weapon' && need <= 1 && this.isSplitSlot
-            && this.isSplitSlot(shipId, kind, index)) {
-            have = Math.max(have, 1);
-        }
+        // Prefer effective size (split wing mounts count as ≥ M for fit).
+        const have = this.getSlotEffectiveSizeLevel
+            ? this.getSlotEffectiveSizeLevel(shipId, kind, index)
+            : this.getSlotSizeLevel(shipId, kind, index);
         return { ok: need <= have, need: need, have: have };
     },
 });
@@ -18732,9 +18892,9 @@ extendClass(ShipLoadoutManager, {
 // Slot sizes per slot (replaces "area level = size of every slot").
 //
 //   size = base + upgrades, capped at L
-//   base: split slots (wing pairs, split nose/core mounts) are S,
-//         single slots on the centreline (nose gun, core, aft) are M.
-//   upgrades: bought per slot in the hangar slot menu, S → M → L.
+//   base: almost everything starts S. Only a single centre-line weapon
+//         mount (nose gun) starts at M — wing pairs, defense, ability and
+//         energy stay S until upgraded in the hangar slot menu (S → M → L).
 //
 // Area upgrades still open new slots (see ship-areas.js); they no longer
 // change slot size. Stored as
@@ -18765,7 +18925,10 @@ extendClass(ShipLoadoutManager, {
     };
 
     slm.getSlotBaseSizeLevel = function (shipId, kind, index) {
-        return this.isSplitSlot(shipId, kind, index) ? 0 : 1;
+        // Fresh hull: only the single nose/core weapon is M. Everything else
+        // (wings, defense, ability, energy) is S so new profiles aren't all-M.
+        if (kind === 'weapon' && !this.isSplitSlot(shipId, kind, index)) return 1;
+        return 0;
     };
 
     /**
@@ -18813,6 +18976,7 @@ extendClass(ShipLoadoutManager, {
     /**
      * Size level (0 S, 1 M, 2 L) of a slot. Without an index, the largest
      * slot of that kind counts — "does this part fit anywhere".
+     * Upgrade UI uses this raw value (split wings start S and grow S→M→L).
      */
     slm.getSlotSizeLevel = function (shipId, kind, index) {
         if (index == null) {
@@ -18828,6 +18992,30 @@ extendClass(ShipLoadoutManager, {
         }
         return Math.min(MAX, this.getSlotBaseSizeLevel(shipId, kind, index)
             + this.getSlotUpgradeLevel(shipId, kind, index));
+    };
+
+    /**
+     * Size that governs fit + inventory footprint. A split weapon mount is a
+     * pair of half-sockets whose complete mount is at least M — so M guns
+     * fit wing/split slots even while the upgrade ladder still starts at S.
+     */
+    slm.getSlotEffectiveSizeLevel = function (shipId, kind, index) {
+        if (index == null) {
+            const caps = this.getSlotCaps(shipId, this.resolveModelClass(shipId));
+            const n = kind === 'weapon'
+                ? (this.weaponMountSlots ? this.weaponMountSlots(caps.weapons) : caps.weapons)
+                : caps[this.kindToLoadoutKey(kind)];
+            let best = 0;
+            for (let i = 0; i < Math.max(1, Number(n) || 1); i++) {
+                best = Math.max(best, this.getSlotEffectiveSizeLevel(shipId, kind, i));
+            }
+            return best;
+        }
+        let have = this.getSlotSizeLevel(shipId, kind, index);
+        if (kind === 'weapon' && this.isSplitSlot && this.isSplitSlot(shipId, kind, index)) {
+            have = Math.max(have, 1);
+        }
+        return have;
     };
 
     slm.getMaxSlotSizeLevel = function () {
@@ -21172,6 +21360,8 @@ extendClass(GameControlSystem, {
         if (loadoutList && this.renderVictoryLoadoutHtml) {
             loadoutList.innerHTML = this.renderVictoryLoadoutHtml();
         }
+        const loadoutTitle = document.querySelector('#victoryLoadout .victory-loot-title span');
+        if (loadoutTitle) loadoutTitle.textContent = 'INVENTORY';
 
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay && this.bindVictoryCargoDrag) {
@@ -21188,6 +21378,35 @@ extendClass(GameControlSystem, {
                 : 0;
             creditsElement.textContent = credits + 'c';
         }
+
+        // Pending found loot → sell value if left behind (right of this is the loot grid).
+        const sellEl = document.getElementById('victoryLootSellValue');
+        if (sellEl) {
+            const total = this.getPendingCargoSellValue ? this.getPendingCargoSellValue() : 0;
+            sellEl.textContent = total + 'c';
+            const wrap = document.getElementById('victoryLootSell');
+            if (wrap) wrap.classList.toggle('is-empty', total <= 0);
+        }
+    },
+
+    /** Credits you'd get if every still-pending found part/blueprint were sold. */
+    getPendingCargoSellValue() {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return 0;
+        const profile = profileManager.getActiveProfile();
+        if (!profile || !profile.cargo) return 0;
+        let total = 0;
+        const add = (bucket) => {
+            Object.keys(bucket || {}).forEach((key) => {
+                const n = Math.max(0, Math.round(Number(bucket[key]) || 0));
+                if (n <= 0) return;
+                const unit = profileManager.getCargoPartSellValue
+                    ? profileManager.getCargoPartSellValue(key) : 0;
+                total += unit * n;
+            });
+        };
+        add(profile.cargo.parts);
+        add(profile.cargo.blueprints);
+        return Math.max(0, Math.round(total));
     },
 
     /** Remember an end screen so a page refresh lands on it again (menu-state/restore.js). */
@@ -21391,8 +21610,14 @@ var GameLoop = class GameLoop {
         }
         
         // Cap deltaTime to prevent extreme speed on first frame or lag spikes
-        const cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
-        
+        let cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
+        // Bezel SPD slider (0.5×–2×) — scales sim time without changing the frame clock.
+        try {
+            const sp = (typeof window !== 'undefined' && typeof window.vfGetGameSpeed === 'function')
+                ? window.vfGetGameSpeed() : 1;
+            if (Number.isFinite(sp) && sp !== 1) cappedDeltaTime *= sp;
+        } catch (e) { /* ignore */ }
+
         this.update(cappedDeltaTime);
         // Paused: keep the last frame; the pause overlay is CSS on top. While the remote control is open the
         // field is frozen by it, but still repainted so slider changes (sizes, effects) show up live.
@@ -21927,6 +22152,16 @@ var InputHandler = class InputHandler {
     setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
         document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+        // Kill the native browser context menu everywhere in the game (right-click
+        // is used for equip / unequip / map fly / editor pan — never for Back/Inspect).
+        // DevMode bezel toggle can re-enable it for Inspect Element. Text fields stay open.
+        document.addEventListener('contextmenu', (e) => {
+            const t = e.target;
+            if (t && t.closest && t.closest('input, textarea, [contenteditable="true"]')) return;
+            const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+            if (devOn && window.vfAllowBrowserCtxMenu) return;
+            e.preventDefault();
+        }, true);
         // FIRE TO START: mouse / pointer click (overlay is pointer-events: none)
         document.addEventListener('pointerdown', (e) => {
             if (e.button != null && e.button !== 0) return;
@@ -24299,16 +24534,41 @@ var CoreRenderManager = class CoreRenderManager {
     const LAYOUT_CANCEL_ICON = svg16('<path d="M3 3l10 10M13 3L3 13"/>');
     // Frame edit: crosshair/target, for the on-screen BEZEL FILL / VINE INSET grips.
     const FRAME_EDIT_ICON = svg16('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>');
+    // DevMode: allow the native browser right-click menu (Inspect / Reload).
+    const CTX_MENU_ICON = svg16('<rect x="3" y="2" width="10" height="12"/><path d="M5 5h6M5 8h6M5 11h4"/>');
     const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     const MUTE_ON = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5c1.5 1 1.5 5 0 6M13 3c3 2.5 3 7.5 0 10"/>');
     const MUTE_OFF = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5l5 6M16 5l-5 6"/>');
     // Music settings (Soundtrack Editor): note glyph.
     const MUSIC_ICON = svg16('<circle cx="5" cy="12" r="2"/><circle cx="11" cy="10" r="2"/><path d="M7 12V3l6-1v8"/>');
-    Object.assign(NS, { MUTE_ON, MUTE_OFF, MUSIC_ICON });
+    // Ship render style: flat slab vs voxel cube.
+    const STYLE_FLAT = svg16('<rect x="2" y="4" width="12" height="8"/><path d="M2 8h12"/>');
+    const STYLE_VOXEL = svg16('<path d="M8 1l6 3.5v7L8 15 2 11.5v-7z"/><path d="M8 8v7M2 4.5l6 3.5 6-3.5"/>');
+    Object.assign(NS, { MUTE_ON, MUTE_OFF, MUSIC_ICON, STYLE_FLAT, STYLE_VOXEL });
     vfs.resOpen = false;
     vfs.fxOpen = false;
     vfs.volOpen = false;
+    // Combat / sim speed (0.5×–2×). Read by game-loop via window.vfGetGameSpeed.
+    const SPEED_KEY = 'vf_game_speed';
+    (function initGameSpeed() {
+        let n = 1;
+        try {
+            const raw = parseFloat(localStorage.getItem(SPEED_KEY));
+            if (Number.isFinite(raw)) n = Math.max(0.5, Math.min(2, raw));
+        } catch (e) { /* ignore */ }
+        vfs.gameSpeed = n;
+    })();
+    window.vfGetGameSpeed = function () {
+        const n = Number(vfs.gameSpeed);
+        return Number.isFinite(n) ? Math.max(0.5, Math.min(2, n)) : 1;
+    };
+    window.vfSetGameSpeed = function (v) {
+        const n = Math.max(0.5, Math.min(2, Number(v) || 1));
+        vfs.gameSpeed = n;
+        try { localStorage.setItem(SPEED_KEY, String(n)); } catch (e) { /* ignore */ }
+        return n;
+    };
 
     // Per-faction frame style overrides (bevel, plate colours, deco), kept in localStorage.
     const FACTIONS = ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
@@ -24827,7 +25087,7 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { CTX_MENU_ICON, FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));
 
 
@@ -25198,6 +25458,52 @@ var CoreRenderManager = class CoreRenderManager {
             else if (d.toolsAction === 'assetGen' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator(null);
             else if (d.toolsAction === 'assetGenFaction' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
             else if (d.toolsAction === 'assetGenFactionShips' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
+            else if (d.toolsAction === 'transmissionEditor') {
+                const openTx = () => { if (typeof transmissionEditorUI !== 'undefined') transmissionEditorUI.show(); };
+                if (typeof transmissionEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openTx);
+                else openTx();
+            }
+            else if (d.toolsAction === 'difficultyEditor') {
+                const openDiff = () => { if (typeof difficultyEditorUI !== 'undefined') difficultyEditorUI.show(); };
+                if (typeof difficultyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openDiff);
+                else openDiff();
+            }
+            else if (d.toolsAction === 'themeEditor') {
+                const open = () => { if (typeof themeEditorUI !== 'undefined') themeEditorUI.show(); };
+                if (typeof themeEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'shipEditor') {
+                const open = () => { if (typeof shipEditorUI !== 'undefined') shipEditorUI.show(); };
+                if (typeof shipEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'enemyEditor') {
+                const open = () => { if (typeof enemyEditorUI !== 'undefined') enemyEditorUI.show(); };
+                if (typeof enemyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'planetEditor') {
+                const open = () => { if (typeof planetEditorUI !== 'undefined') planetEditorUI.show(); };
+                if (typeof planetEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'componentEditor') {
+                const open = () => { if (typeof componentEditorUI !== 'undefined') componentEditorUI.open({}); };
+                if (typeof componentEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'abilityEditor') {
+                const open = () => { if (typeof abilityEditorUI !== 'undefined') abilityEditorUI.show(); };
+                if (typeof abilityEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'hangarTestArena') {
+                const open = () => { if (typeof hangarTestArena !== 'undefined') hangarTestArena.show({}); };
+                if (typeof hangarTestArena === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'hudLayoutEditor' && typeof hudLayoutEditor !== 'undefined') hudLayoutEditor.toggleEdit();
         }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
         else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }
@@ -25997,7 +26303,6 @@ var CoreRenderManager = class CoreRenderManager {
             h += '</div>';
         } else if (vfs.fxTab === 'voxelpixel') {
             h += '<div class="vf-fx-title">VOXEL &amp; PIXEL SIZE</div>' +
-                fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
                 fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
                 '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
                 fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
@@ -26268,7 +26573,21 @@ var CoreRenderManager = class CoreRenderManager {
                 '<button type="button" class="vf-fx-launch" data-tools-action="assetGen"><em>ASSET GENERATOR</em><i aria-hidden="true">›</i></button>' +
                 '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFaction"><em>FACTION EMBLEMS</em><i aria-hidden="true">›</i></button>' +
                 '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFactionShips"><em>FACTION SHIPS</em><i aria-hidden="true">›</i></button>' +
-                '</div></section>';
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="transmissionEditor"><em>TRANSMISSION EDITOR</em><i aria-hidden="true">›</i></button>' : '') +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="difficultyEditor"><em>COMBAT TUNING</em><i aria-hidden="true">›</i></button>' : '') +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="themeEditor"><em>COLOR APPEARANCE</em><i aria-hidden="true">›</i></button>' : '') +
+                '</div></section>' +
+                (fxDevModeOn() ? '<section class="vf-fx-tools-sec">' +
+                '<div class="vf-fx-title">CONTENT EDITORS</div>' +
+                '<div class="vf-fx-tools-actions">' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="shipEditor"><em>SHIP EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="enemyEditor"><em>ENEMY EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="planetEditor"><em>PLANET EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="componentEditor"><em>COMPONENT EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="abilityEditor"><em>ABILITY EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="hangarTestArena"><em>HANGAR TEST ARENA</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="hudLayoutEditor"><em>HUD LAYOUT EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '</div></section>' : '');
             if (fxDevModeOn()) {
                 let ppBgv = 0, ppBga = 2;
                 try {
@@ -26482,7 +26801,17 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const { CTX_MENU_ICON, FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, STYLE_FLAT, STYLE_VOXEL, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const CTX_MENU_KEY = 'vf_dev_ctx_menu_v1';
+    function loadCtxMenuPref() {
+        try { return localStorage.getItem(CTX_MENU_KEY) === 'true'; } catch (e) { return false; }
+    }
+    function saveCtxMenuPref(on) {
+        try { localStorage.setItem(CTX_MENU_KEY, on ? 'true' : 'false'); } catch (e) { /* ignore */ }
+        window.vfAllowBrowserCtxMenu = !!on;
+    }
+    // Honor a saved DevMode preference as soon as this module loads (flag stays false until DevMode).
+    window.vfAllowBrowserCtxMenu = false;
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
@@ -26654,6 +26983,11 @@ var CoreRenderManager = class CoreRenderManager {
                 toggleFrameEdit();
                 btn.classList.toggle('is-open', !!vfs.frameEditOn);
             },
+            ctxMenu: function (btn) {
+                const on = !loadCtxMenuPref();
+                saveCtxMenuPref(on);
+                btn.classList.toggle('is-open', on);
+            },
             save: function (btn) {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.save();
@@ -26663,12 +26997,25 @@ var CoreRenderManager = class CoreRenderManager {
             reset: function () {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.resetLayout();
+            },
+            style: function (btn) {
+                if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.setShipRenderStyle) return;
+                const cur = String(uiAppearanceManager.shipRenderStyle || 'VOXEL').toUpperCase();
+                const next = cur === 'VOXEL' ? 'FLAT' : 'VOXEL';
+                uiAppearanceManager.setShipRenderStyle(next);
+                const voxel = next === 'VOXEL';
+                btn.innerHTML = voxel ? STYLE_VOXEL : STYLE_FLAT;
+                btn.title = voxel ? 'Style · VOXEL' : 'Style · FLAT';
+                btn.setAttribute('aria-label', btn.title);
+                btn.dataset.state = voxel ? 'voxel' : 'flat';
             }
         };
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
+            ctxMenu: ['Browser context menu', CTX_MENU_ICON],
             res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], soundtrack: ['Music settings', MUSIC_ICON],
+            style: ['Style · VOXEL', STYLE_VOXEL],
             fs: ['Fullscreen', FS_OFF], fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -26683,7 +27030,7 @@ var CoreRenderManager = class CoreRenderManager {
                 btn.title = meta[key][0];
                 btn.setAttribute('aria-label', meta[key][0]);
                 btn.innerHTML = meta[key][1];
-                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit' || key === 'soundtrack') btn.hidden = true;
+                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit' || key === 'ctxMenu' || key === 'soundtrack') btn.hidden = true;
                 tools.appendChild(btn);
             });
             frame.appendChild(tools);
@@ -26715,6 +27062,68 @@ var CoreRenderManager = class CoreRenderManager {
             if (after && after.nextSibling) tools.insertBefore(feBtn, after.nextSibling);
             else tools.appendChild(feBtn);
             tools.dataset.wired = '0';
+        }
+        // DevMode: browser context-menu toggle (Inspect / Reload) after frame-edit.
+        if (!tools.querySelector('[data-tool="ctxMenu"]') && meta.ctxMenu) {
+            const ctxBtn = document.createElement('button');
+            ctxBtn.type = 'button';
+            ctxBtn.dataset.tool = 'ctxMenu';
+            ctxBtn.title = meta.ctxMenu[0];
+            ctxBtn.setAttribute('aria-label', meta.ctxMenu[0]);
+            ctxBtn.innerHTML = meta.ctxMenu[1];
+            ctxBtn.hidden = true;
+            const after = tools.querySelector('[data-tool="frameEdit"]') || tools.querySelector('[data-tool="hud"]');
+            if (after && after.nextSibling) tools.insertBefore(ctxBtn, after.nextSibling);
+            else tools.appendChild(ctxBtn);
+            tools.dataset.wired = '0';
+        }
+        // Style toggle (FLAT ↔ VOXEL) — inject before mute / fullscreen.
+        if (!tools.querySelector('[data-tool="style"]') && meta.style) {
+            const styleBtn = document.createElement('button');
+            styleBtn.type = 'button';
+            styleBtn.dataset.tool = 'style';
+            styleBtn.title = meta.style[0];
+            styleBtn.setAttribute('aria-label', meta.style[0]);
+            styleBtn.innerHTML = meta.style[1];
+            const before = tools.querySelector('[data-tool="mute"]') || tools.querySelector('[data-tool="fs"]');
+            if (before) tools.insertBefore(styleBtn, before);
+            else tools.appendChild(styleBtn);
+            tools.dataset.wired = '0';
+        }
+        // Game speed slider — sits left of style / mute.
+        let speedLab = tools.querySelector('.vf-bezel-speed');
+        if (!speedLab) {
+            speedLab = document.createElement('label');
+            speedLab.className = 'vf-bezel-speed';
+            speedLab.title = 'Game speed';
+            speedLab.innerHTML = '<span>SPD</span>' +
+                '<input type="range" min="50" max="200" step="25" aria-label="Game speed">' +
+                '<output></output>';
+            const before = tools.querySelector('[data-tool="style"]')
+                || tools.querySelector('[data-tool="mute"]')
+                || tools.querySelector('[data-tool="fs"]');
+            if (before) tools.insertBefore(speedLab, before);
+            else tools.appendChild(speedLab);
+            const speedInp = speedLab.querySelector('input');
+            const speedOut = speedLab.querySelector('output');
+            const syncSpeedUi = function () {
+                const sp = (typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : 1;
+                const pct = Math.round(sp * 100);
+                if (String(speedInp.value) !== String(pct)) speedInp.value = String(pct);
+                speedOut.textContent = (Math.round(sp * 100) / 100) + '×';
+                speedInp.style.setProperty('--look-fill', ((pct - 50) / 150 * 100) + '%');
+            };
+            syncSpeedUi();
+            speedInp.addEventListener('input', function (e) {
+                e.stopPropagation();
+                const pct = parseInt(speedInp.value, 10) || 100;
+                if (typeof window.vfSetGameSpeed === 'function') window.vfSetGameSpeed(pct / 100);
+                syncSpeedUi();
+            });
+            ['keydown', 'keyup', 'click', 'mousedown', 'pointerdown'].forEach(function (t) {
+                speedInp.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+            speedLab._syncSpeedUi = syncSpeedUi;
         }
         // Older saves / markup without the mute key: inject it just before fullscreen.
         if (!tools.querySelector('[data-tool="mute"]') && meta.mute) {
@@ -26755,6 +27164,26 @@ var CoreRenderManager = class CoreRenderManager {
             fxSlot.title = meta.fx[0];
             fxSlot.setAttribute('aria-label', meta.fx[0]);
         }
+        // DevMode: Voxel Size dropdown at the left of the bezel tool strip.
+        let voxelLab = tools.querySelector('.vf-bezel-voxel');
+        if (!voxelLab) {
+            voxelLab = document.createElement('label');
+            voxelLab.className = 'vf-bezel-voxel';
+            voxelLab.title = 'Voxel Size';
+            voxelLab.hidden = true;
+            voxelLab.innerHTML = '<span>VOXEL</span><select aria-label="Voxel Size"></select>';
+            tools.insertBefore(voxelLab, tools.firstChild);
+            const voxelSel = voxelLab.querySelector('select');
+            voxelSel.addEventListener('change', function (e) {
+                e.stopPropagation();
+                if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setVoxelSize) {
+                    uiAppearanceManager.setVoxelSize(voxelSel.value);
+                }
+            });
+            ['keydown', 'keyup', 'click', 'mousedown'].forEach(function (t) {
+                voxelSel.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+        }
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
@@ -26775,6 +27204,19 @@ var CoreRenderManager = class CoreRenderManager {
         };
         q('res').classList.toggle('is-open', vfs.resOpen);
         q('fx').classList.toggle('is-open', vfs.fxOpen);
+        const styleBtn = q('style');
+        if (styleBtn) {
+            const voxel = typeof uiAppearanceManager !== 'undefined'
+                && String(uiAppearanceManager.shipRenderStyle || 'VOXEL').toUpperCase() === 'VOXEL';
+            const st = voxel ? 'voxel' : 'flat';
+            if (styleBtn.dataset.state !== st) {
+                styleBtn.dataset.state = st;
+                styleBtn.innerHTML = voxel ? STYLE_VOXEL : STYLE_FLAT;
+                styleBtn.title = voxel ? 'Style · VOXEL' : 'Style · FLAT';
+                styleBtn.setAttribute('aria-label', styleBtn.title);
+            }
+        }
+        if (speedLab && speedLab._syncSpeedUi) speedLab._syncSpeedUi();
         const muteBtn = q('mute');
         if (muteBtn) {
             muteBtn.classList.toggle('is-open', vfs.volOpen);
@@ -26791,6 +27233,25 @@ var CoreRenderManager = class CoreRenderManager {
         if (soundtrackBtn) {
             const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
             soundtrackBtn.hidden = !devOn;
+        }
+        {
+            const voxelDev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+            voxelLab.hidden = !voxelDev;
+            if (voxelDev && typeof uiAppearanceManager !== 'undefined') {
+                const opts = uiAppearanceManager.getVoxelSizeOptions
+                    ? uiAppearanceManager.getVoxelSizeOptions()
+                    : ['0.25', '0.5', '0.75', '1', '2', '3', '4', '5', '6', '7', '8'];
+                const cur = String(uiAppearanceManager.voxelSize || '1');
+                const voxelSel = voxelLab.querySelector('select');
+                const optKey = opts.join('|');
+                if (voxelSel.dataset.opts !== optKey) {
+                    voxelSel.dataset.opts = optKey;
+                    voxelSel.innerHTML = opts.map(function (o) {
+                        return '<option value="' + o + '">' + o + '×</option>';
+                    }).join('');
+                }
+                if (voxelSel.value !== cur) voxelSel.value = cur;
+            }
         }
         const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
         const fsBtn = q('fs');
@@ -26846,6 +27307,16 @@ var CoreRenderManager = class CoreRenderManager {
         }
         if (!devOn && vfs.frameEditOn) toggleFrameEdit(false);
         if (vfs.frameEditOn) renderFrameEditGrips();
+        const ctxMenuBtn = q('ctxMenu');
+        if (ctxMenuBtn) {
+            ctxMenuBtn.hidden = !devOn;
+            // Preference persists, but the browser menu is only allowed while DevMode is on.
+            const ctxOn = !!devOn && loadCtxMenuPref();
+            window.vfAllowBrowserCtxMenu = ctxOn;
+            ctxMenuBtn.classList.toggle('is-open', ctxOn);
+        } else if (!devOn) {
+            window.vfAllowBrowserCtxMenu = false;
+        }
         const saveBtn = q('save');
         if (saveBtn) saveBtn.hidden = !nowEditing;
         const resetBtn = q('reset');
@@ -28194,6 +28665,13 @@ var CoreRenderManager = class CoreRenderManager {
             if (performance.now() < vfs.suppressROUntil) return;
             scheduleUpdate();
         });
+        // Embedded hosts (e.g. a VSCode webview panel) can settle to their real size after
+        // 'load' without ever firing window/visualViewport 'resize' — those only cover an
+        // actual top-level browser window being dragged. Watching <html> directly catches
+        // the host-container resize too, so the stage never gets stuck scaled for a stale
+        // early measurement (reads as a permanently cropped bezel with no way to scroll to it,
+        // since html is overflow:hidden by design — see part-01.css).
+        ro.observe(document.documentElement);
         const watch = function () {
             const container = document.querySelector('.game-container');
             if (container) {
@@ -46075,6 +46553,11 @@ window.spriteLoader = spriteLoader;
             : 220;
         let rightW = hasRight ? options.defaults.right : null;
         let resizingSide = null;
+        // Relative drag: absolute clientX-from-body.left jumps when preceding
+        // columns exist (e.g. hangar inventory before the ship list).
+        let dragStartX = 0;
+        let dragStartLeft = 0;
+        let dragStartRight = 0;
 
         if (storageKey) {
             try {
@@ -46101,16 +46584,23 @@ window.spriteLoader = spriteLoader;
             // Pointer is in visual px, column widths in CSS px: measure the real scale (zoomed / scaled stage).
             const sc = body.offsetWidth && rect.width ? rect.width / body.offsetWidth : 1;
             const total = body.offsetWidth || rect.width;
-            const gaps = 4 * (hasRight ? 4 : 2);   // grid column gaps
+            // Measure actual column gaps from the live grid instead of assuming a fixed column
+            // count: a grid can grow an extra leading column (e.g. the hangar's inventory sidebar)
+            // that this helper doesn't know about.
+            const cs = getComputedStyle(body);
+            const colGap = parseFloat(cs.columnGap || cs.gap) || 0;
+            const colCount = cs.gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+            const gaps = colGap * Math.max(0, colCount - 1);
             const rightOff = hasRight && typeof options.isRightHidden === 'function' && options.isRightHidden();
             const rightVal = hasRight && !rightOff ? rightW : 0;
             const handles = (hasRight && !rightOff ? handleW * 2 : handleW + (options.hiddenRightW || 0)) + gaps;
+            const dx = (e.clientX - dragStartX) / sc;
             if (resizingSide === 'left') {
                 const maxLeft = total - rightVal - mins.center - handles;
-                leftW = Math.round(clamp((e.clientX - rect.left) / sc, mins.left, maxLeft));
+                leftW = Math.round(clamp(dragStartLeft + dx, mins.left, maxLeft));
             } else if (hasRight) {
                 const maxRight = total - leftW - mins.center - handles;
-                rightW = Math.round(clamp((rect.right - e.clientX) / sc, mins.right, maxRight));
+                rightW = Math.round(clamp(dragStartRight - dx, mins.right, maxRight));
             }
             apply();
         };
@@ -46136,6 +46626,9 @@ window.spriteLoader = spriteLoader;
             e.preventDefault();
             resizingSide = handle.getAttribute('data-resize');
             if (!hasRight && resizingSide === 'right') return;
+            dragStartX = e.clientX;
+            dragStartLeft = leftW;
+            dragStartRight = rightW;
             document.body.classList.add('pe-resizing');
             handle.classList.add('pe-resize-active');
         };
@@ -46286,12 +46779,16 @@ window.spriteLoader = spriteLoader;
             const cur = placement(side);
             if (!cur) return;
             const startX = e.clientX;
-            const startW = side.getBoundingClientRect().width;
-            const maxW = Math.max(MIN_W, cur.parent.getBoundingClientRect().width - MIN_CENTER);
+            const sideRect = side.getBoundingClientRect();
+            const parentRect = cur.parent.getBoundingClientRect();
+            // Visual px → CSS px (scaled stage); getBoundingClientRect alone jumps on first move.
+            const sc = side.offsetWidth && sideRect.width ? sideRect.width / side.offsetWidth : 1;
+            const startW = side.offsetWidth || (sideRect.width / sc);
+            const maxW = Math.max(MIN_W, (cur.parent.offsetWidth || (parentRect.width / sc)) - MIN_CENTER);
             document.body.classList.add('pe-resizing');
             handle.classList.add('is-active');
             const move = (ev) => {
-                const dx = ev.clientX - startX;
+                const dx = (ev.clientX - startX) / sc;
                 const w = Math.max(MIN_W, Math.min(maxW, startW + (cur.edge === 'right' ? dx : -dx)));
                 if (applyWidth(side, cur, w)) saved[key] = Math.round(w);
                 window.dispatchEvent(new Event('resize'));
@@ -48589,9 +49086,10 @@ var MENU_ORDER_DEFAULT_ESC = MENU_ORDER.esc.slice();
 // The first tab of an area is where a click on the area lands first.
 var MENU_AREAS = [
     { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station'], defaultTab: 'station' },
+    { id: 'upgrade', label: 'UPGRADE', icon: 'hsUpgrade', tabs: ['upgrade'], defaultTab: 'upgrade' },
     // defaultTab: where a click on the area lands (PLAY / the galaxy map is
     // only opened on purpose).
-    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },
+    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'missions', 'craft', 'shop'], defaultTab: 'hangar' },
     { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] },
     { id: 'explore', label: 'WIKI', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
 ];
@@ -48654,6 +49152,11 @@ function getAreaOrder() {
     });
     ids.forEach((id) => {
         if (out.indexOf(id) !== -1) return;
+        // Older saves had no UPGRADE area — keep it next to HANGAR, not at the end.
+        if (id === 'upgrade' && out.indexOf('hangar') !== -1) {
+            out.splice(out.indexOf('hangar'), 0, 'upgrade');
+            return;
+        }
         if (out.length && out[out.length - 1] !== '|') out.push('|');
         out.push(id);
     });
@@ -48723,8 +49226,31 @@ function resetMenuAreas() {
 
 (function loadSavedMenuAreas() {
     try {
-        const saved = JSON.parse(localStorage.getItem(MENU_AREAS_STORAGE_KEY) || 'null');
-        if (saved) applyMenuAreasLayout(saved);
+        let saved = JSON.parse(localStorage.getItem(MENU_AREAS_STORAGE_KEY) || 'null');
+        if (!saved) return;
+        // UPGRADE is its own top-level area again — pull it out of HANGAR (or any other area).
+        let migrated = false;
+        const next = saved.map((entry) => {
+            if (!entry || !Array.isArray(entry.tabs)) return entry;
+            if (entry.id === 'upgrade') {
+                if (entry.tabs.length !== 1 || entry.tabs[0] !== 'upgrade') migrated = true;
+                return Object.assign({}, entry, { tabs: ['upgrade'], defaultTab: 'upgrade' });
+            }
+            if (entry.tabs.indexOf('upgrade') === -1) return entry;
+            migrated = true;
+            const tabs = entry.tabs.filter((t) => t !== 'upgrade');
+            const defaultTab = entry.defaultTab === 'upgrade' ? (tabs[0] || null) : entry.defaultTab;
+            return Object.assign({}, entry, { tabs: tabs, defaultTab: defaultTab });
+        });
+        if (!next.some((e) => e && e.id === 'upgrade')) {
+            migrated = true;
+            const hangarIdx = next.findIndex((e) => e && e.id === 'hangar');
+            const upg = { id: 'upgrade', tabs: ['upgrade'], defaultTab: 'upgrade' };
+            if (hangarIdx !== -1) next.splice(hangarIdx, 0, upg);
+            else next.push(upg);
+        }
+        saved = next;
+        if (applyMenuAreasLayout(saved) && migrated) saveMenuAreas();
     } catch (e) { /* ignore */ }
 })();
 
@@ -50203,15 +50729,6 @@ extendClass(StartScreenManager, {
                 type: 'shipRenderStyle'
             },
             {
-                name: 'Voxel Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? String(uiAppearanceManager.voxelSize || '1') : '1',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getVoxelSizeOptions()
-                    : ['1', '2', '3', '4'],
-                type: 'voxelSize'
-            },
-            {
                 name: 'Player Size',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
                     ? String(Math.round(uiAppearanceManager.getSizePx('player'))) : '18',
@@ -50691,6 +51208,11 @@ extendClass(StartScreenManager, {
                 value: 'OPEN ›',
                 type: 'action',
                 action: 'soundtrackEditor'
+            }, {
+                name: 'Transmission Editor',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'transmissionEditor'
             }, {
                 name: 'Face Editor',
                 value: 'FLUX ›',
@@ -52555,7 +53077,7 @@ extendClass(StartScreenManager, {
             item.type === 'bgParallax' ||
             item.type === 'controlsHints'
         );
-        const isVoxelItem = (item) => item.type === 'shipRenderStyle' || item.type === 'voxelSize'
+        const isVoxelItem = (item) => item.type === 'shipRenderStyle'
             || (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined'
                 && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'pixelSize' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
         addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);
@@ -55160,6 +55682,26 @@ extendClass(StartScreenManager, {
                 window.ensureVfEditors(open);
             } else {
                 open();
+            }
+            return;
+        }
+        if (item.action === 'transmissionEditor') {
+            // Needs both the editor UI (editors bundle) and the story data it edits
+            // (VFStoryDialogue / ProfileSelectionManager live in the profiles bundle).
+            const open = () => {
+                if (typeof transmissionEditorUI !== 'undefined') transmissionEditorUI.show();
+            };
+            const withProfiles = () => {
+                if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+                    window.ensureVfProfiles(open);
+                } else {
+                    open();
+                }
+            };
+            if (typeof transmissionEditorUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(withProfiles);
+            } else {
+                withProfiles();
             }
             return;
         }
@@ -58135,8 +58677,12 @@ extendClass(PlanetSVGManager, {
         const feat = Object.assign({}, features);
         feat.bands = st === 'banded' || (!!feat.bands && st === style);
         feat.craters = st === 'pocked' || (!!feat.craters && st === style);
-        // Any style can carry rings now and then.
-        feat.rings = st === 'ringed' || style === 'ringed' || rng() < 0.14;
+        // Any style can carry rings now and then — but hero homeworlds stay ring-light
+        // (orbit lane + atmosphere already read as rings; Saturn stacks look cluttered).
+        const isHero = String(id || '').indexOf('hero-') === 0;
+        feat.rings = isHero
+            ? false
+            : (st === 'ringed' || style === 'ringed' || rng() < 0.14);
         if (rng() < 0.3) feat.storms = true;
         if (rng() < 0.2) feat.ice = true;
 

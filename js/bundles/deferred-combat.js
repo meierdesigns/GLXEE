@@ -1225,6 +1225,7 @@ extendClass(GameControlSystem, {
         const needsBuild = !victoryOverlay
             || !document.getElementById('victoryLootList')
             || !document.getElementById('victoryLootCredits')
+            || !document.getElementById('victoryLootSellValue')
             || !document.getElementById('victoryLoadoutList')
             || existingBtns !== 3
             || !victoryOverlay.querySelector('.victory-button[data-action="nextLevel"]')
@@ -1266,11 +1267,17 @@ extendClass(GameControlSystem, {
                                     <span>FOUND ITEMS</span>
                                     <span class="victory-loot-credits" id="victoryLootCredits"></span>
                                 </div>
-                                <div class="victory-loot-list" id="victoryLootList"></div>
+                                <div class="victory-loot-row-wrap">
+                                    <div class="victory-loot-sell" id="victoryLootSell" data-ui-tip="LEFT BEHIND → SOLD FOR THIS">
+                                        <span class="victory-loot-sell-label">SELL</span>
+                                        <span class="victory-loot-sell-value" id="victoryLootSellValue">0c</span>
+                                    </div>
+                                    <div class="victory-loot-list" id="victoryLootList"></div>
+                                </div>
                             </div>
 
                             <div class="victory-loadout" id="victoryLoadout">
-                                <div class="victory-loot-title"><span>SHIP LOADOUT</span></div>
+                                <div class="victory-loot-title"><span>INVENTORY</span></div>
                                 <div class="victory-loadout-list" id="victoryLoadoutList"></div>
                             </div>
                         </div>
@@ -1316,16 +1323,45 @@ extendClass(GameControlSystem, {
         // Kill the browser right-click menu anywhere on the victory screen.
         // Capture on the overlay AND document while visible — empty grid cells /
         // planet chrome were still leaking the native menu before.
-        if (victoryOverlay.dataset.ctxBound !== '2') {
-            victoryOverlay.dataset.ctxBound = '2';
+        // Right-click on FOUND loot must take→ship here: document capture runs
+        // before any cell handler, and stopPropagation would otherwise eat it.
+        if (victoryOverlay.dataset.ctxBound !== '4') {
+            victoryOverlay.dataset.ctxBound = '4';
+            const self = this;
             const blockCtx = (event) => {
                 const ov = document.getElementById('victoryOverlay');
                 if (!ov || ov.classList.contains('hidden')) return;
                 event.preventDefault();
                 event.stopPropagation();
+                const btn = event.target && event.target.closest
+                    ? event.target.closest('.victory-loot-cell[data-cargo-key]')
+                    : null;
+                if (!btn || !btn.closest('#victoryLootList')) return;
+                const key = btn.dataset.cargoKey;
+                if (!key) return;
+                // Debounce: pointerdown(button 2) + contextmenu both fire on one right-click.
+                const now = Date.now();
+                if (self._victoryLootTakeKey === key && (now - (self._victoryLootTakeAt || 0)) < 450) return;
+                self._victoryLootTakeKey = key;
+                self._victoryLootTakeAt = now;
+                // Parts → ship bag; blueprints → station schematics.
+                self.takeVictoryCargoItem(key, btn.dataset.cargoBlueprint === '1');
             };
             victoryOverlay.addEventListener('contextmenu', blockCtx, true);
             document.addEventListener('contextmenu', blockCtx, true);
+            // Right-click take on FOUND loot only (ship-grid equip keeps its own pointerdown).
+            const takeLootPointer = (event) => {
+                if (event.button !== 2) return;
+                const ov = document.getElementById('victoryOverlay');
+                if (!ov || ov.classList.contains('hidden')) return;
+                const btn = event.target && event.target.closest
+                    ? event.target.closest('.victory-loot-cell[data-cargo-key]')
+                    : null;
+                if (!btn || !btn.closest('#victoryLootList')) return;
+                blockCtx(event);
+            };
+            victoryOverlay.addEventListener('pointerdown', takeLootPointer, true);
+            document.addEventListener('pointerdown', takeLootPointer, true);
         }
         this.bindVictoryLootList(victoryOverlay);
 
@@ -1567,11 +1603,11 @@ extendClass(GameControlSystem, {
 
     /** Found items as the same square-slot grid used for the ship bag (hs-storage-grid): one
      *  cell per pending cargo part/blueprint, read LIVE off profile.cargo (not a frozen
-     *  snapshot) since selling/taking changes it while this screen stays open. Click takes a
-     *  part onto the SHIP grid (right-click sells); blueprints stay click-to-sell. Drag onto
-     *  SHIP also files a part. Still-pending cargo is wiped when the screen closes
-     *  (clearPendingCargo in hideVictoryOverlay) — the player has to decide now. Plain
-     *  resources aren't shown: those auto-bank straight to the station wallet at victory
+     *  snapshot) since selling/taking changes it while this screen stays open. Right-click
+     *  (and left-click) moves a part onto the SHIP inventory; drag onto SHIP also files it.
+     *  Blueprints can't board the ship — leftover cargo is sold when the screen closes
+     *  (clearPendingCargo in hideVictoryOverlay). Plain resources aren't shown: those
+     *  auto-bank straight to the station wallet at victory
      *  (teleportCargoResourcesToStation), no decision needed. */
     renderVictoryLootHtml() {
         if (typeof profileManager === 'undefined') return '';
@@ -1640,11 +1676,14 @@ extendClass(GameControlSystem, {
             const sellable = sellValue > 0 ? ' is-sellable' : '';
             const draggable = (!e.isBlueprint && parsed) ? ' is-draggable' : '';
             const qtyHtml = e.unitAmount > 1 ? `<span class="hs-storage-cell-qty">×${e.unitAmount}</span>` : '';
-            const actionLine = (e.isBlueprint ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}CLICK TO SELL ALL · ${sellValue}c`
-                : (parsed ? `LEFT-CLICK · MOVE TO SHIP`
-                    : `CLICK TO SELL · ${sellValue}c`));
+            const actionLine = (e.isBlueprint
+                ? `${e.unitAmount > 1 ? '×' + e.unitAmount + '\n' : ''}RIGHT-CLICK · KEEP TO STATION\nLEFT BEHIND → SOLD · ${sellValue}c`
+                : (parsed ? `RIGHT-CLICK · MOVE TO SHIP\nLEFT BEHIND → SOLD`
+                    : `LEFT BEHIND → SOLD · ${sellValue}c`));
             const tip = tipLines.concat(actionLine.split('\n')).join('\n');
-            const html = `<button type="button" class="hs-storage-cell victory-loot-cell${e.isBlueprint ? ' is-blueprint' : ''}${sellable}${draggable}" ` +
+            // Blueprints are clickable too (keep→station); parts stay grab-draggable.
+            const keepable = e.isBlueprint ? ' is-draggable is-blueprint-keep' : '';
+            const html = `<button type="button" class="hs-storage-cell victory-loot-cell${e.isBlueprint ? ' is-blueprint' : ''}${sellable}${draggable}${keepable}" ` +
                 `data-cargo-key="${e.key}" data-cargo-blueprint="${e.isBlueprint ? '1' : '0'}" ` +
                 `${parsed ? `data-part-kind="${parsed.kind}" data-part-id="${parsed.id}" ` : ''}` +
                 `style="__SPAN__--pk-c:${color}" ` +
@@ -1697,19 +1736,27 @@ extendClass(GameControlSystem, {
         this.updateVictoryStats();
     },
 
-    /** Files one pending cargo part onto the active ship and refreshes the panel. */
-    takeVictoryCargoItem(key) {
-        if (typeof profileManager === 'undefined' || !profileManager.takeCargoPartToShip) return;
-        const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
-        if (!shipId) {
-            if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
-                levelInfoManager.showLootNotice('NO ACTIVE SHIP');
-            }
-            return;
-        }
+    /** Keep a found item: parts → ship bag, blueprints → station schematics. */
+    takeVictoryCargoItem(key, asBlueprint) {
+        if (typeof profileManager === 'undefined') return;
         this.cancelVictoryAutoReturn();
-        // One cell = one unit (grid renders each found part separately).
-        const res = profileManager.takeCargoPartToShip(shipId, key, 1);
+        let res = null;
+        if (asBlueprint) {
+            if (!profileManager.takeCargoBlueprintToStation) return;
+            // Blueprint cells are stacked (×N) — take the whole stack.
+            res = profileManager.takeCargoBlueprintToStation(key, null);
+        } else {
+            if (!profileManager.takeCargoPartToShip) return;
+            const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
+            if (!shipId) {
+                if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+                    levelInfoManager.showLootNotice('NO ACTIVE SHIP');
+                }
+                return;
+            }
+            // One cell = one unit (grid renders each found part separately).
+            res = profileManager.takeCargoPartToShip(shipId, key, 1);
+        }
         if (!res || !res.ok) {
             if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
                 levelInfoManager.showLootNotice(res && res.reason ? res.reason : 'LOOT FAILED');
@@ -1717,29 +1764,36 @@ extendClass(GameControlSystem, {
             return;
         }
         if (typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+            let notice = asBlueprint ? 'STORED AT STATION' : 'STORED ON SHIP';
             const roll = res.rolls && res.rolls[0];
-            const notice = roll && roll.classKey
-                ? ('STORED · ' + String(roll.classKey).toUpperCase() + ' ROLL')
-                : 'STORED ON SHIP';
+            if (!asBlueprint && roll && roll.classKey) {
+                notice = 'STORED · ' + String(roll.classKey).toUpperCase() + ' ROLL';
+            }
             levelInfoManager.showLootNotice(notice);
         }
         this.updateVictoryStats();
     },
 
-    /** Same square-slot storage grid as the home station (hs-storage-grid): the active ship's
-     *  equipped + filed parts, view-only except as a drop target for the found-items grid. */
+    /** Ship bag (parts) + station bay (blueprints / filed parts) — kept loot must stay visible. */
     renderVictoryLoadoutHtml() {
         if (typeof profileManager === 'undefined' || typeof homeStationUI === 'undefined') return '';
         const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
         const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
         if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
-        // growToFit: looted parts must stay visible even when the hangar bay is already full.
-        const shipGrid = homeStationUI.renderShipStorage(profile, shipId, {
-            tipAction: 'equip',
-            growToFit: true
-        }) || '';
+        // Same hull-slot frames as hangar bay (colored empty/filled part slots).
+        const shipGrid = (homeStationUI.renderBayShipInventoryGrid
+            ? homeStationUI.renderBayShipInventoryGrid(profile, shipId)
+            : homeStationUI.renderShipStorage(profile, shipId, {
+                tipAction: 'equip',
+                growToFit: true
+            })) || '';
+        // Blueprints land in station inventory — show that bay so RIGHT-CLICK KEEP is visible.
+        const stationGrid = (homeStationUI.renderStationStorage
+            ? homeStationUI.renderStationStorage(profile, { compactSpans: true })
+            : '') || '';
         return `<div class="victory-loadout-bags">` +
             `<div class="victory-loadout-col"><h3 class="victory-loadout-col-title">SHIP</h3>${shipGrid}</div>` +
+            `<div class="victory-loadout-col"><h3 class="victory-loadout-col-title">STATION</h3>${stationGrid || '<div class="victory-loot-empty">EMPTY</div>'}</div>` +
             `</div>`;
     },
 
@@ -1890,7 +1944,7 @@ extendClass(GameControlSystem, {
                     const suppressClick = (e) => { e.preventDefault(); e.stopPropagation(); };
                     cell.addEventListener('click', suppressClick, { capture: true, once: true });
                     setTimeout(() => cell.removeEventListener('click', suppressClick, true), 0);
-                    this.takeVictoryCargoItem(cell.dataset.cargoKey);
+                    this.takeVictoryCargoItem(cell.dataset.cargoKey, cell.dataset.cargoBlueprint === '1');
                 };
                 const onCancel = () => cleanup();
                 document.addEventListener('pointermove', onMove);
@@ -1901,54 +1955,10 @@ extendClass(GameControlSystem, {
     },
 
     bindVictoryLootList(victoryOverlay) {
-        const list = victoryOverlay.querySelector('#victoryLootList');
-        // v4: left-click moves found→ship; right-click does not take (equip is ship-bag only).
-        if (!list || list.dataset.sellBound === 'v4') return;
-        list.dataset.sellBound = 'v4';
-        list.addEventListener('click', (event) => {
-            // Right-click on a <button> can still fire a trailing click (button 2) after
-            // contextmenu/pointerdown — reject it so only left-click moves inventory.
-            if (event.button !== 0) return;
-            const btn = event.target.closest('.victory-loot-cell');
-            if (!btn) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const isBlueprint = btn.dataset.cargoBlueprint === '1';
-            // Parts: left-click moves into the ship bag. Blueprints stay sell-only.
-            if (!isBlueprint && btn.classList.contains('is-draggable')) {
-                this.takeVictoryCargoItem(btn.dataset.cargoKey);
-                return;
-            }
-            if (!btn.classList.contains('is-sellable')) return;
-            this.sellVictoryCargoItem(btn.dataset.cargoKey, isBlueprint);
-        });
-        // Right-click on FOUND ITEMS: only blueprints sell. Parts wait for left-click move;
-        // equip happens later via right-click in the SHIP bag.
-        list.addEventListener('pointerdown', (event) => {
-            if (event.button !== 2) return;
-            const btn = event.target.closest('.victory-loot-cell');
-            if (!btn) return;
-            event.preventDefault();
-            event.stopPropagation();
-            const isBlueprint = btn.dataset.cargoBlueprint === '1';
-            if (isBlueprint && btn.classList.contains('is-sellable')) {
-                this.sellVictoryCargoItem(btn.dataset.cargoKey, true);
-            }
-        });
-        // Block the browser context menu on the whole FOUND ITEMS grid (cells + empties).
-        list.addEventListener('contextmenu', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-        });
-        // Same for SHIP loadout grid — no native context menu on slots or empty cells.
-        const loadout = victoryOverlay.querySelector('#victoryLoadoutList');
-        if (loadout && loadout.dataset.ctxBound !== '2') {
-            loadout.dataset.ctxBound = '2';
-            loadout.addEventListener('contextmenu', (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-            });
-        }
+        // Right-click take is handled in showVictoryOverlay (document/overlay capture).
+        // Left-click / drag-to-ship stays on bindVictoryCargoDrag after each stats refresh.
+        if (!victoryOverlay || victoryOverlay.dataset.lootTakeBound === 'v7') return;
+        victoryOverlay.dataset.lootTakeBound = 'v7';
     },
 
     applyVictoryPixelIcons(victoryOverlay) {
@@ -2148,10 +2158,12 @@ extendClass(GameControlSystem, {
     hideVictoryOverlay() {
         this.cancelVictoryAutoReturn();
         this.unpatchHomeStationForVictory();
-        // Whatever the player never took or sold is lost here — no silent fallback into
-        // station storage, so the found-items decision on this screen actually matters.
+        // Leftover found items → sold for credits (anything not right-clicked into ship inventory).
         if (typeof profileManager !== 'undefined' && profileManager.clearPendingCargo) {
-            profileManager.clearPendingCargo();
+            const sold = profileManager.clearPendingCargo();
+            if (sold && sold.credits > 0 && typeof levelInfoManager !== 'undefined' && levelInfoManager.showLootNotice) {
+                levelInfoManager.showLootNotice('SOLD LEFTOVERS +' + sold.credits + 'c');
+            }
         }
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay) {
@@ -18455,6 +18467,8 @@ var CollisionManager = class CollisionManager {
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
         const gateEnter = typeof objectiveManager !== 'undefined'
             && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
+        // Exit sluice / warp on screen: lips and frame stay solid, but must not scrape the ship.
+        const atExitGate = typeof objectiveManager !== 'undefined' && !!objectiveManager.goal;
         const player = playerManager.getPosition();
         // During sluice enter the ship is pulled into the tube — wall scrapes must not kill it.
         if (player && !gateEnter) {
@@ -18472,7 +18486,7 @@ var CollisionManager = class CollisionManager {
                     player.x = walls.right - player.width - 1;
                 }
                 const now = Date.now();
-                if (hitX != null && hitSide >= 0 && now - (this._terrainHitAt || 0) > 600) {
+                if (hitX != null && hitSide >= 0 && !atExitGate && now - (this._terrainHitAt || 0) > 600) {
                     this._terrainHitAt = now;
                     const hy = player.y + player.height / 2;
                     const wr = obstacleManager.terrainRowAtY(hy);
@@ -24280,7 +24294,11 @@ extendClass(LevelInfoManager, {
         const fitted = (sm && sm.loadout && Array.isArray(sm.loadout.weapons) && sm.loadout.weapons.length)
             ? sm.loadout.weapons.filter((w, i, a) => w && a.indexOf(w) === i)
             : [weaponId];
-        const weaponName = fitted.map(nameOf).join(' · ');
+        const weaponChips = this.weaponChipsHtml ? this.weaponChipsHtml() : '';
+        // Multi-gun: chips sit side-by-side under the row; row keeps a short active name.
+        const weaponName = weaponChips
+            ? nameOf(weaponId)
+            : fitted.map(nameOf).join(' · ');
 
         const session = this.clusterHtml('SESSION',
             `<div class="gi-metrics gi-metrics-session">` +
@@ -24295,7 +24313,8 @@ extendClass(LevelInfoManager, {
         const loadout = this.clusterHtml('LOADOUT',
             this.rowHtml('menuEnemies', 'ENEMY', String(d.enemyType || '—').toUpperCase(), 'enemyType') +
             this.rowHtml('hsShip', 'SHIP', String(d.playerShipType || '—'), 'playerShipType') +
-            this.weaponRowHtml(weaponId, 'WEAPON', weaponName, 'giCurrentWeapon'),
+            this.weaponRowHtml(weaponId, 'WEAPON', weaponName, 'giCurrentWeapon') +
+            weaponChips,
             'gi-cluster-loadout'
         );
 

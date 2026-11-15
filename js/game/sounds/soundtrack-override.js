@@ -195,9 +195,18 @@ extendClass(SoundManager, {
             if (localAudioManager.el && !localAudioManager.el.paused) return true;
         }
         if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.enabled
             && youtubeSoundtrackManager.mode
-            && youtubeSoundtrackManager.enabled) {
+            && youtubeSoundtrackManager.isPlaying
+            && youtubeSoundtrackManager.isPlaying()) {
             return true;
+        }
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.enabled
+            && youtubeSoundtrackManager.mode
+            && !youtubeSoundtrackManager.isPlaying) {
+            // Legacy: mode set but no isPlaying() — only trust if a key is live.
+            if (youtubeSoundtrackManager.currentKey) return true;
         }
         if (this.ambientNodes) return true;
         return false;

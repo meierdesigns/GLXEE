@@ -155,6 +155,19 @@ class SoundManager {
             if (this.startEndMusic) this.startEndMusic(pending.kind);
             return;
         }
+        // Hub / galaxy map owns the bus — never resume into stale combat overrides.
+        const mapVisible = typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible;
+        if (mapVisible || (pending && pending.kind === 'map')) {
+            if (this._musicContextActive && this.clearMusicContext) this.clearMusicContext();
+            if (this.startMapMusic) {
+                const id = (pending && pending.kind === 'map' && pending.id)
+                    ? String(pending.id).replace(/^map:/, '')
+                    : ((typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                        || this._currentPlanetId || 'mars');
+                this.startMapMusic(id, { immediate: true });
+                return;
+            }
+        }
         if (this._musicContextActive && this._reevaluateMusic) {
             this._activeOverrideKey = null;
             this._reevaluateMusic();

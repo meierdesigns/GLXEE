@@ -404,9 +404,12 @@ extendClass(SoundManager, {
         this._pendingMapMusicId = id;
         this.notePendingMusic('map', key);
         if (!this.musicEnabled) return;
-        // Already on this map motif — keep playhead (no restart).
+        // Already on this map motif and audible — keep playhead (no restart).
+        // isPlaying alone is not enough: fadeOut can leave a silent "playing" flag.
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
-            && vfTrackerManager.isPlaying(key)) {
+            && vfTrackerManager.isPlaying(key)
+            && (!vfTrackerManager.isAudible || vfTrackerManager.isAudible())) {
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             this.clearPendingMusic();
             return;
         }
@@ -484,6 +487,8 @@ extendClass(SoundManager, {
             : String(planetId || 'mars').toLowerCase().split('-')[0];
         const key = 'map:' + id;
         if (!this.musicEnabled) return;
+        // Map BGM is hub audio — clear leftover combat override context.
+        if (this._musicContextActive && this.clearMusicContext) this.clearMusicContext();
         this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
         if (typeof localAudioManager !== 'undefined'
@@ -493,7 +498,11 @@ extendClass(SoundManager, {
             else localAudioManager.stop();
         }
         if (!this.ensureContext()) return;
-        if (typeof vfTrackerManager === 'undefined') return;
+        if (typeof vfTrackerManager === 'undefined') {
+            // Tracker may still be in a lazy chunk on older builds — load then retry.
+            if (this._ensureTrackerThen(() => this._applyMapMusic(id))) return;
+            return;
+        }
         this._applyMusicScene('map', this._galaxyFactionForPlanet(id));
         if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
@@ -674,11 +683,13 @@ extendClass(SoundManager, {
         }
 
         if (!this.ensureContext()) return;
-        if (typeof vfTrackerManager !== 'undefined') {
-            this._applyMusicScene('menu');
-            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
-            if (vfTrackerManager.playMenu()) this.clearPendingMusic();
+        if (typeof vfTrackerManager === 'undefined') {
+            if (this._ensureTrackerThen(() => this.startMenuMusic())) return;
+            return;
         }
+        this._applyMusicScene('menu');
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        if (vfTrackerManager.playMenu()) this.clearPendingMusic();
     },
 
     stopMenuMusic() {
@@ -782,8 +793,21 @@ extendClass(SoundManager, {
     /** Start (or resume) music for the current context if it isn't already audible. */
     ensureMusicPlaying() {
         if (!this.musicEnabled) return;
+        // Galaxy map / hub first — do not bail on a fading combat/menu leg that
+        // still reports isAudible(); unmute must start map BGM.
+        const mapVisible = typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible;
+        if (mapVisible && this.startMapMusic) {
+            if (this._musicContextActive && this.clearMusicContext) this.clearMusicContext();
+            this.startMapMusic(galaxyMapManager.selectedPlanetId || this._currentPlanetId || 'mars', {
+                immediate: true
+            });
+            return;
+        }
         // Include fading-out legs — volume drags must not spawn a second song.
-        if (this._musicActuallyPlaying && this._musicActuallyPlaying()) return;
+        if (this._musicActuallyPlaying && this._musicActuallyPlaying()) {
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+            return;
+        }
         if (this._musicContextActive) {
             // Keep the current override slot; only fill silence.
             this._ensureCombatMusicPlaying
@@ -794,6 +818,24 @@ extendClass(SoundManager, {
         } else {
             this.startMenuMusic();
         }
+    },
+
+    /**
+     * Hub/map music needs vfTrackerManager. If the combat chunk has not loaded
+     * yet (tracker used to live only there), pull it in and retry once.
+     */
+    _ensureTrackerThen(retryFn) {
+        if (typeof vfTrackerManager !== 'undefined') return false;
+        if (typeof window.ensureVfCombat !== 'function') return false;
+        if (this._trackerEnsurePending) return true;
+        this._trackerEnsurePending = true;
+        const self = this;
+        window.ensureVfCombat(function (err) {
+            self._trackerEnsurePending = false;
+            if (err) return;
+            if (typeof retryFn === 'function') retryFn();
+        });
+        return true;
     },
 
     getSoundEnabled() {

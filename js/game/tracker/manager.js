@@ -387,21 +387,28 @@ class VFTrackerManager {
     }
 
     getPlaybackBpm() {
-        // Heard tempo = user MUSIC BPM × scene feel (combat/boss nudge).
+        // Heard tempo = MUSIC BPM × scene feel × bezel SPD.
+        let gameMul = 1;
+        try {
+            if (typeof window !== 'undefined' && typeof window.vfGetGameSpeed === 'function') {
+                const g = Number(window.vfGetGameSpeed());
+                if (Number.isFinite(g) && g > 0) gameMul = Math.max(0.2, Math.min(2, g));
+            }
+        } catch (e) { /* ignore */ }
         const base = Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0
             ? this._basePlaybackBpm
             : null;
         if (base != null) {
             const sceneMul = Number(this._sceneTempoMul);
             const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
-            return Math.max(60, Math.min(300, Math.round(base * mul)));
+            return Math.max(30, Math.min(300, Math.round(base * mul * gameMul)));
         }
         const b = Number(this.player && this.player.playbackBpm);
-        if (Number.isFinite(b) && b > 0) return b;
+        if (Number.isFinite(b) && b > 0) return Math.round(b);
         const s = Number(this.player && this.player.tempoScale);
         const ref = this.referenceBpm || 132;
-        if (Number.isFinite(s) && s > 0) return Math.round(ref * s);
-        return Math.round(ref);
+        if (Number.isFinite(s) && s > 0) return Math.round(ref * s * gameMul);
+        return Math.round(ref * gameMul);
     }
 
     /** Absolute playback tempo in BPM (game clock + tracker). */
@@ -611,7 +618,7 @@ class VFTrackerManager {
      * tempoScale = musicBpm / authoredTrackBpm so display == what you hear.
      * BPM = (beats / seconds) × 60 → rowDuration = 60 / bpm / rowsPerBeat.
      */
-    _applyPlaybackTempo() {
+    _applyPlaybackTempo(opts) {
         // User slider BPM only — scene mul applied once below (never via getPlaybackBpm).
         let base = Number.isFinite(this._basePlaybackBpm) ? this._basePlaybackBpm : 0;
         if (!(base > 0)) {
@@ -620,31 +627,62 @@ class VFTrackerManager {
         }
         const sceneMul = Number(this._sceneTempoMul);
         const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
-        const b = Math.max(60, Math.min(300, Math.round(base * mul)));
+        // Bezel SPD (vfGetGameSpeed) scales heard tempo live — same 0.5×–2× as sim.
+        let gameMul = 1;
+        try {
+            if (typeof window !== 'undefined' && typeof window.vfGetGameSpeed === 'function') {
+                const g = Number(window.vfGetGameSpeed());
+                if (Number.isFinite(g) && g > 0) gameMul = Math.max(0.2, Math.min(2, g));
+            }
+        } catch (e) { /* ignore */ }
+        const soft = !!(opts && opts.soft);
+        const finalize = !!(opts && opts.finalize);
+        // Soft glide keeps float BPM so SPD ease is not a 1-BPM staircase.
+        // Floor 30 BPM (bezel SPD min).
+        const bFloat = Math.max(30, Math.min(300, base * mul * gameMul));
+        const b = soft ? bFloat : Math.round(bFloat);
         const authored = this.getAuthoredBpm();
-        const scale = Math.max(0.25, Math.min(8, b / Math.max(1, authored)));
+        const scale = Math.max(0.15, Math.min(8, bFloat / Math.max(1, authored)));
         // Local-file rate stays vs reference 132 (files have no per-track BPM).
-        const fileRate = Math.max(0.5, Math.min(4, b / (this.referenceBpm || 132)));
-        if (this.player) {
-            this.player.tempoScale = scale;
-            this.player.playbackBpm = b;
-            // Debounce re-anchor while the BPM fader is dragged — every tick
-            // used to cut+retrig all voices and pump the bus loudness.
-            this._queueTempoNotify(this.player);
+        const fileRate = Math.max(0.2, Math.min(4, bFloat / (this.referenceBpm || 132)));
+        // Soft = SPD ease: retarget anchor without cutting voices.
+        // Finalize / hard = one debounced notifyTempoChanged.
+        if (soft) {
+            const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const last = Number(this._softTempoAt) || 0;
+            const lastMul = Number(this._softTempoMul);
+            if (now - last < 36 && Number.isFinite(lastMul) && Math.abs(lastMul - gameMul) < 0.006) {
+                return b;
+            }
+            this._softTempoAt = now;
+            this._softTempoMul = gameMul;
         }
-        (this._outgoing || []).forEach((p) => {
+        const applyPlayer = (p, pAuth) => {
             if (!p) return;
-            const pAuth = (p.track && Number(p.track.bpm) > 0) ? Number(p.track.bpm) : authored;
-            p.tempoScale = Math.max(0.25, Math.min(8, b / Math.max(1, pAuth)));
+            p.tempoScale = Math.max(0.25, Math.min(8, bFloat / Math.max(1, pAuth)));
             p.playbackBpm = b;
-            this._queueTempoNotify(p);
+            if (soft && p.retargetTempoAnchor) {
+                try { p.retargetTempoAnchor(); } catch (eR) { /* ignore */ }
+            } else if (!soft) {
+                this._queueTempoNotify(p);
+            }
+        };
+        if (this.player) applyPlayer(this.player, authored);
+        (this._outgoing || []).forEach((p) => {
+            const pAuth = (p && p.track && Number(p.track.bpm) > 0) ? Number(p.track.bpm) : authored;
+            applyPlayer(p, pAuth);
         });
-        if (this.player && this.player.isPlaying()
+        if ((!soft || finalize) && this.player && this.player.isPlaying()
             && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
-            beatSyncManager.setBpm(b);
+            beatSyncManager.setBpm(Math.round(bFloat));
         }
+        // File rate: soft only when it moved enough; always on hard/finalize.
         if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
-            localAudioManager.setPlaybackRate(fileRate);
+            const prev = Number(this._softFileRate);
+            if (!soft || !Number.isFinite(prev) || Math.abs(prev - fileRate) >= 0.015 || finalize) {
+                localAudioManager.setPlaybackRate(fileRate);
+                this._softFileRate = fileRate;
+            }
         }
         return b;
     }

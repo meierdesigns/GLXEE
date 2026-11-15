@@ -372,12 +372,12 @@ class VFTrackerPlayer {
         // UI value matches row timing: seconds/beat = 60 / bpm.
         const abs = Number(this.playbackBpm);
         if (Number.isFinite(abs) && abs > 0) {
-            return Math.max(60, Math.min(960, abs));
+            return Math.max(30, Math.min(960, abs));
         }
         const scale = Number(this.tempoScale);
         const mul = Number.isFinite(scale) && scale > 0 ? scale : 1;
         if (this.track && Number.isFinite(Number(this.track.bpm))) {
-            return Math.max(60, Math.min(960, Number(this.track.bpm) * mul));
+            return Math.max(30, Math.min(960, Number(this.track.bpm) * mul));
         }
         return 0;
     }
@@ -453,6 +453,26 @@ class VFTrackerPlayer {
         this.applyChannelBusGains();
         this._startScheduler();
         return normalized;
+    }
+
+    /**
+     * Continuous tempo glide (SPD ease): preserve audible row, retarget
+     * duration — no voice cut. Hard BPM snaps still use notifyTempoChanged.
+     */
+    retargetTempoAnchor() {
+        if (!this.playing || !this.ctx || !this.track) return;
+        const newDur = this.rowDuration();
+        const oldDur = Math.max(1e-4, this._anchorRowDur || newDur);
+        if (Math.abs(newDur - oldDur) / oldDur < 1e-5) {
+            this._anchorRowDur = newDur;
+            return;
+        }
+        const now = this.ctx.currentTime;
+        const audible = this._anchorRow + Math.max(0, (now - this._anchorTime) / oldDur);
+        this._anchorRow = audible;
+        this._anchorTime = now;
+        this._anchorRowDur = newDur;
+        this._nextRowTime = this._rowWhen(this._rowAbs);
     }
 
     /**

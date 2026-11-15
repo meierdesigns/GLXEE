@@ -86,7 +86,8 @@ COMBAT_PREFIXES = (
     "js/game/player.js",
     "js/game/collisions/",
     "js/game/collisions.js",
-    "js/game/tracker/",
+    # Tracker (vftrack BGM) lives in BOOT — hub/map/menu music must play before
+    # the player ever enters combat. Combat enemies/bullets stay lazy here.
     "js/game/charge-system.js",
     "js/game/pickups.js",
     "js/game/power-crates.js",

@@ -24373,7 +24373,7 @@ var CoreRenderManager = class CoreRenderManager {
         return el;
     }
 
-    // Volume dropdown under the mute key: MUTE + MASTER + SOUNDS + MUSIC (child of <html>).
+    // Volume dropdown under the mute key: MUTE + STYLE + VOL + SND + MUS + SPD (child of <html>).
     function ensureVolPlate() {
         let el = document.getElementById('vf-vol');
         const row = function (id, key, label, aria) {
@@ -24428,7 +24428,17 @@ var CoreRenderManager = class CoreRenderManager {
             }
         };
         const mgr = (typeof volumeControlsManager !== 'undefined') ? volumeControlsManager : null;
+        const ensureVolHead = function (plate) {
+            let head = plate.querySelector('.vf-bezel-vol-head');
+            if (!head) {
+                head = document.createElement('div');
+                head.className = 'vf-bezel-vol-head';
+                plate.insertBefore(head, plate.firstChild);
+            }
+            return head;
+        };
         const ensureMuteBtn = function (plate) {
+            const head = ensureVolHead(plate);
             let btn = plate.querySelector('#vfVolMuteBtn');
             if (!btn) {
                 btn = document.createElement('button');
@@ -24436,7 +24446,9 @@ var CoreRenderManager = class CoreRenderManager {
                 btn.className = 'vf-bezel-vol-mute';
                 btn.id = 'vfVolMuteBtn';
                 btn.textContent = 'MUTE';
-                plate.insertBefore(btn, plate.firstChild);
+                head.appendChild(btn);
+            } else if (btn.parentElement !== head) {
+                head.insertBefore(btn, head.firstChild);
             }
             if (btn.dataset.muteWired !== '1') {
                 btn.dataset.muteWired = '1';
@@ -24444,6 +24456,10 @@ var CoreRenderManager = class CoreRenderManager {
                     e.stopPropagation();
                     togglePureMute(mgr);
                     syncMuteBtn(btn, mgr);
+                    if (mgr && mgr.getMasterVolume && mgr.getMasterVolume() > 0
+                        && mgr.kickMusicIfWanted) {
+                        mgr.kickMusicIfWanted();
+                    }
                     plate.dispatchEvent(new Event('vf-vol-sync'));
                 });
                 plate.addEventListener('vf-vol-sync', function () { syncMuteBtn(btn, mgr); });
@@ -24451,8 +24467,132 @@ var CoreRenderManager = class CoreRenderManager {
             syncMuteBtn(btn, mgr);
             return btn;
         };
+        const themeCount = function () {
+            return (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+                ? Math.max(1, VFTrackerThemes.count()) : 9;
+        };
+        const themeLabel = function (idx) {
+            if (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.labelOf) {
+                return VFTrackerThemes.labelOf(idx);
+            }
+            return 'PLANET';
+        };
+        const ensureStyleBtn = function (plate) {
+            const head = ensureVolHead(plate);
+            let btn = plate.querySelector('#vfVolStyleBtn');
+            if (!btn) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'vf-bezel-vol-style';
+                btn.id = 'vfVolStyleBtn';
+                btn.innerHTML = (typeof STYLE_VOXEL !== 'undefined' && STYLE_VOXEL)
+                    ? STYLE_VOXEL
+                    : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15 2 11.5v-7z"/><path d="M8 8v7M2 4.5l6 3.5 6-3.5"/></svg>';
+                head.appendChild(btn);
+            } else if (btn.parentElement !== head) {
+                head.appendChild(btn);
+            }
+            const syncStyleBtn = function () {
+                const cur = (mgr && mgr.getMusicTheme != null) ? Math.round(Number(mgr.getMusicTheme()) || 0) : 0;
+                const label = themeLabel(cur);
+                btn.title = 'Sound style · ' + label;
+                btn.setAttribute('aria-label', btn.title);
+                btn.dataset.theme = String(cur);
+            };
+            if (btn.dataset.styleWired !== '1') {
+                btn.dataset.styleWired = '1';
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (!mgr || !mgr.setMusicTheme) return;
+                    const max = themeCount() - 1;
+                    const cur = Math.round(Number(mgr.getMusicTheme()) || 0);
+                    const next = cur >= max ? 0 : cur + 1;
+                    mgr.setMusicTheme(next);
+                    if (mgr.updateUI) mgr.updateUI();
+                    syncStyleBtn();
+                    plate.dispatchEvent(new Event('vf-vol-sync'));
+                });
+                plate.addEventListener('vf-vol-sync', syncStyleBtn);
+            }
+            syncStyleBtn();
+            return btn;
+        };
+        const ensureSpeedRow = function (plate) {
+            let lab = plate.querySelector('#vfVolSpeedRow');
+            if (!lab) {
+                lab = document.createElement('label');
+                lab.className = 'vf-bezel-vol-row';
+                lab.id = 'vfVolSpeedRow';
+                lab.title = 'Game + music tempo (BPM)';
+                lab.innerHTML =
+                    '<span>SPD</span>' +
+                    '<input type="range" id="vfVolSpeedSlider" min="20" max="200" step="1" aria-label="Game and music tempo">' +
+                    '<output></output>';
+                plate.appendChild(lab);
+            }
+            let inp = lab.querySelector('input');
+            let out = lab.querySelector('output');
+            // Stale / partial row from older markup — rebuild so the slider wires.
+            if (!inp || !out) {
+                lab.title = 'Game + music tempo (BPM)';
+                lab.innerHTML =
+                    '<span>SPD</span>' +
+                    '<input type="range" id="vfVolSpeedSlider" min="20" max="200" step="1" aria-label="Game and music tempo">' +
+                    '<output></output>';
+                inp = lab.querySelector('input');
+                out = lab.querySelector('output');
+            }
+            if (!inp || !out) return lab;
+            // Migrate coarse step / old min=50 so 30 BPM is reachable.
+            if (inp.step !== '1') inp.step = '1';
+            if (inp.min !== '20') inp.min = '20';
+            const syncSpeedUi = function () {
+                // Thumb = target. While dragging, do not fight the pointer with value writes.
+                const target = (typeof window.vfGetGameSpeedTarget === 'function')
+                    ? window.vfGetGameSpeedTarget()
+                    : ((typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : 1);
+                const heard = (typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : target;
+                const pct = Math.round(target * 100);
+                const dragging = !!(inp.matches && inp.matches(':active'));
+                if (!dragging && String(inp.value) !== String(pct)) inp.value = String(pct);
+                out.textContent = (typeof formatSpeedBpm === 'function')
+                    ? formatSpeedBpm(heard)
+                    : (Math.round(132 * heard) + ' BPM');
+                // Slider span 20–200% (≈30–264 BPM @ 132).
+                inp.style.setProperty('--look-fill', ((pct - 20) / 180 * 100) + '%');
+            };
+            if (inp.dataset.speedWired !== '1') {
+                inp.dataset.speedWired = '1';
+                // One audio unlock per gesture — not on every 25% step mid-ease.
+                inp.addEventListener('pointerdown', function () {
+                    if (typeof volumeControlsManager !== 'undefined'
+                        && volumeControlsManager.kickMusicIfWanted) {
+                        volumeControlsManager.kickMusicIfWanted();
+                    }
+                });
+                inp.addEventListener('input', function (e) {
+                    e.stopPropagation();
+                    const pct = parseInt(inp.value, 10) || 100;
+                    if (typeof window.vfSetGameSpeed === 'function') window.vfSetGameSpeed(pct / 100);
+                    const heard = (typeof window.vfGetGameSpeed === 'function')
+                        ? window.vfGetGameSpeed() : pct / 100;
+                    out.textContent = (typeof formatSpeedBpm === 'function')
+                        ? formatSpeedBpm(heard)
+                        : (Math.round(132 * heard) + ' BPM');
+                    inp.style.setProperty('--look-fill', ((pct - 20) / 180 * 100) + '%');
+                });
+                ['keydown', 'keyup', 'click', 'mousedown', 'pointerdown'].forEach(function (t) {
+                    inp.addEventListener(t, function (e) { e.stopPropagation(); });
+                });
+                plate.addEventListener('vf-vol-sync', syncSpeedUi);
+            }
+            syncSpeedUi();
+            return lab;
+        };
         if (el) {
             ensureMuteBtn(el);
+            ensureStyleBtn(el);
+            ensureSpeedRow(el);
             return el;
         }
         el = document.createElement('div');
@@ -24460,12 +24600,13 @@ var CoreRenderManager = class CoreRenderManager {
         el.className = 'vf-bezel-vol';
         el.style.display = 'none';
         el.innerHTML =
-            '<button type="button" class="vf-bezel-vol-mute" id="vfVolMuteBtn">MUTE</button>' +
             row('vfVolSlider', 'master', 'VOL', 'Master volume') +
             row('vfSoundSlider', 'sound', 'SND', 'Sounds volume') +
             row('vfMusicSlider', 'music', 'MUS', 'Music volume');
         document.documentElement.appendChild(el);
         const muteBtn = ensureMuteBtn(el);
+        ensureStyleBtn(el);
+        ensureSpeedRow(el);
         const readPct = function (key) {
             if (!mgr) {
                 return key === 'master' ? 10 : key === 'sound' ? 50 : 65;
@@ -24550,23 +24691,136 @@ var CoreRenderManager = class CoreRenderManager {
     vfs.fxOpen = false;
     vfs.volOpen = false;
     // Combat / sim speed (0.5×–2×). Read by game-loop via window.vfGetGameSpeed.
+    // Target is persisted; heard value eases so SPD changes transition (music + sim).
     const SPEED_KEY = 'vf_game_speed';
+    const SPEED_EASE_MS = 900;
     (function initGameSpeed() {
         let n = 1;
         try {
             const raw = parseFloat(localStorage.getItem(SPEED_KEY));
-            if (Number.isFinite(raw)) n = Math.max(0.5, Math.min(2, raw));
+            // 0.2× ≈ 30 BPM at default MUSIC 132.
+            if (Number.isFinite(raw)) n = Math.max(0.2, Math.min(2, raw));
         } catch (e) { /* ignore */ }
         vfs.gameSpeed = n;
+        vfs.gameSpeedHeard = n;
+        vfs._speedRaf = 0;
+        vfs._speedGen = 0;
+        vfs._speedFrom = n;
+        vfs._speedTo = n;
+        vfs._speedT0 = 0;
+        vfs._speedUiAt = 0;
     })();
-    window.vfGetGameSpeed = function () {
-        const n = Number(vfs.gameSpeed);
-        return Number.isFinite(n) ? Math.max(0.5, Math.min(2, n)) : 1;
+    const clampSpeed = function (v) {
+        const n = Number(v);
+        return Number.isFinite(n) ? Math.max(0.2, Math.min(2, n)) : 1;
     };
-    window.vfSetGameSpeed = function (v) {
-        const n = Math.max(0.5, Math.min(2, Number(v) || 1));
+    const pushSpeedTempo = function (mode) {
+        try {
+            if (typeof vfTrackerManager === 'undefined' || !vfTrackerManager._applyPlaybackTempo) return;
+            if (mode === 'soft') vfTrackerManager._applyPlaybackTempo({ soft: true });
+            else if (mode === 'finalize') vfTrackerManager._applyPlaybackTempo({ finalize: true });
+            else vfTrackerManager._applyPlaybackTempo();
+        } catch (e) { /* ignore */ }
+    };
+    const formatSpeedBpm = function (speedMul) {
+        const mul = clampSpeed(speedMul != null ? speedMul : vfs.gameSpeedHeard);
+        // Prefer live tracker BPM (includes STYLE/scene); else MUSIC BPM × SPD.
+        try {
+            if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.getPlaybackBpm) {
+                const live = Number(vfTrackerManager.getPlaybackBpm());
+                if (Number.isFinite(live) && live > 0) return Math.round(live) + ' BPM';
+            }
+        } catch (e) { /* ignore */ }
+        let base = 132;
+        try {
+            if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicBpm) {
+                base = Number(volumeControlsManager.getMusicBpm()) || base;
+            } else if (typeof volumeControlsManager !== 'undefined') {
+                base = Number(volumeControlsManager.musicBpm) || base;
+            }
+        } catch (e2) { /* ignore */ }
+        return Math.round(Math.max(30, Math.min(300, base * mul))) + ' BPM';
+    };
+    const syncSpeedReadout = function () {
+        const now = performance.now();
+        if (now - (Number(vfs._speedUiAt) || 0) < 48) return;
+        vfs._speedUiAt = now;
+        try {
+            const out = document.querySelector('#vfVolSpeedRow output');
+            if (!out) return;
+            out.textContent = formatSpeedBpm(vfs.gameSpeedHeard);
+        } catch (e) { /* ignore */ }
+    };
+    const tickSpeedEase = function (now) {
+        const gen = vfs._speedTickGen;
+        if (gen !== vfs._speedGen) {
+            // Stale RAF after a newer scrub — drop.
+            return;
+        }
+        const from = Number(vfs._speedFrom) || 1;
+        const to = Number(vfs._speedTo) || 1;
+        const t0 = Number(vfs._speedT0) || now;
+        const u = Math.max(0, Math.min(1, (now - t0) / SPEED_EASE_MS));
+        // Quintic smootherstep — gentler than quadratic at the ends.
+        const e = u * u * u * (u * (u * 6 - 15) + 10);
+        vfs.gameSpeedHeard = from + (to - from) * e;
+        if (u < 1) {
+            pushSpeedTempo('soft');
+            syncSpeedReadout();
+            vfs._speedRaf = requestAnimationFrame(tickSpeedEase);
+            vfs._speedTickGen = gen;
+            return;
+        }
+        vfs._speedRaf = 0;
+        vfs.gameSpeedHeard = to;
+        pushSpeedTempo('finalize');
+        syncSpeedReadout();
+        try {
+            const plate = document.getElementById('vf-vol');
+            if (plate) plate.dispatchEvent(new Event('vf-vol-sync'));
+        } catch (e2) { /* ignore */ }
+    };
+    const startSpeedEase = function (from, to) {
+        vfs._speedGen = (vfs._speedGen | 0) + 1;
+        if (vfs._speedRaf) {
+            try { cancelAnimationFrame(vfs._speedRaf); } catch (e) { /* ignore */ }
+            vfs._speedRaf = 0;
+        }
+        vfs._speedFrom = clampSpeed(from);
+        vfs._speedTo = clampSpeed(to);
+        vfs._speedT0 = performance.now();
+        if (Math.abs(vfs._speedFrom - vfs._speedTo) < 0.0005) {
+            vfs.gameSpeedHeard = vfs._speedTo;
+            pushSpeedTempo('finalize');
+            syncSpeedReadout();
+            return;
+        }
+        vfs._speedTickGen = vfs._speedGen;
+        vfs._speedRaf = requestAnimationFrame(tickSpeedEase);
+    };
+    window.vfGetGameSpeed = function () {
+        const n = Number(vfs.gameSpeedHeard != null ? vfs.gameSpeedHeard : vfs.gameSpeed);
+        return Number.isFinite(n) ? Math.max(0.2, Math.min(2, n)) : 1;
+    };
+    window.vfGetGameSpeedTarget = function () {
+        return clampSpeed(vfs.gameSpeed);
+    };
+    window.vfSetGameSpeed = function (v, opts) {
+        const n = clampSpeed(v);
         vfs.gameSpeed = n;
         try { localStorage.setItem(SPEED_KEY, String(n)); } catch (e) { /* ignore */ }
+        if (opts && opts.immediate) {
+            vfs._speedGen = (vfs._speedGen | 0) + 1;
+            if (vfs._speedRaf) {
+                try { cancelAnimationFrame(vfs._speedRaf); } catch (e3) { /* ignore */ }
+                vfs._speedRaf = 0;
+            }
+            vfs.gameSpeedHeard = n;
+            pushSpeedTempo('finalize');
+            return n;
+        }
+        const from = Number(vfs.gameSpeedHeard != null ? vfs.gameSpeedHeard : vfs.gameSpeed) || 1;
+        startSpeedEase(from, n);
         return n;
     };
 
@@ -26801,7 +27055,7 @@ var CoreRenderManager = class CoreRenderManager {
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { CTX_MENU_ICON, FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, STYLE_FLAT, STYLE_VOXEL, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const { CTX_MENU_ICON, FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
     const CTX_MENU_KEY = 'vf_dev_ctx_menu_v1';
     function loadCtxMenuPref() {
         try { return localStorage.getItem(CTX_MENU_KEY) === 'true'; } catch (e) { return false; }
@@ -26954,6 +27208,12 @@ var CoreRenderManager = class CoreRenderManager {
                 vfs.volOpen = !vfs.volOpen;
                 btn.classList.toggle('is-open', vfs.volOpen);
                 placeVolPlate();
+                // Opening the plate is a gesture: if VOL/MUS are up, start music
+                // (stale musicEnabled=false or never-unlocked AudioContext).
+                if (vfs.volOpen && typeof volumeControlsManager !== 'undefined'
+                    && volumeControlsManager.kickMusicIfWanted) {
+                    volumeControlsManager.kickMusicIfWanted();
+                }
             },
             soundtrack: function () {
                 if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
@@ -26998,24 +27258,12 @@ var CoreRenderManager = class CoreRenderManager {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.resetLayout();
             },
-            style: function (btn) {
-                if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.setShipRenderStyle) return;
-                const cur = String(uiAppearanceManager.shipRenderStyle || 'VOXEL').toUpperCase();
-                const next = cur === 'VOXEL' ? 'FLAT' : 'VOXEL';
-                uiAppearanceManager.setShipRenderStyle(next);
-                const voxel = next === 'VOXEL';
-                btn.innerHTML = voxel ? STYLE_VOXEL : STYLE_FLAT;
-                btn.title = voxel ? 'Style · VOXEL' : 'Style · FLAT';
-                btn.setAttribute('aria-label', btn.title);
-                btn.dataset.state = voxel ? 'voxel' : 'flat';
-            }
         };
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
             ctxMenu: ['Browser context menu', CTX_MENU_ICON],
             res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], soundtrack: ['Music settings', MUSIC_ICON],
-            style: ['Style · VOXEL', STYLE_VOXEL],
             fs: ['Fullscreen', FS_OFF], fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -27077,54 +27325,9 @@ var CoreRenderManager = class CoreRenderManager {
             else tools.appendChild(ctxBtn);
             tools.dataset.wired = '0';
         }
-        // Style toggle (FLAT ↔ VOXEL) — inject before mute / fullscreen.
-        if (!tools.querySelector('[data-tool="style"]') && meta.style) {
-            const styleBtn = document.createElement('button');
-            styleBtn.type = 'button';
-            styleBtn.dataset.tool = 'style';
-            styleBtn.title = meta.style[0];
-            styleBtn.setAttribute('aria-label', meta.style[0]);
-            styleBtn.innerHTML = meta.style[1];
-            const before = tools.querySelector('[data-tool="mute"]') || tools.querySelector('[data-tool="fs"]');
-            if (before) tools.insertBefore(styleBtn, before);
-            else tools.appendChild(styleBtn);
-            tools.dataset.wired = '0';
-        }
-        // Game speed slider — sits left of style / mute.
-        let speedLab = tools.querySelector('.vf-bezel-speed');
-        if (!speedLab) {
-            speedLab = document.createElement('label');
-            speedLab.className = 'vf-bezel-speed';
-            speedLab.title = 'Game speed';
-            speedLab.innerHTML = '<span>SPD</span>' +
-                '<input type="range" min="50" max="200" step="25" aria-label="Game speed">' +
-                '<output></output>';
-            const before = tools.querySelector('[data-tool="style"]')
-                || tools.querySelector('[data-tool="mute"]')
-                || tools.querySelector('[data-tool="fs"]');
-            if (before) tools.insertBefore(speedLab, before);
-            else tools.appendChild(speedLab);
-            const speedInp = speedLab.querySelector('input');
-            const speedOut = speedLab.querySelector('output');
-            const syncSpeedUi = function () {
-                const sp = (typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : 1;
-                const pct = Math.round(sp * 100);
-                if (String(speedInp.value) !== String(pct)) speedInp.value = String(pct);
-                speedOut.textContent = (Math.round(sp * 100) / 100) + '×';
-                speedInp.style.setProperty('--look-fill', ((pct - 50) / 150 * 100) + '%');
-            };
-            syncSpeedUi();
-            speedInp.addEventListener('input', function (e) {
-                e.stopPropagation();
-                const pct = parseInt(speedInp.value, 10) || 100;
-                if (typeof window.vfSetGameSpeed === 'function') window.vfSetGameSpeed(pct / 100);
-                syncSpeedUi();
-            });
-            ['keydown', 'keyup', 'click', 'mousedown', 'pointerdown'].forEach(function (t) {
-                speedInp.addEventListener(t, function (e) { e.stopPropagation(); });
-            });
-            speedLab._syncSpeedUi = syncSpeedUi;
-        }
+        // Sound style (music theme) + game speed live in the mute/volume dropdown (#vf-vol).
+        tools.querySelectorAll('[data-tool="style"]').forEach(function (n) { n.remove(); });
+        tools.querySelectorAll('.vf-bezel-speed').forEach(function (n) { n.remove(); });
         // Older saves / markup without the mute key: inject it just before fullscreen.
         if (!tools.querySelector('[data-tool="mute"]') && meta.mute) {
             const muteBtn = document.createElement('button');
@@ -27204,19 +27407,6 @@ var CoreRenderManager = class CoreRenderManager {
         };
         q('res').classList.toggle('is-open', vfs.resOpen);
         q('fx').classList.toggle('is-open', vfs.fxOpen);
-        const styleBtn = q('style');
-        if (styleBtn) {
-            const voxel = typeof uiAppearanceManager !== 'undefined'
-                && String(uiAppearanceManager.shipRenderStyle || 'VOXEL').toUpperCase() === 'VOXEL';
-            const st = voxel ? 'voxel' : 'flat';
-            if (styleBtn.dataset.state !== st) {
-                styleBtn.dataset.state = st;
-                styleBtn.innerHTML = voxel ? STYLE_VOXEL : STYLE_FLAT;
-                styleBtn.title = voxel ? 'Style · VOXEL' : 'Style · FLAT';
-                styleBtn.setAttribute('aria-label', styleBtn.title);
-            }
-        }
-        if (speedLab && speedLab._syncSpeedUi) speedLab._syncSpeedUi();
         const muteBtn = q('mute');
         if (muteBtn) {
             muteBtn.classList.toggle('is-open', vfs.volOpen);
@@ -29558,6 +29748,19 @@ var SoundManager = class SoundManager {
             if (this.startEndMusic) this.startEndMusic(pending.kind);
             return;
         }
+        // Hub / galaxy map owns the bus — never resume into stale combat overrides.
+        const mapVisible = typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible;
+        if (mapVisible || (pending && pending.kind === 'map')) {
+            if (this._musicContextActive && this.clearMusicContext) this.clearMusicContext();
+            if (this.startMapMusic) {
+                const id = (pending && pending.kind === 'map' && pending.id)
+                    ? String(pending.id).replace(/^map:/, '')
+                    : ((typeof galaxyMapManager !== 'undefined' && galaxyMapManager.selectedPlanetId)
+                        || this._currentPlanetId || 'mars');
+                this.startMapMusic(id, { immediate: true });
+                return;
+            }
+        }
         if (this._musicContextActive && this._reevaluateMusic) {
             this._activeOverrideKey = null;
             this._reevaluateMusic();
@@ -30296,9 +30499,12 @@ extendClass(SoundManager, {
         this._pendingMapMusicId = id;
         this.notePendingMusic('map', key);
         if (!this.musicEnabled) return;
-        // Already on this map motif — keep playhead (no restart).
+        // Already on this map motif and audible — keep playhead (no restart).
+        // isPlaying alone is not enough: fadeOut can leave a silent "playing" flag.
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
-            && vfTrackerManager.isPlaying(key)) {
+            && vfTrackerManager.isPlaying(key)
+            && (!vfTrackerManager.isAudible || vfTrackerManager.isAudible())) {
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
             this.clearPendingMusic();
             return;
         }
@@ -30376,6 +30582,8 @@ extendClass(SoundManager, {
             : String(planetId || 'mars').toLowerCase().split('-')[0];
         const key = 'map:' + id;
         if (!this.musicEnabled) return;
+        // Map BGM is hub audio — clear leftover combat override context.
+        if (this._musicContextActive && this.clearMusicContext) this.clearMusicContext();
         this.stopPlanetAmbientNodesOnly({ keepTracker: true });
         if (typeof youtubeSoundtrackManager !== 'undefined') youtubeSoundtrackManager.stop();
         if (typeof localAudioManager !== 'undefined'
@@ -30385,7 +30593,11 @@ extendClass(SoundManager, {
             else localAudioManager.stop();
         }
         if (!this.ensureContext()) return;
-        if (typeof vfTrackerManager === 'undefined') return;
+        if (typeof vfTrackerManager === 'undefined') {
+            // Tracker may still be in a lazy chunk on older builds — load then retry.
+            if (this._ensureTrackerThen(() => this._applyMapMusic(id))) return;
+            return;
+        }
         this._applyMusicScene('map', this._galaxyFactionForPlanet(id));
         if (this.pushMusicBusVolume) this.pushMusicBusVolume();
         vfTrackerManager.setEnabled(true);
@@ -30566,11 +30778,13 @@ extendClass(SoundManager, {
         }
 
         if (!this.ensureContext()) return;
-        if (typeof vfTrackerManager !== 'undefined') {
-            this._applyMusicScene('menu');
-            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
-            if (vfTrackerManager.playMenu()) this.clearPendingMusic();
+        if (typeof vfTrackerManager === 'undefined') {
+            if (this._ensureTrackerThen(() => this.startMenuMusic())) return;
+            return;
         }
+        this._applyMusicScene('menu');
+        if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+        if (vfTrackerManager.playMenu()) this.clearPendingMusic();
     },
 
     stopMenuMusic() {
@@ -30674,8 +30888,21 @@ extendClass(SoundManager, {
     /** Start (or resume) music for the current context if it isn't already audible. */
     ensureMusicPlaying() {
         if (!this.musicEnabled) return;
+        // Galaxy map / hub first — do not bail on a fading combat/menu leg that
+        // still reports isAudible(); unmute must start map BGM.
+        const mapVisible = typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible;
+        if (mapVisible && this.startMapMusic) {
+            if (this._musicContextActive && this.clearMusicContext) this.clearMusicContext();
+            this.startMapMusic(galaxyMapManager.selectedPlanetId || this._currentPlanetId || 'mars', {
+                immediate: true
+            });
+            return;
+        }
         // Include fading-out legs — volume drags must not spawn a second song.
-        if (this._musicActuallyPlaying && this._musicActuallyPlaying()) return;
+        if (this._musicActuallyPlaying && this._musicActuallyPlaying()) {
+            if (this.pushMusicBusVolume) this.pushMusicBusVolume();
+            return;
+        }
         if (this._musicContextActive) {
             // Keep the current override slot; only fill silence.
             this._ensureCombatMusicPlaying
@@ -30686,6 +30913,24 @@ extendClass(SoundManager, {
         } else {
             this.startMenuMusic();
         }
+    },
+
+    /**
+     * Hub/map music needs vfTrackerManager. If the combat chunk has not loaded
+     * yet (tracker used to live only there), pull it in and retry once.
+     */
+    _ensureTrackerThen(retryFn) {
+        if (typeof vfTrackerManager !== 'undefined') return false;
+        if (typeof window.ensureVfCombat !== 'function') return false;
+        if (this._trackerEnsurePending) return true;
+        this._trackerEnsurePending = true;
+        const self = this;
+        window.ensureVfCombat(function (err) {
+            self._trackerEnsurePending = false;
+            if (err) return;
+            if (typeof retryFn === 'function') retryFn();
+        });
+        return true;
     },
 
     getSoundEnabled() {
@@ -31273,6 +31518,5087 @@ var LocalAudioManager = class LocalAudioManager {
 var localAudioManager = new LocalAudioManager();
 
 
+/* --- js/game/tracker/parse.js --- */
+"use strict";
+
+/**
+ * VF Tracker (.vftrack) — JSON chiptune format for LLM / code authored BGM.
+ * Canonical schema lives in assets/soundtracks/template.vftrack.json.
+ */
+var VFTrackerParse = {
+    SEMITONE: { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 },
+
+    noteToMidi(note) {
+        if (!note || typeof note !== 'string') return null;
+        const s = note.trim().toUpperCase();
+        if (s === 'OFF' || s === '===' || s === 'CUT') return 'OFF';
+        if (s === '.' || s === '---' || s === '...') return null;
+        // Tracker naturals: C-4 / sharps: C#4 / flats: Db4
+        const m = /^([A-G])([#B-]?)(-?\d+)$/.exec(s);
+        if (!m) return null;
+        const letter = m[1];
+        let acc = m[2];
+        const oct = Number(m[3]);
+        if (acc === '-' || acc === '') acc = '';
+        if (acc === 'B') acc = 'b';
+        let semi = this.SEMITONE[letter];
+        if (acc === '#') semi += 1;
+        if (acc === 'b') semi -= 1;
+        return (oct + 1) * 12 + semi;
+    },
+
+    midiToFreq(midi) {
+        return 440 * Math.pow(2, (midi - 69) / 12);
+    },
+
+    noteToFreq(note) {
+        const midi = this.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return midi;
+        return this.midiToFreq(midi);
+    },
+
+    midiToNote(midi) {
+        const n = Math.round(Number(midi));
+        if (!Number.isFinite(n)) return null;
+        const NOTES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
+        const oct = Math.floor(n / 12) - 1;
+        const name = NOTES[((n % 12) + 12) % 12];
+        return name + oct;
+    },
+
+    transposeToken(token, semitones) {
+        const cell = this.parseCell(token);
+        if (!cell || !cell.note || cell.note === 'OFF') return token;
+        const midi = this.noteToMidi(cell.note);
+        if (midi == null || midi === 'OFF') return token;
+        const next = this.midiToNote(midi + (Number(semitones) || 0));
+        if (!next) return token;
+        let out = next + ':' + (cell.inst || 1);
+        if (cell.vol != null) out += ':' + cell.vol;
+        return out;
+    },
+
+    transposeChannelString(str, semitones) {
+        if (!semitones) return str;
+        return String(str || '').trim().split(/\s+/).filter(Boolean)
+            .map((tok) => this.transposeToken(tok, semitones)).join(' ');
+    },
+
+    parseCell(raw) {
+        if (raw == null || raw === '' || raw === '.' || raw === '---' || raw === '...') {
+            return null;
+        }
+        if (typeof raw === 'string') {
+            const t = raw.trim();
+            if (!t || t === '.' || t === '---') return null;
+            if (t.toUpperCase() === 'OFF' || t === '===') return { note: 'OFF' };
+            const parts = t.split(':');
+            const note = parts[0];
+            const inst = parts[1] != null && parts[1] !== '' ? Number(parts[1]) : 1;
+            const vol = parts[2] != null && parts[2] !== '' ? Number(parts[2]) : null;
+            return {
+                note,
+                inst: Number.isFinite(inst) ? inst : 1,
+                vol: Number.isFinite(vol) ? vol : null
+            };
+        }
+        if (Array.isArray(raw)) {
+            return {
+                note: raw[0] != null ? String(raw[0]) : null,
+                inst: raw[1] != null ? Number(raw[1]) : 1,
+                vol: raw[2] != null ? Number(raw[2]) : null
+            };
+        }
+        if (typeof raw === 'object') {
+            return {
+                note: raw.note != null ? String(raw.note) : null,
+                inst: raw.inst != null ? Number(raw.inst) : (raw.instrument != null ? Number(raw.instrument) : 1),
+                vol: raw.vol != null ? Number(raw.vol) : (raw.volume != null ? Number(raw.volume) : null)
+            };
+        }
+        return null;
+    },
+
+    padChannelString(str, rows) {
+        const n = Math.max(1, Number(rows) || 16);
+        const tokens = String(str || '').trim().split(/\s+/).filter(Boolean);
+        while (tokens.length < n) tokens.push('.');
+        return tokens.slice(0, n).join(' ');
+    },
+
+    expandChannelString(str, rows) {
+        const tokens = String(str || '').trim().split(/\s+/).filter(Boolean);
+        const out = [];
+        for (let i = 0; i < rows; i++) {
+            out.push(this.parseCell(tokens[i] != null ? tokens[i] : '.'));
+        }
+        return out;
+    },
+
+    normalizeInstrument(raw, index) {
+        const r = raw || {};
+        const id = r.id != null ? Number(r.id) : (index + 1);
+        const wave = String(r.wave || r.type || 'square').toLowerCase();
+        const allowed = { sine: 1, square: 1, sawtooth: 1, triangle: 1, noise: 1 };
+        return {
+            id,
+            name: String(r.name || ('inst' + id)),
+            wave: allowed[wave] ? wave : 'square',
+            volume: Math.max(0, Math.min(1, r.volume != null ? Number(r.volume) : 0.5)),
+            attack: Math.max(0.001, Number(r.attack != null ? r.attack : 0.01)),
+            decay: Math.max(0.001, Number(r.decay != null ? r.decay : 0.08)),
+            sustain: Math.max(0, Math.min(1, r.sustain != null ? Number(r.sustain) : 0.45)),
+            release: Math.max(0.001, Number(r.release != null ? r.release : 0.12)),
+            filter: r.filter != null ? Number(r.filter) : null
+        };
+    },
+
+    normalizePattern(raw, channels, rowsPerPattern) {
+        const rowsN = Math.max(1, Number(raw.rowsPerPattern || raw.length || rowsPerPattern) || 16);
+        const chN = Math.max(1, channels | 0);
+        const grid = [];
+        for (let r = 0; r < rowsN; r++) {
+            const row = [];
+            for (let c = 0; c < chN; c++) row.push(null);
+            grid.push(row);
+        }
+
+        if (Array.isArray(raw.rows)) {
+            raw.rows.forEach((row, ri) => {
+                if (ri >= rowsN || !Array.isArray(row)) return;
+                row.forEach((cell, ci) => {
+                    if (ci < chN) grid[ri][ci] = this.parseCell(cell);
+                });
+            });
+        } else if (Array.isArray(raw.channels)) {
+            raw.channels.forEach((chStr, ci) => {
+                if (ci >= chN) return;
+                const cells = this.expandChannelString(chStr, rowsN);
+                for (let ri = 0; ri < rowsN; ri++) grid[ri][ci] = cells[ri];
+            });
+        } else if (Array.isArray(raw)) {
+            // bare rows array
+            raw.forEach((row, ri) => {
+                if (ri >= rowsN || !Array.isArray(row)) return;
+                row.forEach((cell, ci) => {
+                    if (ci < chN) grid[ri][ci] = this.parseCell(cell);
+                });
+            });
+        }
+
+        return {
+            id: raw.id != null ? Number(raw.id) : 0,
+            rows: grid
+        };
+    },
+
+    /**
+     * Accepts a full track object or a JSON string. Returns a playable track
+     * or throws with a short reason.
+     */
+    normalize(input) {
+        let data = input;
+        if (typeof input === 'string') {
+            const trimmed = input.trim();
+            if (!trimmed) throw new Error('empty track');
+            data = JSON.parse(trimmed);
+        }
+        if (!data || typeof data !== 'object') throw new Error('track must be an object');
+
+        const bpm = Math.max(60, Math.min(240, Number(data.bpm) || 120));
+        // Legacy banks mark 16-step / 16th grids as rowsPerBeat:1 (kick every 4 rows).
+        // MUSIC BPM is quarter-note tempo (beats/minute) — use rpb=4 so display matches
+        // tapped downbeats: rowDur=(60/bpm)/4, kick-every-4-rows → bpm.
+        let rowsPerBeat = Math.max(1, Math.min(8, Number(data.rowsPerBeat) || 1));
+        if (rowsPerBeat === 1) rowsPerBeat = 4;
+        const rowsPerPattern = Math.max(4, Math.min(128, Number(data.rowsPerPattern) || 16));
+        const channels = Math.max(1, Math.min(8, Number(data.channels) || 4));
+
+        const instruments = (Array.isArray(data.instruments) ? data.instruments : [])
+            .map((inst, i) => this.normalizeInstrument(inst, i));
+        if (!instruments.length) {
+            instruments.push(this.normalizeInstrument({ id: 1, name: 'lead', wave: 'square' }, 0));
+        }
+        const byId = {};
+        instruments.forEach((inst) => { byId[inst.id] = inst; });
+
+        const patternsIn = Array.isArray(data.patterns) ? data.patterns : [];
+        const patterns = patternsIn.map((p, i) => {
+            const n = this.normalizePattern(p, channels, rowsPerPattern);
+            if (p && p.id == null) n.id = i;
+            return n;
+        });
+        if (!patterns.length) throw new Error('track needs at least one pattern');
+
+        const patternById = {};
+        patterns.forEach((p) => { patternById[p.id] = p; });
+
+        let order = Array.isArray(data.order) ? data.order.map(Number) : patterns.map((p) => p.id);
+        if (!order.length) order = [patterns[0].id];
+        order = order.filter((id) => patternById[id]);
+        if (!order.length) throw new Error('order references no valid patterns');
+
+        const meta = data.meta && typeof data.meta === 'object' ? data.meta : {};
+        return {
+            format: 'vftrack',
+            version: Number(data.version) || 1,
+            meta: {
+                title: String(meta.title || data.title || 'Untitled'),
+                author: String(meta.author || ''),
+                planet: meta.planet != null ? String(meta.planet) : '',
+                notes: String(meta.notes || '')
+            },
+            bpm,
+            rowsPerBeat,
+            rowsPerPattern,
+            channels,
+            instruments,
+            instrumentById: byId,
+            patterns,
+            patternById,
+            order,
+            loop: data.loop !== false
+        };
+    },
+
+    /**
+     * Compact export (channel strings) — best for LLM round-trips.
+     */
+    toCompact(track) {
+        const t = this.normalize(track);
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: t.meta,
+            bpm: t.bpm,
+            rowsPerBeat: t.rowsPerBeat,
+            rowsPerPattern: t.rowsPerPattern,
+            channels: t.channels,
+            instruments: t.instruments.map((i) => ({
+                id: i.id,
+                name: i.name,
+                wave: i.wave,
+                volume: i.volume,
+                attack: i.attack,
+                decay: i.decay,
+                sustain: i.sustain,
+                release: i.release,
+                filter: i.filter
+            })),
+            patterns: t.patterns.map((p) => {
+                const chans = [];
+                for (let c = 0; c < t.channels; c++) {
+                    const toks = p.rows.map((row) => {
+                        const cell = row[c];
+                        if (!cell || !cell.note) return '.';
+                        if (cell.note === 'OFF') return 'OFF';
+                        let s = cell.note + ':' + (cell.inst || 1);
+                        if (cell.vol != null) s += ':' + cell.vol;
+                        return s;
+                    });
+                    chans.push(toks.join(' '));
+                }
+                return { id: p.id, channels: chans };
+            }),
+            order: t.order,
+            loop: t.loop
+        };
+    },
+
+    isTrack(data) {
+        try {
+            this.normalize(data);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+};
+
+
+/* --- js/game/tracker/player.js --- */
+"use strict";
+
+/**
+ * Schedules a normalized vftrack on a Web Audio context (lookahead sequencer).
+ */
+var VFTrackerPlayer = class VFTrackerPlayer {
+    constructor() {
+        this.ctx = null;
+        this.track = null;
+        this.playing = false;
+        this.masterGain = null;
+        this.volume = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
+        this._timer = null;
+        this._raf = null;
+        this._nextRowTime = 0;
+        /** Absolute row counter since play() — tempo-stable scheduling. */
+        this._rowAbs = 0;
+        this._anchorTime = 0;
+        this._anchorRow = 0;
+        this._anchorRowDur = 0;
+        this._orderIndex = 0;
+        this._rowIndex = 0;
+        this._channels = [];
+        this._noiseBuffer = null;
+        // Wilson-style lookahead: short wake + enough scheduleAhead to survive
+        // combat-frame stalls. Tempo changes re-anchor via notifyTempoChanged.
+        this.lookahead = 0.025;
+        this.scheduleAhead = 0.5;
+        /** Playback speed vs authored track BPM (>1 = faster). */
+        this.tempoScale = 1;
+        /** Heard tempo (MUSIC BPM slider) — beats/minute. */
+        this.playbackBpm = null;
+        /**
+         * Per-channel mix (bass / lead / arp / drums).
+         * PLANET base keeps the Hauptmelodie (lead) in front — arp supports, never buries.
+         */
+        // Mix targets stay near loudness-sum ~4 so STYLE swaps don't pump the bus.
+        this.channelMixBase = [1.0, 1.28, 0.68, 1.05];
+        /** Jungle mix: Amen kit dominant, chopped bass, thin lead/arp. */
+        this.channelMixJungle = [1.2, 0.55, 0.45, 1.75];
+        /** DnB mix: heavy Reese sub, two-step kit, sparse lead. */
+        this.channelMixDnb = [1.55, 0.48, 0.4, 1.45];
+        /** Jungle DnB hybrid: big sub + Amen kit pressure. */
+        this.channelMixJungleDnb = [1.35, 0.5, 0.42, 1.65];
+        /** Dark minimal techno: heavy sub+kick, clear delayed lead, present ticks. */
+        this.channelMixElektro = [1.32, 0.78, 0.85, 1.28];
+        /** Liquid: soft drums, floating lead/arp. */
+        this.channelMixLiquid = [1.1, 0.95, 1.05, 1.0];
+        /** NIGHTRUN (darksynth): lead + bass forward, driving kit. */
+        this.channelMixNightrun = [1.25, 1.05, 0.8, 1.2];
+        this.channelMix = this.channelMixBase.slice();
+        /** User-facing fine-tune on top of channelMix (0 = mute, 1 = authored level). */
+        this.channelUserMix = [1, 1, 1, 1];
+        /**
+         * Style intensity 0..1 (how far into the selected STYLE).
+         * Deadzone near 0 has no effect.
+         */
+        this.jungleAmount = 0;
+        /** Melody / style index — see VFTrackerThemes.list. */
+        this.themeIndex = 0;
+        /** Per-channel voice ids: bass / lead / arp / drums (`default` = authored). */
+        this.channelVoices = ['default', 'default', 'default', 'default'];
+        this._onEnded = null;
+        this._endedFired = false;
+        this._channelBus = [];
+        this._fadeOutTimer = null;
+        /** Fire-and-forget hits (drums/breaks) — cancelled on tempo re-anchor. */
+        this._liveOneshots = [];
+        this._lastCell = [];
+        /** Default crossfade length when swapping tracks (seconds). */
+        this.fadeSeconds = 1.4;
+        /**
+         * Amen-chop 16-step break (Jungle / right).
+         * k=kick(inst5), s=snare/noise(inst4), h=hat(inst4 soft), r=half-row roll.
+         */
+        this._jungleBreak = [
+            { k: 1 }, { h: 0.45 }, { s: 0.55, h: 0.5 }, { k: 0.75, h: 0.35 },
+            { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.85 }, { k: 0.8, h: 0.3 },
+            { h: 0.5 }, { k: 0.85, h: 0.35 }, { s: 1, r: 0.7 }, { h: 0.55, s: 0.3 },
+            { k: 1 }, { s: 0.9, r: 0.95 }, { k: 0.55, h: 0.6 }, { s: 1 }
+        ];
+        /**
+         * Two-step DnB: kick on 1+3, snare on 2+4, rolling hats, sparse ghosts.
+         */
+        this._dnbBreak = [
+            { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
+            { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.22 }, { h: 0.5 },
+            { k: 0.95 }, { h: 0.5 }, { h: 0.38 }, { h: 0.48 },
+            { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.2 }, { h: 0.42 }
+        ];
+        /** NIGHTRUN 4/4 drive kit. */
+        this._driveBreak = [
+            { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+            { k: 1 }, { h: 0.45 }, { s: 0.95, h: 0.3 }, { h: 0.4 },
+            { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+            { k: 1 }, { h: 0.5 }, { s: 1, h: 0.35 }, { h: 0.45 }
+        ];
+    }
+
+    setThemeIndex(index) {
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 8;
+        this.themeIndex = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
+        // Re-apply mix target for the newly selected style at current intensity.
+        this.setJungleAmount(this.jungleAmount);
+        return this.themeIndex;
+    }
+
+    _mixTargetForStyle() {
+        const base = this.channelMixBase || [1.0, 1.28, 0.68, 1.05];
+        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(this.themeIndex)
+            : { mix: 'base' };
+        const key = meta.mix || 'base';
+        if (key === 'jungle') return this.channelMixJungle || [1.2, 0.55, 0.45, 1.75];
+        if (key === 'dnb') return this.channelMixDnb || [1.55, 0.48, 0.4, 1.45];
+        if (key === 'jungle_dnb') return this.channelMixJungleDnb || [1.35, 0.5, 0.42, 1.65];
+        if (key === 'elektro') return this.channelMixElektro || [1.32, 0.78, 0.85, 1.28];
+        if (key === 'liquid') return this.channelMixLiquid || [1.1, 0.95, 1.05, 1.0];
+        if (key === 'nightrun') return this.channelMixNightrun || [1.25, 1.05, 0.8, 1.2];
+        return base;
+    }
+
+    /** Style intensity morph: 0 off · 1 full selected STYLE. */
+    setJungleAmount(amount) {
+        let t = Math.max(0, Math.min(1, Number(amount) || 0));
+        if (t < 0.03) t = 0;
+        this.jungleAmount = t;
+        // Mix follows AMOUNT only (no forced floor) — avoids sudden bus pumps.
+        // PLANET (theme 0): keep authored Hauptmelodie balance — don't morph.
+        const themeIdx = Number(this.themeIndex) || 0;
+        const mag = themeIdx > 0 ? t : 0;
+        const base = this.channelMixBase || [1.0, 1.28, 0.68, 1.05];
+        const target = mag > 0 ? this._mixTargetForStyle() : base;
+        this.channelMix = base.map((b, i) => {
+            let v = b + ((target[i] != null ? target[i] : b) - b) * mag;
+            // Never let STYLE duck the hook below a readable floor.
+            if (i === 1) v = Math.max(b * 0.72, v);
+            return v;
+        });
+        this.applyChannelBusGains();
+        return t;
+    }
+
+    /** Absolute style pressure 0..1. */
+    _styleMag() {
+        return Math.max(0, Math.min(1, Number(this.jungleAmount) || 0));
+    }
+
+    /** 'jungle' | 'dnb' | 'elektro' | 'hybrid' | 'drive' | 'off' */
+    _styleSide() {
+        const meta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(this.themeIndex)
+            : null;
+        const side = meta && meta.breakSide ? meta.breakSide : 'off';
+        // Style colour only when AMOUNT is up — picking a STYLE alone must not
+        // flood every section with the same break kit.
+        if (this._styleMag() < 0.03) return 'off';
+        if (Number(this.themeIndex) > 0 && side && side !== 'off') return side;
+        return side === 'off' ? 'off' : side;
+    }
+
+    _busGain(ch) {
+        const base = (this.channelMix && this.channelMix[ch] != null) ? Number(this.channelMix[ch]) : 1;
+        const user = (this.channelUserMix && this.channelUserMix[ch] != null) ? Number(this.channelUserMix[ch]) : 1;
+        const b = Number.isFinite(base) && base > 0 ? base : 1;
+        const u = Number.isFinite(user) && user >= 0 ? user : 1;
+        // Allow voice faders up to 300% (user × style mix); soft ceiling still tames peaks.
+        return Math.max(0.0001, Math.min(5.5, b * u));
+    }
+
+    /**
+     * Channel buses → masterGain (user volume) → fadeGain (crossfade) →
+     * soft ceiling → destination.
+     *
+     * Volume and fade stay on separate nodes so dragging MUSIC / channel
+     * sliders during a crossfade does not yank the envelope (or let one
+     * overlapping track punch through while the other stays ducked).
+     * No bus compressor — that used to duck sibling voices when one
+     * channel was turned up, then squash the whole mix flat ("stumpf").
+     */
+    _ensureMasterChain() {
+        if (!this.ctx) return;
+        if (!this.masterGain) {
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = Math.max(0.0001, this.volume);
+        }
+        if (!this._fadeGain) {
+            this._fadeGain = this.ctx.createGain();
+            this._fadeGain.gain.value = 1;
+        }
+        if (this._masterChained) return;
+        try {
+            this.masterGain.disconnect();
+        } catch (e) { /* first wire */ }
+        try {
+            this._fadeGain.disconnect();
+        } catch (e2) { /* first wire */ }
+        // Soft peak ceiling only — transparent until actual overs.
+        if (!this._limiter) {
+            const lim = this.ctx.createDynamicsCompressor();
+            lim.threshold.value = -2.5;
+            lim.knee.value = 6;
+            lim.ratio.value = 8;
+            lim.attack.value = 0.002;
+            lim.release.value = 0.12;
+            this._limiter = lim;
+        }
+        try {
+            this._limiter.disconnect();
+        } catch (e3) { /* first wire */ }
+        this.masterGain.connect(this._fadeGain);
+        this._fadeGain.connect(this._limiter);
+        this._limiter.connect(this.ctx.destination);
+        this._masterChained = true;
+    }
+
+    _disconnectChannelBuses() {
+        const buses = this._channelBus || [];
+        for (let i = 0; i < buses.length; i++) {
+            const bus = buses[i];
+            if (!bus) continue;
+            try { bus.disconnect(); } catch (e) { /* ignore */ }
+        }
+        this._channelBus = [];
+    }
+
+    _ensureChannelBus(ch) {
+        if (!this.ctx || !this.masterGain) return null;
+        this._ensureMasterChain();
+        if (!this._channelBus[ch]) {
+            const bus = this.ctx.createGain();
+            bus.gain.value = this._busGain(ch);
+            bus.connect(this.masterGain);
+            this._channelBus[ch] = bus;
+        }
+        return this._channelBus[ch];
+    }
+
+    /** Live per-channel volume fine-tune. ch: 0=bass,1=lead,2=arp,3=drums. v: 0-3 (300%). */
+    setChannelVolume(ch, v) {
+        const idx = Number(ch);
+        if (!Number.isFinite(idx) || idx < 0) return;
+        const vol = Math.max(0, Math.min(3, Number(v)));
+        if (!this.channelUserMix) this.channelUserMix = [1, 1, 1, 1];
+        this.channelUserMix[idx] = Number.isFinite(vol) ? vol : 1;
+        // Create the bus immediately so fader moves bite before the next note.
+        const bus = this._ensureChannelBus(idx);
+        if (bus && this.ctx) {
+            const now = this.ctx.currentTime;
+            try {
+                bus.gain.cancelScheduledValues(now);
+                const cur = Math.max(0.0001, Number(bus.gain.value) || 0.0001);
+                bus.gain.setValueAtTime(cur, now);
+                bus.gain.linearRampToValueAtTime(this._busGain(idx), now + 0.04);
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    /** Ensure all channel buses exist at the current mix × user fader levels. */
+    applyChannelBusGains() {
+        if (!this.ctx || !this.masterGain) return;
+        const n = Math.max(4, (this.track && this.track.channels) || 4);
+        const now = this.ctx.currentTime;
+        for (let i = 0; i < n; i++) {
+            const bus = this._ensureChannelBus(i);
+            if (!bus) continue;
+            try {
+                bus.gain.cancelScheduledValues(now);
+                bus.gain.setValueAtTime(this._busGain(i), now);
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    /** Live per-channel instrument voice. ch: 0=bass,1=lead,2=arp,3=drums. */
+    setChannelVoice(ch, voiceId) {
+        const idx = Number(ch);
+        if (!Number.isFinite(idx) || idx < 0 || idx > 3) return 'default';
+        if (!this.channelVoices) this.channelVoices = ['default', 'default', 'default', 'default'];
+        const id = String(voiceId || 'default');
+        const opts = (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.optionsFor)
+            ? VFTrackerVoices.optionsFor(idx)
+            : [{ id: 'default' }];
+        let ok = false;
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].id === id) { ok = true; break; }
+        }
+        const next = ok ? id : 'default';
+        const prev = this.channelVoices[idx];
+        this.channelVoices[idx] = next;
+        // Swap timbre on the sounding note immediately (don't wait for next row).
+        if (next !== prev && this.playing) this._revoiceChannel(idx);
+        return next;
+    }
+
+    /** Retrigger current note / kit preview so voice fader changes are audible now. */
+    _revoiceChannel(ch) {
+        if (!this.ctx || !this.playing) return;
+        const now = this.ctx.currentTime + 0.015;
+        if (ch === 3) {
+            // Drums are oneshots — fire a short kick+snare so the new kit speaks.
+            this._oneshot(3, { note: 'A-2', inst: 5, vol: 52 }, now, 0.14);
+            this._oneshot(3, { note: 'A-4', inst: 4, vol: 42 }, now + 0.05, 0.09);
+            return;
+        }
+        const last = this._lastCell && this._lastCell[ch];
+        if (!last || !last.note || last.note === 'OFF') return;
+        this._stopChannel(ch, now);
+        this._trigger(ch, last, now);
+    }
+
+    _resolveInstrument(ch, cellInst) {
+        const track = this.track;
+        const base = (track && track.instrumentById && track.instrumentById[cellInst])
+            || (track && track.instruments && track.instruments[0])
+            || null;
+        const voiceId = (this.channelVoices && this.channelVoices[ch]) || 'default';
+        // Drum noise/snare/metal voices must not rewrite kick (inst 5) into hiss.
+        if (ch === 3 && Number(cellInst) === 5) {
+            const keepKick = voiceId === 'default' || voiceId === 'kit'
+                || voiceId === 'kick' || voiceId === 'tight';
+            if (!keepKick) return base;
+        }
+        if (typeof VFTrackerVoices !== 'undefined' && VFTrackerVoices.resolve) {
+            return VFTrackerVoices.resolve(ch, voiceId, base) || base;
+        }
+        return base;
+    }
+
+    ensureContext(externalCtx) {
+        if (externalCtx) {
+            this.ctx = externalCtx;
+        } else if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
+        if (!this.masterGain) {
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = Math.max(0.0001, this.volume);
+        }
+        this._ensureMasterChain();
+        if (!this._noiseBuffer) this._noiseBuffer = this._makeNoiseBuffer();
+        return this.ctx;
+    }
+
+    _makeNoiseBuffer() {
+        const len = this.ctx.sampleRate * 1;
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        return buf;
+    }
+
+    setVolume(v) {
+        this.volume = Math.max(0, Math.min(1, Number(v) || 0));
+        if (!this.masterGain || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const target = Math.max(0.0001, this.volume);
+        // Volume lives on masterGain — fade envelope is on _fadeGain, so
+        // slider moves stay linear even mid-crossfade.
+        try {
+            const cur = Math.max(0.0001, this.masterGain.gain.value);
+            this.masterGain.gain.cancelScheduledValues(now);
+            this.masterGain.gain.setValueAtTime(cur, now);
+            this.masterGain.gain.linearRampToValueAtTime(target, now + 0.05);
+        } catch (e) { /* ignore */ }
+    }
+
+    effectiveBpm() {
+        // MUSIC BPM slider is the heard tempo (beats/minute). Prefer it so the
+        // UI value matches row timing: seconds/beat = 60 / bpm.
+        const abs = Number(this.playbackBpm);
+        if (Number.isFinite(abs) && abs > 0) {
+            return Math.max(30, Math.min(960, abs));
+        }
+        const scale = Number(this.tempoScale);
+        const mul = Number.isFinite(scale) && scale > 0 ? scale : 1;
+        if (this.track && Number.isFinite(Number(this.track.bpm))) {
+            return Math.max(30, Math.min(960, Number(this.track.bpm) * mul));
+        }
+        return 0;
+    }
+
+    rowDuration() {
+        const bpm = this.effectiveBpm();
+        const rpb = this.track.rowsPerBeat;
+        return (60 / bpm) / rpb;
+    }
+
+    play(track, opts) {
+        if (this._fadeOutTimer) {
+            clearTimeout(this._fadeOutTimer);
+            this._fadeOutTimer = null;
+        }
+        const normalized = VFTrackerParse.normalize(track);
+        // Soft stop channels/timer but keep the master bus; hard-mute made
+        // immediate restarts come back silent when setVolume raced the ramp.
+        this.stop(false);
+        const ctx = this.ensureContext(opts && opts.context);
+        if (!this.masterGain) {
+            this.masterGain = ctx.createGain();
+        }
+        this._ensureMasterChain();
+        this.track = normalized;
+        this.playing = true;
+        this._endedFired = false;
+        this._onEnded = (opts && typeof opts.onEnded === 'function') ? opts.onEnded : null;
+        this._orderIndex = 0;
+        this._rowIndex = 0;
+        this._rowAbs = 0;
+        this._channels = [];
+        // Drop orphaned channel buses — leaving them connected stacked silent
+        // GainNodes on masterGain across every in-place play().
+        this._disconnectChannelBuses();
+        this._channelBus = [];
+        this._liveOneshots = [];
+        this._lastCell = [];
+        for (let i = 0; i < normalized.channels; i++) {
+            this._channels.push({ gain: null, source: null, release: 0.1 });
+        }
+        const vol = opts && opts.volume != null ? opts.volume : this.volume;
+        const fallback = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
+        this.volume = Math.max(0, Math.min(1, Number.isFinite(Number(vol)) ? Number(vol) : fallback));
+        if (this.volume <= 0) this.volume = 0.0001;
+        const fadeIn = opts && opts.fadeIn != null
+            ? Math.max(0, Number(opts.fadeIn) || 0)
+            : 0;
+        this._fadeInUntil = fadeIn > 0 ? (ctx.currentTime + fadeIn) : 0;
+        try {
+            // User volume on masterGain; crossfade envelope on _fadeGain.
+            this.masterGain.gain.cancelScheduledValues(ctx.currentTime);
+            this.masterGain.gain.setValueAtTime(this.volume, ctx.currentTime);
+            if (this._fadeGain) {
+                this._fadeGain.gain.cancelScheduledValues(ctx.currentTime);
+                if (fadeIn > 0) {
+                    // Equal-power (sine) fade-in: paired with the equal-power
+                    // fade-out so outgoing + incoming sum to constant loudness.
+                    this._fadeGain.gain.setValueCurveAtTime(
+                        this._equalPowerCurve(1, true), ctx.currentTime, fadeIn
+                    );
+                } else {
+                    this._fadeGain.gain.setValueAtTime(1, ctx.currentTime);
+                }
+            }
+        } catch (e) { /* ignore */ }
+        const t0 = ctx.currentTime + 0.02;
+        this._anchorTime = t0;
+        this._anchorRow = 0;
+        this._anchorRowDur = this.rowDuration();
+        this._nextRowTime = t0;
+        // Warm buses at current fader levels so live volume works before first hit.
+        this.applyChannelBusGains();
+        this._startScheduler();
+        return normalized;
+    }
+
+    /**
+     * Continuous tempo glide (SPD ease): preserve audible row, retarget
+     * duration — no voice cut. Hard BPM snaps still use notifyTempoChanged.
+     */
+    retargetTempoAnchor() {
+        if (!this.playing || !this.ctx || !this.track) return;
+        const newDur = this.rowDuration();
+        const oldDur = Math.max(1e-4, this._anchorRowDur || newDur);
+        if (Math.abs(newDur - oldDur) / oldDur < 1e-5) {
+            this._anchorRowDur = newDur;
+            return;
+        }
+        const now = this.ctx.currentTime;
+        const audible = this._anchorRow + Math.max(0, (now - this._anchorTime) / oldDur);
+        this._anchorRow = audible;
+        this._anchorTime = now;
+        this._anchorRowDur = newDur;
+        this._nextRowTime = this._rowWhen(this._rowAbs);
+    }
+
+    /**
+     * Re-anchor musical time after a live BPM change. Drop the stale schedule
+     * pocket (notes already queued at the old row duration) so cranking speed
+     * does not tangle old+new timing — then keep the hook sounding.
+     */
+    notifyTempoChanged() {
+        if (!this.playing || !this.ctx || !this.track) return;
+        const newDur = this.rowDuration();
+        const oldDur = Math.max(1e-4, this._anchorRowDur || newDur);
+        // Unchanged tempo (theme/style reassert, play() follow-up) — keep pocket.
+        if (Math.abs(newDur - oldDur) / oldDur < 0.002) {
+            this._anchorRowDur = newDur;
+            return;
+        }
+        const now = this.ctx.currentTime;
+        const audible = this._anchorRow + Math.max(0, (now - this._anchorTime) / oldDur);
+        const keep = (this._lastCell || []).map((c) => (c ? {
+            note: c.note, inst: c.inst, vol: c.vol
+        } : null));
+        // Kill only not-yet-heard oneshots from the old pocket (drums/breaks).
+        this._cancelFutureOneshots(now);
+        // Soft cut melodic slots — never snap gain to peak on BPM drag.
+        for (let i = 0; i < this._channels.length; i++) {
+            this._stopChannel(i, now, { silent: true });
+        }
+        // Reschedule from the audible head at the new tempo (old future pocket dropped).
+        const nextAbs = Math.ceil(audible - 1e-6);
+        const pos = this._absRowToPos(nextAbs);
+        this._orderIndex = pos.order;
+        this._rowIndex = pos.row;
+        this._rowAbs = nextAbs;
+        this._anchorRow = audible;
+        this._anchorTime = now;
+        this._anchorRowDur = newDur;
+        this._nextRowTime = this._rowWhen(this._rowAbs);
+        // Revoice last melodic notes so speeding up does not swallow the hook.
+        const tVoice = now + 0.018;
+        for (let c = 0; c < 3; c++) {
+            const cell = keep[c];
+            if (cell && cell.note && cell.note !== 'OFF') {
+                this._trigger(c, cell, tVoice);
+            }
+        }
+    }
+
+    /** Drop oneshots that were scheduled ahead at the previous tempo. */
+    _cancelFutureOneshots(now) {
+        const list = this._liveOneshots || [];
+        const keep = [];
+        const t = Number(now) || (this.ctx ? this.ctx.currentTime : 0);
+        for (let i = 0; i < list.length; i++) {
+            const e = list[i];
+            if (!e || !e.source) continue;
+            if (e.start > t + 0.008) {
+                try {
+                    if (e.gain && e.gain.gain) {
+                        e.gain.gain.cancelScheduledValues(t);
+                        e.gain.gain.setValueAtTime(0.0001, t);
+                    }
+                } catch (err) { /* ignore */ }
+                try { e.source.stop(t); } catch (err2) { /* ignore */ }
+            } else {
+                keep.push(e);
+            }
+        }
+        this._liveOneshots = keep;
+    }
+
+    /** Compress ADSR when rows get short so fast BPM still has body, not choke. */
+    _tempoEnvScale() {
+        const rowDur = this.track ? this.rowDuration() : 0.1;
+        // ~0.11s ≈ 132 BPM @ 4 rows/beat. Below that, shrink envelopes.
+        return Math.max(0.42, Math.min(1, rowDur / 0.1));
+    }
+
+    _rowWhen(absRow) {
+        const dur = Math.max(1e-4, this._anchorRowDur || this.rowDuration());
+        return this._anchorTime + (Number(absRow) - this._anchorRow) * dur;
+    }
+
+    _startScheduler() {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+        if (this._raf) {
+            cancelAnimationFrame(this._raf);
+            this._raf = null;
+        }
+        this._timer = setInterval(() => this._tick(), this.lookahead * 1000);
+        const pump = () => {
+            if (!this.playing) {
+                this._raf = null;
+                return;
+            }
+            this._tick();
+            this._raf = requestAnimationFrame(pump);
+        };
+        this._raf = requestAnimationFrame(pump);
+        this._tick();
+    }
+
+    /** Equal-power fade curve (cos for fade-out, sin for fade-in), peak..0.0001 or reverse. */
+    _equalPowerCurve(peak, fadeIn) {
+        const steps = 32;
+        const curve = new Float32Array(steps + 1);
+        const p = Math.max(0.0001, Number(peak) || 0.0001);
+        for (let i = 0; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            curve[i] = Math.max(0.0001, p * (fadeIn ? Math.sin(t) : Math.cos(t)));
+        }
+        return curve;
+    }
+
+    /**
+     * Ramp master bus to silence while the sequence keeps running, then stop.
+     * Used as the outgoing leg of a track crossfade.
+     */
+    fadeOut(seconds) {
+        const dur = Math.max(0.05, Number(seconds) || this.fadeSeconds || 1.4);
+        if (!this.ctx || (!this._fadeGain && !this.masterGain)) {
+            this.stop(true);
+            return dur;
+        }
+        const now = this.ctx.currentTime;
+        try {
+            // Fade on the envelope node so setVolume can still retarget loudness.
+            const g = (this._fadeGain || this.masterGain).gain;
+            const start = Math.max(0.0001, g.value);
+            g.cancelScheduledValues(now);
+            // Equal-power (cosine) fade-out — see fade-in above.
+            g.setValueCurveAtTime(this._equalPowerCurve(start, false), now, dur);
+        } catch (e) { /* ignore */ }
+        if (this._fadeOutTimer) clearTimeout(this._fadeOutTimer);
+        this._fadeOutTimer = setTimeout(() => {
+            this._fadeOutTimer = null;
+            this.stop(true);
+        }, dur * 1000 + 40);
+        return dur;
+    }
+
+    _stopChannel(ch, when, opts) {
+        const slot = this._channels[ch];
+        if (!slot || !slot.gain) return;
+        const now = this.ctx ? this.ctx.currentTime : 0;
+        const t = Math.max(when, now);
+        const rowDur = this.track ? this.rowDuration() : 0.1;
+        // Keep a usable release floor at high BPM so note→note does not click-swallow.
+        const rel = Math.max(0.02, Math.min(0.18, (slot.release || 0.1) * 1.15, rowDur * 0.7));
+        const peak = Math.max(0.0001, slot.peak || 0.2);
+        const sustain = Math.max(0.0001, peak * 0.55);
+        try {
+            const g = slot.gain.gain;
+            g.cancelScheduledValues(t);
+            if (opts && opts.silent) {
+                // Tempo re-anchor: fade from the live level — never jump to peak.
+                const cur = Math.max(0.0001, Math.min(peak, Number(g.value) || 0.0001));
+                g.setValueAtTime(cur, now);
+                g.linearRampToValueAtTime(0.0001, now + 0.03);
+                if (slot.source) {
+                    try { slot.source.stop(now + 0.045); } catch (e) { /* already stopped */ }
+                }
+            } else {
+                // Soft cut for note→note — release from sustain, not a peak jump
+                // (peak jumps at high BPM sounded like the note was swallowed).
+                g.setValueAtTime(sustain, t);
+                g.exponentialRampToValueAtTime(0.0001, t + rel);
+                if (slot.source) {
+                    try { slot.source.stop(t + rel + 0.03); } catch (e2) { /* already stopped */ }
+                }
+            }
+        } catch (e) { /* ignore */ }
+        slot.gain = null;
+        slot.source = null;
+        slot.peak = 0;
+    }
+
+    /**
+     * Fire-and-forget hit (jungle breaks) — does NOT steal monophonic channel slots,
+     * so authored drums/bass keep sustaining without hard cuts.
+     */
+    _oneshot(ch, cell, when, gateSec) {
+        const track = this.track;
+        if (!cell || !cell.note || cell.note === 'OFF' || !this.ctx) return;
+        const freq = VFTrackerParse.noteToFreq(cell.note);
+        if (!freq || freq === 'OFF') return;
+        const inst = this._resolveInstrument(ch, cell.inst);
+        if (!inst) return;
+
+        const ctx = this.ctx;
+        if (!this._noiseBuffer) this._noiseBuffer = this._makeNoiseBuffer();
+        const styleSide = this._styleSide();
+        const heavyBreak = styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid';
+        const envScale = this._tempoEnvScale();
+        const isKick = cell.inst === 5 || (typeof freq === 'number' && freq < 120 && inst.wave !== 'noise');
+        const isHat = inst.wave === 'noise' && typeof freq === 'number' && freq >= 700;
+        const isSnare = inst.wave === 'noise' && !isHat;
+        const gain = ctx.createGain();
+        let filter = null;
+        if (inst.filter && inst.wave !== 'noise') {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(
+                isKick && heavyBreak
+                    ? (styleSide === 'dnb' ? 520 : 620)
+                    : inst.filter,
+                when);
+            filter.Q.setValueAtTime(isKick && heavyBreak ? 1.1 : 0.7, when);
+        } else if (isSnare && heavyBreak) {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(styleSide === 'jungle' ? 1800 : 2200, when);
+            filter.Q.setValueAtTime(0.9, when);
+        } else if (isHat && heavyBreak) {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.setValueAtTime(styleSide === 'dnb' ? 6200 : 5200, when);
+            filter.Q.setValueAtTime(0.6, when);
+        }
+        let source;
+        if (inst.wave === 'noise') {
+            source = ctx.createBufferSource();
+            source.buffer = this._noiseBuffer;
+            source.loop = true;
+        } else {
+            source = ctx.createOscillator();
+            source.type = isKick && heavyBreak
+                ? (styleSide === 'dnb' ? 'sine' : 'triangle')
+                : inst.wave;
+            // Classic jungle/DnB kick: fast pitch drop into the thud.
+            if (isKick && heavyBreak && typeof freq === 'number') {
+                const startF = styleSide === 'dnb' ? freq * 5.2 : freq * 3.6;
+                const drop = Math.max(0.018, (styleSide === 'dnb' ? 0.055 : 0.032) * envScale);
+                source.frequency.setValueAtTime(Math.max(40, startF), when);
+                source.frequency.exponentialRampToValueAtTime(Math.max(20, freq), when + drop);
+            } else {
+                source.frequency.setValueAtTime(Math.max(20, freq), when);
+            }
+        }
+        const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
+        // Jungle/DnB break hits need to read as the kit, not a soft tick under the song.
+        const breakBoost = styleSide === 'jungle' || styleSide === 'hybrid' ? 0.98
+            : styleSide === 'dnb' ? 0.9
+                : 0.72;
+        const peakCap = heavyBreak ? 0.5 : 0.38;
+        const peak = Math.max(0.0001, Math.min(peakCap, inst.volume * vol64 * breakBoost
+            * (isSnare && heavyBreak ? 1.15 : isHat && styleSide === 'dnb' ? 1.08 : 1)));
+        const a = Math.max(0.001, inst.attack * envScale);
+        const dRaw = isHat && heavyBreak ? Math.min(0.018, inst.decay)
+            : isSnare && styleSide === 'jungle' ? Math.max(0.035, inst.decay)
+                : isKick && styleSide === 'dnb' ? Math.max(0.08, inst.decay)
+                    : inst.decay;
+        const d = Math.max(0.001, dRaw * envScale);
+        const s = Math.max(0.0001, peak * (isKick && styleSide === 'dnb'
+            ? Math.max(0.08, inst.sustain)
+            : inst.sustain));
+        const r = Math.max(0.02, (isHat && heavyBreak ? 0.03 : (inst.release || 0.08)) * envScale);
+        // Floor the gate so fast BPM still has body (was vanishing under ~0.05s).
+        const gate = Math.max(a + d + 0.028, Math.max(isKick ? 0.055 : 0.04, Number(gateSec) || 0.09));
+
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.exponentialRampToValueAtTime(peak, when + a);
+        gain.gain.exponentialRampToValueAtTime(s, when + a + d);
+        gain.gain.setValueAtTime(s, when + Math.max(a + d, gate - r));
+        gain.gain.exponentialRampToValueAtTime(0.0001, when + gate);
+
+        if (filter) {
+            source.connect(filter);
+            filter.connect(gain);
+        } else {
+            source.connect(gain);
+        }
+        const bus = this._ensureChannelBus(ch) || this.masterGain;
+        gain.connect(bus);
+        source.start(when);
+        try { source.stop(when + gate + 0.04); } catch (e) { /* ignore */ }
+        if (!this._liveOneshots) this._liveOneshots = [];
+        const entry = { source, gain, start: when };
+        this._liveOneshots.push(entry);
+        // Prune finished entries so tempo cancels stay cheap.
+        if (this._liveOneshots.length > 64) {
+            const tNow = ctx.currentTime;
+            this._liveOneshots = this._liveOneshots.filter((e) => e && e.start + 0.4 > tNow);
+        }
+    }
+
+    _trigger(ch, cell, when) {
+        const track = this.track;
+        if (!cell || !cell.note) return;
+        if (cell.note === 'OFF') {
+            this._stopChannel(ch, when);
+            return;
+        }
+        const freq = VFTrackerParse.noteToFreq(cell.note);
+        if (!freq || freq === 'OFF') return;
+
+        let inst = this._resolveInstrument(ch, cell.inst);
+        if (!inst) return;
+
+        // Morph authored voices into jungle chops / Reese / ragga lead without moving pitches.
+        // Honour an explicit VOICE pick: never overwrite its wave (fader must stay audible).
+        const styleSide = this._styleSide();
+        const styleMag = this._styleMag();
+        const voiceId = (this.channelVoices && this.channelVoices[ch]) || 'default';
+        const userVoice = voiceId !== 'default';
+        if (styleMag > 0.03 && inst.wave !== 'noise'
+            && (styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid')) {
+            if (ch === 0) {
+                if (styleSide === 'dnb' || styleSide === 'hybrid') {
+                    // Half-time Reese sub: long saw, dark filter, high sustain.
+                    const morph = {
+                        attack: Math.max(0.004, 0.002 + styleMag * 0.006),
+                        decay: Math.max(0.12, 0.1 + styleMag * 0.08),
+                        sustain: Math.min(0.92, 0.72 + styleMag * 0.18),
+                        release: Math.max(0.22, 0.16 + styleMag * 0.18),
+                        filter: Math.max(180, Math.min(480, 380 - styleMag * 160)),
+                        volume: Math.min(0.98, (Number(inst.volume) || 0.7) * (1.08 + styleMag * 0.18))
+                    };
+                    if (!userVoice) morph.wave = 'sawtooth';
+                    else if (inst.filter != null) {
+                        morph.filter = Math.round((Number(inst.filter) + morph.filter) * 0.5);
+                    }
+                    inst = Object.assign({}, inst, morph);
+                } else {
+                    // Jungle: short square chops, mid growl.
+                    const morph = {
+                        attack: 0.001,
+                        decay: Math.min(0.035, 0.045 - styleMag * 0.015),
+                        sustain: Math.min(0.42, Math.max(0.18, 0.45 - styleMag * 0.28)),
+                        release: Math.min(0.05, Math.max(0.02, 0.06 - styleMag * 0.03)),
+                        filter: Math.min(1100, 750 + (1 - styleMag) * 250),
+                        volume: Math.min(0.94, (Number(inst.volume) || 0.7) * (1.05 + styleMag * 0.1))
+                    };
+                    if (!userVoice) morph.wave = 'square';
+                    inst = Object.assign({}, inst, morph);
+                }
+            } else if (ch === 1) {
+                // Lead: ragga stabs (jungle) or thin pads (dnb) — don't fight the kit.
+                if (styleSide === 'jungle') {
+                    const morph = {
+                        attack: 0.001,
+                        decay: Math.min(0.04, 0.05 - styleMag * 0.02),
+                        sustain: Math.max(0.12, 0.32 - styleMag * 0.18),
+                        release: Math.max(0.03, 0.07 - styleMag * 0.035),
+                        filter: Math.min(3200, 2200 + styleMag * 800),
+                        volume: Math.min(0.5, (Number(inst.volume) || 0.4) * (0.85 - styleMag * 0.15))
+                    };
+                    if (!userVoice) morph.wave = 'square';
+                    inst = Object.assign({}, inst, morph);
+                } else {
+                    const morph = {
+                        attack: 0.002,
+                        decay: 0.06,
+                        sustain: Math.max(0.18, 0.36 - styleMag * 0.12),
+                        release: Math.max(0.06, 0.1 - styleMag * 0.03),
+                        filter: Math.min(2400, 1800 - styleMag * 400),
+                        volume: Math.min(0.42, (Number(inst.volume) || 0.4) * (0.75 - styleMag * 0.2))
+                    };
+                    if (!userVoice) morph.wave = styleMag > 0.5 ? 'sawtooth' : (inst.wave || 'square');
+                    inst = Object.assign({}, inst, morph);
+                }
+            }
+        }
+
+        if (!this._lastCell) this._lastCell = [];
+        this._lastCell[ch] = { note: cell.note, inst: cell.inst, vol: cell.vol };
+        this._stopChannel(ch, when);
+
+        const ctx = this.ctx;
+        const gain = ctx.createGain();
+        let filter = null;
+        if (inst.filter && inst.wave !== 'noise') {
+            filter = ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(inst.filter, when);
+            filter.Q.setValueAtTime(
+                ch === 0 && (styleSide === 'dnb' || styleSide === 'hybrid') ? 1.25 : 0.7,
+                when);
+        }
+
+        let source;
+        if (inst.wave === 'noise') {
+            source = ctx.createBufferSource();
+            source.buffer = this._noiseBuffer;
+            source.loop = true;
+        } else {
+            source = ctx.createOscillator();
+            source.type = inst.wave;
+            source.frequency.setValueAtTime(Math.max(20, freq), when);
+        }
+
+        const vol64 = cell.vol != null ? Math.max(0, Math.min(64, cell.vol)) / 64 : 1;
+        // Cap note peaks so dense patterns (Saturn) don't blow past sparse ones.
+        const peak = Math.max(0.0001, Math.min(0.52, inst.volume * vol64));
+        const envScale = this._tempoEnvScale();
+        const a = Math.max(0.001, Math.min(0.04, inst.attack * envScale));
+        const d = Math.max(0.001, Math.min(0.12, inst.decay * envScale));
+        const s = Math.max(0.0001, peak * inst.sustain);
+        const r = Math.max(0.03, Math.min(0.16, (inst.release || 0.1) * envScale));
+
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.exponentialRampToValueAtTime(peak, when + a);
+        gain.gain.exponentialRampToValueAtTime(s, when + a + d);
+
+        if (filter) {
+            source.connect(filter);
+            filter.connect(gain);
+        } else {
+            source.connect(gain);
+        }
+        const bus = this._ensureChannelBus(ch) || this.masterGain;
+        gain.connect(bus);
+        source.start(when);
+
+        // Twin osc: light STYLE colour on the authored note (AMOUNT-scaled, no floor).
+        const themeId = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.idOf)
+            ? VFTrackerThemes.idOf(this.themeIndex)
+            : '';
+        const wantTwin = ch === 0 && inst.wave !== 'noise' && styleMag > 0.03
+            && (themeId === 'reese' || themeId === 'amen' || themeId === 'neuro'
+                || themeId === 'jungle_dnb' || themeId === 'dnb' || themeId === 'nightrun'
+                || themeId === 'minimal_elektro'
+                || styleSide === 'dnb' || styleSide === 'jungle' || styleSide === 'hybrid'
+                || styleSide === 'drive');
+        // Lead octave twin for NIGHTRUN cinematic weight.
+        const wantLeadTwin = ch === 1 && themeId === 'nightrun' && inst.wave !== 'noise'
+            && styleMag > 0.03;
+        if ((wantTwin || wantLeadTwin) && typeof freq === 'number') {
+            try {
+                const osc2 = ctx.createOscillator();
+                const g2 = ctx.createGain();
+                osc2.type = styleSide === 'drive' || themeId === 'nightrun'
+                    ? 'sawtooth'
+                    : styleSide === 'dnb' || styleSide === 'hybrid'
+                        || themeId === 'reese' || themeId === 'neuro' || themeId === 'dnb'
+                        ? 'sawtooth'
+                        : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen'
+                            ? 'square'
+                            : styleSide === 'elektro'
+                                ? 'square'
+                                : (inst.wave === 'triangle' ? 'sawtooth' : inst.wave);
+                const detune = styleSide === 'drive' || themeId === 'nightrun' ? 0.988
+                    : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb' ? 0.985
+                        : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen' ? 0.997
+                            : styleSide === 'elektro' ? 0.998 : 0.995;
+                const f2 = wantLeadTwin ? freq * 0.5 : freq * detune;
+                osc2.frequency.setValueAtTime(Math.max(20, f2), when);
+                const twinScale = Math.min(0.36, (styleSide === 'drive' || themeId === 'nightrun'
+                    ? (wantLeadTwin ? 0.12 + styleMag * 0.14 : 0.14 + styleMag * 0.16)
+                    : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb'
+                        ? (0.18 + styleMag * 0.2)
+                        : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen'
+                            ? (0.12 + styleMag * 0.14)
+                            : styleSide === 'elektro'
+                                ? (0.06 + styleMag * 0.08)
+                                : (0.08 + styleMag * 0.1)) * styleMag);
+                const twinPeak = Math.max(0.0001, Math.min(0.26, peak * twinScale));
+                const gate = Math.max(0.18, a + d + r
+                    + (styleSide === 'drive' || themeId === 'nightrun' ? 0.3
+                        : styleSide === 'dnb' || styleSide === 'hybrid' || themeId === 'dnb' ? 0.38
+                            : styleSide === 'jungle' || themeId === 'jungle_dnb' || themeId === 'amen' ? 0.08
+                                : styleSide === 'elektro' ? 0.28 : 0.12));
+                g2.gain.setValueAtTime(0.0001, when);
+                g2.gain.exponentialRampToValueAtTime(twinPeak, when + a);
+                g2.gain.exponentialRampToValueAtTime(Math.max(0.0001, twinPeak * inst.sustain), when + a + d);
+                g2.gain.setValueAtTime(Math.max(0.0001, twinPeak * inst.sustain), when + Math.max(a + d, gate - r));
+                g2.gain.exponentialRampToValueAtTime(0.0001, when + gate);
+                osc2.connect(g2);
+                g2.connect(bus);
+                osc2.start(when);
+                try { osc2.stop(when + gate + 0.04); } catch (e2) { /* ignore */ }
+            } catch (e) { /* ignore */ }
+        }
+
+        this._channels[ch] = { gain, source, release: r, filter, peak };
+    }
+
+    /** Advance song position by one row without scheduling audio. */
+    _advanceRowIndex() {
+        const track = this.track;
+        if (!track) return false;
+        const patId = track.order[this._orderIndex];
+        const pat = track.patternById[patId];
+        if (!pat) return false;
+        this._rowIndex += 1;
+        if (this._rowIndex >= pat.rows.length) {
+            this._rowIndex = 0;
+            this._orderIndex += 1;
+            if (this._orderIndex >= track.order.length) {
+                if (track.loop) {
+                    this._orderIndex = 0;
+                } else {
+                    this.playing = false;
+                    this._finishNonLoop();
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    _scheduleRow(when) {
+        const track = this.track;
+        const patId = track.order[this._orderIndex];
+        const pat = track.patternById[patId];
+        if (!pat) return;
+        const rowIndex = this._rowIndex;
+        const row = pat.rows[rowIndex];
+        const styleMag = this._styleMag();
+        const styleSide = this._styleSide();
+        const themeIdx = Number(this.themeIndex) || 0;
+        const themeMeta = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.metaOf)
+            ? VFTrackerThemes.metaOf(themeIdx)
+            : { themeBreak: 0 };
+        const themeBreak = Number(themeMeta.themeBreak) || 0;
+        // STYLE interprets authored Hauptmelodien (rhythm/drums/articulation);
+        // pitches stay on the planet/role motif. Theme 0 = authored as written.
+        if (row) {
+            const pools = [];
+            if (themeIdx > 0 && styleMag >= 0.03
+                && typeof VFTrackerThemes !== 'undefined'
+                && VFTrackerThemes.pitchPoolFromPattern) {
+                for (let c = 0; c < 3; c++) {
+                    pools[c] = VFTrackerThemes.pitchPoolFromPattern(pat, c);
+                }
+            }
+            // Jungle / DnB push the Amen / two-step layer hard; other styles stay mild.
+            const breakHeavy = styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid';
+            const breakAmtPre = styleMag < 0.03 ? 0
+                : styleMag * (themeIdx > 0
+                    ? (breakHeavy
+                        ? (0.42 + Math.min(1, themeBreak) * 0.52)
+                        : (0.22 + Math.min(0.55, themeBreak) * 0.28))
+                    : 0.35);
+            for (let c = 0; c < track.channels; c++) {
+                let cell = row[c];
+                if (c <= 3 && themeIdx > 0
+                    && typeof VFTrackerThemes !== 'undefined'
+                    && VFTrackerThemes.interpretCell) {
+                    cell = VFTrackerThemes.interpretCell(
+                        themeIdx, this._orderIndex, rowIndex, c,
+                        row[c], pools[c] || null, styleMag);
+                }
+                // Jungle/DnB: silence authored GB kit when break owns the groove.
+                if (c === 3 && cell && breakHeavy && breakAmtPre > 0.28) {
+                    cell = null;
+                } else if (c === 3 && cell && breakAmtPre > 0.2) {
+                    const duck = Math.max(0.3, 1 - breakAmtPre * 0.55);
+                    if (cell.note !== 'OFF') {
+                        cell = {
+                            note: cell.note,
+                            inst: cell.inst,
+                            vol: Math.max(8, Math.round((cell.vol != null ? cell.vol : 40) * duck))
+                        };
+                    }
+                }
+                if (cell) {
+                    // Drums are polyphonic (kick+hat same step) — oneshot, don't cut.
+                    if (c === 3) {
+                        const rowDur = this.rowDuration();
+                        const isKick = cell.inst === 5;
+                        // Floor gate length so high BPM drums keep body.
+                        this._oneshot(c, cell, when, Math.max(
+                            isKick ? 0.055 : 0.04,
+                            rowDur * (isKick ? 0.95 : 0.65)));
+                    } else {
+                        this._trigger(c, cell, when);
+                    }
+                }
+            }
+        }
+        // Break overlay: STYLE kit colour as spice, not a second song.
+        const breakHeavy = styleSide === 'jungle' || styleSide === 'dnb' || styleSide === 'hybrid';
+        const breakAmt = styleMag < 0.03 ? 0
+            : styleMag * (themeIdx > 0
+                ? (breakHeavy
+                    ? (0.42 + Math.min(1, themeBreak) * 0.52)
+                    : (0.22 + Math.min(0.55, themeBreak) * 0.28))
+                : 0.35);
+        const breakSide = (styleSide !== 'off' ? styleSide : null)
+            || (themeMeta.breakSide && themeMeta.breakSide !== 'off' ? themeMeta.breakSide : null)
+            || 'jungle';
+        if (breakAmt > 0.02) this._scheduleJungleHits(when, rowIndex, breakAmt, breakSide);
+        this._advanceRowIndex();
+    }
+
+    /**
+     * Extra breakbeat pressure — Jungle / DnB / hybrid / minimal / NIGHTRUN drive.
+     * @param {number} [amountOverride]
+     * @param {'jungle'|'dnb'|'hybrid'|'elektro'|'drive'} [sideOverride]
+     */
+    _scheduleJungleHits(when, rowIndex, amountOverride, sideOverride) {
+        const amt = Math.max(0, Math.min(1, amountOverride != null
+            ? Number(amountOverride)
+            : this._styleMag()));
+        if (!(amt > 0)) return;
+        const side = sideOverride || this._styleSide() || 'jungle';
+        let bank;
+        if (side === 'dnb') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.dnbBreak)
+                ? VFTrackerThemes.dnbBreak
+                : this._dnbBreak;
+        } else if (side === 'hybrid') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.jungleDnbBreak)
+                ? VFTrackerThemes.jungleDnbBreak
+                : this._jungleBreak;
+        } else if (side === 'elektro') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.elektroBreak)
+                ? VFTrackerThemes.elektroBreak
+                : this._dnbBreak;
+        } else if (side === 'drive') {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.driveBreak)
+                ? VFTrackerThemes.driveBreak
+                : this._driveBreak;
+        } else {
+            bank = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.amenBreak)
+                ? VFTrackerThemes.amenBreak
+                : this._jungleBreak;
+        }
+        const step = (bank || [])[rowIndex % 16];
+        if (!step) return;
+        const volScale = Math.min(1.15, side === 'jungle' || side === 'hybrid'
+            ? (0.62 + amt * 0.5)
+            : side === 'dnb'
+                ? (0.55 + amt * 0.48)
+                : side === 'drive'
+                    ? (0.34 + amt * 0.4)
+                    : side === 'elektro'
+                        ? (0.36 + amt * 0.38)
+                        : (0.3 + amt * 0.4));
+        const rowDur = this.rowDuration();
+        // Prefer body over ultra-short ticks when BPM is cranked.
+        const gate = Math.max(0.045, Math.min(
+            side === 'jungle' || side === 'hybrid' ? 0.1
+                : side === 'dnb' ? 0.22
+                    : side === 'drive' ? 0.16
+                        : side === 'elektro' ? 0.18 : 0.18,
+            Math.max(rowDur * 0.95, 0.05)));
+        // Oneshots on drum bus — never call _trigger(3) (that cut authored notes).
+        const fire = (note, inst, vel, at, gateMul) => {
+            if (!(vel > 0.05)) return;
+            this._oneshot(3, {
+                note,
+                inst,
+                vol: Math.max(1, Math.min(64, Math.round(64 * vel * volScale)))
+            }, at, gate * (gateMul || 1));
+        };
+        if (step.k) {
+            fire('A-2', 5, step.k, when,
+                side === 'dnb' ? 1.7
+                    : side === 'elektro' || side === 'drive' ? 1.35
+                        : side === 'jungle' || side === 'hybrid' ? 0.9 : 1);
+        }
+        if (step.s) {
+            fire('A-4', 4, step.s * (side === 'elektro' ? 0.85
+                : side === 'drive' ? 1.05
+                    : side === 'jungle' || side === 'hybrid' ? 1.18
+                        : side === 'dnb' ? 1.15 : 1), when,
+                side === 'jungle' || side === 'hybrid' ? 0.7
+                    : side === 'dnb' ? 1.1 : 1);
+        }
+        if (step.h) {
+            fire('A-5', 4, step.h * (side === 'elektro' ? 0.9
+                : side === 'dnb' ? 0.85
+                    : side === 'drive' ? 0.75
+                        : side === 'jungle' || side === 'hybrid' ? 0.8 : 0.85), when,
+                side === 'dnb' ? 0.7 : 0.55);
+        }
+
+        // Jungle: Amen rolls only on marked steps (not every subdivision).
+        // DnB: light mid-hat only — keep two-step space.
+        if ((side === 'jungle' || side === 'hybrid') && step.r && amt > 0.18) {
+            const mid = when + rowDur * 0.5;
+            const rollVel = step.r * (0.7 + amt * 0.7);
+            fire('A-4', 4, rollVel, mid, 0.5);
+            if (amt > 0.45) {
+                fire('A-4', 4, rollVel * 0.7, when + rowDur * 0.75, 0.42);
+            }
+            if (amt > 0.7) {
+                fire('A-5', 4, rollVel * 0.45, when + rowDur * 0.25, 0.32);
+            }
+        } else if (side === 'dnb' && amt > 0.25) {
+            fire('A-5', 4, 0.22 + amt * 0.2, when + rowDur * 0.5, 0.55);
+            if (step.s && amt > 0.55) {
+                fire('A-4', 4, 0.16 + amt * 0.14, when + rowDur * 0.75, 0.45);
+            }
+        } else if (side === 'elektro' && amt > 0.15) {
+            fire('A-5', 4, 0.28 + amt * 0.28, when + rowDur * 0.5, 0.5);
+            if (amt > 0.55 && step.k) {
+                fire('A-2', 5, 0.35 + amt * 0.2, when + rowDur * 0.5, 0.85);
+            }
+        } else if (side === 'drive' && amt > 0.2) {
+            fire('A-5', 4, 0.2 + amt * 0.2, when + rowDur * 0.5, 0.5);
+        }
+    }
+
+    _finishNonLoop() {
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+        if (this._endedFired) return;
+        this._endedFired = true;
+        const cb = this._onEnded;
+        this._onEnded = null;
+        if (cb) {
+            try { cb(); } catch (e) { /* ignore listener errors */ }
+        }
+    }
+
+    _tick() {
+        if (!this.playing || !this.track || !this.ctx) return;
+        const rowDur = this.rowDuration();
+        if (!(rowDur > 0)) return;
+        if (!(this._anchorRowDur > 0)) this._anchorRowDur = rowDur;
+        const now = this.ctx.currentTime;
+        // ~0.5s / ~12 rows ahead so combat-frame stalls rarely go late.
+        const ahead = Math.max(this.scheduleAhead, Math.min(0.55, rowDur * 12));
+        const horizon = now + ahead;
+        while (this.playing) {
+            const ideal = this._rowWhen(this._rowAbs);
+            if (ideal >= horizon) break;
+            let when = ideal;
+            if (ideal < now + 0.001) {
+                // Play this musical row, then re-anchor — never skip pattern
+                // content to catch wall-clock (that jumped inside the tracks).
+                when = now + 0.003;
+                this._scheduleRow(when);
+                this._rowAbs += 1;
+                this._anchorTime = when;
+                this._anchorRow = this._rowAbs - 1;
+                this._anchorRowDur = rowDur;
+                this._nextRowTime = this._rowWhen(this._rowAbs);
+                continue;
+            }
+            this._scheduleRow(when);
+            this._rowAbs += 1;
+            this._nextRowTime = this._rowWhen(this._rowAbs);
+        }
+    }
+
+    stop(immediate) {
+        if (this._fadeOutTimer) {
+            clearTimeout(this._fadeOutTimer);
+            this._fadeOutTimer = null;
+        }
+        if (this._timer) {
+            clearInterval(this._timer);
+            this._timer = null;
+        }
+        if (this._raf) {
+            cancelAnimationFrame(this._raf);
+            this._raf = null;
+        }
+        this.playing = false;
+        this._onEnded = null;
+        const when = this.ctx ? this.ctx.currentTime : 0;
+        for (let i = 0; i < this._channels.length; i++) {
+            this._stopChannel(i, when);
+        }
+        this._channels = [];
+        this.track = null;
+        // Never hard-mute the bus on soft stop — a following play() would race
+        // the mute and leave planet music silent. Channels are already silenced.
+        if (immediate && this.ctx) {
+            try {
+                if (this.masterGain) this.masterGain.gain.cancelScheduledValues(when);
+                if (this._fadeGain) {
+                    this._fadeGain.gain.cancelScheduledValues(when);
+                    this._fadeGain.gain.setValueAtTime(0.0001, when);
+                }
+            } catch (e) { /* ignore */ }
+            // Tear the output chain off destination so faded-out crossfade
+            // legs cannot accumulate zombie limiters on the shared context.
+            this._disconnectChannelBuses();
+            try { if (this._limiter) this._limiter.disconnect(); } catch (e2) { /* ignore */ }
+            try { if (this._fadeGain) this._fadeGain.disconnect(); } catch (e3) { /* ignore */ }
+            try { if (this.masterGain) this.masterGain.disconnect(); } catch (e4) { /* ignore */ }
+            this._masterChained = false;
+        }
+    }
+
+    get bpm() {
+        return this.effectiveBpm();
+    }
+
+    isPlaying() {
+        return !!this.playing;
+    }
+
+    /**
+     * Audible playhead for UI (Music Editor score). Uses musical time, not the
+     * lookahead schedule cursor, so the highlight matches what you hear.
+     */
+    getPlayhead() {
+        if (!this.playing || !this.track || !this.ctx) {
+            return { playing: false, orderIndex: 0, rowIndex: 0, pattern: 0, frac: 0, absRow: 0 };
+        }
+        const now = this.ctx.currentTime;
+        const dur = Math.max(1e-4, this._anchorRowDur || this.rowDuration());
+        let abs = this._anchorRow + (now - this._anchorTime) / dur;
+        if (!(abs > 0)) abs = 0;
+        const floor = Math.floor(abs);
+        const frac = Math.max(0, Math.min(1, abs - floor));
+        const pos = this._absRowToPos(floor);
+        // Pattern id from the order slot (not orderIndex%3 — that mapped the
+        // wrong pack whenever order repeated P0/P1 before P2).
+        const patId = (this.track.order && this.track.order[pos.order] != null)
+            ? Number(this.track.order[pos.order])
+            : 0;
+        return {
+            playing: true,
+            orderIndex: pos.order,
+            rowIndex: pos.row,
+            pattern: Number.isFinite(patId) ? patId : 0,
+            frac,
+            absRow: abs
+        };
+    }
+
+    _absRowToPos(absRow) {
+        const track = this.track;
+        if (!track || !track.order || !track.order.length) return { order: 0, row: 0 };
+        let left = Math.max(0, Math.floor(Number(absRow) || 0));
+        let oi = 0;
+        for (let g = 0; g < 100000; g++) {
+            const pat = track.patternById[track.order[oi]];
+            const rows = (pat && pat.rows && pat.rows.length) ? pat.rows.length : 16;
+            if (left < rows) return { order: oi, row: left };
+            left -= rows;
+            oi += 1;
+            if (oi >= track.order.length) {
+                if (!track.loop) {
+                    const last = track.order.length - 1;
+                    const lp = track.patternById[track.order[last]];
+                    const lr = (lp && lp.rows && lp.rows.length) ? lp.rows.length : 16;
+                    return { order: last, row: Math.max(0, lr - 1) };
+                }
+                oi = 0;
+            }
+        }
+        return { order: 0, row: 0 };
+    }
+}
+
+
+/* --- js/game/tracker/defaults.js --- */
+"use strict";
+
+/**
+ * Built-in vftracks — oriented on Volley Fire (GB, 1990 / Akihiko Mori):
+ * clear pulse hooks, wave bass ostinato, sparse harmony, noise hats.
+ * Original melodies inspired by that era's Toei GB shooter feel (not a rip).
+ * Role map ≈ GB OST: Title→intro, Planet Select→menu, Main BGM→ingame,
+ * Map / Victory / Lose / Shop = per-planet Hauptmelodien (styles interpret them).
+ * Boss keys (`mars-boss` …) own separate siege melodies — not combat remixes.
+ */
+var VFTrackerDefaults = {
+    /** Playback roles that own a distinct Hauptmelodie per planet. */
+    ROLES: ['ingame', 'map', 'victory', 'lose', 'shop', 'boss'],
+    /** Game Boy-ish voices: wave bass, two pulses, noise. */
+    _baseInstruments() {
+        return [
+            { id: 1, name: 'wave', wave: 'triangle', volume: 0.68, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
+            // Lead must read above arp — pulse1 was quieter than pulse2 and buried the hook.
+            { id: 2, name: 'pulse1', wave: 'square', volume: 0.44, attack: 0.001, decay: 0.05, sustain: 0.36, release: 0.08, filter: 2600 },
+            { id: 3, name: 'pulse2', wave: 'square', volume: 0.32, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05, filter: 2200 },
+            { id: 4, name: 'noise', wave: 'noise', volume: 0.28, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+            { id: 5, name: 'kick', wave: 'triangle', volume: 0.74, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
+        ];
+    },
+
+    _track(meta, bpm, patterns, order, loop) {
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: Object.assign({ author: 'VF Tracker · GB-style' }, meta),
+            bpm,
+            rowsPerBeat: 1,
+            rowsPerPattern: 16,
+            channels: 4,
+            instruments: this._baseInstruments(),
+            patterns,
+            order,
+            loop: loop !== false
+        };
+    },
+
+    _pat(id, bass, lead, arp, drums) {
+        const pad = (s) => (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.padChannelString
+            ? VFTrackerParse.padChannelString(s, 16)
+            : s);
+        return { id: id, channels: [pad(bass), pad(lead), pad(arp), pad(drums)] };
+    },
+
+    /**
+     * Motivic writing rules (all planet tracks):
+     *   P0 = state the head motif (lead) over a locked bass ostinato
+     *   P1 = same rhythm, motif sequenced to the relative / IV area
+     *   P2 = motif climax (octave / extension) then cadence home
+     * Lead answers itself — never random walks.
+     */
+
+    // Mars — A-minor call/answer hook (E-C-A | E-D-C | A). Combat workhorse.
+    mars() {
+        return this._track(
+            { title: 'Main Orbit 1', planet: 'mars', notes: 'call E-C-A · answer E-D-C · land A' },
+            128,
+            [
+                this._pat(0,
+                    'A-2:1:60 . A-2:1:42 . A-2:1:56 . E-2:1:46 . A-2:1:60 . A-2:1:40 . G-2:1:50 . E-2:1:38',
+                    'E-5:2:54 . C-5:2:40 . A-4:2:48 . E-5:2:56 . D-5:2:44 . C-5:2:40 . A-4:2:46 . A-4:2:52',
+                    'A-3:3:14 . . . E-4:3:12 . . . A-3:3:14 . . . C-4:3:10 . . .',
+                    'A-2:5:66 . A-4:4:16 . A-2:5:52 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .'
+                ),
+                this._pat(1,
+                    'F-2:1:54 . F-2:1:38 . F-2:1:52 . C-2:1:42 . G-2:1:54 . G-2:1:38 . E-2:1:48 . G-2:1:36',
+                    'C-5:2:50 . A-4:2:36 . F-4:2:44 . C-5:2:52 . Bb4:2:40 . A-4:2:36 . G-4:2:38 . F-4:2:46',
+                    'C-4:3:12 . . . F-4:3:10 . . . D-4:3:12 . . . G-4:3:10 . . .',
+                    'F-2:5:60 . A-4:4:14 . F-2:5:46 . A-4:4:10 G-2:5:60 . A-4:4:14 . G-2:5:44 A-4:4:08 . .'
+                ),
+                this._pat(2,
+                    'A-2:1:62 . A-2:1:44 . C-3:1:52 . E-2:1:48 . A-2:1:62 . A-2:1:42 . G-2:1:54 . E-2:1:40',
+                    'A-5:2:56 . E-5:2:42 . C-5:2:48 . A-5:2:58 . G-5:2:46 . E-5:2:40 . C-5:2:44 . A-4:2:52',
+                    'E-4:3:16 . A-4:3:10 . . E-4:3:14 . C-5:3:18 . A-4:3:10 . E-4:3:12 . A-4:3:08',
+                    'A-2:5:72 A-4:4:18 . A-4:4:12 A-2:5:56 . A-4:4:14 . A-2:5:68 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Jupiter — E-minor bounce: offbeat lead leaps, sparse bass punches.
+    jupiter() {
+        return this._track(
+            { title: 'Main Orbit 2', planet: 'jupiter', notes: 'bounce E-G-B · fall A-G-E · tag D-E' },
+            120,
+            [
+                this._pat(0,
+                    'E-2:1:56 . . E-2:1:40 . B-1:1:48 . E-2:1:54 . . B-1:1:42 . E-2:1:50 . B-1:1:36 .',
+                    '. E-4:2:48 . G-4:2:38 . B-4:2:54 . A-4:2:42 . G-4:2:40 . E-4:2:44 . D-4:2:36 E-4:2:48',
+                    '. . B-3:3:14 . . . E-4:3:12 . . . B-3:3:12 . . . E-4:3:10 .',
+                    'E-2:5:60 . . A-4:4:12 . E-2:5:48 . A-4:4:10 . E-2:5:56 . . A-4:4:12 . E-2:5:44 .'
+                ),
+                this._pat(1,
+                    'C-3:1:52 . . C-3:1:36 . G-2:1:44 . D-3:1:50 . . B-1:1:38 . C-3:1:46 . G-2:1:32 .',
+                    '. C-5:2:44 . E-5:2:34 . G-5:2:50 . F-5:2:38 . E-5:2:36 . C-5:2:40 . B-4:2:32 C-5:2:44',
+                    '. . G-4:3:12 . . . C-5:3:10 . . . A-4:3:12 . . . D-5:3:08 .',
+                    'C-3:5:54 . . A-4:4:10 . C-3:5:42 . A-4:4:08 . D-3:5:50 . . A-4:4:10 . D-3:5:38 .'
+                ),
+                this._pat(2,
+                    'E-2:1:60 . E-2:1:42 . G-2:1:50 . B-1:1:46 . E-2:1:60 . E-2:1:40 . D-2:1:52 . B-1:1:38',
+                    'E-5:2:54 . G-5:2:42 . B-5:2:58 . A-5:2:46 . G-5:2:44 . E-5:2:38 . D-5:2:40 . E-5:2:50',
+                    'E-4:3:16 . . B-3:3:10 E-4:3:14 . G-4:3:18 . . E-4:3:12 . D-4:3:10 . B-3:3:08',
+                    'E-2:5:66 A-4:4:16 . A-4:4:10 E-2:5:52 . A-4:4:12 . E-2:5:62 A-4:4:14 . A-4:4:08 E-2:5:46 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 0, 1, 0]
+        );
+    },
+
+    // Saturn — D-minor gallop: short-short-long lead over driving bass.
+    saturn() {
+        return this._track(
+            { title: 'Main Orbit 3', planet: 'saturn', notes: 'gallop D-F-A · snap G-F · home D' },
+            136,
+            [
+                this._pat(0,
+                    'D-2:1:58 D-2:1:36 . D-2:1:54 . A-1:1:44 . D-2:1:58 D-2:1:36 . A-1:1:48 . A-1:1:34',
+                    'D-4:2:46 F-4:2:34 . A-4:2:54 . G-4:2:42 . F-4:2:40 D-4:2:32 . C-4:2:36 . D-4:2:48',
+                    'A-3:3:14 . . . D-4:3:12 . . . A-3:3:14 . . . D-4:3:10 . . .',
+                    'D-2:5:66 A-4:4:16 D-2:5:42 A-4:4:10 D-2:5:60 A-4:4:14 . D-2:5:66 A-4:4:16 D-2:5:40 A-4:4:10 D-2:5:52 A-4:4:12 .'
+                ),
+                this._pat(1,
+                    'G-1:1:54 G-1:1:34 . G-1:1:50 . D-1:1:40 . Bb1:1:54 Bb1:1:34 . F-2:1:46 . Bb1:1:32',
+                    'G-3:2:42 Bb3:2:30 . D-4:2:50 . C-4:2:38 . Bb3:2:36 G-3:2:28 . A-3:2:32 . G-3:2:44',
+                    'D-3:3:12 . . . G-3:3:10 . . . F-3:3:12 . . . Bb3:3:10 . . .',
+                    'G-1:5:62 A-4:4:14 G-1:5:40 A-4:4:08 Bb1:5:58 A-4:4:12 . Bb1:5:62 A-4:4:14 Bb1:5:38 A-4:4:08 Bb1:5:50 A-4:4:10 .'
+                ),
+                this._pat(2,
+                    'D-2:1:62 . D-2:1:42 . F-2:1:52 . A-1:1:46 . D-2:1:62 . D-2:1:40 . C-2:1:54 . A-1:1:38',
+                    'D-5:2:54 . F-5:2:42 . A-5:2:58 . G-5:2:46 . F-5:2:44 . D-5:2:38 . C-5:2:40 . D-5:2:50',
+                    'D-4:3:16 . A-3:3:10 . . D-4:3:14 . F-4:3:18 . A-3:3:10 . D-4:3:12 . A-3:3:08',
+                    'D-2:5:72 A-4:4:18 . A-4:4:10 D-2:5:56 A-4:4:14 A-4:4:08 . D-2:5:68 A-4:4:16 . A-4:4:08 D-2:5:50 A-4:4:10 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Neptune — B-minor ice: long held tones, wide gaps, cold answer.
+    neptune() {
+        return this._track(
+            { title: 'Ice Lane', planet: 'neptune', notes: 'hold B · rise D-F# · fall E-B' },
+            108,
+            [
+                this._pat(0,
+                    'B-1:1:52 . . . F#1:1:40 . . . B-1:1:48 . . . F#1:1:36 . . .',
+                    'B-3:2:46 . . . D-4:2:36 . F#4:2:50 . E-4:2:38 . . B-3:2:42 . . .',
+                    'F#3:3:12 . . . . . . . B-3:3:10 . . . . . . .',
+                    '. . A-4:4:10 . . . B-1:5:46 . . . A-4:4:08 . . B-1:5:40 .'
+                ),
+                this._pat(1,
+                    'G-1:1:46 . . . D-1:1:34 . . . A-1:1:44 . . . E-1:1:32 . . .',
+                    'G-3:2:40 . . . B-3:2:30 . D-4:2:46 . C-4:2:34 . . G-3:2:38 . . .',
+                    'D-3:3:10 . . . . . . . G-3:3:08 . . . . . . .',
+                    '. . A-4:4:08 . . . G-1:5:40 . . . A-4:4:06 . . A-1:5:36 .'
+                ),
+                this._pat(2,
+                    'B-1:1:56 . . F#1:1:42 . . A-1:1:46 . . B-1:1:54 . . F#1:1:38 . E-1:1:34 .',
+                    'B-4:2:50 . . D-5:2:40 . F#5:2:56 . E-5:2:44 . D-5:2:42 . B-4:2:38 . B-4:2:48',
+                    'B-3:3:14 . . F#3:3:10 . . B-3:3:12 . . D-4:3:16 . . F#3:3:08 . B-3:3:10 .',
+                    'B-1:5:52 . . A-4:4:12 . B-1:5:42 . A-4:4:08 . B-1:5:48 . A-4:4:10 . . . .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    // Pluto — C-minor stab: three hits then silence, urgent return.
+    pluto() {
+        return this._track(
+            { title: 'Kuiper Rush', planet: 'pluto', notes: 'stab C-Eb-G · gap · snap F-C' },
+            144,
+            [
+                this._pat(0,
+                    'C-2:1:60 C-2:1:40 . C-2:1:54 . G-1:1:46 . . C-2:1:58 C-2:1:38 . G-1:1:44 . . .',
+                    'C-4:2:52 Eb4:2:40 G-4:2:56 . F-4:2:44 . . C-4:2:48 Bb3:2:36 C-4:2:50 . . .',
+                    'G-3:3:16 C-4:3:10 . . C-4:3:12 . . . G-3:3:14 . C-4:3:10 . . . .',
+                    'C-2:5:70 A-4:4:18 C-2:5:44 . C-2:5:62 A-4:4:14 . . C-2:5:68 A-4:4:16 C-2:5:40 . C-2:5:54 .'
+                ),
+                this._pat(1,
+                    'Ab1:1:54 Ab1:1:36 . Ab1:1:50 . Eb1:1:40 . . Bb1:1:54 Bb1:1:34 . F-2:1:46 . . .',
+                    'Ab3:2:46 C-4:2:34 Eb4:2:50 . D-4:2:38 . . Bb3:2:44 Ab3:2:30 Bb3:2:42 . . .',
+                    'Eb3:3:14 Ab3:3:08 . . Ab3:3:10 . . . F-3:3:12 . Bb3:3:08 . . . .',
+                    'Ab1:5:64 A-4:4:14 Ab1:5:40 . Bb1:5:60 A-4:4:12 . . Bb1:5:64 A-4:4:14 Bb1:5:38 . Bb1:5:50 .'
+                ),
+                this._pat(2,
+                    'C-2:1:64 . C-2:1:44 . Eb2:1:54 . G-1:1:48 . C-2:1:64 . C-2:1:42 . Bb1:1:54 . G-1:1:40',
+                    'C-5:2:56 . Eb5:2:44 . G-5:2:60 . F-5:2:48 . Eb5:2:46 . C-5:2:40 . Bb4:2:42 . C-5:2:52',
+                    'C-4:3:18 . G-3:3:12 . . C-4:3:16 . Eb4:3:20 . G-3:3:10 . C-4:3:14 . G-3:3:08',
+                    'C-2:5:76 A-4:4:20 . A-4:4:12 C-2:5:58 A-4:4:14 A-4:4:08 . C-2:5:72 A-4:4:18 . A-4:4:10 C-2:5:52 A-4:4:12 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    /**
+     * Title fanfare = planet head motif once, then cadence. Same DNA as combat.
+     */
+    intro(planetId) {
+        const id = this.normalizePlanetKey
+            ? this.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        if (this.isHandcraftedPlanet && !this.isHandcraftedPlanet(id)) {
+            return this.remixPlanet(id, { intro: true });
+        }
+        // Combat track → take P0 lead motif as fanfare body.
+        const combat = typeof this[id] === 'function' ? this[id]() : this.mars();
+        const p0 = (combat.patterns && combat.patterns[0]) || { channels: [] };
+        const ch = p0.channels || [];
+        const bass = ch[0] || 'A-2:1:56 . A-2:1:40 . A-2:1:56 . E-2:1:44 . A-2:1:56 . A-2:1:40 . E-2:1:48 . E-2:1:36';
+        const lead = ch[1] || 'A-4:2:48 . C-5:2:40 . E-5:2:52 . D-5:2:44 . C-5:2:46 . A-4:2:38 . G-4:2:40 . A-4:2:44';
+        const arp = ch[2] || 'E-4:3:16 . . . A-4:3:14 . . . E-4:3:16 . . . A-4:3:14 . . .';
+        const drums = ch[3] || 'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .';
+        // Cadence: hold tonic, resolve lead to root.
+        const cadenceBass = {
+            mars: 'A-2:1:60 . . A-2:1:44 . E-2:1:48 . . A-2:1:52 . . E-2:1:40 . A-2:1:56 . OFF .',
+            jupiter: 'E-2:1:58 . . E-2:1:42 . B-1:1:46 . . E-2:1:50 . . B-1:1:38 . E-2:1:54 . OFF .',
+            saturn: 'D-2:1:60 . . D-2:1:44 . A-1:1:48 . . D-2:1:52 . . A-1:1:40 . D-2:1:56 . OFF .',
+            neptune: 'B-1:1:54 . . B-1:1:40 . F#1:1:44 . . B-1:1:48 . . F#1:1:36 . B-1:1:52 . OFF .',
+            pluto: 'C-2:1:60 . . C-2:1:44 . G-1:1:48 . . C-2:1:52 . . G-1:1:40 . C-2:1:56 . OFF .'
+        };
+        const cadenceLead = {
+            mars: 'A-5:2:52 . . E-5:2:44 . C-5:2:46 . . A-4:2:50 . . E-4:2:40 . A-4:2:54 . OFF .',
+            jupiter: 'E-5:2:50 . . B-4:2:42 . G-4:2:44 . . E-4:2:48 . . B-3:2:38 . E-4:2:52 . OFF .',
+            saturn: 'D-5:2:52 . . A-4:2:44 . F-4:2:46 . . D-4:2:50 . . A-3:2:40 . D-4:2:54 . OFF .',
+            neptune: 'B-4:2:48 . . F#4:2:40 . D-4:2:42 . . B-3:2:46 . . F#3:2:36 . B-3:2:50 . OFF .',
+            pluto: 'C-5:2:52 . . G-4:2:44 . Eb4:2:46 . . C-4:2:50 . . G-3:2:40 . C-4:2:54 . OFF .'
+        };
+        const cBass = cadenceBass[id] || cadenceBass.mars;
+        const cLead = cadenceLead[id] || cadenceLead.mars;
+        return this._track(
+            { title: 'Title · ' + id, planet: id, notes: 'fanfare = combat motif + cadence' },
+            Math.min(156, (combat.bpm || 132) + 12),
+            [
+                this._pat(0, bass, lead, arp, drums),
+                this._pat(1, cBass, cLead, arp, drums)
+            ],
+            [0, 1],
+            false
+        );
+    },
+
+    /**
+     * Start Screen / Planet Select hub — C-major call/answer (type `screen`).
+     * Call C-E-G | answer A-G-E | home C. Bright dock motif, not a combat hook.
+     */
+    menu() {
+        return this._track(
+            { title: 'Start Screen', planet: 'menu', role: 'screen', notes: 'call C-E-G · answer A-G-E · home C' },
+            118,
+            [
+                this._pat(0,
+                    'C-2:1:54 . C-2:1:38 . C-2:1:52 . G-1:1:42 . C-2:1:54 . C-2:1:36 . G-1:1:46 . G-1:1:34',
+                    'C-5:2:50 . E-5:2:38 . G-5:2:56 . E-5:2:44 . A-4:2:42 . G-4:2:36 . E-4:2:40 . C-5:2:48',
+                    'G-4:3:14 . . . C-5:3:12 . . . G-4:3:14 . . . E-4:3:10 . . .',
+                    'C-2:5:60 . A-4:4:12 . C-2:5:46 . A-4:4:08 C-2:5:58 . A-4:4:12 . C-2:5:42 A-4:4:06 . .'
+                ),
+                this._pat(1,
+                    'A-1:1:50 . A-1:1:34 . A-1:1:48 . E-1:1:40 . A-1:1:50 . A-1:1:34 . E-1:1:42 . E-1:1:32',
+                    'A-4:2:46 . C-5:2:34 . E-5:2:52 . C-5:2:40 . G-4:2:38 . E-4:2:32 . D-4:2:34 . A-4:2:44',
+                    'E-4:3:12 . . . A-4:3:10 . . . E-4:3:12 . . . C-4:3:08 . . .',
+                    'A-1:5:56 . A-4:4:10 . A-1:5:42 . A-4:4:06 A-1:5:54 . A-4:4:10 . A-1:5:38 A-4:4:05 . .'
+                ),
+                this._pat(2,
+                    'C-2:1:58 . C-2:1:40 . E-2:1:50 . G-1:1:46 . C-2:1:58 . C-2:1:38 . G-2:1:52 . E-2:1:36',
+                    'C-6:2:54 . E-6:2:42 . G-6:2:58 . A-5:2:46 . G-5:2:44 . E-5:2:38 . C-5:2:40 . C-5:2:50',
+                    'C-5:3:16 . G-4:3:10 . . C-5:3:14 . E-5:3:18 . G-4:3:10 . C-5:3:12 . G-4:3:08',
+                    'C-2:5:64 A-4:4:14 . A-4:4:08 C-2:5:50 . A-4:4:10 . C-2:5:60 A-4:4:12 . A-4:4:06 C-2:5:44 A-4:4:08 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 0]
+        );
+    },
+
+    /**
+     * Global title-screen fanfare — one-shot cinematic open (type `screen`),
+     * slower and broader than the Start Screen hub loop (`menu`).
+     */
+    titleIntro() {
+        return this._track(
+            { title: 'Title Fanfare', planet: 'menu', role: 'screen', notes: 'cinematic swell · held call · resolve home' },
+            108,
+            [
+                this._pat(0,
+                    'C-2:1:40 . . . . . G-1:1:36 . . . . . C-2:1:44 . . .',
+                    'C-4:2:36 . . E-4:2:40 . . G-4:2:46 . . C-5:2:52 . . . E-5:2:48 .',
+                    '. . . . E-4:3:10 . . . G-4:3:12 . . . C-5:3:14 . . .',
+                    '. . . . . . . . . . . . . . . .'
+                ),
+                this._pat(1,
+                    'C-2:1:58 . . C-2:1:42 . G-2:1:50 . . C-3:1:54 . . G-2:1:46 . C-2:1:60 . . .',
+                    'G-5:2:54 . E-5:2:48 . C-5:2:52 . G-4:2:44 . C-6:2:62 . G-5:2:50 . E-5:2:46 . C-5:2:56',
+                    'C-5:3:16 . . G-4:3:12 . . E-4:3:14 . . C-5:3:18 . . G-4:3:12 . . .',
+                    '. . A-4:4:14 . . . A-4:4:16 . . . A-4:4:18 . . A-4:4:12 . .'
+                ),
+                this._pat(2,
+                    'C-2:1:64 . . . G-1:1:48 . . C-2:1:70 . . . . G-1:1:40 . C-2:1:72 . OFF .',
+                    'C-6:2:66 . . G-5:2:52 . E-5:2:48 . C-5:2:58 . . G-4:2:44 . C-4:2:64 . OFF .',
+                    'G-4:3:18 . E-4:3:14 . C-4:3:16 . . . . . . . . . . .',
+                    'C-2:5:70 . A-4:4:18 . . C-2:5:56 A-4:4:14 . . C-2:5:62 . . . . OFF .'
+                )
+            ],
+            [0, 1, 2],
+            false
+        );
+    },
+
+    /** Lead-motif pitch names from planet combat P0 (Hauptmelodie DNA). */
+    _motifPitches(planetId, galaxyId) {
+        const id = this.normalizePlanetKey(planetId);
+        let combat;
+        if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id) && typeof this[id] === 'function') {
+            combat = this[id]();
+        } else if (typeof this.forPlanet === 'function') {
+            combat = this.forPlanet(id, galaxyId);
+        } else {
+            combat = this.mars();
+        }
+        const lead = (((combat.patterns || [])[0] || {}).channels || [])[1] || '';
+        const pitches = [];
+        String(lead).trim().split(/\s+/).forEach((tok) => {
+            if (!tok || tok === '.') return;
+            const cell = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.parseCell)
+                ? VFTrackerParse.parseCell(tok) : null;
+            if (cell && cell.note && cell.note !== 'OFF') pitches.push(cell.note);
+        });
+        return pitches.length ? pitches : ['A-4', 'C-5', 'E-5', 'D-5'];
+    },
+
+    _rootBass(note) {
+        if (!note || typeof VFTrackerParse === 'undefined') return 'A-2';
+        const midi = VFTrackerParse.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return 'A-2';
+        return VFTrackerParse.midiToNote(midi - 24) || 'A-2';
+    },
+
+    _shiftNote(note, semi) {
+        if (!note || typeof VFTrackerParse === 'undefined') return note;
+        const midi = VFTrackerParse.noteToMidi(note);
+        if (midi == null || midi === 'OFF') return note;
+        return VFTrackerParse.midiToNote(midi + (Number(semi) || 0)) || note;
+    },
+
+    /**
+     * Rebuild role arrangements from planet motif pitches — not a thin combat remix.
+     * map = ambient orbit · victory = call/answer fanfare · lose = descending fade ·
+     * shop = mid-tempo bazaar groove.
+     */
+    _roleFromPlanet(planetId, role, galaxyId) {
+        const id = this.normalizePlanetKey(planetId);
+        const m = this._motifPitches(id, galaxyId);
+        // Procedural planets can share donor+key (40 remix slots) — salt the
+        // role arrangement so map/shop/victory hops never replay identical notes.
+        const salt = (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id))
+            ? 0
+            : (((this._hash32(String(galaxyId || '') + '|' + id + '|' + role) % 11) - 5) || 0);
+        const sh = (n) => (salt ? this._shiftNote(n, salt) : n);
+        const a = sh(m[0]); const b = sh(m[1] || m[0]); const c = sh(m[2] || m[0]);
+        const d = sh(m[3] || m[1] || m[0]); const e = sh(m[4] || m[2] || m[0]);
+        const f = sh(m[5] || m[1] || m[0]); const g = sh(m[6] || m[3] || m[0]);
+        const h = sh(m[7] || m[0]);
+        const root = this._rootBass(a);
+        const fifth = this._shiftNote(root, 7);
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        let patterns;
+        let bpm;
+        let order;
+        if (role === 'map') {
+            // Ambient: held bass, lead only on bar anchors, almost no kit.
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 48), '.', '.', '.', tok(root, 1, 36), '.', '.', '.',
+                        tok(fifth, 1, 42), '.', '.', '.', tok(root, 1, 32), '.', '.', '.'].join(' '),
+                    [tok(a, 2, 36), '.', '.', '.', '.', '.', '.', '.',
+                        tok(c, 2, 30), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', '.', '.', '.', '.', '.', '.',
+                        tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', tok('A-4', 4, 8), '.', '.', '.', '.', '.',
+                        '.', '.', tok('A-4', 4, 6), '.', '.', '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 44), '.', '.', '.', tok(root, 1, 34), '.', '.', '.',
+                        tok(this._shiftNote(root, 5) || fifth, 1, 40), '.', '.', '.', tok(root, 1, 30), '.', '.', '.'].join(' '),
+                    [tok(e, 2, 32), '.', '.', '.', '.', '.', '.', '.',
+                        tok(g, 2, 28), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', '.',
+                        '.', '.', '.', '.', tok(this._shiftNote(a, 12) || a, 3, 8), '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', '.', '.', tok('A-4', 4, 6), '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 96;
+            order = [0, 0, 1, 0, 1, 0, 0, 1];
+        } else if (role === 'victory') {
+            // Fanfare: rising call / answer, dense kick, octave climax.
+            const up = (n) => this._shiftNote(n, 12) || n;
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 64), '.', tok(root, 1, 48), '.', tok(fifth, 1, 56), '.', tok(root, 1, 44), '.',
+                        tok(root, 1, 62), '.', tok(fifth, 1, 50), '.', tok(root, 1, 58), '.', tok(fifth, 1, 40), '.'].join(' '),
+                    [tok(a, 2, 54), tok(b, 2, 46), tok(c, 2, 58), tok(d, 2, 50),
+                        '.', tok(a, 2, 42), '.', '.',
+                        tok(c, 2, 56), tok(d, 2, 48), tok(e, 2, 60), tok(f, 2, 52),
+                        '.', tok(c, 2, 44), '.', '.'].join(' '),
+                    [tok(c, 3, 22), '.', tok(a, 3, 16), '.', tok(e, 3, 20), '.', tok(c, 3, 14), '.',
+                        tok(c, 3, 22), '.', tok(a, 3, 16), '.', tok(e, 3, 20), '.', tok(c, 3, 14), '.'].join(' '),
+                    [tok(root, 5, 72), '.', tok('A-4', 4, 24), '.', tok(root, 5, 58), '.', tok('A-4', 4, 18), '.',
+                        tok(root, 5, 72), '.', tok('A-4', 4, 24), '.', tok(root, 5, 54), tok('A-4', 4, 16), '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 60), '.', tok(root, 1, 52), '.', tok(fifth, 1, 58), '.', tok(this._shiftNote(root, 12) || root, 1, 50), '.',
+                        tok(root, 1, 64), '.', tok(fifth, 1, 54), '.', tok(root, 1, 60), '.', 'OFF', '.'].join(' '),
+                    [tok(up(a), 2, 58), tok(up(b), 2, 50), tok(up(c), 2, 62), tok(up(d), 2, 54),
+                        tok(up(e), 2, 60), tok(up(f), 2, 52), tok(up(g), 2, 56), tok(up(h), 2, 48),
+                        tok(up(c), 2, 64), '.', tok(up(a), 2, 54), '.', tok(up(a), 2, 58), '.', 'OFF', '.'].join(' '),
+                    [tok(up(c), 3, 24), tok(up(a), 3, 16), tok(up(e), 3, 22), tok(up(c), 3, 14),
+                        tok(up(c), 3, 24), tok(up(a), 3, 16), tok(up(e), 3, 22), tok(up(c), 3, 14),
+                        tok(up(a), 3, 26), '.', tok(up(c), 3, 18), '.', tok(up(a), 3, 20), '.', '.', '.'].join(' '),
+                    [tok(root, 5, 76), tok('A-4', 4, 22), tok(root, 5, 50), tok('A-4', 4, 16),
+                        tok(root, 5, 70), tok('A-4', 4, 20), tok(root, 5, 48), tok('A-4', 4, 14),
+                        tok(root, 5, 78), '.', tok('A-4', 4, 26), '.', tok(root, 5, 60), tok('A-4', 4, 18), '.', '.'].join(' ')
+                )
+            ];
+            bpm = 138;
+            order = [0, 0, 1, 0, 1, 0];
+        } else if (role === 'shop') {
+            // Bazaar: mid-tempo swing, sparse kit, motif as trade call.
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 46), '.', tok(root, 1, 28), '.', tok(fifth, 1, 40), '.', tok(root, 1, 24), '.',
+                        tok(root, 1, 44), '.', tok(fifth, 1, 30), '.', tok(root, 1, 36), '.', tok(fifth, 1, 22), '.'].join(' '),
+                    [tok(a, 2, 36), '.', '.', tok(b, 2, 28), '.', tok(c, 2, 34), '.', '.',
+                        tok(d, 2, 32), '.', '.', tok(c, 2, 26), '.', tok(a, 2, 30), '.', '.'].join(' '),
+                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', tok(c, 3, 8), '.', '.', tok(a, 3, 10), '.', '.',
+                        tok(e, 3, 12), '.', tok(c, 3, 8), '.', '.', tok(a, 3, 9), '.', '.'].join(' '),
+                    [tok(root, 5, 42), '.', tok('A-4', 4, 10), '.', tok(root, 5, 28), '.', '.', tok('A-4', 4, 8),
+                        tok(root, 5, 40), '.', tok('A-4', 4, 10), '.', tok(root, 5, 26), '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(fifth, 1, 42), '.', tok(root, 1, 26), '.', tok(fifth, 1, 38), '.', tok(this._shiftNote(root, 5) || fifth, 1, 24), '.',
+                        tok(root, 1, 44), '.', tok(fifth, 1, 28), '.', tok(root, 1, 34), '.', 'OFF', '.'].join(' '),
+                    [tok(e, 2, 34), '.', tok(f, 2, 26), '.', tok(g, 2, 32), '.', tok(h, 2, 24), '.',
+                        tok(c, 2, 36), '.', tok(a, 2, 28), '.', tok(b, 2, 30), '.', '.', '.'].join(' '),
+                    ['.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', tok(c, 3, 8), '.', '.', tok(a, 3, 9),
+                        '.', tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', tok(a, 3, 8), '.', '.', '.'].join(' '),
+                    ['.', tok(root, 5, 30), '.', tok('A-4', 4, 8), '.', tok(root, 5, 36), '.', tok('A-4', 4, 6),
+                        '.', tok(root, 5, 28), '.', '.', tok('A-4', 4, 8), '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 108;
+            order = [0, 0, 1, 0, 1, 0, 0, 1];
+        } else {
+            // Lose: descending, half-time, hollow kit.
+            const down = (n, s) => this._shiftNote(n, s) || n;
+            patterns = [
+                this._pat(0,
+                    [tok(root, 1, 44), '.', '.', '.', tok(root, 1, 30), '.', '.', '.',
+                        tok(down(root, -2), 1, 36), '.', '.', '.', tok(down(root, -5), 1, 26), '.', '.', '.'].join(' '),
+                    [tok(a, 2, 34), '.', '.', tok(down(a, -2), 2, 28), '.', '.', tok(down(a, -5), 2, 24), '.',
+                        '.', tok(down(a, -7), 2, 20), '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(down(c, -12), 3, 12), '.', '.', '.', tok(down(a, -12), 3, 8), '.', '.', '.',
+                        tok(down(e, -12), 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(root, 5, 40), '.', '.', tok('A-4', 4, 8), '.', '.', '.', '.',
+                        tok(root, 5, 30), '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                ),
+                this._pat(1,
+                    [tok(down(root, -5), 1, 38), '.', '.', '.', tok(down(root, -7), 1, 26), '.', '.', '.',
+                        tok(down(root, -12), 1, 32), '.', '.', '.', tok(down(root, -12), 1, 20), '.', 'OFF', '.'].join(' '),
+                    [tok(down(c, -5), 2, 28), '.', '.', '.', tok(down(a, -7), 2, 22), '.', '.', '.',
+                        tok(down(a, -12), 2, 18), '.', '.', '.', '.', '.', 'OFF', '.'].join(' '),
+                    ['.', '.', tok(down(a, -12), 3, 8), '.', '.', '.', '.', '.',
+                        '.', '.', tok(down(e, -12), 3, 6), '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', tok(root, 5, 28), '.', tok('A-4', 4, 6), '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                )
+            ];
+            bpm = 78;
+            order = [0, 1, 0, 0, 1, 0];
+        }
+        const titles = {
+            map: 'Map · ' + id,
+            victory: 'Victory · ' + id,
+            lose: 'Defeat · ' + id,
+            shop: 'Shop · ' + id
+        };
+        const notes = {
+            map: 'map role = ambient orbit from motif',
+            victory: 'victory role = fanfare from motif',
+            lose: 'lose role = descending fade from motif',
+            shop: 'shop role = bazaar groove from motif'
+        };
+        return this._track(
+            {
+                title: titles[role] || (id + ' · ' + role),
+                planet: id,
+                role: role,
+                notes: notes[role] || role
+            },
+            bpm,
+            patterns,
+            order
+        );
+    },
+
+    /** Galaxy map BGM — per-planet Hauptmelodie, soft arrangement. */
+    map(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'map', galaxyId);
+    },
+
+    /** Pure space / between-planets map ambience — no planet motif, galaxy-toned drone. */
+    mapVoid(galaxyId) {
+        const faction = (typeof VFTrackerFactionCompose !== 'undefined' && galaxyId
+            && typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxy
+            && planetConfigManager.getGalaxy(galaxyId))
+            ? planetConfigManager.getGalaxy(galaxyId).faction
+            : '';
+        const roots = {
+            terran: 'G-1', kronax: 'E-1', voidborn: 'B-1', pirate: 'D-1', machine: 'C-2'
+        };
+        const root = roots[faction] || 'A-1';
+        const fifth = this._shiftNote(root, 7) || root;
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        return this._track(
+            { title: 'Deep Space' + (faction ? ' · ' + faction : ''), planet: '', role: 'map-void',
+                notes: 'pure space drone, no planet motif' },
+            84,
+            [
+                this._pat(0,
+                    [tok(root, 1, 30), '.', '.', '.', '.', '.', '.', '.',
+                        tok(fifth, 1, 24), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    ['.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(this._shiftNote(root, 12) || root, 3, 8), '.', '.', '.', '.', '.', '.', '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    this._emptyRow()
+                )
+            ],
+            [0, 0, 0, 0]
+        );
+    },
+
+    /** Victory screen — per-planet Hauptmelodie, lifted. */
+    victory(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'victory', galaxyId);
+    },
+
+    /** Lose screen — per-planet Hauptmelodie, sparse. */
+    lose(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'lose', galaxyId);
+    },
+
+    /** Resolve planet + role → raw track (ingame = combat loop). */
+    forRole(planetId, role, galaxyId) {
+        const r = String(role || 'ingame').toLowerCase();
+        if (r === 'map') return this.map(planetId, galaxyId);
+        if (r === 'victory' || r === 'win') return this.victory(planetId, galaxyId);
+        if (r === 'lose' || r === 'defeat') return this.lose(planetId, galaxyId);
+        if (r === 'shop' || r === 'trade' || r === 'trader') return this.shop(planetId, galaxyId);
+        if (r === 'corridor' || r === 'tunnel') return this.corridor(planetId, galaxyId);
+        return this.forPlanet(planetId, galaxyId);
+    },
+
+    /** Victory / docked trader — per-planet bazaar Hauptmelodie. */
+    shop(planetId, galaxyId) {
+        return this._roleFromPlanet(planetId || 'mars', 'shop', galaxyId);
+    },
+
+    /**
+     * Schlauchlevel / corridor stage — tense, claustrophobic variant of the
+     * planet motif: locked single-note pulse, no climax, tight dynamic range.
+     * Distinct mood from open combat (`ingame`) and boss (`boss`).
+     */
+    corridor(planetId, galaxyId) {
+        const id = this.normalizePlanetKey(planetId || 'mars');
+        const m = this._motifPitches(id, galaxyId);
+        const a = m[0];
+        const root = this._rootBass(a);
+        const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
+        const patterns = [
+            this._pat(0,
+                [tok(root, 1, 40), '.', tok(root, 1, 40), '.', tok(root, 1, 32), '.', tok(root, 1, 40), '.',
+                    tok(root, 1, 40), '.', tok(root, 1, 32), '.', tok(root, 1, 40), '.', tok(root, 1, 28), '.'].join(' '),
+                [tok(a, 2, 26), '.', '.', '.', '.', '.', tok(a, 2, 20), '.',
+                    '.', '.', '.', '.', '.', '.', tok(a, 2, 24), '.'].join(' '),
+                this._emptyRow(),
+                [tok(root, 5, 36), '.', '.', tok('A-4', 4, 8), '.', '.', tok(root, 5, 30), '.',
+                    '.', '.', tok('A-4', 4, 6), '.', '.', '.', tok(root, 5, 26), '.'].join(' ')
+            )
+        ];
+        return this._track(
+            { title: 'Corridor · ' + id, planet: id, role: 'corridor', notes: 'Schlauchlevel: locked pulse, no climax' },
+            118,
+            patterns,
+            [0, 0, 0, 0]
+        );
+    },
+
+    /**
+     * Boss Hauptmelodien — own head DNA, not a combat remix.
+     * Heavier kit, darker intervals, pressure P2. Planet colour stays via key/feel.
+     */
+
+    // Mars boss — chromatic menace (Ab→G→A) vs combat's even march.
+    'mars-boss'() {
+        return this._track(
+            { title: 'Dust Siege', planet: 'mars', role: 'boss', notes: 'boss Ab-G-A-E · chromatic threat' },
+            136,
+            [
+                this._pat(0,
+                    'A-1:1:68 . Ab1:1:52 . A-1:1:64 . E-1:1:50 . A-1:1:66 . G-1:1:48 . E-1:1:56 . Ab1:1:42',
+                    'A-4:2:56 Ab4:2:44 G-4:2:52 E-4:2:40 . A-4:2:54 G-4:2:42 Ab4:2:48 E-4:2:36',
+                    'E-3:3:22 . Ab3:3:14 . E-3:3:18 . A-3:3:12 . E-3:3:20 . G-3:3:12 . Ab3:3:16 . E-3:3:10',
+                    'A-1:5:78 A-4:4:24 A-1:5:52 A-4:4:16 A-1:5:72 A-4:4:22 A-4:4:12 . A-1:5:76 A-4:4:24 A-1:5:50 A-4:4:14 A-1:5:68 A-4:4:18 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'F-1:1:62 . F-1:1:46 . Ab1:1:58 . C-2:1:44 . G-1:1:60 . E-1:1:42 . G-1:1:54 . Bb1:1:38',
+                    'F-4:2:50 Ab4:2:38 C-5:2:56 Bb4:2:42 . F-4:2:48 E-4:2:36 G-4:2:44 Bb4:2:34',
+                    'C-3:3:18 . F-3:3:12 . Ab3:3:16 . C-4:3:10 . D-3:3:16 . G-3:3:10 . Bb3:3:14 . D-4:3:08',
+                    'F-1:5:70 A-4:4:20 F-1:5:46 A-4:4:12 G-1:5:68 A-4:4:18 A-4:4:10 . F-1:5:72 A-4:4:20 G-1:5:44 A-4:4:12 G-1:5:64 A-4:4:16 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'A-1:1:74 A-1:1:50 Ab1:1:58 E-1:1:54 A-1:1:72 . G-1:1:60 . E-1:1:48 A-1:1:66 Ab1:1:46 E-1:1:56',
+                    'A-5:2:64 Ab5:2:50 G-5:2:58 E-5:2:46 A-5:2:62 . G-5:2:52 Ab5:2:56 E-5:2:44 A-5:2:60 G-5:2:48',
+                    'A-3:3:26 E-3:3:16 Ab3:3:22 E-3:3:14 A-3:3:24 . G-3:3:18 E-3:3:12 A-3:3:20 Ab3:3:14 E-3:3:10',
+                    'A-1:5:84 A-4:4:28 A-1:5:56 A-4:4:18 A-1:5:78 A-4:4:24 A-4:4:14 A-4:4:08 A-1:5:82 A-4:4:26 A-1:5:54 A-4:4:16 A-1:5:74 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Jupiter boss — crushing on-beat hits vs combat's offbeat syncop.
+    'jupiter-boss'() {
+        return this._track(
+            { title: 'Giant Impact', planet: 'jupiter', role: 'boss', notes: 'boss E-Bb-B-F# · crushing hits' },
+            124,
+            [
+                this._pat(0,
+                    'E-1:1:70 . E-1:1:48 . Bb1:1:62 . B-1:1:50 . E-1:1:68 . F#1:1:44 . B-1:1:58 . Bb1:1:40',
+                    'E-4:2:58 . Bb4:2:46 . B-4:2:60 . F#4:2:48 . E-4:2:54 . D-4:2:40 . B-3:2:46 . Bb3:2:36',
+                    'B-2:3:24 . E-3:3:14 . Bb2:3:18 . B-2:3:12 . F#3:3:20 . B-2:3:12 . E-3:3:16 . Bb2:3:10',
+                    'E-1:5:80 . A-4:4:22 E-1:5:54 . A-4:4:14 E-1:5:74 . A-4:4:20 A-4:4:10 E-1:5:78 . A-4:4:22 E-1:5:50 . A-4:4:14 E-1:5:70 . A-4:4:16'
+                ),
+                this._pat(1,
+                    'C-2:1:64 . G-1:1:46 . C-2:1:58 . Eb2:1:44 . D-2:1:62 . A-1:1:42 . B-1:1:54 . F#1:1:38',
+                    'C-5:2:52 . Eb5:2:40 . G-5:2:56 . F-5:2:44 . D-5:2:50 . C-5:2:38 . B-4:2:44 . A-4:2:34',
+                    'G-3:3:20 . C-4:3:12 . Eb3:3:16 . G-3:3:10 . A-3:3:18 . D-4:3:10 . F#3:3:14 . B-3:3:08',
+                    'C-2:5:72 . A-4:4:18 C-2:5:48 . A-4:4:12 D-2:5:70 . A-4:4:18 A-4:4:08 C-2:5:74 . A-4:4:18 D-2:5:46 . A-4:4:12 D-2:5:66 . A-4:4:14'
+                ),
+                this._pat(2,
+                    'E-1:1:76 E-1:1:52 Bb1:1:60 B-1:1:56 E-1:1:74 . F#1:1:58 . B-1:1:50 E-1:1:70 Bb1:1:48 B-1:1:54',
+                    'E-5:2:66 Bb5:2:52 B-5:2:70 F#5:2:54 E-5:2:62 . D-5:2:50 Bb4:2:56 B-4:2:48 E-5:2:64 F#5:2:52',
+                    'E-3:3:28 B-2:3:16 Bb2:3:22 B-2:3:14 E-3:3:26 . F#3:3:18 B-2:3:12 E-3:3:22 Bb2:3:14 B-2:3:10',
+                    'E-1:5:86 A-4:4:28 E-1:5:58 A-4:4:18 E-1:5:80 A-4:4:24 A-4:4:14 A-4:4:08 E-1:5:84 A-4:4:26 E-1:5:56 A-4:4:16 E-1:5:76 A-4:4:20 A-4:4:12 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Saturn boss — broken-ring chase: dotted menace vs combat gallop.
+    'saturn-boss'() {
+        return this._track(
+            { title: 'Ring Breaker', planet: 'saturn', role: 'boss', notes: 'boss D-C#-A-G · dotted chase' },
+            150,
+            [
+                this._pat(0,
+                    'D-1:1:70 . D-1:1:48 C#2:1:56 . A-1:1:62 . D-1:1:68 G-1:1:44 . D-1:1:60 . A-1:1:50 C#2:1:40 .',
+                    'D-4:2:56 . C#5:2:44 A-4:2:58 . G-4:2:48 . D-4:2:52 F-4:2:38 . A-4:2:50 . G-4:2:42 C#4:2:34 .',
+                    'A-2:3:22 . D-3:3:14 C#3:3:18 . A-2:3:16 . G-2:3:12 D-3:3:14 . A-2:3:18 . C#3:3:12 G-2:3:08 .',
+                    'D-1:5:82 A-4:4:26 . A-4:4:14 D-1:5:70 A-4:4:20 . A-4:4:10 D-1:5:78 A-4:4:24 . A-4:4:14 D-1:5:66 A-4:4:18 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'G-1:1:64 . Bb1:1:46 F-1:1:54 . C-2:1:58 . A-1:1:50 E-2:1:44 . G-1:1:60 . Bb1:1:42 F-1:1:36 .',
+                    'G-3:2:50 . Bb3:2:38 D-4:2:54 . C-4:2:44 . A-3:2:46 E-4:2:36 . G-3:2:48 . Bb3:2:34 D-4:2:40 .',
+                    'D-2:3:18 . G-2:3:10 Bb2:3:14 . D-3:3:16 . E-2:3:12 A-2:3:10 . D-2:3:16 . G-2:3:10 Bb2:3:08 .',
+                    'G-1:5:74 A-4:4:22 . A-4:4:12 A-1:5:66 A-4:4:18 . A-4:4:08 G-1:5:72 A-4:4:20 . A-4:4:12 A-1:5:62 A-4:4:16 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'D-1:1:78 D-1:1:54 C#2:1:62 A-1:1:58 D-1:1:76 . G-1:1:64 . A-1:1:52 D-1:1:72 C#2:1:48 A-1:1:56',
+                    'D-5:2:64 C#6:2:50 A-5:2:68 G-5:2:52 D-5:2:60 . F-5:2:54 A-5:2:58 G-5:2:46 D-5:2:62 C#5:2:48',
+                    'D-3:3:28 A-2:3:16 C#3:3:22 A-2:3:14 D-3:3:26 . G-2:3:18 A-2:3:12 D-3:3:22 C#3:3:14 A-2:3:10',
+                    'D-1:5:88 A-4:4:30 D-1:5:60 A-4:4:20 D-1:5:82 A-4:4:26 A-4:4:16 A-4:4:10 D-1:5:86 A-4:4:28 D-1:5:58 A-4:4:18 D-1:5:78 A-4:4:22 A-4:4:14 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    // Neptune boss — dread pulse under ice: rising minor vs combat half-time space.
+    'neptune-boss'() {
+        return this._track(
+            { title: 'Ice Tyrant', planet: 'neptune', role: 'boss', notes: 'boss B-C-D#-F# · dread rise' },
+            112,
+            [
+                this._pat(0,
+                    'B-1:1:60 . . B-1:1:42 . C-2:1:52 . . D#2:1:46 . . F#1:1:50 . B-1:1:44 . .',
+                    'B-3:2:50 . C-4:2:40 . D#4:2:54 . F#4:2:44 . B-4:2:56 . A-4:2:42 . F#4:2:46 . D#4:2:36',
+                    'F#2:3:16 . . B-2:3:12 . . C-3:3:14 . . D#3:3:18 . . F#2:3:10 . B-2:3:12 .',
+                    'B-1:5:64 . . A-4:4:14 . B-1:5:50 . A-4:4:10 . B-1:5:60 . A-4:4:14 . B-1:5:46 A-4:4:08 . .'
+                ),
+                this._pat(1,
+                    'G-1:1:54 . . A-1:1:38 . Bb1:1:48 . . C-2:1:42 . . D-1:1:46 . G-1:1:40 . .',
+                    'G-3:2:44 . Bb3:2:34 . C-4:2:48 . D-4:2:38 . Eb4:2:50 . D-4:2:36 . C-4:2:40 . Bb3:2:30',
+                    'D-2:3:14 . . G-2:3:10 . . Bb2:3:12 . . C-3:3:16 . . D-2:3:08 . G-2:3:10 .',
+                    'G-1:5:56 . . A-4:4:12 . G-1:5:44 . A-4:4:08 . A-1:5:54 . A-4:4:12 . G-1:5:40 A-4:4:06 . .'
+                ),
+                this._pat(2,
+                    'B-1:1:66 . C-2:1:50 . D#2:1:58 . F#1:1:52 B-1:1:64 . A-1:1:48 . F#1:1:54 . D#2:1:46 B-1:1:58',
+                    'B-4:2:58 C-5:2:46 D#5:2:62 F#5:2:50 B-5:2:66 . A-5:2:52 F#5:2:56 D#5:2:44 B-4:2:54 C-5:2:42',
+                    'B-2:3:22 F#2:3:14 C-3:3:18 D#3:3:12 F#3:3:20 . B-2:3:16 F#2:3:10 B-2:3:18 C-3:3:12 D#2:3:08',
+                    'B-1:5:72 A-4:4:20 . A-4:4:12 B-1:5:58 A-4:4:16 . A-4:4:08 B-1:5:68 A-4:4:18 . A-4:4:12 B-1:5:54 A-4:4:14 A-4:4:08 .'
+                )
+            ],
+            [0, 0, 1, 0, 2, 0, 1, 2]
+        );
+    },
+
+    // Pluto boss — siege siren: descending alarm vs combat stab clusters.
+    'pluto-boss'() {
+        return this._track(
+            { title: 'Kuiper Siege', planet: 'pluto', role: 'boss', notes: 'boss C-Bb-Ab-G · descending alarm' },
+            158,
+            [
+                this._pat(0,
+                    'C-1:1:72 C-1:1:52 . Bb1:1:60 . Ab1:1:54 G-1:1:48 . C-1:1:70 C-1:1:50 . Bb1:1:56 . Ab1:1:44 . G-1:1:40',
+                    'C-5:2:60 Bb4:2:48 Ab4:2:54 G-4:2:42 . C-5:2:56 Bb4:2:44 Ab4:2:50 G-4:2:38 C-4:2:46 Bb3:2:34 Ab3:2:40 G-3:2:30',
+                    'G-2:3:24 C-3:3:16 Bb2:3:18 Ab2:3:12 G-2:3:20 . C-3:3:22 Bb2:3:14 Ab2:3:16 G-2:3:10 C-3:3:18 Bb2:3:12 Ab2:3:08',
+                    'C-1:5:84 A-4:4:28 C-1:5:56 A-4:4:18 C-1:5:76 A-4:4:22 A-4:4:12 . C-1:5:82 A-4:4:26 C-1:5:54 A-4:4:16 C-1:5:72 A-4:4:20 A-4:4:10 .'
+                ),
+                this._pat(1,
+                    'Ab1:1:66 Ab1:1:46 . Gb1:1:54 . Eb1:1:50 F-1:1:42 . Bb1:1:64 Bb1:1:46 . Ab1:1:52 . Gb1:1:40 . F-1:1:36',
+                    'Ab4:2:54 Gb4:2:42 Eb4:2:48 D-4:2:36 . Bb4:2:52 Ab4:2:40 Gb4:2:46 F-4:2:34 Eb4:2:42 D-4:2:30 C-4:2:36 Bb3:2:28',
+                    'Eb2:3:20 Ab2:3:14 Gb2:3:16 Eb2:3:10 F-2:3:18 . Bb2:3:20 Ab2:3:12 Gb2:3:14 F-2:3:08 Bb2:3:16 Ab2:3:10 Gb2:3:06',
+                    'Ab1:5:76 A-4:4:24 Ab1:5:50 A-4:4:14 Bb1:5:72 A-4:4:20 A-4:4:10 . Ab1:5:78 A-4:4:24 Bb1:5:48 A-4:4:14 Bb1:5:68 A-4:4:18 A-4:4:08 .'
+                ),
+                this._pat(2,
+                    'C-1:1:80 C-1:1:58 Bb1:1:66 Ab1:1:54 G-1:1:60 . C-1:1:76 Bb1:1:52 Ab1:1:58 G-1:1:46 C-1:1:72 Bb1:1:50 Ab1:1:56 G-1:1:44',
+                    'C-6:2:68 Bb5:2:54 Ab5:2:60 G-5:2:48 C-6:2:64 . Bb5:2:56 Ab5:2:58 G-5:2:46 C-5:2:54 Bb4:2:42 Ab4:2:48 G-4:2:38',
+                    'C-3:3:30 G-2:3:18 Bb2:3:24 Ab2:3:14 G-2:3:22 C-3:3:28 . Bb2:3:20 Ab2:3:16 G-2:3:12 C-3:3:24 Bb2:3:14 Ab2:3:10',
+                    'C-1:5:90 A-4:4:32 C-1:5:62 A-4:4:22 C-1:5:84 A-4:4:28 A-4:4:16 A-4:4:10 C-1:5:88 A-4:4:30 C-1:5:60 A-4:4:20 C-1:5:80 A-4:4:24 A-4:4:14 A-4:4:08'
+                )
+            ],
+            [0, 0, 1, 0, 2, 1, 0, 2]
+        );
+    },
+
+    /**
+     * Fallback boss for unknown / explored slugs: donor planet's boss Hauptmelodie
+     * (keyed remix), never a combat-loop pressure clone.
+     */
+    _bossFor(planetId, bpm, galaxyId) {
+        const id = this.normalizePlanetKey
+            ? this.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase();
+        if (this.isHandcraftedPlanet && this.isHandcraftedPlanet(id)) {
+            const key = id + '-boss';
+            if (typeof this[key] === 'function') {
+                const track = this[key]();
+                if (bpm && track) track.bpm = bpm;
+                return track;
+            }
+        }
+        const { primary } = this._donorPair ? this._donorPair(id, galaxyId) : { primary: 'mars' };
+        const key = primary + '-boss';
+        if (typeof this[key] === 'function' && typeof this.remixPlanet === 'function') {
+            // remixPlanet with boss:true pulls handcrafted boss DNA via _handcraftedRaw.
+            const remixed = this.remixPlanet(id, { boss: true, galaxyId: galaxyId });
+            if (bpm && remixed) remixed.bpm = bpm;
+            return remixed;
+        }
+        if (typeof this[key] === 'function') return this[key]();
+        return this['mars-boss']();
+    },
+
+    PLANETS: ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'],
+
+    /**
+     * Strip only stage suffixes (mars-2, pluto-boss). Keep explored / ambush ids.
+     */
+    normalizePlanetKey(planetId) {
+        const raw = String(planetId || 'mars').toLowerCase().trim();
+        if (!raw) return 'mars';
+        const m = /^(.*)-(?:\d+|boss|b)$/.exec(raw);
+        if (m && m[1]) return m[1];
+        return raw.split(':')[0];
+    },
+
+    isHandcraftedPlanet(planetId) {
+        const id = this.normalizePlanetKey(planetId);
+        return this.PLANETS.indexOf(id) !== -1;
+    },
+
+    _hash32(str) {
+        let h = 2166136261;
+        const s = String(str || '');
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    },
+
+    _rng(seed) {
+        let s = (seed >>> 0) || 1;
+        return () => {
+            s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+            return s / 4294967296;
+        };
+    },
+
+    /**
+     * Stable primary + secondary handcrafted donors for any planet slug.
+     * `galaxyId` (optional) folds into the hash seed so procedurally remixed
+     * planets sharing a galaxy tend toward a related donor/key/BPM family,
+     * while two planets with the same id in different galaxies diverge.
+     */
+    _donorPair(planetId, galaxyId) {
+        const id = this.normalizePlanetKey(planetId);
+        const seed = galaxyId ? id + ':' + String(galaxyId).toLowerCase() : id;
+        const h = this._hash32(seed);
+        const primary = this.PLANETS[h % this.PLANETS.length];
+        let secondary = this.PLANETS[(h >>> 8) % this.PLANETS.length];
+        if (secondary === primary) {
+            secondary = this.PLANETS[(h + 2) % this.PLANETS.length];
+        }
+        return { primary, secondary, hash: h };
+    },
+
+    _handcraftedRaw(planetKey, opts) {
+        const boss = !!(opts && opts.boss);
+        const intro = !!(opts && opts.intro);
+        if (intro) return this.intro(planetKey);
+        if (boss) {
+            const key = planetKey + '-boss';
+            if (typeof this[key] === 'function') return this[key]();
+            return this._bossFor(planetKey, 128);
+        }
+        if (typeof this[planetKey] === 'function') return this[planetKey]();
+        return this.mars();
+    },
+
+    _thinChannel(str, keepEvery) {
+        const step = Math.max(1, keepEvery | 0);
+        return String(str || '').trim().split(/\s+/).filter(Boolean)
+            .map((tok, i) => (i % step === 0 ? tok : '.')).join(' ');
+    },
+
+    _shiftOctaveChannel(str, octaves) {
+        if (!octaves || typeof VFTrackerParse === 'undefined') return str;
+        return VFTrackerParse.transposeChannelString(str, octaves * 12);
+    },
+
+    _emptyRow() {
+        return '. . . . . . . . . . . . . . . .';
+    },
+
+    _padRow(str) {
+        const empty = this._emptyRow();
+        if (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.padChannelString) {
+            return VFTrackerParse.padChannelString(str || empty, 16);
+        }
+        return String(str || empty);
+    },
+
+    /**
+     * Stretch a short P0/P1/P2 combat loop into a longer form so the hamster
+     * wheel (order like [0,0,1,0,2,1,0,0]) stops repeating every ~8 bars.
+     * Derives breakdown + drop packs from the same DNA — no new melodies.
+     */
+    _withLongForm(raw, opts) {
+        if (!raw || !raw.patterns || raw.patterns.length < 2) return raw;
+        if (raw.meta && raw.meta.longForm) return raw;
+        if (raw.patterns.length >= 5) return raw;
+
+        const compact = (typeof VFTrackerParse !== 'undefined' && VFTrackerParse.toCompact)
+            ? VFTrackerParse.toCompact(raw)
+            : raw;
+        const empty = this._emptyRow();
+        const pats = (compact.patterns || []).map((p, i) => ({
+            id: i,
+            channels: (p.channels || []).slice()
+        }));
+        while (pats.length < 3) {
+            const src = pats[0] || { channels: [empty, empty, empty, empty] };
+            pats.push({ id: pats.length, channels: src.channels.slice() });
+        }
+        const ch = (pi, ci) => this._padRow((pats[pi].channels && pats[pi].channels[ci]) || empty);
+
+        // P3 breakdown — bass stays, lead thinned, arp out, kit half-time.
+        pats.push({
+            id: 3,
+            channels: [
+                ch(0, 0),
+                this._padRow(this._thinChannel(ch(0, 1), 2)),
+                empty,
+                this._padRow(this._thinChannel(ch(0, 3), 2))
+            ]
+        });
+        // P4 drop / rebuild — bass+drums from P1, arp ticks, lead silent.
+        pats.push({
+            id: 4,
+            channels: [
+                ch(1, 0),
+                empty,
+                this._padRow(this._thinChannel(ch(1, 2), 2)),
+                ch(1, 3)
+            ]
+        });
+
+        const boss = !!(opts && opts.boss);
+        // ~24 slots before loop (~3× old 8-bar cycle).
+        const order = boss
+            ? [
+                0, 0, 1, 0,
+                1, 2, 1, 2,
+                0, 3, 4, 3,
+                0, 1, 2, 2,
+                4, 0, 1, 2,
+                0, 2, 1, 3
+            ]
+            : [
+                0, 0, 1, 0,
+                1, 1, 2, 1,
+                0, 3, 1, 3,
+                0, 1, 2, 2,
+                4, 0, 1, 2,
+                0, 1, 0, 3
+            ];
+
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: Object.assign({}, compact.meta || {}, {
+                longForm: true,
+                notes: ((compact.meta && compact.meta.notes) ? compact.meta.notes + ' · ' : '')
+                    + 'long form A/B/C/break/drop'
+            }),
+            bpm: compact.bpm,
+            rowsPerBeat: compact.rowsPerBeat || 1,
+            rowsPerPattern: compact.rowsPerPattern || 16,
+            channels: 4,
+            instruments: (compact.instruments || this._baseInstruments()).map((inst) => Object.assign({}, inst)),
+            patterns: pats,
+            order: order,
+            loop: compact.loop !== false
+        };
+    },
+
+    /**
+     * Explored planets: one donor motif track, musical key + small BPM nudge.
+     * Never splice channels from two songs — that kills motif continuity.
+     */
+    remixPlanet(planetId, opts) {
+        const id = this.normalizePlanetKey(planetId);
+        const boss = !!(opts && opts.boss);
+        const intro = !!(opts && opts.intro);
+        const { primary, hash } = this._donorPair(id, opts && opts.galaxyId);
+        const a = VFTrackerParse.toCompact(this._handcraftedRaw(primary, { boss, intro }));
+        const keyPool = [0, 2, -2, 3, -3, 5, -5, 7];
+        // Coarse key from low bits + micro salt from high bits so two planets
+        // that land on the same donor/key still diverge in pitch (map hops).
+        const key = keyPool[hash % keyPool.length] + (((hash >>> 16) % 11) - 5);
+        const bpm = Math.max(110, Math.min(152, Number(a.bpm) + ((hash % 5) - 2) + (((hash >>> 24) % 3) - 1)));
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const tx = (s, semi) => (semi ? VFTrackerParse.transposeChannelString(s, semi) : s);
+
+        const patterns = (a.patterns || []).map((p, pi) => {
+            const ch = (p.channels || []).slice();
+            while (ch.length < 4) ch.push('.');
+            return {
+                id: pi,
+                channels: [
+                    pad(tx(ch[0], key)),
+                    pad(tx(ch[1], key)),
+                    pad(tx(ch[2], key)),
+                    pad(tx(ch[3], key))
+                ]
+            };
+        });
+        let order = (a.order || []).slice();
+        if (!order.length) order = intro ? [0, 1] : [0, 0, 1, 0, 2, 1, 0, 0];
+        // Rotate form only — keep relative motif order (P0→P1→P2 development).
+        if (order.length > 2) {
+            const steps = Math.max(1, Math.floor(order.length / 2));
+            const rot = ((hash >>> 8) % steps) * 2; // phrase-boundary rotate
+            order = order.slice(rot).concat(order.slice(0, rot));
+            order = order.map((idx) => idx % Math.max(patterns.length, 1));
+        }
+
+        const labels = { mars: 'Dust', jupiter: 'Giant', saturn: 'Ring', neptune: 'Ice', pluto: 'Kuiper' };
+        const built = {
+            format: 'vftrack',
+            version: 1,
+            meta: {
+                title: (intro ? 'Launch' : boss ? 'Siege' : 'Orbit')
+                    + ' ' + (labels[primary] || primary) + ' · ' + id.slice(0, 12).toUpperCase(),
+                author: 'VF Tracker · GB-style',
+                planet: id,
+                notes: 'keyed remix of ' + primary + ' motif' + (intro ? ' intro' : boss ? ' boss' : '')
+            },
+            bpm: bpm,
+            rowsPerBeat: a.rowsPerBeat || 1,
+            rowsPerPattern: a.rowsPerPattern || 16,
+            channels: 4,
+            instruments: (a.instruments || this._baseInstruments()).map((inst) => Object.assign({}, inst)),
+            patterns: patterns,
+            order: order,
+            loop: !intro
+        };
+        if (intro) return built;
+        return this._withLongForm(built, { boss: boss });
+    },
+
+    forPlanet(planetId, galaxyId) {
+        const raw = String(planetId || 'mars').toLowerCase();
+        if (raw === 'intro' || raw.indexOf('intro:') === 0) {
+            return this.intro(raw.split(':')[1] || 'mars');
+        }
+        // Named role helpers (map/victory/…) — do not long-form those.
+        if (raw.indexOf('-boss') === -1 && typeof this[raw] === 'function'
+            && (raw === 'menu' || raw === 'map' || raw === 'victory' || raw === 'lose' || raw === 'shop')) {
+            return this[raw]();
+        }
+        const id = this.normalizePlanetKey(raw);
+        const wantBoss = raw.indexOf('boss') !== -1 || /-(?:boss|b)$/.test(raw);
+        let built = null;
+        if (typeof this[raw] === 'function') {
+            built = this[raw]();
+        } else if (this.isHandcraftedPlanet(id)) {
+            if (wantBoss) {
+                const key = id + '-boss';
+                built = (typeof this[key] === 'function') ? this[key]() : this._bossFor(id, 128, galaxyId);
+            } else if (typeof this[id] === 'function') {
+                built = this[id]();
+            }
+        }
+        if (!built) built = this.remixPlanet(id, { boss: wantBoss, galaxyId: galaxyId });
+        // Combat / boss loops get the long form; roles already returned above.
+        return this._withLongForm(built, { boss: wantBoss });
+    },
+
+    allKeys() {
+        const planets = this.PLANETS || ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
+        const keys = [
+            'menu', 'intro', 'title-intro', 'map', 'map-void', 'victory', 'lose', 'shop',
+            'mars', 'jupiter', 'saturn', 'neptune', 'pluto',
+            'mars-boss', 'jupiter-boss', 'saturn-boss', 'neptune-boss', 'pluto-boss'
+        ];
+        planets.forEach((p) => {
+            keys.push('map:' + p);
+            keys.push('victory:' + p);
+            keys.push('lose:' + p);
+            keys.push('shop:' + p);
+            keys.push('ingame:' + p);
+            keys.push('corridor:' + p);
+        });
+        return keys;
+    }
+};
+
+
+/* --- js/game/tracker/themes.js --- */
+"use strict";
+
+/**
+ * Selectable music STYLES for VF Tracker.
+ * Theme 0 = PLANET: play authored Hauptmelodien as written.
+ * Theme 1+ = stylize only: keep the song's notes & rhythm; colour via mix,
+ * light drum blend, break overlay, twin, and preferred BPM.
+ * AMOUNT (0..1) scales how far into that colour — never rebuilds the hook.
+ *
+ * Indices 0–6 stay stable (renames only). New styles append at the end.
+ */
+var VFTrackerThemes = {
+    REF_BPM: 174,
+    /** localStorage key for Music Editor bank overrides (dev-only edits). */
+    OVERRIDE_KEY: 'vf_music_theme_banks_v1',
+    _bankOverrides: null,
+
+    /** UI / storage order — indices 0–6 must stay stable once shipped. */
+    list: [
+        { id: 'planet', label: 'PLANET' },
+        { id: 'jungle_dnb', label: 'JUNGLE' },
+        { id: 'minimal_elektro', label: 'MINIMAL' }, // dark minimal techno (Max Minimal–style)
+        { id: 'amen', label: 'AMEN' },
+        { id: 'reese', label: 'REESE' },
+        { id: 'neuro', label: 'NEURO' },
+        { id: 'liquid', label: 'LIQUID' },
+        { id: 'dnb', label: 'DNB' },
+        { id: 'nightrun', label: 'NIGHTRUN' }
+    ],
+
+    /**
+     * Per-style playback hints used by the tracker player / tempo morph.
+     * breakSide: 'jungle' | 'dnb' | 'elektro' | 'hybrid' | 'drive' | 'off'
+     * preferredBpm: MUSIC BPM snap target (60..300) shown as a mark on the speed fader.
+     */
+    _meta: {
+        // preferredBpm = heard tempo when the STYLE is picked (auto-applied).
+        planet: { breakSide: 'off', mix: 'base', tempoBoost: 0, themeBreak: 0, preferredBpm: 132 },
+        // Classic jungle: Amen pressure + ragga chops ~168.
+        jungle_dnb: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.4, themeBreak: 0.95, preferredBpm: 168 },
+        minimal_elektro: { breakSide: 'elektro', mix: 'elektro', tempoBoost: 0.08, themeBreak: 0.55, preferredBpm: 128 },
+        amen: { breakSide: 'jungle', mix: 'jungle', tempoBoost: 0.36, themeBreak: 0.9, preferredBpm: 170 },
+        reese: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.26, themeBreak: 0.62, preferredBpm: 172 },
+        neuro: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.24, themeBreak: 0.58, preferredBpm: 174 },
+        liquid: { breakSide: 'dnb', mix: 'liquid', tempoBoost: 0.12, themeBreak: 0.4, preferredBpm: 170 },
+        // Proper DnB: two-step kit + half-time sub @ 174.
+        dnb: { breakSide: 'dnb', mix: 'dnb', tempoBoost: 0.34, themeBreak: 0.88, preferredBpm: 174 },
+        nightrun: { breakSide: 'drive', mix: 'nightrun', tempoBoost: 0.12, themeBreak: 0.55, preferredBpm: 108 }
+    },
+
+    count() {
+        return this.list.length;
+    },
+
+    labelOf(index) {
+        const i = Math.max(0, Math.min(this.list.length - 1, Math.round(Number(index) || 0)));
+        return this.list[i].label;
+    },
+
+    idOf(index) {
+        const i = Math.max(0, Math.min(this.list.length - 1, Math.round(Number(index) || 0)));
+        return this.list[i].id;
+    },
+
+    indexOfId(id) {
+        const key = String(id || '');
+        for (let i = 0; i < this.list.length; i++) {
+            if (this.list[i].id === key) return i;
+        }
+        return 0;
+    },
+
+    metaOf(indexOrId) {
+        const id = typeof indexOrId === 'string'
+            ? indexOrId
+            : this.idOf(indexOrId);
+        return this._meta[id] || this._meta.planet;
+    },
+
+    /** Preferred MUSIC BPM for a style (snap + fader mark). */
+    preferredBpmOf(indexOrId) {
+        const meta = this.metaOf(indexOrId);
+        const bpm = Number(meta && meta.preferredBpm);
+        if (!Number.isFinite(bpm)) return 132;
+        return Math.max(60, Math.min(300, Math.round(bpm)));
+    },
+
+    /**
+     * Style tempo fitted to the playing song's authored BPM.
+     * PLANET → authored. Other styles scale preferredBpm vs REF 132 onto the track.
+     */
+    adaptedBpmOf(indexOrId, authoredBpm) {
+        const authored = Math.max(60, Math.min(300, Number(authoredBpm) || 132));
+        const id = typeof indexOrId === 'string' ? indexOrId : this.idOf(indexOrId);
+        if (!id || id === 'planet') return Math.round(authored);
+        const pref = this.preferredBpmOf(indexOrId);
+        const scaled = authored * (pref / 132);
+        // Jungle / Amen / DnB need their tempo to read — weight preferred hard.
+        const heavy = id === 'jungle_dnb' || id === 'amen' || id === 'dnb'
+            || id === 'reese' || id === 'neuro';
+        const blended = heavy
+            ? pref * 0.72 + scaled * 0.28
+            : authored * 0.35 + scaled * 0.65;
+        return Math.max(60, Math.min(300, Math.round(blended)));
+    },
+
+    /** Three development patterns (P0 state / P1 sequence / P2 climax), 16 rows. */
+    _banks: {
+        // Classic jungle: chopped Amen bass, ragga hooks, open space for breaks.
+        jungle_dnb: [
+            {
+                bass: 'A-1:1:78 A-1:1:42 A-1:1:28 . E-1:1:58 A-1:1:34 . A-1:1:70 A-1:1:30 E-1:1:48 . A-1:1:74 A-1:1:38 . E-1:1:52 A-1:1:60',
+                lead: 'A-4:2:52 . . C-5:2:28 . . . E-5:2:58 . . . D-5:2:34 . C-5:2:26 . A-4:2:44 .',
+                arp: 'E-3:3:24 . A-3:3:12 E-3:3:08 . A-3:3:16 . E-3:3:18 . A-3:3:10 . E-3:3:14 A-3:3:08 . E-3:3:10',
+                drums: 'A-2:5:70 A-4:4:22 A-5:4:14 A-2:5:48 A-4:4:64 A-5:4:16 A-4:4:40 A-2:5:54 A-5:4:18 A-2:5:50 A-4:4:58 A-5:4:20 A-2:5:66 A-4:4:44 A-5:4:16 A-4:4:52'
+            },
+            {
+                bass: 'F-1:1:74 F-1:1:40 F-1:1:26 . C-1:1:54 F-1:1:32 . G-1:1:66 G-1:1:28 D-1:1:46 . F-1:1:70 F-1:1:36 . C-1:1:50 G-1:1:56',
+                lead: 'F-4:2:48 . . A-4:2:24 . . . C-5:2:54 . . . B-4:2:30 . A-4:2:22 . G-4:2:40 .',
+                arp: 'C-3:3:22 . F-3:3:10 C-3:3:08 . F-3:3:14 . G-3:3:16 . D-3:3:10 . F-3:3:12 C-3:3:08 . F-3:3:08',
+                drums: 'A-2:5:66 A-5:4:18 A-4:4:28 A-2:5:44 A-4:4:60 A-5:4:14 A-4:4:36 A-2:5:50 A-5:4:16 A-2:5:46 A-4:4:54 A-5:4:18 A-2:5:62 A-4:4:40 A-5:4:14 A-4:4:48'
+            },
+            {
+                bass: 'A-1:1:82 A-1:1:46 A-1:1:32 E-1:1:62 A-1:1:72 . E-1:1:40 G-1:1:58 A-1:1:36 A-1:1:78 A-1:1:44 . E-1:1:54 A-1:1:66 E-1:1:38 A-1:1:48',
+                lead: 'A-5:2:60 . C-6:2:36 . E-6:2:64 . . D-6:2:42 . C-6:2:38 . A-5:2:34 . G-5:2:30 A-5:2:52 .',
+                arp: 'A-3:3:26 E-3:3:14 A-3:3:18 . C-4:3:28 . E-3:3:12 A-3:3:16 G-3:3:12 E-3:3:10 . A-3:3:14 . E-3:3:08',
+                drums: 'A-2:5:74 A-4:4:26 A-5:4:16 A-2:5:52 A-4:4:68 A-5:4:18 A-4:4:44 A-2:5:58 A-5:4:20 A-2:5:54 A-4:4:62 A-5:4:22 A-2:5:70 A-4:4:48 A-5:4:18 A-4:4:56'
+            }
+        ],
+        // Dark minimal techno (Max Minimal / dark techno set vibe):
+        // pumping 4/4 sub, delayed minor stabs, muted offbeat ticks — hypnotic, not empty.
+        minimal_elektro: [
+            {
+                bass: 'A-1:1:72 A-1:1:34 . A-1:1:50 A-1:1:68 A-1:1:30 . A-1:1:46 A-1:1:70 A-1:1:32 . A-1:1:48 A-1:1:66 A-1:1:28 . A-1:1:44',
+                lead: '. . A-3:2:38 . . . . E-3:2:28 . . . A-3:2:34 . . . E-3:2:24',
+                arp: 'E-4:3:18 . . E-4:3:10 . E-4:3:14 . . A-4:3:12 . E-4:3:10 . . E-4:3:12 . E-4:3:08'
+            },
+            {
+                bass: 'F-1:1:68 F-1:1:32 . F-1:1:46 F-1:1:64 F-1:1:28 . F-1:1:42 G-1:1:66 G-1:1:30 . G-1:1:44 C-1:1:58 C-1:1:26 . C-1:1:40',
+                lead: '. . F-3:2:34 . . . . C-3:2:24 . . . F-3:2:30 . . . Ab3:2:22',
+                arp: 'C-4:3:16 . . C-4:3:08 . C-4:3:12 . . F-4:3:10 . C-4:3:08 . . D-4:3:10 . C-4:3:06'
+            },
+            {
+                bass: 'A-1:1:76 A-1:1:36 A-1:1:52 . A-1:1:70 A-1:1:32 . E-1:1:60 E-1:1:34 . A-1:1:72 A-1:1:38 A-1:1:54 . A-1:1:66 A-1:1:30',
+                lead: '. A-3:2:42 . . E-3:2:30 . . A-3:2:36 . . C-4:2:40 . . A-3:2:32 . . E-3:2:26 .',
+                arp: 'A-4:3:20 . E-4:3:12 . A-4:3:16 . E-4:3:10 . A-4:3:18 . E-4:3:12 . C-5:3:14 . E-4:3:08'
+            }
+        ],
+        // Amen head (classic jungle hook bank).
+        amen: [
+            {
+                bass: 'A-1:1:70 A-1:1:44 A-1:1:30 E-1:1:52 . A-1:1:64 A-1:1:38 . E-1:1:46 A-1:1:28 A-1:1:66 . E-1:1:44 A-1:1:54 . E-1:1:40',
+                lead: 'A-4:2:50 . . C-5:2:30 . . E-5:2:54 . . D-5:2:36 . C-5:2:28 . A-4:2:40 . G-4:2:26 .',
+                arp: 'E-3:3:20 . A-3:3:12 . E-3:3:14 . A-3:3:10 . E-3:3:16 . A-3:3:08 . E-3:3:12 . A-3:3:08'
+            },
+            {
+                bass: 'F-1:1:66 F-1:1:40 F-1:1:28 C-1:1:48 . G-1:1:62 G-1:1:36 . D-1:1:44 F-1:1:26 F-1:1:60 . C-1:1:42 G-1:1:52 . D-1:1:38',
+                lead: 'F-4:2:46 . . A-4:2:26 . . C-5:2:50 . . B-4:2:32 . A-4:2:24 . G-4:2:36 . E-4:2:22 .',
+                arp: 'C-3:3:18 . F-3:3:10 . C-3:3:12 . F-3:3:08 . D-3:3:14 . G-3:3:08 . C-3:3:10 . F-3:3:06'
+            },
+            {
+                bass: 'A-1:1:74 A-1:1:48 A-1:1:34 E-1:1:56 A-1:1:68 . G-1:1:54 A-1:1:42 A-1:1:72 . E-1:1:50 A-1:1:58 E-1:1:36 A-1:1:46 .',
+                lead: 'A-5:2:56 . C-6:2:34 . E-6:2:60 . D-6:2:40 . C-6:2:36 . A-5:2:30 . G-5:2:28 A-5:2:46 .',
+                arp: 'A-3:3:22 E-3:3:12 . A-3:3:16 C-4:3:24 . E-3:3:12 A-3:3:14 G-3:3:10 . E-3:3:10 A-3:3:12 .'
+            }
+        ],
+        // Dark Reese: long sub drones, almost no lead — pressure from bass + breaks.
+        reese: [
+            {
+                bass: 'A-1:1:70 . . . A-1:1:58 . . . A-1:1:66 . . . E-1:1:50 . . .',
+                lead: 'A-4:2:28 . . . . . E-4:2:22 . . . . . A-4:2:26 . . .',
+                arp: 'E-2:3:10 . . . . . . . A-2:3:08 . . . . . . .'
+            },
+            {
+                bass: 'F-1:1:66 . . . F-1:1:54 . . . G-1:1:62 . . . D-1:1:48 . . .',
+                lead: 'F-4:2:24 . . . . . C-4:2:20 . . . . . G-4:2:22 . . .',
+                arp: 'C-2:3:08 . . . . . . . D-2:3:06 . . . . . . .'
+            },
+            {
+                bass: 'A-1:1:74 . . A-1:1:50 . A-1:1:68 . . E-1:1:56 . A-1:1:72 . . A-1:1:52 . E-1:1:48 . .',
+                lead: 'A-5:2:36 . . E-5:2:28 . . C-5:2:30 . . A-4:2:32 . . E-4:2:24 . . A-4:2:34 .',
+                arp: 'A-2:3:14 . . . E-2:3:10 . . . A-2:3:12 . . . E-2:3:08 . . .'
+            }
+        ],
+        // Neuro: syncopated stabs, dissonant leaps, choppy bass.
+        neuro: [
+            {
+                bass: 'A-1:1:64 . A-1:1:30 A-1:1:48 . E-1:1:40 A-1:1:58 . A-1:1:28 . E-1:1:52 A-1:1:36 . A-1:1:44 . E-1:1:32',
+                lead: 'A-4:2:52 . . Eb5:2:40 . . A-4:2:46 . G-4:2:34 . . C-5:2:48 . . Bb4:2:36 . A-4:2:42 .',
+                arp: 'E-4:3:22 . . A-4:3:16 . . E-4:3:18 . . Bb3:3:14 . . E-4:3:16 . . A-4:3:12 .'
+            },
+            {
+                bass: 'Bb0:1:60 . Bb0:1:28 F-1:1:46 . Bb0:1:54 . F-1:1:26 . C-1:1:50 Bb0:1:34 . F-1:1:42 . C-1:1:30',
+                lead: 'Bb4:2:48 . . F-5:2:38 . . Eb5:2:42 . D-5:2:32 . . F-5:2:44 . . Eb5:2:34 . Bb4:2:40 .',
+                arp: 'F-4:3:20 . . Bb4:3:14 . . F-4:3:16 . . D-4:3:12 . . F-4:3:14 . . Bb4:3:10 .'
+            },
+            {
+                bass: 'A-1:1:68 A-1:1:34 . E-1:1:50 A-1:1:62 . E-1:1:32 A-1:1:56 . G-1:1:46 A-1:1:64 . E-1:1:38 A-1:1:52 .',
+                lead: 'A-5:2:56 . Eb6:2:44 . A-5:2:50 . G-5:2:40 . Eb6:2:52 . C-6:2:42 . Bb5:2:38 . A-5:2:46',
+                arp: 'A-4:3:24 . E-4:3:14 . Bb4:3:18 . E-4:3:12 A-4:3:20 . Eb4:3:16 . A-4:3:18 . E-4:3:10 .'
+            }
+        ],
+        // Liquid: smoother 7ths / floating arp, still break-friendly.
+        liquid: [
+            {
+                bass: 'A-1:1:54 . . E-1:1:42 . A-1:1:50 . . E-1:1:38 . A-1:1:52 . . E-1:1:40 . A-1:1:46 .',
+                lead: 'A-4:2:40 . C-5:2:34 . E-5:2:44 . G-5:2:36 . E-5:2:38 . C-5:2:32 . B-4:2:30 . A-4:2:36',
+                arp: 'E-4:3:14 C-4:3:10 . A-3:3:12 . E-4:3:12 C-4:3:08 . A-3:3:10 . E-4:3:12 C-4:3:08 . A-3:3:10 .'
+            },
+            {
+                bass: 'F-1:1:50 . . C-1:1:38 . G-1:1:48 . . D-1:1:36 . F-1:1:46 . . C-1:1:34 . G-1:1:42 .',
+                lead: 'F-4:2:36 . A-4:2:30 . C-5:2:40 . E-5:2:32 . D-5:2:34 . C-5:2:28 . A-4:2:26 . G-4:2:32',
+                arp: 'C-4:3:12 A-3:3:08 . F-3:3:10 . D-4:3:12 B-3:3:08 . G-3:3:10 . C-4:3:12 A-3:3:08 . F-3:3:10 .'
+            },
+            {
+                bass: 'A-1:1:58 . . E-1:1:44 . A-1:1:54 . . G-1:1:46 . A-1:1:56 . . E-1:1:42 . A-1:1:50 .',
+                lead: 'A-5:2:44 . C-6:2:38 . E-6:2:48 . G-6:2:40 . E-6:2:42 . C-6:2:36 . B-5:2:34 . A-5:2:40',
+                arp: 'A-4:3:16 E-4:3:12 . C-4:3:14 . A-4:3:14 E-4:3:10 . C-4:3:12 . A-4:3:14 E-4:3:10 . C-4:3:12 .'
+            }
+        ],
+        // Proper DnB: half-time sub drones, two-step space, sparse neuro stabs.
+        dnb: [
+            {
+                bass: 'A-1:1:80 . . . A-1:1:72 . . . A-1:1:76 . . . E-1:1:58 . . .',
+                lead: 'A-4:2:30 . . . . . . . C-5:2:22 . . . . . . E-4:2:26 .',
+                arp: 'E-2:3:12 . . . . . . . A-2:3:08 . . . . . . .',
+                drums: 'A-2:5:72 A-5:4:18 A-5:4:14 A-5:4:16 A-4:4:64 A-5:4:16 A-5:4:12 A-5:4:18 A-5:4:14 A-2:5:36 A-4:4:58 A-5:4:16 A-2:5:68 A-5:4:16 A-5:4:12 A-4:4:54'
+            },
+            {
+                bass: 'F-1:1:76 . . . F-1:1:68 . . . G-1:1:72 . . . D-1:1:54 . . .',
+                lead: 'F-4:2:26 . . . . . . . A-4:2:18 . . . . . . C-4:2:22 .',
+                arp: 'C-2:3:10 . . . . . . . F-2:3:06 . . . . . . .',
+                drums: 'A-2:5:68 A-5:4:16 A-5:4:12 A-5:4:14 A-4:4:60 A-5:4:14 A-5:4:10 A-5:4:16 A-5:4:12 A-2:5:32 A-4:4:54 A-5:4:14 A-2:5:64 A-5:4:14 A-5:4:10 A-4:4:50'
+            },
+            {
+                bass: 'A-1:1:84 . . . A-1:1:74 . . E-1:1:62 . A-1:1:80 . . . A-1:1:50 . E-1:1:56 .',
+                lead: 'A-5:2:38 . . . Eb5:2:28 . . . A-4:2:32 . . . G-4:2:24 . . C-5:2:30 .',
+                arp: 'A-2:3:14 . . . E-2:3:08 . . . A-2:3:12 . . . Bb2:3:10 . . .',
+                drums: 'A-2:5:76 A-5:4:18 A-5:4:14 A-5:4:16 A-4:4:66 A-5:4:16 A-4:4:22 A-5:4:18 A-5:4:14 A-2:5:40 A-4:4:60 A-5:4:16 A-2:5:72 A-5:4:16 A-4:4:24 A-4:4:56'
+            }
+        ],
+        // NIGHTRUN — darksynth / neon-highway (Carpenter Brut–adjacent, original name).
+        // Driving minor riffs, heavy octaves, cinematic lead, relentless pulse.
+        nightrun: [
+            {
+                bass: 'A-1:1:74 A-1:1:50 A-1:1:58 A-1:1:42 A-1:1:70 A-1:1:48 A-1:1:56 A-1:1:40 A-1:1:72 A-1:1:46 A-1:1:54 A-1:1:38 E-1:1:62 E-1:1:44 E-1:1:52 E-1:1:36',
+                lead: 'A-3:2:58 . C-4:2:48 . E-4:2:62 . D-4:2:52 . C-4:2:50 . A-3:2:44 . G-3:2:42 . A-3:2:54',
+                arp: 'A-4:3:28 E-4:3:18 . C-5:3:24 . A-4:3:22 E-4:3:14 . C-5:3:20 . A-4:3:18 E-4:3:12 . G-4:3:16'
+            },
+            {
+                bass: 'F-1:1:70 F-1:1:46 F-1:1:54 F-1:1:38 F-1:1:66 F-1:1:44 F-1:1:52 F-1:1:36 G-1:1:68 G-1:1:42 G-1:1:50 G-1:1:34 D-1:1:58 D-1:1:40 D-1:1:48 D-1:1:32',
+                lead: 'F-3:2:54 . Ab3:2:44 . C-4:2:58 . Bb3:2:48 . Ab3:2:46 . F-3:2:40 . Eb3:2:38 . F-3:2:50',
+                arp: 'F-4:3:26 C-4:3:16 . Ab4:3:22 . F-4:3:20 C-4:3:12 . Ab4:3:18 . F-4:3:16 C-4:3:10 . Eb4:3:14'
+            },
+            {
+                bass: 'A-1:1:78 A-1:1:54 A-1:1:62 A-1:1:46 A-1:1:74 A-1:1:52 E-1:1:66 E-1:1:44 A-1:1:76 A-1:1:50 A-1:1:60 A-1:1:42 G-1:1:64 G-1:1:46 E-1:1:58 E-1:1:40',
+                lead: 'A-4:2:64 . C-5:2:52 . E-5:2:68 . G-5:2:56 . E-5:2:58 . C-5:2:48 . B-4:2:46 . A-4:2:60',
+                arp: 'A-5:3:32 E-5:3:22 . C-6:3:28 . A-5:3:26 E-5:3:18 . C-6:3:24 . A-5:3:22 E-5:3:16 . G-5:3:20'
+            }
+        ]
+    },
+
+    /**
+     * Amen-chop 16-step (Jungle) — classic Amen Brother skeleton + ragga rolls.
+     * k=kick, s=snare, h=hat, r=half-row snare roll.
+     */
+    amenBreak: [
+        { k: 1 }, { h: 0.45 }, { s: 0.55, h: 0.5 }, { k: 0.75, h: 0.35 },
+        { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.85 }, { k: 0.8, h: 0.3 },
+        { h: 0.5 }, { k: 0.85, h: 0.35 }, { s: 1, r: 0.7 }, { h: 0.55, s: 0.3 },
+        { k: 1 }, { s: 0.9, r: 0.95 }, { k: 0.55, h: 0.6 }, { s: 1 }
+    ],
+
+    /**
+     * Two-step DnB — kick on 1+3, snare on 2+4, rolling hats, sparse ghosts.
+     * Half-time pressure: space between anchors, not Amen mush.
+     */
+    dnbBreak: [
+        { k: 1 }, { h: 0.55 }, { h: 0.4 }, { h: 0.5 },
+        { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.22 }, { h: 0.5 },
+        { k: 0.95 }, { h: 0.5 }, { h: 0.38 }, { h: 0.48 },
+        { s: 1 }, { h: 0.45 }, { h: 0.35, s: 0.2 }, { h: 0.42 }
+    ],
+
+    /** Legacy hybrid map (kept for older callers). */
+    jungleDnbBreak: [
+        { k: 1 }, { h: 0.45 }, { s: 0.4, h: 0.5 }, { k: 0.65 },
+        { s: 1 }, { h: 0.4 }, { s: 0.7, r: 0.75 }, { k: 0.7, h: 0.3 },
+        { h: 0.5 }, { k: 0.75 }, { s: 1, r: 0.7 }, { h: 0.55 },
+        { k: 1 }, { s: 0.85, r: 0.8 }, { h: 0.55 }, { s: 0.95 }
+    ],
+
+    /**
+     * Dark minimal techno kit: hard 4/4 kick, clap/snare on 2+4,
+     * rolling closed hats — club pressure, not sparse ticks.
+     */
+    elektroBreak: [
+        { k: 1 }, { h: 0.48 }, { h: 0.62 }, { h: 0.4 },
+        { k: 1, s: 0.78 }, { h: 0.45 }, { h: 0.58 }, { h: 0.38 },
+        { k: 1 }, { h: 0.5 }, { h: 0.65 }, { h: 0.42 },
+        { k: 0.98, s: 0.85 }, { h: 0.48 }, { h: 0.55 }, { h: 0.36 }
+    ],
+
+    /** NIGHTRUN drive: pounding 4/4, snare on 2/4, tight hats. */
+    driveBreak: [
+        { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+        { k: 1 }, { h: 0.45 }, { s: 0.95, h: 0.3 }, { h: 0.4 },
+        { k: 1 }, { h: 0.45 }, { s: 0.9, h: 0.3 }, { h: 0.4 },
+        { k: 1 }, { h: 0.5 }, { s: 1, h: 0.35 }, { h: 0.45 }
+    ],
+
+    _ensureOverrides() {
+        if (this._bankOverrides) return this._bankOverrides;
+        this._bankOverrides = {};
+        try {
+            const raw = localStorage.getItem(this.OVERRIDE_KEY);
+            if (raw) {
+                const data = JSON.parse(raw);
+                if (data && typeof data === 'object') this._bankOverrides = data;
+            }
+        } catch (e) { /* ignore */ }
+        return this._bankOverrides;
+    },
+
+    /** Active bank for a style id (override → built-in). */
+    bankOf(id) {
+        const key = String(id || '');
+        if (!key || key === 'planet') return null;
+        const ov = this._ensureOverrides();
+        if (ov[key] && Array.isArray(ov[key]) && ov[key].length) return ov[key];
+        return this._banks[key] || null;
+    },
+
+    /** Fallback kit when a STYLE bank has no drums strand yet. */
+    defaultDrums(patternIndex) {
+        const kits = [
+            'A-2:5:64 . A-4:4:16 . A-2:5:50 . A-4:4:12 A-2:5:64 . A-4:4:16 . A-2:5:48 A-4:4:10 . .',
+            'A-2:5:58 . A-4:4:14 . A-2:5:46 . A-4:4:10 G-2:5:58 . A-4:4:14 . G-2:5:44 A-4:4:08 . .',
+            'A-2:5:70 A-4:4:18 . A-4:4:12 A-2:5:54 . A-4:4:14 . A-2:5:66 A-4:4:16 . A-4:4:10 A-2:5:50 A-4:4:12 .'
+        ];
+        return kits[Math.abs(patternIndex | 0) % kits.length];
+    },
+
+    /** Deep-clone built-in bank (for the Music Editor). */
+    cloneBank(id) {
+        const bank = this._banks[id];
+        if (!bank) return null;
+        return bank.map((p, i) => ({
+            bass: String(p.bass || ''),
+            lead: String(p.lead || ''),
+            arp: String(p.arp || ''),
+            drums: String(p.drums || '') || this.defaultDrums(i)
+        }));
+    },
+
+    getBankOverride(id) {
+        const ov = this._ensureOverrides();
+        return ov[String(id || '')] || null;
+    },
+
+    setBankOverride(id, bank) {
+        const key = String(id || '');
+        if (!key || key === 'planet') return;
+        const ov = this._ensureOverrides();
+        if (!bank) {
+            delete ov[key];
+        } else {
+            ov[key] = bank.map((p) => ({
+                bass: String(p.bass || ''),
+                lead: String(p.lead || ''),
+                arp: String(p.arp || ''),
+                drums: String(p.drums || '')
+            }));
+        }
+        try {
+            localStorage.setItem(this.OVERRIDE_KEY, JSON.stringify(ov));
+        } catch (e) { /* quota */ }
+    },
+
+    clearBankOverrides() {
+        this._bankOverrides = {};
+        try { localStorage.removeItem(this.OVERRIDE_KEY); } catch (e) { /* ignore */ }
+    },
+
+    /**
+     * Raw STYLE bank cell for patternIndex / row / channel
+     * (0 bass, 1 lead, 2 arp, 3 drums). null = no style strand.
+     */
+    cellAt(themeIndex, patternIndex, rowIndex, channel) {
+        const id = this.idOf(themeIndex);
+        if (!id || id === 'planet') return null;
+        const bank = this.bankOf(id);
+        if (!bank || !bank.length) return null;
+        const pat = bank[Math.abs(patternIndex | 0) % bank.length];
+        if (!pat) return null;
+        const key = channel === 0 ? 'bass'
+            : channel === 1 ? 'lead'
+            : channel === 2 ? 'arp'
+            : channel === 3 ? 'drums'
+            : null;
+        if (!key || !pat[key]) return null;
+        if (typeof VFTrackerParse === 'undefined' || !VFTrackerParse.expandChannelString) return null;
+        const padded = VFTrackerParse.padChannelString
+            ? VFTrackerParse.padChannelString(pat[key], 16)
+            : pat[key];
+        const cells = VFTrackerParse.expandChannelString(padded, 16);
+        return cells[rowIndex % 16] || null;
+    },
+
+    /**
+     * Collect pitch notes from an authored pattern channel (melody DNA).
+     * @param {object} pat normalized pattern ({ rows: [[{note,inst,vol},…],…] })
+     * @param {number} channel 0..2
+     */
+    pitchPoolFromPattern(pat, channel) {
+        const pool = [];
+        const rows = (pat && pat.rows) || [];
+        for (let r = 0; r < rows.length; r++) {
+            const cell = rows[r] && rows[r][channel];
+            if (cell && cell.note && cell.note !== 'OFF') pool.push(String(cell.note));
+        }
+        return pool;
+    },
+
+    /**
+     * STYLE colour on an authored cell — pitches stay on the planet hook.
+     * Jungle/Amen/DnB: break kit owns drums (silence GB kit); lead gets
+     * ragga chops / two-step space so it doesn't fight the Amen.
+     * @param {number} styleAmount 0..1 (AMOUNT fader)
+     * @returns {object|null} cell to trigger, or null for rest
+     */
+    interpretCell(themeIndex, patternIndex, rowIndex, channel, authoredCell, pitchPool, styleAmount) {
+        const mag = Math.max(0, Math.min(1, Number(styleAmount) || 0));
+        if (!(Number(themeIndex) > 0) || mag < 0.03) return authoredCell || null;
+
+        const id = this.idOf(themeIndex);
+        const jungle = id === 'jungle_dnb' || id === 'amen';
+        const dnb = id === 'dnb' || id === 'reese' || id === 'neuro';
+        const heavy = jungle || dnb;
+        const styleCell = this.cellAt(themeIndex, patternIndex, rowIndex, channel);
+        const row = Math.abs(rowIndex | 0) % 16;
+
+        // Drums: Jungle/DnB — mute authored GB kit so Amen/two-step owns the groove.
+        if (channel === 3) {
+            if (heavy && mag > 0.28) return null;
+            if (!authoredCell || !authoredCell.note || authoredCell.note === 'OFF') {
+                const fillAt = heavy ? 0.38 : 0.7;
+                if (mag > fillAt && styleCell && styleCell.note && styleCell.note !== 'OFF') {
+                    return {
+                        note: styleCell.note,
+                        inst: styleCell.inst || 4,
+                        vol: Math.max(6, Math.min(heavy ? 36 : 28, Math.round(
+                            (styleCell.vol != null ? styleCell.vol : 20) * (heavy ? 0.62 : 0.45))))
+                    };
+                }
+                return authoredCell || null;
+            }
+            if (styleCell && styleCell.note && styleCell.note !== 'OFF' && mag > 0.25) {
+                const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+                const sVol = styleCell.vol != null ? styleCell.vol : aVol;
+                return {
+                    note: authoredCell.note,
+                    inst: authoredCell.inst || styleCell.inst || 5,
+                    vol: Math.max(8, Math.min(60, Math.round(aVol + (sVol - aVol) * mag * 0.55)))
+                };
+            }
+            return authoredCell;
+        }
+
+        if (!authoredCell || !authoredCell.note) return authoredCell || null;
+        if (authoredCell.note === 'OFF') return authoredCell;
+
+        // Lead: Jungle chops / DnB space — drop cluttered hits so the break breathes.
+        if (channel === 1 && heavy && mag > 0.35) {
+            const drop = jungle
+                ? (row % 4 === 1 || row % 4 === 3) && mag > 0.45
+                : (row % 2 === 1) || (dnb && row % 4 === 2 && mag > 0.55);
+            if (drop) return null;
+        }
+        // Arp: thin under jungle/dnb so sub + kit stay clear.
+        if (channel === 2 && heavy && mag > 0.4 && (row % 2 === 1 || (dnb && row % 4 !== 0))) {
+            return null;
+        }
+
+        // Velocity tint from STYLE bank when both hit.
+        if (!styleCell || !styleCell.note || styleCell.note === 'OFF') {
+            if (!heavy) return authoredCell;
+            const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+            const boost = channel === 0 ? 1 + mag * 0.2 : channel === 1 ? (1 - mag * 0.15) : (1 - mag * 0.25);
+            return {
+                note: authoredCell.note,
+                inst: authoredCell.inst || 1,
+                vol: Math.max(12, Math.min(60, Math.round(aVol * boost)))
+            };
+        }
+        const aVol = authoredCell.vol != null ? authoredCell.vol : 40;
+        const sVol = styleCell.vol != null ? styleCell.vol : aVol;
+        const tintAmt = heavy
+            ? (channel === 0 ? 0.65 : channel === 1 ? 0.35 : 0.25)
+            : 0.35;
+        const tint = aVol + (sVol - aVol) * mag * tintAmt;
+        return {
+            note: authoredCell.note,
+            inst: authoredCell.inst || 1,
+            vol: Math.max(heavy && channel === 0 ? 14 : 14, Math.min(60, Math.round(tint)))
+        };
+    }
+};
+
+
+/* --- js/game/tracker/voices.js --- */
+"use strict";
+
+/**
+ * Per-channel voice presets for BASS / LEAD / ARP / DRUMS sliders.
+ * `default` keeps the track's authored instrument for that hit.
+ */
+var VFTrackerVoices = {
+    channels: [
+        {
+            id: 'bass',
+            label: 'BASS',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'wave', label: 'WAVE' },
+                { id: 'reese', label: 'REESE' },
+                { id: 'square', label: 'SQUARE' },
+                { id: 'sine', label: 'SINE' },
+                { id: 'sub', label: 'SUB' },
+                { id: 'saw', label: 'SAW' },
+                { id: 'grit', label: 'GRIT' },
+                { id: 'growl', label: 'GROWL' },
+                { id: 'deep', label: 'DEEP' }
+            ]
+        },
+        {
+            id: 'lead',
+            label: 'LEAD',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'pulse', label: 'PULSE' },
+                { id: 'square', label: 'SQUARE' },
+                { id: 'saw', label: 'SAW' },
+                { id: 'tri', label: 'TRI' },
+                { id: 'bell', label: 'BELL' },
+                { id: 'sine', label: 'SINE' },
+                { id: 'chip', label: 'CHIP' },
+                { id: 'soft', label: 'SOFT' },
+                { id: 'growl', label: 'GROWL' }
+            ]
+        },
+        {
+            id: 'arp',
+            label: 'ARP',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'pulse', label: 'PULSE' },
+                { id: 'square', label: 'SQUARE' },
+                { id: 'tri', label: 'TRI' },
+                { id: 'pluck', label: 'PLUCK' },
+                { id: 'soft', label: 'SOFT' },
+                { id: 'saw', label: 'SAW' },
+                { id: 'sine', label: 'SINE' },
+                { id: 'bell', label: 'BELL' },
+                { id: 'chirp', label: 'CHIRP' }
+            ]
+        },
+        {
+            id: 'drums',
+            label: 'DRUMS',
+            options: [
+                { id: 'default', label: 'DEFAULT' },
+                { id: 'kit', label: 'KIT' },
+                { id: 'noise', label: 'NOISE' },
+                { id: 'kick', label: 'KICK' },
+                { id: 'metal', label: 'METAL' },
+                { id: 'soft', label: 'SOFT' },
+                { id: 'click', label: 'CLICK' },
+                { id: 'snare', label: 'SNARE' },
+                { id: 'crunch', label: 'CRUNCH' },
+                { id: 'tight', label: 'TIGHT' }
+            ]
+        }
+    ],
+
+    _presets: {
+        bass: {
+            wave: { wave: 'triangle', volume: 0.72, attack: 0.001, decay: 0.04, sustain: 0.6, release: 0.08, filter: 1800 },
+            reese: { wave: 'sawtooth', volume: 0.62, attack: 0.002, decay: 0.08, sustain: 0.7, release: 0.14, filter: 520 },
+            square: { wave: 'square', volume: 0.5, attack: 0.001, decay: 0.05, sustain: 0.55, release: 0.08, filter: 900 },
+            sine: { wave: 'sine', volume: 0.85, attack: 0.001, decay: 0.05, sustain: 0.75, release: 0.1, filter: 1200 },
+            sub: { wave: 'sine', volume: 0.95, attack: 0.002, decay: 0.06, sustain: 0.85, release: 0.16, filter: 280 },
+            saw: { wave: 'sawtooth', volume: 0.58, attack: 0.001, decay: 0.06, sustain: 0.62, release: 0.1, filter: 700 },
+            grit: { wave: 'square', volume: 0.48, attack: 0.001, decay: 0.07, sustain: 0.5, release: 0.09, filter: 640 },
+            growl: { wave: 'sawtooth', volume: 0.55, attack: 0.003, decay: 0.1, sustain: 0.68, release: 0.18, filter: 420 },
+            deep: { wave: 'triangle', volume: 0.9, attack: 0.002, decay: 0.08, sustain: 0.8, release: 0.2, filter: 360 }
+        },
+        lead: {
+            pulse: { wave: 'square', volume: 0.46, attack: 0.001, decay: 0.05, sustain: 0.36, release: 0.08, filter: 2600 },
+            square: { wave: 'square', volume: 0.48, attack: 0.001, decay: 0.04, sustain: 0.38, release: 0.07, filter: 2800 },
+            saw: { wave: 'sawtooth', volume: 0.4, attack: 0.001, decay: 0.06, sustain: 0.34, release: 0.09, filter: 2200 },
+            tri: { wave: 'triangle', volume: 0.5, attack: 0.001, decay: 0.05, sustain: 0.42, release: 0.1, filter: 2600 },
+            bell: { wave: 'sine', volume: 0.52, attack: 0.001, decay: 0.12, sustain: 0.18, release: 0.18, filter: 3200 },
+            sine: { wave: 'sine', volume: 0.5, attack: 0.002, decay: 0.06, sustain: 0.4, release: 0.12, filter: 2800 },
+            chip: { wave: 'square', volume: 0.46, attack: 0.001, decay: 0.02, sustain: 0.3, release: 0.04, filter: 4000 },
+            soft: { wave: 'triangle', volume: 0.44, attack: 0.004, decay: 0.08, sustain: 0.36, release: 0.14, filter: 1800 },
+            growl: { wave: 'sawtooth', volume: 0.42, attack: 0.002, decay: 0.1, sustain: 0.3, release: 0.12, filter: 1400 }
+        },
+        arp: {
+            pulse: { wave: 'square', volume: 0.34, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05, filter: 2400 },
+            square: { wave: 'square', volume: 0.36, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05, filter: 3200 },
+            tri: { wave: 'triangle', volume: 0.34, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.06, filter: 2600 },
+            pluck: { wave: 'square', volume: 0.32, attack: 0.001, decay: 0.08, sustain: 0.1, release: 0.04, filter: 2800 },
+            soft: { wave: 'sine', volume: 0.3, attack: 0.002, decay: 0.05, sustain: 0.24, release: 0.08, filter: 2000 },
+            saw: { wave: 'sawtooth', volume: 0.3, attack: 0.001, decay: 0.04, sustain: 0.26, release: 0.05, filter: 2800 },
+            sine: { wave: 'sine', volume: 0.28, attack: 0.001, decay: 0.04, sustain: 0.22, release: 0.07, filter: 2400 },
+            bell: { wave: 'sine', volume: 0.32, attack: 0.001, decay: 0.1, sustain: 0.08, release: 0.12, filter: 3400 },
+            chirp: { wave: 'square', volume: 0.28, attack: 0.001, decay: 0.015, sustain: 0.06, release: 0.03, filter: 4000 }
+        },
+        drums: {
+            kit: null,
+            noise: { wave: 'noise', volume: 0.36, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+            kick: { wave: 'triangle', volume: 0.82, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 380 },
+            metal: { wave: 'noise', volume: 0.4, attack: 0.001, decay: 0.015, sustain: 0.02, release: 0.03, filter: 5000 },
+            soft: { wave: 'noise', volume: 0.22, attack: 0.002, decay: 0.04, sustain: 0.01, release: 0.05 },
+            click: { wave: 'noise', volume: 0.28, attack: 0.001, decay: 0.008, sustain: 0.01, release: 0.015, filter: 6000 },
+            snare: { wave: 'noise', volume: 0.42, attack: 0.001, decay: 0.04, sustain: 0.02, release: 0.04, filter: 3200 },
+            crunch: { wave: 'noise', volume: 0.38, attack: 0.001, decay: 0.05, sustain: 0.03, release: 0.05, filter: 2200 },
+            tight: { wave: 'triangle', volume: 0.7, attack: 0.001, decay: 0.03, sustain: 0.02, release: 0.02, filter: 520 }
+        }
+    },
+
+    optionsFor(ch) {
+        const row = this.channels[ch];
+        return row ? row.options : [{ id: 'default', label: 'DEFAULT' }];
+    },
+
+    labelOf(ch, voiceId) {
+        const opts = this.optionsFor(ch);
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].id === voiceId) return opts[i].label;
+        }
+        return 'DEFAULT';
+    },
+
+    indexOf(ch, voiceId) {
+        const opts = this.optionsFor(ch);
+        const id = String(voiceId || 'default');
+        for (let i = 0; i < opts.length; i++) {
+            if (opts[i].id === id) return i;
+        }
+        return 0;
+    },
+
+    /**
+     * Resolve instrument for a channel voice. Returns authored `base` for default/kit.
+     */
+    resolve(ch, voiceId, base) {
+        const key = ch === 0 ? 'bass' : ch === 1 ? 'lead' : ch === 2 ? 'arp' : 'drums';
+        const id = String(voiceId || 'default');
+        if (id === 'default' || id === 'kit') return base || null;
+        const bank = this._presets[key];
+        const preset = bank && bank[id];
+        if (!preset) return base || null;
+        const out = Object.assign({ id: (base && base.id) || (ch + 1), name: id }, preset);
+        return out;
+    }
+};
+
+
+/* --- js/game/tracker/faction-compose.js --- */
+"use strict";
+
+/**
+ * Faction skins on top of VF-GB-style planet tracks.
+ * Voices stay in the Game Boy palette (wave/pulse/noise) — no modern synth sludge.
+ */
+var VFTrackerFactionCompose = {
+    FACTIONS: ['terran', 'kronax', 'voidborn', 'pirate', 'machine'],
+
+    styles: {
+        terran: {
+            label: 'Terran',
+            bpmDelta: 2,
+            transpose: 2,
+            drums: [
+                'C-2:5:64 . A-4:4:16 . C-2:5:50 . A-4:4:12 C-2:5:60 . A-4:4:16 . C-2:5:44 A-4:4:10 . .',
+                'C-2:5:60 . A-4:4:14 C-2:5:38 . C-2:5:54 . A-4:4:14 . C-2:5:58 A-4:4:12 . A-4:4:08 C-2:5:42 A-4:4:10 .',
+                'C-2:5:68 A-4:4:18 . A-4:4:10 C-2:5:54 A-4:4:14 A-4:4:08 . C-2:5:64 A-4:4:16 . A-4:4:08 C-2:5:46 A-4:4:10 .',
+                'C-2:5:44 . . A-4:4:10 . . C-2:5:34 . . . A-4:4:08 . . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.68, attack: 0.001, decay: 0.04, sustain: 0.58, release: 0.06, filter: 1800 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.26, attack: 0.001, decay: 0.05, sustain: 0.32, release: 0.08, filter: 2400 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.38, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.05 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.3, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.76, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
+            ]
+        },
+        kronax: {
+            label: 'Kronax',
+            bpmDelta: 8,
+            transpose: -2,
+            drums: [
+                'A-2:5:72 A-4:4:20 A-2:5:42 A-4:4:12 A-2:5:64 A-4:4:18 A-4:4:10 . A-2:5:70 A-4:4:18 A-2:5:40 A-4:4:12 A-2:5:58 A-4:4:14 .',
+                'A-2:5:68 . A-4:4:16 A-2:5:46 . A-2:5:62 A-4:4:18 . A-4:4:10 A-2:5:66 A-4:4:16 . A-4:4:08 A-2:5:52 A-4:4:12 .',
+                'A-2:5:76 A-4:4:22 A-2:5:48 A-4:4:14 A-2:5:68 A-4:4:18 A-4:4:10 A-4:4:06 A-2:5:72 A-4:4:20 A-2:5:44 A-4:4:12 A-2:5:60 A-4:4:14 A-4:4:08 .',
+                'A-2:5:50 A-4:4:12 . . A-2:5:38 . A-4:4:08 . A-2:5:44 . . A-4:4:08 . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.74, attack: 0.001, decay: 0.03, sustain: 0.62, release: 0.05, filter: 2200 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.28, attack: 0.001, decay: 0.04, sustain: 0.32, release: 0.06, filter: 2400 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.4, attack: 0.001, decay: 0.025, sustain: 0.28, release: 0.04 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.36, attack: 0.001, decay: 0.02, sustain: 0.01, release: 0.02 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.8, attack: 0.001, decay: 0.06, sustain: 0.04, release: 0.04, filter: 350 }
+            ]
+        },
+        voidborn: {
+            label: 'Voidborn',
+            bpmDelta: -4,
+            transpose: 3,
+            drums: [
+                '. A-4:4:12 . . . A-4:4:08 . . . A-4:4:12 . . . A-4:4:06 . .',
+                '. . A-4:4:10 . . . A-4:4:06 . . A-4:4:10 . . . . A-4:4:05 .',
+                'B-1:5:44 . A-4:4:12 . . A-4:4:08 . B-1:5:36 . A-4:4:12 . . A-4:4:06 . . .',
+                '. . . A-4:4:06 . . . . . . . A-4:4:05 . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.58, attack: 0.004, decay: 0.08, sustain: 0.55, release: 0.12, filter: 900 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.22, attack: 0.003, decay: 0.08, sustain: 0.3, release: 0.12, filter: 1800 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.34, attack: 0.002, decay: 0.06, sustain: 0.3, release: 0.1 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.2, attack: 0.002, decay: 0.05, sustain: 0.01, release: 0.04 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.62, attack: 0.002, decay: 0.1, sustain: 0.08, release: 0.08, filter: 500 }
+            ]
+        },
+        pirate: {
+            label: 'Pirate',
+            bpmDelta: 4,
+            transpose: -1,
+            drums: [
+                'C-2:5:66 A-4:4:18 . A-4:4:10 C-2:5:52 . A-4:4:14 A-4:4:08 C-2:5:64 A-4:4:16 . A-4:4:08 C-2:5:46 A-4:4:12 . .',
+                'C-2:5:60 . A-4:4:14 . C-2:5:46 A-4:4:12 . A-4:4:08 C-2:5:58 . A-4:4:14 C-2:5:40 . A-4:4:10 A-4:4:06 .',
+                'C-2:5:70 A-4:4:20 C-2:5:44 A-4:4:12 C-2:5:58 A-4:4:16 A-4:4:08 A-4:4:05 C-2:5:66 A-4:4:18 C-2:5:42 A-4:4:10 C-2:5:52 A-4:4:12 A-4:4:08 .',
+                'C-2:5:46 . A-4:4:10 . . A-4:4:06 . C-2:5:36 . . A-4:4:08 . . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'triangle', volume: 0.66, attack: 0.001, decay: 0.04, sustain: 0.55, release: 0.06, filter: 1600 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.26, attack: 0.001, decay: 0.04, sustain: 0.28, release: 0.07, filter: 2400 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.38, attack: 0.001, decay: 0.03, sustain: 0.28, release: 0.05 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.34, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 380 }
+            ]
+        },
+        machine: {
+            label: 'Machine',
+            bpmDelta: 6,
+            transpose: 0,
+            drums: [
+                'C-2:5:62 A-4:4:14 C-2:5:34 A-4:4:10 C-2:5:62 A-4:4:14 C-2:5:34 A-4:4:10 C-2:5:62 A-4:4:14 C-2:5:34 A-4:4:10 C-2:5:54 A-4:4:12 A-4:4:08 .',
+                'C-2:5:58 A-4:4:12 . A-4:4:08 C-2:5:58 A-4:4:12 . A-4:4:08 C-2:5:58 A-4:4:12 C-2:5:34 A-4:4:08 C-2:5:50 A-4:4:10 A-4:4:06 .',
+                'C-2:5:68 A-4:4:18 C-2:5:40 A-4:4:12 C-2:5:62 A-4:4:14 A-4:4:08 A-4:4:05 C-2:5:66 A-4:4:16 C-2:5:38 A-4:4:10 C-2:5:56 A-4:4:12 A-4:4:08 .',
+                'C-2:5:42 A-4:4:10 . . C-2:5:32 A-4:4:06 . . C-2:5:36 . A-4:4:08 . . . . .'
+            ],
+            instruments: [
+                { id: 1, name: 'wave', wave: 'square', volume: 0.62, attack: 0.001, decay: 0.03, sustain: 0.58, release: 0.04, filter: 1200 },
+                { id: 2, name: 'pulse1', wave: 'square', volume: 0.24, attack: 0.001, decay: 0.03, sustain: 0.3, release: 0.04, filter: 2200 },
+                { id: 3, name: 'pulse2', wave: 'square', volume: 0.38, attack: 0.001, decay: 0.025, sustain: 0.28, release: 0.03 },
+                { id: 4, name: 'noise', wave: 'noise', volume: 0.32, attack: 0.001, decay: 0.018, sustain: 0.01, release: 0.015 },
+                { id: 5, name: 'kick', wave: 'triangle', volume: 0.78, attack: 0.001, decay: 0.05, sustain: 0.04, release: 0.03, filter: 400 }
+            ]
+        }
+    },
+
+    normalizeFaction(id) {
+        const f = String(id || '').toLowerCase();
+        return this.FACTIONS.indexOf(f) !== -1 ? f : '';
+    },
+
+    styleOf(factionId) {
+        const f = this.normalizeFaction(factionId) || 'pirate';
+        return this.styles[f] || this.styles.pirate;
+    },
+
+    /**
+     * Planet arrangement (handcrafted or remix) + faction instruments.
+     * Melodies stay planet-owned. Faction drums only on fill patterns so the
+     * planet groove survives; light transpose for faction colour.
+     */
+    composeCombat(planetId, factionId, opts) {
+        const planet = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const boss = !!(opts && opts.boss);
+        const faction = this.normalizeFaction(factionId) || 'pirate';
+        const style = this.styleOf(faction);
+        const baseRaw = VFTrackerDefaults.forPlanet(boss ? (planet + '-boss') : planet, opts && opts.galaxyId);
+        const compact = VFTrackerParse.toCompact(baseRaw);
+        // Boss: push tempo + darker instrument skin so the chamber can't be
+        // mistaken for the regular stage loop (even when DNA is related).
+        const bpmNudge = boss
+            ? Math.round(style.bpmDelta * 0.35) + 14
+            : Math.round(style.bpmDelta * 0.35);
+        compact.bpm = Math.max(70, Math.min(168, Number(compact.bpm) + bpmNudge));
+        compact.instruments = style.instruments.map((i) => {
+            const inst = Object.assign({}, i);
+            if (boss) {
+                if (inst.filter != null) inst.filter = Math.max(280, Math.round(inst.filter * 0.62));
+                if (inst.wave === 'triangle') inst.wave = 'sawtooth';
+                if (inst.volume != null) inst.volume = Math.min(0.95, Number(inst.volume) * 1.12);
+                if (inst.sustain != null) inst.sustain = Math.min(0.9, Number(inst.sustain) * 1.15);
+            }
+            return inst;
+        });
+        compact.meta = {
+            title: ((compact.meta && compact.meta.title) || planet) + ' / ' + style.label + (boss ? ' BOSS' : ''),
+            author: 'VF Tracker',
+            planet: planet,
+            faction: faction,
+            notes: (boss ? 'boss ' : '') + 'combat vs ' + faction
+        };
+        const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const transpose = boss
+            ? Math.max(-5, Math.min(5, Math.round(style.transpose / 2) - 2))
+            : Math.max(-2, Math.min(2, Math.round(style.transpose / 2)));
+        compact.patterns = (compact.patterns || []).map((p, pi) => ({
+            id: p.id,
+            channels: (p.channels || []).map((ch, i) => {
+                // Boss: faction kit on most packs. Stage: planet drums on A/B.
+                const bossKit = boss && drumBank.length && (pi % 5 !== 0);
+                const stageKit = !boss && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3);
+                if (i === 3 && (bossKit || stageKit)) {
+                    return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                }
+                const melodic = transpose
+                    ? VFTrackerParse.transposeChannelString(ch, transpose)
+                    : ch;
+                if (i === 2 && ((boss && (pi % 5) === 3) || (!boss && (pi % 4) === 3))) {
+                    return pad(String(melodic).split(/\s+/).map((tok, ti) => (ti % 2 ? '.' : tok)).join(' '));
+                }
+                return pad(melodic);
+            })
+        }));
+        return compact;
+    },
+
+    factionTheme(factionId) {
+        const faction = this.normalizeFaction(factionId) || 'pirate';
+        const style = this.styleOf(faction);
+        const roots = {
+            terran: { bass: 'G-1', lead: 'G-3', arp: 'G-4' },
+            kronax: { bass: 'E-1', lead: 'E-3', arp: 'E-4' },
+            voidborn: { bass: 'B-1', lead: 'B-3', arp: 'F#4' },
+            pirate: { bass: 'D-1', lead: 'D-3', arp: 'A-3' },
+            machine: { bass: 'C-2', lead: 'C-4', arp: 'G-4' }
+        }[faction];
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        const drums0 = Array.isArray(style.drums) ? style.drums[0] : style.drums;
+        const drums1 = Array.isArray(style.drums) ? (style.drums[1] || style.drums[0]) : style.drums;
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: {
+                title: style.label + ' Doctrine',
+                author: 'VF Tracker',
+                planet: '',
+                faction: faction,
+                notes: 'faction combat theme'
+            },
+            bpm: Math.max(80, Math.min(140, 100 + style.bpmDelta)),
+            rowsPerBeat: 1,
+            rowsPerPattern: 16,
+            channels: 4,
+            instruments: style.instruments.map((i) => Object.assign({}, i)),
+            patterns: [{
+                id: 0,
+                channels: [
+                    pad(roots.bass + ':1:64 . . . ' + roots.bass + ':1:48 . . . ' + roots.bass + ':1:56 . . . ' + roots.bass + ':1:40 . . .'),
+                    pad(roots.lead + ':2:44 . . ' + roots.lead + ':2:36 . . ' + roots.lead + ':2:40 . . ' + roots.lead + ':2:32 . . .'),
+                    pad(roots.arp + ':3:26 . ' + roots.arp + ':3:18 . ' + roots.arp + ':3:22 . ' + roots.arp + ':3:16 . ' + roots.arp + ':3:26 . ' + roots.arp + ':3:18 . ' + roots.arp + ':3:20 . .'),
+                    pad(drums0)
+                ]
+            }, {
+                id: 1,
+                channels: [
+                    pad(roots.bass + ':1:56 . ' + roots.bass + ':1:36 . ' + roots.bass + ':1:48 . . . ' + roots.bass + ':1:40 . ' + roots.bass + ':1:32 . . .'),
+                    pad(roots.lead + ':2:40 . . ' + roots.lead + ':2:32 . . ' + roots.lead + ':2:36 . . ' + roots.lead + ':2:28 OFF . .'),
+                    pad(roots.arp + ':3:20 . . ' + roots.arp + ':3:14 . ' + roots.arp + ':3:18 . . ' + roots.arp + ':3:12 . . ' + roots.arp + ':3:16 . .'),
+                    pad(drums1)
+                ]
+            }, {
+                id: 2,
+                channels: [
+                    pad(roots.bass + ':1:70 ' + roots.bass + ':1:40 . ' + roots.bass + ':1:52 ' + roots.bass + ':1:60 . . ' + roots.bass + ':1:48 . ' + roots.bass + ':1:36 . ' + roots.bass + ':1:44 . .'),
+                    pad(roots.lead + ':2:52 . ' + roots.lead + ':2:40 . ' + roots.lead + ':2:48 . ' + roots.lead + ':2:36 ' + roots.lead + ':2:44 . ' + roots.lead + ':2:32 . OFF .'),
+                    pad(roots.arp + ':3:28 ' + roots.arp + ':3:16 . ' + roots.arp + ':3:22 . ' + roots.arp + ':3:18 ' + roots.arp + ':3:26 . ' + roots.arp + ':3:14 . ' + roots.arp + ':3:20 .'),
+                    pad(Array.isArray(style.drums) ? (style.drums[2] || drums0) : drums0)
+                ]
+            }],
+            order: [0, 0, 1, 0, 2, 1, 0, 1],
+            loop: true
+        };
+    },
+
+    /**
+     * End screens: planet Hauptmelodie (victory/lose role) + faction voice skin.
+     * Faction-only tables remain as fallback when no planet motif is available.
+     */
+    _endingTrack(kind, factionId, planetId) {
+        const faction = this.normalizeFaction(factionId) || '';
+        const style = this.styleOf(faction || 'pirate');
+        const planet = planetId
+            ? ((typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+                ? VFTrackerDefaults.normalizePlanetKey(planetId)
+                : String(planetId).toLowerCase().split('-')[0])
+            : '';
+        const win = kind === 'victory';
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+
+        // Prefer per-planet role melody; fall back to legacy faction patterns.
+        let base = null;
+        if (planet && typeof VFTrackerDefaults !== 'undefined') {
+            base = win
+                ? (VFTrackerDefaults.victory && VFTrackerDefaults.victory(planet))
+                : (VFTrackerDefaults.lose && VFTrackerDefaults.lose(planet));
+        }
+        if (base) {
+            const compact = VFTrackerParse.toCompact(base);
+            compact.bpm = Math.max(70, Math.min(160,
+                Number(compact.bpm) + Math.round((style.bpmDelta || 0) * 0.35)));
+            if (faction) {
+                compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+                const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+                const transpose = Math.max(-2, Math.min(2, Math.round((style.transpose || 0) / 2)));
+                compact.patterns = (compact.patterns || []).map((p, pi) => ({
+                    id: p.id,
+                    channels: (p.channels || []).map((ch, i) => {
+                        if (i === 3 && drumBank.length && ((pi % 4) === 2 || (pi % 4) === 3)) {
+                            return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                        }
+                        return pad(transpose
+                            ? VFTrackerParse.transposeChannelString(ch, transpose)
+                            : ch);
+                    })
+                }));
+            }
+            compact.meta = Object.assign({}, compact.meta, {
+                title: (win ? 'Victory' : 'Defeat')
+                    + (planet ? ' · ' + planet : '')
+                    + (faction ? ' / ' + style.label : ''),
+                planet: planet,
+                faction: faction || '',
+                role: kind,
+                notes: kind + ' screen · planet melody'
+                    + (faction ? ' · ' + faction + ' skin' : '')
+            });
+            compact.loop = true;
+            return compact;
+        }
+
+        const bpm = win
+            ? Math.max(90, Math.min(140, 112 + Math.floor(style.bpmDelta / 2)))
+            : Math.max(70, Math.min(110, 84 + Math.floor(style.bpmDelta / 3)));
+        const a = (win ? this._victoryPattern(faction || 'pirate') : this._losePattern(faction || 'pirate')).map(pad);
+        const b = (win ? this._victoryBridge(faction || 'pirate') : this._loseBridge(faction || 'pirate')).map(pad);
+        return {
+            format: 'vftrack',
+            version: 1,
+            meta: {
+                title: (win ? 'Victory' : 'Defeat') + ' — ' + style.label + (planet ? ' @ ' + planet : ''),
+                author: 'VF Tracker',
+                planet: planet,
+                faction: faction || 'pirate',
+                role: kind,
+                notes: kind + ' screen · faction fallback'
+            },
+            bpm,
+            rowsPerBeat: 1,
+            rowsPerPattern: 16,
+            channels: 4,
+            instruments: style.instruments.map((i) => Object.assign({}, i)),
+            patterns: [
+                { id: 0, channels: a },
+                { id: 1, channels: b }
+            ],
+            order: win ? [0, 0, 1, 0] : [0, 1, 0, 0],
+            loop: true
+        };
+    },
+
+    _victoryPattern(faction) {
+        const table = {
+            terran: [
+                'C-2:1:60 . E-2:1:48 . G-2:1:56 . . . C-3:1:52 . . . G-2:1:44 . . .',
+                'E-4:2:48 . G-4:2:40 . C-5:2:52 . G-4:2:36 E-4:2:44 . D-4:2:36 . C-4:2:40 . . . .',
+                'C-5:3:24 G-4:3:16 E-4:3:16 G-4:3:16 C-5:3:24 G-4:3:16 E-4:3:16 G-4:3:16 E-5:3:26 C-5:3:18 G-4:3:18 C-5:3:18 E-5:3:26 C-5:3:16 G-4:3:14 E-4:3:14',
+                'C-2:5:68 . A-4:4:22 . C-2:5:52 . A-4:4:20 . C-2:5:68 . A-4:4:22 . C-2:5:48 A-4:4:16 . .'
+            ],
+            kronax: [
+                'E-1:1:70 E-1:1:40 . G-1:1:56 B-1:1:64 . . E-2:1:60 . B-1:1:48 . G-1:1:44 . . . .',
+                'E-3:2:52 . G-3:2:44 . B-3:2:56 . D-4:2:48 E-4:2:60 . B-3:2:44 . G-3:2:40 . . . .',
+                'E-4:3:28 B-3:3:20 G-3:3:20 B-3:3:20 E-4:3:28 B-3:3:20 G-3:3:20 B-3:3:20 G-4:3:30 D-4:3:22 B-3:3:22 D-4:3:22 G-4:3:30 E-4:3:20 B-3:3:18 G-3:3:18',
+                'E-1:5:82 A-4:4:34 E-1:5:50 A-4:4:24 E-1:5:74 A-4:4:30 A-4:4:18 . E-1:5:82 A-4:4:34 E-1:5:50 A-4:4:24 E-1:5:70 A-4:4:28 A-4:4:20 A-4:4:14'
+            ],
+            voidborn: [
+                'B-1:1:48 . . . F#1:1:36 . . . A-1:1:44 . . . E-1:1:32 . . .',
+                'B-3:2:36 . D#4:2:30 . F#4:2:40 . . A-3:2:32 . C#4:2:28 . E-4:2:36 . . . .',
+                'B-4:3:20 F#4:3:12 D#4:3:12 F#4:3:12 B-4:3:22 F#4:3:12 D#4:3:12 F#4:3:12 A-4:3:18 E-4:3:12 C#4:3:12 E-4:3:12 A-4:3:18 F#4:3:10 D#4:3:10 B-3:3:10',
+                '. A-4:4:14 . . . A-4:4:12 . . . A-4:4:16 . . . A-4:4:10 . .'
+            ],
+            pirate: [
+                'D-1:1:64 . F-1:1:48 . A-1:1:56 . . . D-2:1:52 . C-2:1:44 . A-1:1:40 . . .',
+                'D-4:2:46 . F-4:2:38 . A-4:2:50 . F-4:2:34 D-4:2:42 . C-4:2:36 . A-3:2:40 . . . .',
+                'D-5:3:24 A-4:3:16 F-4:3:16 A-4:3:16 D-5:3:24 A-4:3:16 F-4:3:16 A-4:3:16 C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 C-5:3:22 A-4:3:14 F-4:3:12 D-4:3:12',
+                'D-1:5:74 A-4:4:30 . A-4:4:20 D-1:5:58 . A-4:4:26 . D-1:5:74 A-4:4:30 . A-4:4:20 D-1:5:52 A-4:4:22 A-4:4:16 .'
+            ],
+            machine: [
+                'C-2:1:64 C-2:1:36 G-1:1:48 G-1:1:28 C-2:1:64 C-2:1:36 G-1:1:48 G-1:1:28 C-2:1:64 C-2:1:36 E-2:1:52 E-2:1:32 G-2:1:56 G-2:1:36 C-3:1:60 .',
+                'C-4:2:40 E-4:2:34 G-4:2:40 E-4:2:30 C-4:2:40 E-4:2:34 G-4:2:40 E-4:2:30 C-4:2:42 E-4:2:36 G-4:2:44 B-4:2:38 C-5:2:48 . G-4:2:36 .',
+                'C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 C-5:3:22 G-4:3:14 E-4:3:14 G-4:3:14 E-5:3:24 C-5:3:16 G-4:3:16 C-5:3:16 E-5:3:24 C-5:3:14 G-4:3:12 E-4:3:12',
+                'C-2:5:70 A-4:4:26 C-2:5:40 A-4:4:20 C-2:5:70 A-4:4:26 C-2:5:40 A-4:4:20 C-2:5:70 A-4:4:26 C-2:5:40 A-4:4:20 C-2:5:70 A-4:4:26 A-4:4:18 A-4:4:12'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    _losePattern(faction) {
+        const table = {
+            terran: [
+                'A-1:1:50 . . . E-1:1:36 . . . F-1:1:40 . . . E-1:1:30 . . .',
+                'A-3:2:32 . . C-4:2:26 . . E-3:2:28 . . . C-3:2:22 . . . . .',
+                'A-4:3:16 E-4:3:10 C-4:3:10 E-4:3:10 A-4:3:14 E-4:3:10 C-4:3:10 E-4:3:08 G-4:3:12 D-4:3:08 B-3:3:08 D-4:3:08 E-4:3:12 C-4:3:08 A-3:3:08 E-3:3:08',
+                'A-1:5:48 . . A-4:4:12 . . A-1:5:36 . . . A-4:4:10 . . . . .'
+            ],
+            kronax: [
+                'E-1:1:58 . E-1:1:30 . . G-1:1:40 . . B-0:1:36 . . . E-1:1:28 . . .',
+                'E-3:2:36 . . G-3:2:28 . . B-2:2:30 . . . G-2:2:24 . . . . .',
+                'E-4:3:18 B-3:3:12 G-3:3:12 B-3:3:12 E-4:3:16 B-3:3:10 G-3:3:10 B-3:3:08 D-4:3:14 A-3:3:08 F#3:3:08 A-3:3:08 B-3:3:12 G-3:3:08 E-3:3:08 B-2:3:08',
+                'E-1:5:60 A-4:4:18 . . E-1:5:40 . A-4:4:14 . E-1:5:48 . . A-4:4:12 . . . .'
+            ],
+            voidborn: [
+                'B-0:1:40 . . . . . F#0:1:28 . . . . . E-0:1:24 . . .',
+                'B-2:2:24 . . . D#3:2:18 . . . F#3:2:20 . . . . . . .',
+                'B-3:3:12 F#3:3:08 . F#3:3:08 B-3:3:10 . D#3:3:08 . A-3:3:10 E-3:3:08 . E-3:3:08 A-3:3:08 . C#3:3:06 .',
+                '. . A-4:4:08 . . . . . . . A-4:4:06 . . . . .'
+            ],
+            pirate: [
+                'D-1:1:52 . . F-1:1:34 . . A-0:1:30 . . . D-1:1:26 . . . . .',
+                'D-3:2:30 . . F-3:2:24 . . A-2:2:26 . . . F-2:2:20 . . . . .',
+                'D-4:3:16 A-3:3:10 F-3:3:10 A-3:3:10 D-4:3:14 A-3:3:08 F-3:3:08 A-3:3:08 C-4:3:12 G-3:3:08 E-3:3:08 G-3:3:08 A-3:3:10 F-3:3:06 D-3:3:06 A-2:3:06',
+                'D-1:5:55 . A-4:4:16 . D-1:5:38 . A-4:4:12 . D-1:5:44 . . A-4:4:10 . . . .'
+            ],
+            machine: [
+                'C-1:1:48 C-1:1:24 . . G-0:1:32 G-0:1:18 . . C-1:1:40 C-1:1:20 . . E-0:1:28 . . .',
+                'C-3:2:28 . E-3:2:22 . G-3:2:26 . . . C-3:2:22 . . . G-2:2:18 . . .',
+                'C-4:3:14 G-3:3:08 E-3:3:08 G-3:3:08 C-4:3:12 G-3:3:08 E-3:3:08 G-3:3:06 B-3:3:12 F#3:3:06 D#3:3:06 F#3:3:06 G-3:3:10 E-3:3:06 C-3:3:06 G-2:3:06',
+                'C-1:5:52 A-4:4:16 C-1:5:28 A-4:4:12 C-1:5:44 A-4:4:14 . . C-1:5:40 A-4:4:12 . . C-1:5:32 . . .'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    _victoryBridge(faction) {
+        const table = {
+            terran: [
+                'G-1:1:52 . . B-1:1:40 . . C-2:1:48 . . . E-2:1:44 . . G-2:1:50 . .',
+                'G-4:2:42 . B-4:2:36 . C-5:2:46 . . D-5:2:40 . C-5:2:36 . B-4:2:32 . . . .',
+                'G-4:3:18 D-4:3:12 . D-4:3:12 G-4:3:18 . B-4:3:22 . D-4:3:12 G-4:3:16 . E-4:3:12 . D-4:3:10 . .',
+                'C-2:5:60 . A-4:4:18 . C-2:5:44 . A-4:4:14 . C-2:5:56 . A-4:4:16 . A-4:4:12 . . .'
+            ],
+            kronax: [
+                'G-1:1:60 . B-1:1:48 . D-2:1:56 . . E-2:1:52 . . B-1:1:40 . G-1:1:36 . . .',
+                'G-3:2:48 . B-3:2:40 . D-4:2:52 . E-4:2:46 G-4:2:54 . D-4:2:40 . B-3:2:36 . . . .',
+                'G-4:3:24 D-4:3:16 . D-4:3:16 G-4:3:24 . B-4:3:28 . D-4:3:16 G-4:3:20 . E-4:3:14 . D-4:3:12 . .',
+                'E-1:5:70 A-4:4:26 . A-4:4:16 E-1:5:52 . A-4:4:20 . E-1:5:64 A-4:4:22 A-4:4:12 . . . . .'
+            ],
+            voidborn: [
+                'F#1:1:40 . . . A-1:1:34 . . . C#2:1:38 . . . B-1:1:30 . . .',
+                'F#3:2:30 . A-3:2:26 . C#4:2:34 . . E-4:2:28 . C#4:2:24 . A-3:2:22 . . . .',
+                'F#4:3:16 C#4:3:10 . C#4:3:10 F#4:3:16 . A-4:3:18 . C#4:3:10 F#4:3:14 . E-4:3:10 . C#4:3:08 . .',
+                '. A-4:4:12 . . . A-4:4:08 . . . A-4:4:10 . . . A-4:4:06 . .'
+            ],
+            pirate: [
+                'A-1:1:56 . C-2:1:44 . E-2:1:52 . . F-2:1:48 . D-2:1:40 . A-1:1:36 . . . .',
+                'A-3:2:42 . C-4:2:36 . E-4:2:46 . F-4:2:40 A-4:2:48 . E-4:2:36 . C-4:2:32 . . . .',
+                'A-4:3:20 E-4:3:12 . E-4:3:12 A-4:3:20 . C-5:3:24 . E-4:3:12 A-4:3:16 . G-4:3:12 . E-4:3:10 . .',
+                'D-1:5:64 A-4:4:24 . A-4:4:14 D-1:5:48 . A-4:4:18 . D-1:5:58 A-4:4:20 A-4:4:12 . . . . .'
+            ],
+            machine: [
+                'E-2:1:56 E-2:1:30 G-2:1:44 G-2:1:26 E-2:1:56 E-2:1:30 G-2:1:44 G-2:1:26 C-3:1:60 C-3:1:34 E-3:1:48 E-3:1:30 G-3:1:54 . C-4:1:58 .',
+                'E-4:2:38 G-4:2:32 B-4:2:40 G-4:2:28 E-4:2:38 G-4:2:32 B-4:2:40 G-4:2:28 C-5:2:44 E-5:2:36 G-5:2:42 . E-5:2:34 . C-5:2:30 .',
+                'E-5:3:20 B-4:3:12 G-4:3:12 B-4:3:12 E-5:3:20 B-4:3:12 G-4:3:12 B-4:3:12 G-5:3:22 E-5:3:14 C-5:3:14 E-5:3:14 G-5:3:22 E-5:3:12 C-5:3:10 G-4:3:10',
+                'C-2:5:66 A-4:4:22 C-2:5:36 A-4:4:16 C-2:5:66 A-4:4:22 C-2:5:36 A-4:4:16 C-2:5:62 A-4:4:20 A-4:4:12 . A-4:4:10 . . .'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    _loseBridge(faction) {
+        const table = {
+            terran: [
+                'F-1:1:40 . . . C-1:1:28 . . . D-1:1:32 . . . C-1:1:24 . . .',
+                'F-3:2:26 . . A-3:2:20 . . C-3:2:22 . . . A-2:2:18 . . . . .',
+                'F-4:3:12 C-4:3:08 . C-4:3:08 F-4:3:10 . A-3:3:08 . E-4:3:10 C-4:3:06 . C-4:3:06 E-4:3:08 . A-3:3:06 .',
+                'A-1:5:36 . . A-4:4:08 . . A-1:5:28 . . . A-4:4:06 . . . . .'
+            ],
+            kronax: [
+                'D-1:1:44 . . E-1:1:32 . . G-0:1:28 . . . D-1:1:24 . . . . .',
+                'D-3:2:28 . . E-3:2:22 . . G-2:2:24 . . . E-2:2:18 . . . . .',
+                'D-4:3:14 A-3:3:08 . A-3:3:08 D-4:3:12 . F#3:3:08 . B-3:3:10 G-3:3:06 . G-3:3:06 B-3:3:08 . E-3:3:06 .',
+                'E-1:5:44 A-4:4:12 . . E-1:5:30 . A-4:4:08 . E-1:5:36 . . A-4:4:08 . . . .'
+            ],
+            voidborn: [
+                'A-0:1:30 . . . . . E-0:1:22 . . . . . F#0:1:18 . . .',
+                'A-2:2:18 . . . C#3:2:14 . . . E-3:2:16 . . . . . . .',
+                'A-3:3:10 E-3:3:06 . E-3:3:06 A-3:3:08 . C#3:3:06 . G-3:3:08 E-3:3:06 . E-3:3:06 G-3:3:06 . B-2:3:04 .',
+                '. . A-4:4:06 . . . . . . . A-4:4:04 . . . . .'
+            ],
+            pirate: [
+                'C-1:1:40 . . D-1:1:28 . . F-0:1:24 . . . C-1:1:20 . . . . .',
+                'C-3:2:24 . . D-3:2:18 . . F-2:2:20 . . . D-2:2:16 . . . . .',
+                'C-4:3:12 G-3:3:06 . G-3:3:06 C-4:3:10 . E-3:3:06 . A-3:3:08 F-3:3:06 . F-3:3:06 A-3:3:06 . D-3:3:04 .',
+                'D-1:5:40 . A-4:4:10 . D-1:5:28 . A-4:4:08 . D-1:5:32 . . A-4:4:06 . . . .'
+            ],
+            machine: [
+                'G-0:1:36 G-0:1:18 . . E-0:1:28 E-0:1:14 . . G-0:1:32 G-0:1:16 . . C-0:1:24 . . .',
+                'G-2:2:22 . B-2:2:16 . D-3:2:20 . . . G-2:2:18 . . . D-2:2:14 . . .',
+                'G-3:3:12 D-3:3:06 . D-3:3:06 G-3:3:10 . B-2:3:06 . F#3:3:10 D-3:3:06 . D-3:3:06 F#3:3:08 . B-2:3:04 .',
+                'C-1:5:40 A-4:4:12 C-1:5:22 A-4:4:08 C-1:5:34 A-4:4:10 . . C-1:5:30 A-4:4:08 . . . . . .'
+            ]
+        };
+        return table[faction] || table.pirate;
+    },
+
+    victory(factionId, planetId) {
+        return this._endingTrack('victory', factionId, planetId);
+    },
+
+    lose(factionId, planetId) {
+        return this._endingTrack('lose', factionId, planetId);
+    },
+
+    /**
+     * Resolve a library / playback key to a raw track object, or null.
+     * Keys: victory[:faction][:planet], lose..., planet[:faction], planet-boss[:faction], faction:id
+     */
+    /**
+     * Planet intro fanfare skinned with faction instruments/drums/transpose.
+     */
+    composeIntro(planetId, factionId) {
+        const planet = (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.normalizePlanetKey)
+            ? VFTrackerDefaults.normalizePlanetKey(planetId)
+            : String(planetId || 'mars').toLowerCase().split('-')[0];
+        const faction = this.normalizeFaction(factionId);
+        const base = VFTrackerDefaults.intro(planet);
+        if (!faction) {
+            return Object.assign({}, base, { loop: false });
+        }
+        const style = this.styleOf(faction);
+        const compact = VFTrackerParse.toCompact(base);
+        compact.loop = false;
+        compact.bpm = Math.max(90, Math.min(150, Number(compact.bpm) + Math.floor(style.bpmDelta / 2)));
+        compact.instruments = style.instruments.map((i) => Object.assign({}, i));
+        compact.meta = Object.assign({}, compact.meta, {
+            title: (compact.meta.title || 'Intro') + ' / ' + style.label,
+            faction: faction,
+            notes: 'mission intro vs ' + faction
+        });
+        const drumBank = Array.isArray(style.drums) ? style.drums : [style.drums];
+        const pad = (s) => VFTrackerParse.padChannelString(s, 16);
+        compact.patterns = (compact.patterns || []).map((p, pi) => ({
+            id: p.id,
+            channels: (p.channels || []).map((ch, i) => {
+                if (i === 3 && drumBank.length) {
+                    return pad(drumBank[pi % drumBank.length] || drumBank[0]);
+                }
+                return pad(VFTrackerParse.transposeChannelString(ch, style.transpose));
+            })
+        }));
+        return compact;
+    },
+
+    resolveKey(key, opts) {
+        const k = String(key || '').toLowerCase().trim();
+        if (!k) return null;
+        const galaxyId = opts && opts.galaxyId ? String(opts.galaxyId).toLowerCase() : '';
+
+        let         m = /^intro(?::([a-z0-9_-]+))?(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const a = m[1] || '';
+            const b = m[2] || '';
+            const planets = (VFTrackerDefaults && VFTrackerDefaults.PLANETS) ||
+                ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'];
+            let planet = 'mars';
+            let faction = '';
+            if (a && planets.indexOf(a) !== -1) {
+                planet = a;
+                faction = this.normalizeFaction(b);
+            } else if (a && this.normalizeFaction(a)) {
+                faction = a;
+                planet = (b && planets.indexOf(b) !== -1) ? b : 'mars';
+            } else if (a) {
+                planet = (VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(a)
+                    : a.split('-')[0];
+            }
+            return this.composeIntro(planet, faction);
+        }
+
+        m = /^(victory|lose)(?::([a-z0-9_-]+))?(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const kind = m[1];
+            const a = m[2] || '';
+            const b = m[3] || '';
+            let faction = this.normalizeFaction(a);
+            let planet = '';
+            if (faction && b) {
+                planet = (VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(b)
+                    : b.split('-')[0];
+            } else if (!faction && a) {
+                // victory:mars or victory:pirate
+                if (this.normalizeFaction(a)) faction = a;
+                else {
+                    planet = (VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                        ? VFTrackerDefaults.normalizePlanetKey(a)
+                        : a.split('-')[0];
+                }
+            }
+            // Bare victory/lose → default planet motif (styles interpret it).
+            if (!planet) planet = 'mars';
+            return kind === 'victory' ? this.victory(faction, planet) : this.lose(faction, planet);
+        }
+
+        m = /^map(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1]
+                ? ((VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(m[1])
+                    : m[1].split('-')[0])
+                : 'mars';
+            if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.map) {
+                return VFTrackerDefaults.map(planet, galaxyId);
+            }
+            return null;
+        }
+
+        m = /^ingame(?::([a-z0-9_-]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1]
+                ? ((VFTrackerDefaults && VFTrackerDefaults.normalizePlanetKey)
+                    ? VFTrackerDefaults.normalizePlanetKey(m[1])
+                    : m[1].split('-')[0])
+                : 'mars';
+            if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.forRole) {
+                return VFTrackerDefaults.forRole(planet, 'ingame', galaxyId);
+            }
+            return null;
+        }
+
+        m = /^faction:([a-z]+)$/.exec(k);
+        if (m) return this.factionTheme(m[1]);
+
+        // Any planet slug (mars, ambush_x, mil_pir_x1_ab12) ± boss ± faction.
+        m = /^([a-z][a-z0-9_]*)(-boss)?(?::([a-z]+))?$/.exec(k);
+        if (m) {
+            const planet = m[1];
+            const boss = !!m[2];
+            const faction = this.normalizeFaction(m[3]);
+            if (planet === 'menu' || planet === 'intro' || planet === 'victory' || planet === 'lose'
+                || planet === 'faction' || planet === 'station' || planet === 'hub') {
+                return null;
+            }
+            if (faction) return this.composeCombat(planet, faction, { boss: boss });
+            return null; // plain planet / boss handled by VFTrackerDefaults
+        }
+        return null;
+    }
+};
+
+
+/* --- js/game/tracker/manager.js --- */
+"use strict";
+
+/**
+ * Library + playback facade for vftrack soundtracks.
+ * Storage: vf_tracker_library_v1 (per-key JSON tracks).
+ * Keys include planet / ingame:planet, map:planet, shop:planet,
+ * victory[:faction][:planet], lose[:faction][:planet], planet:faction,
+ * planet-boss:faction. Hauptmelodien are planet×role; STYLE interprets them
+ * at playback. Scene feel (difficulty / planet tier) nudges tempo + STYLE.
+ */
+var VFTrackerManager = class VFTrackerManager {
+    constructor() {
+        this.storageKey = 'vf_tracker_library_v1';
+        this.player = new VFTrackerPlayer();
+        this.library = {};
+        this.currentKey = null;
+        this.enabled = true;
+        this.volume = (typeof VFVolume !== 'undefined') ? VFVolume.busDefault() : 0.065;
+        /** Crossfade length when swapping distinct tracks (seconds). */
+        this.crossfadeSeconds = 1.4;
+        this._outgoing = [];
+        /** Manager-owned mixer state — survives fadeOut/stop player swaps. */
+        this._themeIndex = 0;
+        this._jungleAmount = 0;
+        /** Scene feel: tempo × user BPM, STYLE amount offset (combat intensity). */
+        this._sceneTempoMul = 1;
+        this._sceneStyleBoost = 0;
+        /** AUTO STYLE: scene/galaxy picks the melody-genre dropdown (default on). */
+        this._themeAuto = true;
+        this._autoThemeIndex = null;
+        try {
+            const ta = localStorage.getItem('vf_musicThemeAuto');
+            if (ta != null) this._themeAuto = ta !== '0';
+        } catch (e) { /* ignore */ }
+        this.loadLibrary();
+        /** Typical authored combat BPM — local-audio rate is musicBpm / this. */
+        this.referenceBpm = 132;
+        // Pick up persisted AUDIO → MUSIC BPM (volumeControls may load earlier).
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicBpm) {
+            this.setPlaybackBpm(volumeControlsManager.getMusicBpm());
+        } else if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicSpeed) {
+            this.setPlaybackBpm(volumeControlsManager.getMusicSpeed() * this.referenceBpm);
+        } else {
+            try {
+                const savedBpm = localStorage.getItem('vf_musicBpm');
+                if (savedBpm != null) this.setPlaybackBpm(parseFloat(savedBpm));
+                else {
+                    const saved = localStorage.getItem('vf_musicSpeed');
+                    if (saved != null) this.setPlaybackBpm(parseFloat(saved) * this.referenceBpm);
+                }
+            } catch (e) { /* ignore */ }
+        }
+        try {
+            const xf = localStorage.getItem('vf_musicCrossfade');
+            if (xf != null && Number.isFinite(parseFloat(xf))) {
+                this.crossfadeSeconds = Math.max(0.2, Math.min(3, parseFloat(xf)));
+            }
+        } catch (e) { /* ignore */ }
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getJungleAmount) {
+            this.setJungleAmount(volumeControlsManager.getJungleAmount());
+        } else {
+            try {
+                const j = localStorage.getItem('vf_musicJungle');
+                if (j != null) this.setJungleAmount(parseFloat(j));
+            } catch (e) { /* ignore */ }
+        }
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.getMusicTheme != null) {
+            this.setThemeIndex(volumeControlsManager.getMusicTheme());
+        } else {
+            try {
+                const th = localStorage.getItem('vf_musicTheme');
+                if (th != null) this.setThemeIndex(parseInt(th, 10));
+            } catch (e) { /* ignore */ }
+        }
+        if (typeof volumeControlsManager !== 'undefined' && volumeControlsManager.applyChannelVoices) {
+            volumeControlsManager.applyChannelVoices();
+        } else {
+            try {
+                const raw = localStorage.getItem('vf_channelVoices');
+                if (raw) {
+                    const arr = JSON.parse(raw);
+                    if (Array.isArray(arr) && arr.length === 4) {
+                        for (let i = 0; i < 4; i++) this.setChannelVoice(i, arr[i]);
+                    }
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    loadLibrary() {
+        try {
+            const raw = localStorage.getItem(this.storageKey);
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (data && typeof data === 'object') this.library = data;
+        } catch (e) {
+            this.library = {};
+        }
+    }
+
+    saveLibrary() {
+        try {
+            localStorage.setItem(this.storageKey, JSON.stringify(this.library));
+        } catch (e) {
+            // quota — skip
+        }
+    }
+
+    /** Galaxy id for a planet slug — drives procedural motif divergence. */
+    _planetGalaxyId(planetId) {
+        const id = String(planetId || '').toLowerCase();
+        if (!id) return '';
+        try {
+            if (typeof planetConfigManager !== 'undefined' && planetConfigManager.configs) {
+                const cfg = planetConfigManager.configs[id];
+                if (cfg && cfg.galaxyId) return String(cfg.galaxyId).toLowerCase();
+            }
+            if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.galaxyId) {
+                return String(galaxyMapManager.galaxyId).toLowerCase();
+            }
+        } catch (e) { /* ignore */ }
+        return '';
+    }
+
+    _builtInRaw(key) {
+        const k = String(key || '');
+        if (!k) return null;
+        if (this.library[k]) return this.library[k];
+
+        if (k === 'menu' || k === 'station' || k === 'hub') {
+            return VFTrackerDefaults.menu();
+        }
+        if (k === 'title-intro') {
+            return VFTrackerDefaults.titleIntro ? VFTrackerDefaults.titleIntro() : VFTrackerDefaults.menu();
+        }
+        if (k === 'map-void' || k.indexOf('map-void:') === 0) {
+            const galaxyId = k.split(':')[1] || '';
+            return VFTrackerDefaults.mapVoid ? VFTrackerDefaults.mapVoid(galaxyId) : VFTrackerDefaults.menu();
+        }
+        if (k === 'map' || k.indexOf('map:') === 0) {
+            const planet = k.split(':')[1] || 'mars';
+            const galaxyId = this._planetGalaxyId(planet);
+            if (typeof VFTrackerFactionCompose !== 'undefined'
+                && VFTrackerFactionCompose.resolveKey) {
+                const composed = VFTrackerFactionCompose.resolveKey(k, { galaxyId: galaxyId });
+                if (composed) return composed;
+            }
+            return VFTrackerDefaults.map
+                ? VFTrackerDefaults.map(planet, galaxyId)
+                : VFTrackerDefaults.menu();
+        }
+        if (k === 'shop' || k.indexOf('shop:') === 0) {
+            const planet = k.split(':')[1] || 'mars';
+            const galaxyId = this._planetGalaxyId(planet);
+            return VFTrackerDefaults.shop
+                ? VFTrackerDefaults.shop(planet, galaxyId)
+                : (VFTrackerDefaults.forRole
+                    ? VFTrackerDefaults.forRole(planet, 'shop', galaxyId)
+                    : VFTrackerDefaults.menu());
+        }
+        if (k === 'corridor' || k.indexOf('corridor:') === 0) {
+            const planet = k.split(':')[1] || 'mars';
+            const galaxyId = this._planetGalaxyId(planet);
+            return VFTrackerDefaults.corridor
+                ? VFTrackerDefaults.corridor(planet, galaxyId)
+                : VFTrackerDefaults.forRole(planet, 'ingame', galaxyId);
+        }
+        if (k === 'ingame' || k.indexOf('ingame:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            const galaxySkin = this._galaxyDefaultSkin(planet, false);
+            if (galaxySkin) return galaxySkin;
+            return VFTrackerDefaults.forRole
+                ? VFTrackerDefaults.forRole(planet, 'ingame')
+                : VFTrackerDefaults.forPlanet(planet);
+        }
+        if (k === 'victory' || k.indexOf('victory:') === 0
+            || k === 'lose' || k.indexOf('lose:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const parts = k.split(':');
+            const kind = parts[0];
+            const planet = parts[1] && !((typeof VFTrackerFactionCompose !== 'undefined'
+                && VFTrackerFactionCompose.normalizeFaction
+                && VFTrackerFactionCompose.normalizeFaction(parts[1])))
+                ? parts[1]
+                : (parts[2] || 'mars');
+            if (kind === 'victory' && VFTrackerDefaults.victory) return VFTrackerDefaults.victory(planet);
+            if (kind === 'lose' && VFTrackerDefaults.lose) return VFTrackerDefaults.lose(planet);
+        }
+        if (k === 'intro' || k.indexOf('intro:') === 0) {
+            if (typeof VFTrackerFactionCompose !== 'undefined') {
+                const composed = VFTrackerFactionCompose.resolveKey(k);
+                if (composed) return composed;
+            }
+            const planet = k.split(':')[1] || 'mars';
+            return VFTrackerDefaults.intro(planet);
+        }
+        if (typeof VFTrackerFactionCompose !== 'undefined') {
+            const composed = VFTrackerFactionCompose.resolveKey(k);
+            if (composed) return composed;
+        }
+        if (typeof VFTrackerDefaults !== 'undefined' && VFTrackerDefaults.allKeys().indexOf(k) !== -1) {
+            return VFTrackerDefaults.forPlanet(k);
+        }
+        // Bare planet id — including explored / ambush / editor slugs.
+        if (k.indexOf(':') === -1 && /^[a-z][a-z0-9_]*(-boss)?$/.test(k)
+            && k !== 'menu' && k !== 'intro' && k !== 'victory' && k !== 'lose'
+            && k !== 'shop' && k !== 'faction' && k !== 'station' && k !== 'hub') {
+            const wantBoss = k.indexOf('boss') !== -1 || /-(?:boss|b)$/.test(k);
+            const basePlanet = VFTrackerDefaults.normalizePlanetKey(k);
+            const galaxySkin = this._galaxyDefaultSkin(basePlanet, wantBoss);
+            if (galaxySkin) return galaxySkin;
+            return VFTrackerDefaults.forPlanet(k);
+        }
+        return null;
+    }
+
+    /**
+     * Galaxy-level default Faction skin for a procedurally generated planet
+     * with no explicit faction/stage override — milky_way's 5 handcrafted
+     * planets keep their authored sound untouched. Priority stays: active
+     * hostile faction (resolveKey above) > this galaxy default > plain motif.
+     */
+    _galaxyDefaultSkin(planetId, boss) {
+        if (typeof VFTrackerDefaults === 'undefined' || typeof VFTrackerFactionCompose === 'undefined') return null;
+        const id = VFTrackerDefaults.normalizePlanetKey(planetId);
+        if (VFTrackerDefaults.isHandcraftedPlanet && VFTrackerDefaults.isHandcraftedPlanet(id)) return null;
+        try {
+            if (typeof planetConfigManager === 'undefined' || !planetConfigManager.configs) return null;
+            const cfg = planetConfigManager.configs[id];
+            const galaxyId = cfg && cfg.galaxyId;
+            if (!galaxyId || !planetConfigManager.getGalaxy) return null;
+            const galaxy = planetConfigManager.getGalaxy(galaxyId);
+            const faction = galaxy && galaxy.faction;
+            if (!faction) return null;
+            return VFTrackerFactionCompose.composeCombat(id, faction, { boss: boss, galaxyId: galaxyId });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    getTrack(key) {
+        const raw = this._builtInRaw(key);
+        if (!raw) return null;
+        try { return VFTrackerParse.normalize(raw); } catch (e) { return null; }
+    }
+
+    hasTrack(key) {
+        return !!this._builtInRaw(key);
+    }
+
+    setTrack(key, data) {
+        const k = String(key || '').trim();
+        if (!k) return false;
+        if (!data) {
+            delete this.library[k];
+            this.saveLibrary();
+            return true;
+        }
+        const normalized = VFTrackerParse.normalize(data);
+        this.library[k] = VFTrackerParse.toCompact(normalized);
+        this.saveLibrary();
+        return true;
+    }
+
+    importJson(key, jsonText) {
+        const data = typeof jsonText === 'string' ? JSON.parse(jsonText) : jsonText;
+        return this.setTrack(key, data);
+    }
+
+    exportJson(key) {
+        const track = this.getTrack(key);
+        if (!track) return null;
+        return JSON.stringify(VFTrackerParse.toCompact(track), null, 2);
+    }
+
+    listKeys() {
+        const keys = new Set(VFTrackerDefaults.allKeys());
+        keys.add('menu');
+        keys.add('intro');
+        keys.add('title-intro');
+        keys.add('map');
+        keys.add('map-void');
+        keys.add('victory');
+        keys.add('lose');
+        keys.add('shop');
+        keys.add('corridor');
+        ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => {
+            keys.add('intro:' + p);
+            keys.add('map:' + p);
+            keys.add('ingame:' + p);
+            keys.add('victory:' + p);
+            keys.add('lose:' + p);
+            keys.add('shop:' + p);
+            keys.add('corridor:' + p);
+        });
+        if (typeof planetConfigManager !== 'undefined' && planetConfigManager.getGalaxyIds) {
+            try {
+                planetConfigManager.getGalaxyIds().forEach((g) => keys.add('map-void:' + g));
+            } catch (e) { /* ignore */ }
+        }
+        if (typeof VFTrackerFactionCompose !== 'undefined') {
+            VFTrackerFactionCompose.FACTIONS.forEach((f) => {
+                keys.add('faction:' + f);
+                keys.add('victory:' + f);
+                keys.add('lose:' + f);
+                keys.add('intro:' + f);
+                ['mars', 'jupiter', 'saturn', 'neptune', 'pluto'].forEach((p) => {
+                    keys.add(p + ':' + f);
+                    keys.add(p + '-boss:' + f);
+                    keys.add('intro:' + p + ':' + f);
+                    keys.add('victory:' + f + ':' + p);
+                    keys.add('lose:' + f + ':' + p);
+                });
+            });
+        }
+        Object.keys(this.library).forEach((k) => keys.add(k));
+        return [...keys].sort();
+    }
+
+    setVolume(v) {
+        this.volume = Math.max(0, Math.min(1, Number(v) || 0));
+        if (this.player && this.player.setVolume) this.player.setVolume(this.volume);
+        // Keep the fading-out leg at the same loudness so volume drags mid-
+        // crossfade do not leave one voice blasting while the other ducks.
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setVolume) p.setVolume(this.volume);
+        });
+    }
+
+    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. v: 0-3 user fine-tune multiplier. */
+    setChannelVolume(ch, v) {
+        if (this.player && this.player.setChannelVolume) this.player.setChannelVolume(ch, v);
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setChannelVolume) p.setChannelVolume(ch, v);
+        });
+    }
+
+    getChannelVolume(ch) {
+        const mix = this.player && this.player.channelUserMix && this.player.channelUserMix[ch];
+        return Number.isFinite(mix) ? mix : 1;
+    }
+
+    /** ch: 0=bass, 1=lead, 2=arp, 3=drums. voiceId from VFTrackerVoices. */
+    setChannelVoice(ch, voiceId) {
+        let id = 'default';
+        if (this.player && this.player.setChannelVoice) {
+            id = this.player.setChannelVoice(ch, voiceId);
+        } else if (this.player) {
+            if (!this.player.channelVoices) this.player.channelVoices = ['default', 'default', 'default', 'default'];
+            this.player.channelVoices[ch] = String(voiceId || 'default');
+            id = this.player.channelVoices[ch];
+        }
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setChannelVoice) p.setChannelVoice(ch, voiceId);
+            else if (p) {
+                if (!p.channelVoices) p.channelVoices = ['default', 'default', 'default', 'default'];
+                p.channelVoices[ch] = String(voiceId || 'default');
+            }
+        });
+        return id;
+    }
+
+    getChannelVoice(ch) {
+        const v = this.player && this.player.channelVoices && this.player.channelVoices[ch];
+        return v || 'default';
+    }
+
+    /** Authored BPM of the active track (fallback: reference 132). */
+    getAuthoredBpm() {
+        const t = this.player && this.player.track;
+        const b = t && Number(t.bpm);
+        if (Number.isFinite(b) && b > 0) return b;
+        return this.referenceBpm || 132;
+    }
+
+    getTempoScale() {
+        const bpm = this.getPlaybackBpm();
+        const ref = this.getAuthoredBpm();
+        return Math.max(0.25, Math.min(8, bpm / Math.max(1, ref)));
+    }
+
+    getPlaybackBpm() {
+        // Heard tempo = MUSIC BPM × scene feel × bezel SPD.
+        let gameMul = 1;
+        try {
+            if (typeof window !== 'undefined' && typeof window.vfGetGameSpeed === 'function') {
+                const g = Number(window.vfGetGameSpeed());
+                if (Number.isFinite(g) && g > 0) gameMul = Math.max(0.2, Math.min(2, g));
+            }
+        } catch (e) { /* ignore */ }
+        const base = Number.isFinite(this._basePlaybackBpm) && this._basePlaybackBpm > 0
+            ? this._basePlaybackBpm
+            : null;
+        if (base != null) {
+            const sceneMul = Number(this._sceneTempoMul);
+            const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
+            return Math.max(30, Math.min(300, Math.round(base * mul * gameMul)));
+        }
+        const b = Number(this.player && this.player.playbackBpm);
+        if (Number.isFinite(b) && b > 0) return Math.round(b);
+        const s = Number(this.player && this.player.tempoScale);
+        const ref = this.referenceBpm || 132;
+        if (Number.isFinite(s) && s > 0) return Math.round(ref * s * gameMul);
+        return Math.round(ref * gameMul);
+    }
+
+    /** Absolute playback tempo in BPM (game clock + tracker). */
+    setPlaybackBpm(bpm) {
+        const b = Math.max(60, Math.min(300, Math.round(Number(bpm) || 120)));
+        this._basePlaybackBpm = b;
+        return this._applyPlaybackTempo();
+    }
+
+    getJungleAmount() {
+        if (Number.isFinite(this._jungleAmount)) return this._jungleAmount;
+        const a = Number(this.player && this.player.jungleAmount);
+        return Number.isFinite(a) ? a : 0;
+    }
+
+    /**
+     * Style intensity 0..1 — how far into the selected STYLE
+     * (break layer + mix morph). Tempo stays on the MUSIC BPM slider.
+     */
+    setJungleAmount(amount) {
+        let t = Math.max(0, Math.min(1, Number(amount) || 0));
+        if (t < 0.03) t = 0;
+        this._jungleAmount = t;
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        return t;
+    }
+
+    /** User STYLE amount + scene intensity boost (combat difficulty / tier). */
+    _effectiveJungleAmount() {
+        const user = Math.max(0, Math.min(1, Number(this._jungleAmount) || 0));
+        const boost = Number(this._sceneStyleBoost) || 0;
+        let t = Math.max(0, Math.min(1, user + boost));
+        if (t < 0.03) t = 0;
+        return t;
+    }
+
+    _pushJungleToPlayers(amount) {
+        const t = Math.max(0, Math.min(1, Number(amount) || 0));
+        if (this.player && this.player.setJungleAmount) this.player.setJungleAmount(t);
+        else if (this.player) this.player.jungleAmount = t;
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setJungleAmount) p.setJungleAmount(t);
+            else if (p) p.jungleAmount = t;
+        });
+    }
+
+    /**
+     * Adapt heard tempo + STYLE intensity to the active scene.
+     * role: combat|boss|corridor|victory|lose|map|map-void|shop|menu|intro|title-intro
+     * difficulty: easy|normal|hard (menu preset)
+     * planetTier: 0..4 (EASY…NIGHTMARE planet curve)
+     * galaxyFaction: terran|kronax|voidborn|pirate|machine (drives AUTO STYLE pick)
+     */
+    setSceneFeel(opts) {
+        const o = opts || {};
+        const role = String(o.role || 'menu').toLowerCase();
+        const diff = String(o.difficulty || '').toLowerCase();
+        const tierRaw = o.planetTier;
+        const tier = Number.isFinite(Number(tierRaw)) ? Math.max(0, Math.min(4, Number(tierRaw))) : null;
+        let tempoMul = 1;
+        let styleBoost = 0;
+        if (role === 'combat' || role === 'boss' || role === 'ingame') {
+            if (diff === 'easy') { tempoMul = 0.94; styleBoost = -0.08; }
+            else if (diff === 'hard') { tempoMul = 1.07; styleBoost = 0.14; }
+            else { tempoMul = 1; styleBoost = 0; }
+            if (tier != null) {
+                tempoMul *= 0.96 + tier * 0.035;
+                styleBoost += -0.06 + tier * 0.055;
+            }
+            if (role === 'boss') {
+                tempoMul *= 1.05;
+                styleBoost += 0.1;
+            }
+        } else if (role === 'corridor') {
+            // Schlauchlevel: tense but locked — faster pulse, less STYLE flourish.
+            tempoMul = 1.08;
+            styleBoost = -0.1;
+            if (tier != null) tempoMul *= 0.98 + tier * 0.02;
+        } else if (role === 'victory') {
+            tempoMul = 1.03;
+            styleBoost = 0.06;
+        } else if (role === 'lose') {
+            tempoMul = 0.84;
+            styleBoost = -0.18;
+        } else if (role === 'shop') {
+            tempoMul = 0.92;
+            styleBoost = -0.1;
+        } else if (role === 'map-void') {
+            // Pure Weltall: slower, sparsest STYLE of all scenes.
+            tempoMul = 0.82;
+            styleBoost = -0.22;
+        } else if (role === 'map') {
+            tempoMul = 0.9;
+            styleBoost = -0.12;
+        } else if (role === 'intro' || role === 'title-intro') {
+            // Cinematic open: slower pulse, more STYLE weight than the hub loop
+            // so a scene change is heard as a real music update, not a remix.
+            tempoMul = 0.88;
+            styleBoost = 0.16;
+        } else {
+            tempoMul = 1;
+            styleBoost = 0;
+        }
+        this._sceneTempoMul = Math.max(0.75, Math.min(1.35, tempoMul));
+        this._sceneStyleBoost = Math.max(-0.35, Math.min(0.45, styleBoost));
+        // AUTO STYLE: scene/galaxy picks the melody-genre dropdown too, unless
+        // the user has touched the STYLE select themselves (setThemeAuto(false)).
+        this._autoThemeIndex = this._autoThemeIndexFor(role, o.galaxyFaction);
+        if (this._themeAuto) this.setThemeIndex(this._autoThemeIndex);
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        this._applyPlaybackTempo();
+        return { tempoMul: this._sceneTempoMul, styleBoost: this._sceneStyleBoost };
+    }
+
+    clearSceneFeel() {
+        return this.setSceneFeel({ role: 'menu' });
+    }
+
+    /**
+     * Default STYLE dropdown index per scene role (+ galaxy faction for
+     * combat/boss) when AUTO STYLE is on. Indices per VFTrackerThemes.list:
+     * 0 planet · 1 jungle_dnb · 2 minimal · 3 amen · 4 reese · 5 neuro ·
+     * 6 liquid · 7 dnb · 8 nightrun.
+     */
+    _autoThemeIndexFor(role, galaxyFaction) {
+        const r = String(role || 'menu').toLowerCase();
+        const factionIdx = { terran: 0, kronax: 5, voidborn: 6, pirate: 1, machine: 7 };
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1 : 8;
+        const clamp = (i) => Math.max(0, Math.min(max, i));
+        if (r === 'boss') return clamp(4);
+        if (r === 'corridor') return clamp(2);
+        if (r === 'map' || r === 'map-void') return clamp(6);
+        if (r === 'shop') return clamp(0);
+        if (r === 'victory') return clamp(1);
+        if (r === 'lose') return clamp(2);
+        // Hub stays on planet motif; story/title intros pull NIGHTRUN so the
+        // scene change is audible even when the fanfare motif overlaps menu DNA.
+        if (r === 'menu') return clamp(0);
+        if (r === 'intro' || r === 'title-intro') return clamp(8);
+        const f = String(galaxyFaction || '').toLowerCase();
+        if (f && factionIdx[f] != null) return clamp(factionIdx[f]);
+        return clamp(0);
+    }
+
+    /** AUTO STYLE on (default): scene/galaxy drives the melody-genre dropdown. */
+    setThemeAuto(on) {
+        this._themeAuto = !!on;
+        try { localStorage.setItem('vf_musicThemeAuto', this._themeAuto ? '1' : '0'); } catch (e) { /* ignore */ }
+        if (this._themeAuto && this._autoThemeIndex != null) this.setThemeIndex(this._autoThemeIndex);
+        return this._themeAuto;
+    }
+
+    getThemeAuto() {
+        return this._themeAuto !== false;
+    }
+
+    getThemeIndex() {
+        if (Number.isFinite(this._themeIndex)) return this._themeIndex;
+        return Number(this.player && this.player.themeIndex) || 0;
+    }
+
+    /** Melody / style index — see VFTrackerThemes.list (dropdown). */
+    setThemeIndex(index) {
+        const max = (typeof VFTrackerThemes !== 'undefined' && VFTrackerThemes.count)
+            ? VFTrackerThemes.count() - 1
+            : 6;
+        const i = Math.max(0, Math.min(max, Math.round(Number(index) || 0)));
+        this._themeIndex = i;
+        if (this.player && this.player.setThemeIndex) this.player.setThemeIndex(i);
+        else if (this.player) this.player.themeIndex = i;
+        (this._outgoing || []).forEach((p) => {
+            if (p && p.setThemeIndex) p.setThemeIndex(i);
+            else if (p) p.themeIndex = i;
+        });
+        return i;
+    }
+
+    /**
+     * Re-assert THEME / STYLE / channel mix from volume UI (or manager memory)
+     * so every planet / menu / intro / combat swap keeps the selected head.
+     */
+    _reassertMixerSettings() {
+        if (typeof volumeControlsManager !== 'undefined') {
+            if (this._themeAuto && this._autoThemeIndex != null) {
+                this.setThemeIndex(this._autoThemeIndex);
+            } else if (volumeControlsManager.getMusicTheme != null) {
+                this.setThemeIndex(volumeControlsManager.getMusicTheme());
+            }
+            if (volumeControlsManager.getJungleAmount != null) {
+                this.setJungleAmount(volumeControlsManager.getJungleAmount());
+            }
+            if (volumeControlsManager.applyChannelVolumes) {
+                volumeControlsManager.applyChannelVolumes();
+            }
+            if (volumeControlsManager.applyChannelVoices) {
+                volumeControlsManager.applyChannelVoices();
+            }
+            return;
+        }
+        this.setThemeIndex(this.getThemeIndex());
+        this.setJungleAmount(this.getJungleAmount());
+    }
+
+    /**
+     * MUSIC BPM slider = true heard tempo (beats/minute).
+     * tempoScale = musicBpm / authoredTrackBpm so display == what you hear.
+     * BPM = (beats / seconds) × 60 → rowDuration = 60 / bpm / rowsPerBeat.
+     */
+    _applyPlaybackTempo(opts) {
+        // User slider BPM only — scene mul applied once below (never via getPlaybackBpm).
+        let base = Number.isFinite(this._basePlaybackBpm) ? this._basePlaybackBpm : 0;
+        if (!(base > 0)) {
+            const raw = Number(this.player && this.player.playbackBpm);
+            base = (Number.isFinite(raw) && raw > 0) ? raw : (this.referenceBpm || 132);
+        }
+        const sceneMul = Number(this._sceneTempoMul);
+        const mul = Number.isFinite(sceneMul) && sceneMul > 0 ? sceneMul : 1;
+        // Bezel SPD (vfGetGameSpeed) scales heard tempo live — same 0.5×–2× as sim.
+        let gameMul = 1;
+        try {
+            if (typeof window !== 'undefined' && typeof window.vfGetGameSpeed === 'function') {
+                const g = Number(window.vfGetGameSpeed());
+                if (Number.isFinite(g) && g > 0) gameMul = Math.max(0.2, Math.min(2, g));
+            }
+        } catch (e) { /* ignore */ }
+        const soft = !!(opts && opts.soft);
+        const finalize = !!(opts && opts.finalize);
+        // Soft glide keeps float BPM so SPD ease is not a 1-BPM staircase.
+        // Floor 30 BPM (bezel SPD min).
+        const bFloat = Math.max(30, Math.min(300, base * mul * gameMul));
+        const b = soft ? bFloat : Math.round(bFloat);
+        const authored = this.getAuthoredBpm();
+        const scale = Math.max(0.15, Math.min(8, bFloat / Math.max(1, authored)));
+        // Local-file rate stays vs reference 132 (files have no per-track BPM).
+        const fileRate = Math.max(0.2, Math.min(4, bFloat / (this.referenceBpm || 132)));
+        // Soft = SPD ease: retarget anchor without cutting voices.
+        // Finalize / hard = one debounced notifyTempoChanged.
+        if (soft) {
+            const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const last = Number(this._softTempoAt) || 0;
+            const lastMul = Number(this._softTempoMul);
+            if (now - last < 36 && Number.isFinite(lastMul) && Math.abs(lastMul - gameMul) < 0.006) {
+                return b;
+            }
+            this._softTempoAt = now;
+            this._softTempoMul = gameMul;
+        }
+        const applyPlayer = (p, pAuth) => {
+            if (!p) return;
+            p.tempoScale = Math.max(0.25, Math.min(8, bFloat / Math.max(1, pAuth)));
+            p.playbackBpm = b;
+            if (soft && p.retargetTempoAnchor) {
+                try { p.retargetTempoAnchor(); } catch (eR) { /* ignore */ }
+            } else if (!soft) {
+                this._queueTempoNotify(p);
+            }
+        };
+        if (this.player) applyPlayer(this.player, authored);
+        (this._outgoing || []).forEach((p) => {
+            const pAuth = (p && p.track && Number(p.track.bpm) > 0) ? Number(p.track.bpm) : authored;
+            applyPlayer(p, pAuth);
+        });
+        if ((!soft || finalize) && this.player && this.player.isPlaying()
+            && typeof beatSyncManager !== 'undefined' && beatSyncManager.setBpm) {
+            beatSyncManager.setBpm(Math.round(bFloat));
+        }
+        // File rate: soft only when it moved enough; always on hard/finalize.
+        if (typeof localAudioManager !== 'undefined' && localAudioManager.setPlaybackRate) {
+            const prev = Number(this._softFileRate);
+            if (!soft || !Number.isFinite(prev) || Math.abs(prev - fileRate) >= 0.015 || finalize) {
+                localAudioManager.setPlaybackRate(fileRate);
+                this._softFileRate = fileRate;
+            }
+        }
+        return b;
+    }
+
+    /** Coalesce rapid BPM-slider updates into one schedule re-anchor. */
+    _queueTempoNotify(player) {
+        if (!player || !player.notifyTempoChanged) return;
+        if (player._tempoNotifyTimer) {
+            clearTimeout(player._tempoNotifyTimer);
+            player._tempoNotifyTimer = null;
+        }
+        // Slightly longer debounce — mid-drag reanchors were swallowing the mix.
+        player._tempoNotifyTimer = setTimeout(() => {
+            player._tempoNotifyTimer = null;
+            try { player.notifyTempoChanged(); } catch (e) { /* ignore */ }
+        }, 110);
+    }
+
+    setTempoScale(scale) {
+        const ref = this.referenceBpm || 132;
+        this.setPlaybackBpm((Number(scale) || 1) * ref);
+        return this.getTempoScale();
+    }
+
+    setEnabled(on) {
+        this.enabled = !!on;
+        if (!this.enabled) this.stop();
+    }
+
+    _fingerprint(track) {
+        if (!track) return null;
+        try {
+            const c = VFTrackerParse.toCompact(VFTrackerParse.normalize(track));
+            // Musical identity only — meta.title/planet must not force a restart
+            // when two keys resolve to the same notes (procedural map collisions).
+            return JSON.stringify({
+                bpm: c.bpm,
+                rowsPerBeat: c.rowsPerBeat,
+                rowsPerPattern: c.rowsPerPattern,
+                channels: c.channels,
+                patterns: c.patterns,
+                order: c.order,
+                loop: c.loop !== false
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Coarse playback role for a library key. Keep-same only within a role —
+     * combat→menu (planet select) must always swap, even under a non-PLANET style.
+     */
+    _trackRole(key) {
+        const k = String(key || '').toLowerCase();
+        if (!k) return 'combat';
+        if (k === 'menu' || k === 'station' || k === 'hub') return 'menu';
+        if (k === 'title-intro') return 'title-intro';
+        if (k === 'map-void' || k.indexOf('map-void:') === 0) return 'map';
+        if (k === 'map' || k.indexOf('map:') === 0) return 'map';
+        if (k === 'shop' || k.indexOf('shop:') === 0) return 'shop';
+        if (k === 'corridor' || k.indexOf('corridor:') === 0) return 'corridor';
+        if (k === 'intro' || k.indexOf('intro:') === 0) return 'intro';
+        if (k === 'victory' || k.indexOf('victory:') === 0) return 'victory';
+        if (k === 'lose' || k.indexOf('lose:') === 0) return 'lose';
+        if (k === 'ingame' || k.indexOf('ingame:') === 0) return 'combat';
+        return 'combat';
+    }
+
+    /** Play galaxy-map BGM for a planet Hauptmelodie. */
+    playMap(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('map:' + id);
+    }
+
+    /** Play trader / shop BGM for a planet Hauptmelodie. */
+    playShop(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('shop:' + id);
+    }
+
+    _syncPlayerSettings(target) {
+        if (!target) return;
+        const src = this.player;
+        const theme = this.getThemeIndex();
+        const jungle = this._effectiveJungleAmount();
+        const tempoScale = (src && src.tempoScale) || this.getTempoScale();
+        const playbackBpm = (src && src.playbackBpm) || this.getPlaybackBpm();
+        target.tempoScale = tempoScale;
+        target.playbackBpm = playbackBpm;
+        target.jungleAmount = jungle;
+        target.themeIndex = theme;
+        target.channelMixBase = ((src && src.channelMixBase) || [1.0, 1.28, 0.68, 1.05]).slice();
+        target.channelMixJungle = ((src && src.channelMixJungle) || [1.38, 0.3, 0.95, 1.72]).slice();
+        target.channelMixDnb = ((src && src.channelMixDnb) || [1.58, 0.26, 0.82, 1.38]).slice();
+        target.channelMixJungleDnb = ((src && src.channelMixJungleDnb) || [1.45, 0.28, 0.9, 1.62]).slice();
+        target.channelMixElektro = ((src && src.channelMixElektro) || [1.4, 0.34, 1.05, 1.35]).slice();
+        target.channelMixLiquid = ((src && src.channelMixLiquid) || [1.15, 0.48, 1.35, 1.1]).slice();
+        target.channelMixNightrun = ((src && src.channelMixNightrun) || [1.3, 0.62, 1.0, 1.35]).slice();
+        target.channelMix = ((src && src.channelMix) || target.channelMixBase).slice();
+        target.channelUserMix = ((src && src.channelUserMix) || [1, 1, 1, 1]).slice();
+        target.channelVoices = ((src && src.channelVoices) || ['default', 'default', 'default', 'default']).slice();
+        target.fadeSeconds = this.crossfadeSeconds;
+        target.volume = this.volume;
+        if (target.setJungleAmount) target.setJungleAmount(jungle);
+        if (target.setThemeIndex) target.setThemeIndex(theme);
+        if (target.setChannelVoice && target.channelVoices) {
+            for (let i = 0; i < 4; i++) target.setChannelVoice(i, target.channelVoices[i]);
+        }
+    }
+
+    _retireOutgoing(oldPlayer, fadeSec) {
+        if (!oldPlayer) return;
+        // Cap concurrent fade-outs at one: a track swap retriggered before the
+        // previous fade finished (rapid slider drags, quick planet hops) used to
+        // stack a second and third still-audible outgoing player on top of the
+        // new one — heard as the music "overlapping"/stumbling. Cut any player
+        // already fading out immediately instead of letting it keep sounding.
+        if (this._outgoing && this._outgoing.length) {
+            this._outgoing.forEach((p) => {
+                try { p.stop(true); } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
+        this._outgoing.push(oldPlayer);
+        const dur = oldPlayer.fadeOut ? oldPlayer.fadeOut(fadeSec) : 0;
+        setTimeout(() => {
+            try { oldPlayer.stop(true); } catch (e) { /* ignore */ }
+            this._outgoing = this._outgoing.filter((p) => p !== oldPlayer);
+        }, Math.max(0.05, dur) * 1000 + 80);
+    }
+
+    play(key, trackOverride, opts) {
+        if (!this.enabled) return false;
+        const k = String(key || 'mars');
+        let track = trackOverride || this.getTrack(k);
+        if (!track) return false;
+        // Theme / style belong on every song — reassert before keep-or-swap.
+        this._reassertMixerSettings();
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        const prevRole = this._trackRole(this.currentKey);
+        const nextRole = this._trackRole(k);
+        const sameRole = prevRole === nextRole;
+        const fp = this._fingerprint(track);
+        // Same song already audible (even under a new key) — keep row position.
+        // Never keep across roles (combat↔menu/intro/end/shop).
+        // onEnded alone must NOT force a restart: playIntro used to re-crossfade
+        // the same fanfare whenever setStageContext/reevaluate re-armed it.
+        if (!(opts && opts.force) && this.player.isPlaying()) {
+            if (sameRole) {
+                if ((fp && fp === this._currentFingerprint) || this.currentKey === k) {
+                    this.currentKey = k;
+                    if (fp) this._currentFingerprint = fp;
+                    if (opts && typeof opts.onEnded === 'function') {
+                        this.player._onEnded = opts.onEnded;
+                        this.player._endedFired = false;
+                    }
+                    return true;
+                }
+            }
+        }
+        // Scene/role change → always refresh tempo + AUTO STYLE before the swap
+        // so the handoff is heard as a music update, not just a new pattern row.
+        if (!sameRole || (opts && opts.forceScene) || (opts && opts.force)) {
+            const galaxyFaction = (opts && opts.galaxyFaction)
+                || (typeof soundManager !== 'undefined' && (
+                    soundManager._currentHostileFaction
+                    || soundManager._endMusicFaction
+                ))
+                || '';
+            if (typeof soundManager !== 'undefined' && soundManager._applyMusicScene) {
+                soundManager._applyMusicScene(nextRole, galaxyFaction);
+            } else {
+                this.setSceneFeel({ role: nextRole, galaxyFaction: galaxyFaction });
+            }
+        }
+        const ctx = (opts && opts.context)
+            || (typeof soundManager !== 'undefined' && soundManager.ensureContext
+                ? soundManager.ensureContext() : null);
+        if (!ctx) return false;
+
+        const wasPlaying = this.player.isPlaying();
+        const roleChange = !sameRole && wasPlaying;
+        let fade = opts && opts.fade != null
+            ? Math.max(0, Number(opts.fade) || 0)
+            : this.crossfadeSeconds;
+        // Audible scene handoff: role changes never sneak in under a tiny fade.
+        if (roleChange) fade = Math.max(fade, Math.min(1.25, Math.max(0.85, this.crossfadeSeconds * 0.75)));
+        const hasOutgoing = !!(this._outgoing && this._outgoing.length);
+        const doFade = fade > 0 && !(opts && opts.forceHard);
+
+        // Distinct tracks always dual-crossfade (incl. same-role planet hops).
+        // Soft in-place restarts cut mid-bar and sounded like a broken switch;
+        // _retireOutgoing caps stacked fades so quick hops stay clean.
+        if (wasPlaying && doFade) {
+            const incoming = new VFTrackerPlayer();
+            this._syncPlayerSettings(incoming);
+            this._retireOutgoing(this.player, fade);
+            this.player = incoming;
+        } else {
+            // Soft-stop left a blank player — stamp manager THEME onto it.
+            this._syncPlayerSettings(this.player);
+        }
+
+        this.currentKey = k;
+        this._currentFingerprint = fp;
+        // Always ease in when a fade is requested — covers intro→combat and
+        // source handoffs where the previous player already finished.
+        const fadeIn = opts && opts.fadeIn != null
+            ? Math.max(0, Number(opts.fadeIn) || 0)
+            : (doFade ? fade : 0);
+        this.player.play(track, {
+            context: ctx,
+            volume: this.volume,
+            fadeIn: (wasPlaying || hasOutgoing || doFade) ? fadeIn : 0,
+            onEnded: opts && opts.onEnded
+        });
+        // Re-stamp live faders/voices onto the (possibly new) player so AUDIO
+        // moves keep working immediately after a track swap / crossfade.
+        if (typeof volumeControlsManager !== 'undefined') {
+            if (volumeControlsManager.applyChannelVolumes) volumeControlsManager.applyChannelVolumes();
+            if (volumeControlsManager.applyChannelVoices) volumeControlsManager.applyChannelVoices();
+        } else if (this.player && this.player.applyChannelBusGains) {
+            this.player.applyChannelBusGains();
+        }
+        // Track is loaded — finish STYLE + BPM adaptation against this song's
+        // authored BPM (same result as nudging MUSIC BPM / STYLE in AUDIO).
+        this._applyStylePlaybackForTrack();
+        if (typeof beatSyncManager !== 'undefined' && beatSyncManager.start) {
+            const planetHint = (track.meta && track.meta.planet) || k.split(':')[0].split('-')[0];
+            beatSyncManager.start(
+                planetHint === 'menu' || planetHint === 'intro' || planetHint === 'map'
+                    ? 'mars' : planetHint,
+                this.getPlaybackBpm()
+            );
+        }
+        return true;
+    }
+
+    /**
+     * After a real track load: reassert mixer + adapt MUSIC BPM to STYLE × song
+     * so playback does not stay half-styled until the AUDIO faders move.
+     */
+    _applyStylePlaybackForTrack() {
+        if (typeof volumeControlsManager !== 'undefined'
+            && volumeControlsManager.applyStylePlaybackForTrack) {
+            volumeControlsManager.applyStylePlaybackForTrack();
+            this._pushJungleToPlayers(this._effectiveJungleAmount());
+            this._applyPlaybackTempo();
+            return;
+        }
+        this._reassertMixerSettings();
+        this._pushJungleToPlayers(this._effectiveJungleAmount());
+        this._applyPlaybackTempo();
+    }
+
+    /**
+     * Intro fanfare retired (was a one-shot before combat). Kept as API stub
+     * so old callers no-op instead of cutting the bus.
+     */
+    playIntro(/* key, opts */) {
+        return false;
+    }
+
+    playPlanet(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play(id);
+    }
+
+    playMenu() {
+        // Keep position when hub music is already the same track (faction /
+        // wizard / station remounts call startMenuMusic often). play() still
+        // swaps when the role or fingerprint differs (e.g. combat → menu).
+        return this.play('menu');
+    }
+
+    /** Global, one-shot title-screen fanfare. `onDone` fires when it ends. */
+    playTitleIntro(onDone) {
+        if (typeof soundManager !== 'undefined' && soundManager._applyMusicScene) {
+            soundManager._applyMusicScene('title-intro');
+        } else {
+            this.setSceneFeel({ role: 'title-intro' });
+        }
+        return this.play('title-intro', null, {
+            fade: 0.55,
+            fadeIn: 0.85,
+            force: true,
+            forceScene: true,
+            onEnded: typeof onDone === 'function' ? onDone : undefined
+        });
+    }
+
+    /** Schlauchlevel / corridor stage mood — tense, locked-pulse variant. */
+    playCorridor(planetId) {
+        const id = String(planetId || 'mars').toLowerCase().split('-')[0];
+        return this.play('corridor:' + id);
+    }
+
+    /** Pure deep-space map ambience (no planet nearby) — optional galaxy tone. */
+    playMapVoid(galaxyId) {
+        return this.play(galaxyId ? 'map-void:' + String(galaxyId).toLowerCase() : 'map-void');
+    }
+
+    /** First library/default key that would actually play from `keys`. */
+    firstPlayableKey(keys) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        for (let i = 0; i < list.length; i++) {
+            const k = list[i];
+            if (k && this.hasTrack(k)) return String(k);
+        }
+        return null;
+    }
+
+    /**
+     * Try keys in order; first playable wins.
+     * If that song is already playing, keep its position (unless opts.force).
+     */
+    playFirst(keys, opts) {
+        const list = Array.isArray(keys) ? keys : [keys];
+        const target = this.firstPlayableKey(list);
+        if (!target) return null;
+        const force = !!(opts && opts.force);
+        if (!force && this.currentKey === target && this.player.isPlaying()) {
+            // Keep playhead, but still push STYLE / scene feel to the live player.
+            this._reassertMixerSettings();
+            this._pushJungleToPlayers(this._effectiveJungleAmount());
+            this._applyPlaybackTempo();
+            return target;
+        }
+        // Same map/combat motif under an alias key — keep playhead.
+        if (!force && this.player.isPlaying()
+            && this._trackRole(this.currentKey) === this._trackRole(target)) {
+            const track = this.getTrack(target);
+            const fp = this._fingerprint(track);
+            if (fp && fp === this._currentFingerprint) {
+                this.currentKey = target;
+                this._reassertMixerSettings();
+                this._pushJungleToPlayers(this._effectiveJungleAmount());
+                this._applyPlaybackTempo();
+                return target;
+            }
+        }
+        if (this.play(target, null, opts || null)) return target;
+        return null;
+    }
+
+    stop(opts) {
+        const fade = opts && opts.fade != null ? Number(opts.fade) : 0;
+        if (fade > 0 && this.player && this.player.isPlaying()) {
+            this._retireOutgoing(this.player, fade);
+            this.player = new VFTrackerPlayer();
+            this._syncPlayerSettings(this.player);
+        } else {
+            this.player.stop(true);
+            (this._outgoing || []).forEach((p) => {
+                try { p.stop(true); } catch (e) { /* ignore */ }
+            });
+            this._outgoing = [];
+        }
+        this.currentKey = null;
+        this._currentFingerprint = null;
+    }
+
+    /** Soft stop used when handing the bus to local/YouTube audio. */
+    fadeOut(seconds) {
+        const fade = seconds != null ? Number(seconds) : this.crossfadeSeconds;
+        if (!(fade > 0) || !this.player.isPlaying()) {
+            this.stop();
+            return;
+        }
+        this._retireOutgoing(this.player, fade);
+        this.player = new VFTrackerPlayer();
+        this._syncPlayerSettings(this.player);
+        this.currentKey = null;
+        this._currentFingerprint = null;
+    }
+
+    isPlaying(key) {
+        if (key != null) return this.currentKey === key && this.player.isPlaying();
+        return this.player.isPlaying();
+    }
+
+    /**
+     * True while the current player OR a still-fading outgoing leg is audible.
+     * fadeOut() swaps in a blank player — without this, ensureMusicPlaying /
+     * enemy overrides would start a second song on top of the fade.
+     */
+    isAudible() {
+        if (this.player && this.player.isPlaying && this.player.isPlaying()) return true;
+        const out = this._outgoing || [];
+        for (let i = 0; i < out.length; i++) {
+            const p = out[i];
+            if (p && p.isPlaying && p.isPlaying()) return true;
+        }
+        return false;
+    }
+
+    /** Audible playhead for the Music Editor score sheet. */
+    getPlayhead() {
+        if (this.player && this.player.getPlayhead) return this.player.getPlayhead();
+        return { playing: false, orderIndex: 0, rowIndex: 0, pattern: 0, frac: 0, absRow: 0 };
+    }
+
+    downloadTrack(key, filename) {
+        const json = this.exportJson(key);
+        if (!json) return false;
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename || ((key || 'track').replace(/:/g, '_') + '.vftrack.json');
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            URL.revokeObjectURL(a.href);
+            a.remove();
+        }, 500);
+        return true;
+    }
+}
+
+var vfTrackerManager = new VFTrackerManager();
+
+
 /* --- js/game/sounds/soundtrack-override.js --- */
 "use strict";
 
@@ -31471,9 +36797,18 @@ extendClass(SoundManager, {
             if (localAudioManager.el && !localAudioManager.el.paused) return true;
         }
         if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.enabled
             && youtubeSoundtrackManager.mode
-            && youtubeSoundtrackManager.enabled) {
+            && youtubeSoundtrackManager.isPlaying
+            && youtubeSoundtrackManager.isPlaying()) {
             return true;
+        }
+        if (typeof youtubeSoundtrackManager !== 'undefined'
+            && youtubeSoundtrackManager.enabled
+            && youtubeSoundtrackManager.mode
+            && !youtubeSoundtrackManager.isPlaying) {
+            // Legacy: mode set but no isPlaying() — only trust if a key is live.
+            if (youtubeSoundtrackManager.currentKey) return true;
         }
         if (this.ambientNodes) return true;
         return false;
@@ -57600,9 +62935,9 @@ var VolumeControlsManager = class VolumeControlsManager {
      * Dragging a VOL/SND/MUS slider above 0 is the player asking for that
      * channel to be audible — undo a stale soundEnabled/musicEnabled=false
      * left over from an earlier mute, or the slider alone would stay silent.
-     * Only called from the explicit setters below (real user action) — never
-     * from applyVolumes()/boot, or a persisted mute would be undone on every
-     * page load just because the sliders themselves sit above 0.
+     * Also used when opening the volume plate / unmuting: MUS>0 + VOL>0 means
+     * the player expects music, not a silent leftover musicEnabled=false.
+     * Never call from applyVolumes()/boot alone.
      */
     autoUnmuteOnSliderMove() {
         if (typeof soundManager === 'undefined') return;
@@ -57645,6 +62980,19 @@ var VolumeControlsManager = class VolumeControlsManager {
             const plate = document.getElementById('vf-vol');
             if (plate) plate.dispatchEvent(new Event('vf-vol-sync'));
         } catch (e2) { /* optional */ }
+    }
+
+    /**
+     * Volume plate open / MUTE toggle: volumes already say "play music" but a
+     * stale musicEnabled=false or a never-unlocked AudioContext left silence.
+     */
+    kickMusicIfWanted() {
+        this.autoUnmuteOnSliderMove();
+        this.wakeAudioFromUserGesture();
+        if (this.masterVolume > 0 && this.musicVolume > 0 && typeof soundManager !== 'undefined') {
+            if (soundManager.pushMusicBusVolume) soundManager.pushMusicBusVolume();
+            if (soundManager.ensureMusicPlaying) soundManager.ensureMusicPlaying();
+        }
     }
 
     _normVol(volume) {

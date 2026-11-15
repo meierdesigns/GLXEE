@@ -20,7 +20,7 @@ var HomeStationUI = class HomeStationUI {
         this._escMenuCoolKeyUp = null;
         this.onClose = null;
         this.tab = 'station'; // station | upgrade | hangar | components | shop | craft | travel | explorations | play
-        this.upgradeSubTab = 'station'; // station | ships | modules
+        this.upgradeSubTab = 'station'; // station | ships | modules | factions | equipment
         this.shopCategory = 'resources'; // resources | ships | blueprints | parts | portals | styles
         this.shopFilter = 'all';
         this.shopSort = 'name'; // name | cost | tier
@@ -78,7 +78,7 @@ var HomeStationUI = class HomeStationUI {
         } catch (e) { /* ignore */ }
         this.applyMenuOrder();
         // Hangar + factions upgrades live inside the station tree page.
-        this._upgradeSubTabs = ['station', 'equipment'];
+        this._upgradeSubTabs = ['station', 'ships', 'modules', 'factions', 'equipment'];
         this.selectedUpgradeNode = null;
         this.expandedEquipItem = null;
         this._upgTipHost = null;
@@ -93,6 +93,9 @@ var HomeStationUI = class HomeStationUI {
         this._navPreferAreaKey = null;
         this._upgradeSubMeta = {
             station: { label: 'TREE', icon: 'hsStation' },
+            ships: { label: 'SHIPS', icon: 'hsShip' },
+            modules: { label: 'MODULES', icon: 'hsCraft' },
+            factions: { label: 'FACTIONS', icon: 'menuPeoples' },
             equipment: { label: 'EQUIPMENT', icon: 'hsHangar' }
         };
         this._shopCategories = ['resources', 'ships', 'blueprints', 'parts', 'portals', 'styles'];
@@ -2839,7 +2842,7 @@ extendClass(HomeStationUI, {
             && typeof galaxyMapManager !== 'undefined'
             && galaxyMapManager.isVisible
             && soundManager.startMapMusic) {
-            soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
+            soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars', { immediate: true });
             return;
         }
         const ck = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey)
@@ -3853,43 +3856,101 @@ extendClass(HomeStationUI, {
         const order = economyConfig.stationUpgradeOrder || [];
         const nodes = [];
         const byId = {};
-        const pos = {};
-        let maxX = 0;
-        let maxY = 0;
         order.forEach((id) => {
             const node = economyConfig.getStationUpgradeNode(id);
             if (!node) return;
             nodes.push(node);
             byId[node.id] = node;
-            const tx = Number(node.treeX != null ? node.treeX : ((node.treeCol || 0) + 0.5) * 20);
-            const ty = Number(node.treeY != null ? node.treeY : ((node.treeRow || 0) + 0.5) * 20);
-            pos[node.id] = { tx, ty };
-            maxX = Math.max(maxX, tx);
-            maxY = Math.max(maxY, ty);
         });
-        const nodeSize = 76;
-        const half = nodeSize / 2;
-        const padX = 48;
-        const padY = 40;
-        const scaleX = 11.2;
-        const scaleY = 8.4;
-        const treeW = Math.ceil(padX * 2 + maxX * scaleX + nodeSize);
-        const treeH = Math.ceil(padY * 2 + maxY * scaleY + nodeSize);
 
-        const centerOf = (node) => {
-            const p = pos[node.id] || { tx: 0, ty: 0 };
-            return {
-                x: Math.round(padX + p.tx * scaleX),
-                y: Math.round(padY + p.ty * scaleY)
-            };
-        };
+        // Independent color-coded trees side-by-side (NOT one hub from CORE).
+        const TREES = [
+            { id: 'core', root: 'core', color: 'var(--color-primary, #3dff6a)', label: 'CORE' },
+            { id: 'vault', root: 'storage', color: '#e8b84a', label: 'VAULT' },
+            { id: 'fleet', root: 'hangar', color: '#4ec4ff', label: 'FLEET' },
+            { id: 'cargo', root: 'cargo', color: '#d46cff', label: 'CARGO' },
+            { id: 'drive', root: 'impulse_drive', color: '#5dff8a', label: 'DRIVE' },
+            { id: 'power', root: 'reactor', color: '#ff7a45', label: 'POWER' },
+            { id: 'diplo', root: 'embassy', color: '#ff5cab', label: 'DIPLO' }
+        ].filter((t) => byId[t.root]);
 
         const kidsByParent = {};
         nodes.forEach((n) => {
             if (!n.requires || !byId[n.requires]) return;
+            // No visual parent link from CORE into other trees — each tree is independent.
+            if (n.requires === 'core' && n.id !== 'core') return;
             if (!kidsByParent[n.requires]) kidsByParent[n.requires] = [];
             kidsByParent[n.requires].push(n);
         });
+
+        const branchOf = {};
+        const colorOf = {};
+        TREES.forEach((t) => {
+            const stack = [t.root];
+            while (stack.length) {
+                const id = stack.pop();
+                if (branchOf[id]) continue;
+                branchOf[id] = t.id;
+                colorOf[id] = t.color;
+                (kidsByParent[id] || []).forEach((k) => stack.push(k.id));
+            }
+        });
+
+        // Pixel layout: each tree fans out in local space, then packed side-by-side.
+        const nodeSize = 104;
+        const half = nodeSize / 2;
+        const padX = 56;
+        const padY = 48;
+        const rowH = 188;
+        const sibGap = 168;
+        const treeGap = 96;
+        const topY = padY + half + 36;
+        const iconPx = 80;
+
+        const posPx = {}; // id -> { x, y } centre
+        const treeCenters = []; // label x per tree (after packing)
+        let cursorX = padX;
+
+        TREES.forEach((t) => {
+            // Local coords: root at lx=0; each sibling pack fans under its parent.
+            const local = {};
+            let minLx = 0;
+            let maxLx = 0;
+            const place = (id, lx, depth) => {
+                local[id] = { lx, ly: depth * rowH };
+                minLx = Math.min(minLx, lx);
+                maxLx = Math.max(maxLx, lx);
+                const kids = kidsByParent[id] || [];
+                if (!kids.length) return;
+                const spread = (kids.length - 1) * sibGap;
+                kids.forEach((k, i) => {
+                    place(k.id, lx - spread / 2 + i * sibGap, depth + 1);
+                });
+            };
+            place(t.root, 0, 0);
+
+            const localW = Math.max(nodeSize, (maxLx - minLx) + nodeSize);
+            const originX = cursorX + half - minLx;
+            treeCenters.push(originX);
+            Object.keys(local).forEach((id) => {
+                posPx[id] = {
+                    x: Math.round(originX + local[id].lx),
+                    y: Math.round(topY + local[id].ly)
+                };
+            });
+            cursorX += localW + treeGap;
+        });
+
+        let maxX = 0;
+        let maxY = 0;
+        Object.keys(posPx).forEach((id) => {
+            maxX = Math.max(maxX, posPx[id].x);
+            maxY = Math.max(maxY, posPx[id].y);
+        });
+        const treeW = Math.ceil(Math.max(maxX + half + padX, cursorX - treeGap + padX));
+        const treeH = Math.ceil(maxY + half + padY + 32);
+
+        const centerOf = (node) => posPx[node.id] || { x: 0, y: 0 };
 
         const linkParts = [];
         Object.keys(kidsByParent).forEach((pid) => {
@@ -3901,39 +3962,46 @@ extendClass(HomeStationUI, {
             kids.forEach((k) => {
                 minChildTop = Math.min(minChildTop, centerOf(k).y - half);
             });
-            const gap = Math.max(12, Math.min(28, (minChildTop - parentBottom) * 0.4));
+            const gap = Math.max(36, Math.min(72, (minChildTop - parentBottom) * 0.42));
             const busY = parentBottom + gap;
             kids.forEach((k) => {
                 const b = centerOf(k);
                 const childLit = profileManager.getStationUpgradeLevel(k.requires, profile) >= (k.requireLevel || 1)
                     ? ' lit'
                     : '';
+                const branchId = branchOf[k.id] || branchOf[pid] || 'core';
+                const col = colorOf[k.id] || colorOf[pid] || 'var(--color-primary)';
                 const x1 = a.x;
                 const y1 = parentBottom;
                 const x2 = b.x;
                 const y2 = b.y - half;
                 const dx = Math.abs(x2 - x1);
                 let d;
-                if (dx < 6) {
+                if (dx < 8) {
                     d = `M ${Math.round(x1)} ${Math.round(y1)} L ${Math.round(x2)} ${Math.round(y2)}`;
                 } else {
-                    // Hard right-angle bus (no curves) for retro pixel look
                     d = `M ${Math.round(x1)} ${Math.round(y1)}` +
                         ` L ${Math.round(x1)} ${Math.round(busY)}` +
                         ` L ${Math.round(x2)} ${Math.round(busY)}` +
                         ` L ${Math.round(x2)} ${Math.round(y2)}`;
                 }
                 linkParts.push(
-                    `<path class="hs-upg-link${childLit}" d="${d}" fill="none"/>`
+                    `<path class="hs-upg-link${childLit}" data-branch="${branchId}" style="--upg-branch:${col}" d="${d}" fill="none"/>`
                 );
             });
         });
+
+        const legend = TREES.map((t) =>
+            `<span class="hs-upg-branch-chip" style="--upg-branch:${t.color}">` +
+            `<i style="background:${t.color}"></i>${t.label}</span>`
+        ).join('');
 
         const selectedId = this.selectedUpgradeNode && byId[this.selectedUpgradeNode]
             ? this.selectedUpgradeNode
             : (nodes[0] && nodes[0].id);
 
         const nodeButtons = nodes.map((node) => {
+            if (!posPx[node.id]) return '';
             const level = profileManager.getStationUpgradeLevel(node.id, profile);
             const maxed = level >= node.maxLevel;
             const check = profileManager.canUnlockStationUpgrade(node.id, profile);
@@ -3941,6 +4009,8 @@ extendClass(HomeStationUI, {
             const cost = !maxed
                 ? economyConfig.getStationUpgradeCost(node.id, level + 1)
                 : null;
+            const branchId = branchOf[node.id] || 'core';
+            const col = colorOf[node.id] || 'var(--color-primary)';
             let stateClass = 'hs-upg-node';
             if (maxed) stateClass += ' maxed';
             else if (locked) stateClass += ' locked';
@@ -3950,21 +4020,26 @@ extendClass(HomeStationUI, {
 
             const c = centerOf(node);
             const top = c.y - half;
+            const left = c.x - half;
             const canBuy = !maxed && !locked && check.ok;
             const tip = this.buildUpgradeTooltip(node, level, maxed, locked, check, cost, false);
 
-            // Anchor on the node centre (in %) so it stays on its link line
-            // when the tree is squeezed to the panel width.
-            const centerPercent = (c.x / treeW) * 100;
-            return `<button type="button" class="${stateClass}" style="left:calc(${centerPercent}% - ${half}px);top:${top}px;width:${nodeSize}px;height:${nodeSize}px"` +
+            return `<button type="button" class="${stateClass}" data-branch="${branchId}"` +
+                ` style="left:${left}px;top:${top}px;width:${nodeSize}px;height:${nodeSize}px;--upg-branch:${col}"` +
                 ` data-nav-item data-upgrade-node="${node.id}"` +
                 (canBuy ? ` data-upgrade="${node.id}"` : '') +
                 ` aria-label="${node.label} ${level}/${node.maxLevel}">` +
                 `<span class="hs-upg-face" aria-hidden="true"></span>` +
-                `<span class="hs-upg-icon">${this.iconHtml((node.icon || 'hsUpgrade') + '@d', 64, 'hs-pixel')}</span>` +
+                `<span class="hs-upg-icon">${this.iconHtml((node.icon || 'hsUpgrade') + '@d', iconPx, 'hs-pixel')}</span>` +
                 this.buildUpgradeSlotBadges(level, node.maxLevel) +
                 tip +
                 `</button>`;
+        }).join('');
+
+        // Per-tree labels above each independent root.
+        const colLabels = TREES.map((t, ti) => {
+            const x = treeCenters[ti] || 0;
+            return `<span class="hs-upg-col-label" style="left:${Math.round(x)}px;--upg-branch:${t.color}">${t.label}</span>`;
         }).join('');
 
         const sel = byId[selectedId];
@@ -3975,7 +4050,8 @@ extendClass(HomeStationUI, {
             const check = profileManager.canUnlockStationUpgrade(sel.id, profile);
             const locked = !maxed && check.reason === 'LOCKED';
             const cost = !maxed ? economyConfig.getStationUpgradeCost(sel.id, level + 1) : null;
-            dock = `<div class="hs-upg-dock">${this.buildUpgradeTooltip(sel, level, maxed, locked, check, cost, false)
+            const col = colorOf[sel.id] || 'var(--color-primary)';
+            dock = `<div class="hs-upg-dock" style="--upg-branch:${col}">${this.buildUpgradeTooltip(sel, level, maxed, locked, check, cost, false)
                 .replace('hs-upg-tip', 'hs-upg-dock-body')
                 .replace(' role="tooltip"', '')}</div>`;
         }
@@ -4000,10 +4076,11 @@ extendClass(HomeStationUI, {
             `</div>`;
 
         return summary +
+            `<div class="hs-upg-branch-legend">${legend}</div>` +
             `<div class="hs-upg-tree-scroll">` +
-            // Fits the panel width (no horizontal scroll); only vertical scrolls.
-            `<div class="hs-upg-tree" style="width:100%;height:${treeH}px">` +
-            `<svg class="hs-upg-links" width="100%" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" preserveAspectRatio="none" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
+            `<div class="hs-upg-tree" style="width:${treeW}px;min-width:100%;height:${treeH}px">` +
+            colLabels +
+            `<svg class="hs-upg-links" width="${treeW}" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" preserveAspectRatio="xMidYMin meet" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
             nodeButtons +
             `</div></div>` +
             dock;
@@ -5889,22 +5966,34 @@ extendClass(HomeStationUI, {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsUpgrade', 'UPGRADES')}` +
                 `<p class="hs-muted">Upgrade system unavailable.</p></div>`;
         }
-        // Legacy saves may still point at removed ships/modules sub-tabs.
-        if (this.upgradeSubTab === 'ships' || this.upgradeSubTab === 'modules'
-            || this.upgradeSubTab === 'factions' || this.upgradeSubTab === 'hangar') {
-            this.upgradeSubTab = 'station';
-        }
+        // Old "hangar" sub-tab → SHIPS (hull areas).
+        if (this.upgradeSubTab === 'hangar') this.upgradeSubTab = 'ships';
         let inner = '';
         let title = 'STATION UPGRADE TREE';
-        let hint = 'Station systems, hangar bays, drives — plus hangar hull/module upgrades and the factions wing on one tree.';
+        let hint = 'Station systems, hangar bays, drives — pick a node, then UPGRADE.';
         let showHead = true;
         if (this.upgradeSubTab === 'equipment') {
             showHead = false;
             inner = this.renderEquipmentUpgrades(profile);
+        } else if (this.upgradeSubTab === 'ships') {
+            title = 'SHIP HULL UPGRADES';
+            hint = 'Per-ship hull areas — nose, core, aft, wings.';
+            inner = this.renderShipFrameUpgrades
+                ? this.renderShipFrameUpgrades(profile)
+                : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
+        } else if (this.upgradeSubTab === 'modules') {
+            title = 'MODULE TRACKS';
+            hint = 'Global weapon / defense / ability / energy tracks.';
+            inner = this.renderModuleTypeUpgrades
+                ? this.renderModuleTypeUpgrades(profile)
+                : '';
+        } else if (this.upgradeSubTab === 'factions') {
+            title = 'FACTIONS UPGRADES';
+            hint = 'Embassy, Trade Desk, War Room — levels and live bonuses.';
+            inner = this.renderTreeFactionUpgrades(profile);
         } else {
-            inner = this.renderStationUpgradeTree(profile) +
-                this.renderTreeHangarUpgrades(profile) +
-                this.renderTreeFactionUpgrades(profile);
+            // TREE: graphical station nodes only.
+            inner = this.renderStationUpgradeTree(profile);
         }
 
         return `<div class="hs-section hs-panel hs-upgrade-root">` +
@@ -5917,22 +6006,7 @@ extendClass(HomeStationUI, {
             `</div>`;
     },
 
-    /** Hull areas + module tracks — hangar upgrades embedded under the station tree. */
-    renderTreeHangarUpgrades(profile) {
-        const ships = this.renderShipFrameUpgrades
-            ? this.renderShipFrameUpgrades(profile)
-            : '';
-        const modules = this.renderModuleTypeUpgrades
-            ? this.renderModuleTypeUpgrades(profile)
-            : '';
-        return `<div class="hs-upg-branch hs-upg-branch-hangar">` +
-            `${this.panelTitle('hsShip', 'HANGAR UPGRADES')}` +
-            `<p class="hs-muted hs-hint">Hull areas and global module tracks — same buys as before, now on the station tree page.</p>` +
-            `<div class="hs-upg-branch-body">${ships}${modules}</div>` +
-            `</div>`;
-    },
-
-    /** Factions wing status — nodes are on the tree; this lists levels + live bonuses. */
+    /** Factions wing status — nodes are also on the TREE; this tab lists levels + live bonuses. */
     renderTreeFactionUpgrades(profile) {
         const ids = ['embassy', 'trade_desk', 'war_room'];
         const stats = profileManager.getStationStats ? profileManager.getStationStats(profile) : {};
@@ -5964,11 +6038,8 @@ extendClass(HomeStationUI, {
             stats.tradeBonus > 0 ? ('TRADE +' + Math.round(stats.tradeBonus * 100) + '%') : '',
             stats.contractRepBonus > 0 ? ('CONTRACT REP +' + stats.contractRepBonus) : ''
         ].filter(Boolean).join(' · ') || 'BUILD EMBASSY ON THE TREE TO START';
-        return `<div class="hs-upg-branch hs-upg-branch-factions">` +
-            `${this.panelTitle('menuPeoples', 'FACTIONS UPGRADES')}` +
-            `<p class="hs-muted hs-hint">Embassy → Trade Desk / War Room on the tree. Live bonuses: ${bonusLine}</p>` +
-            `<div class="hs-upg-branch-body">${rows}</div>` +
-            `</div>`;
+        return `<p class="hs-muted hs-hint">Embassy → Trade Desk / War Room also on TREE. Live bonuses: ${bonusLine}</p>` +
+            `<div class="hs-upg-branch-body">${rows}</div>`;
     },
 
     renderTravelTab(profile) {

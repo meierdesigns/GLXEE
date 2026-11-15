@@ -178,14 +178,72 @@ extendClass(HomeStationUI, {
 
         this.overlay.querySelectorAll('[data-item-mode]').forEach((btn) => {
             btn.addEventListener('click', () => {
-                const [bucket, id, mode] = (btn.getAttribute('data-item-mode') || '').split(':');
-                const res = profileManager.setItemMode(bucket, id, mode);
+                const raw = btn.getAttribute('data-item-mode') || '';
+                const first = raw.indexOf(':');
+                const last = raw.lastIndexOf(':');
+                if (first < 0 || last <= first) return;
+                const bucket = raw.slice(0, first);
+                const id = raw.slice(first + 1, last);
+                const mode = raw.slice(last + 1);
+                let res = profileManager.setItemMode(bucket, id, mode);
                 if (res.ok) {
                     this.playButtonResult(btn, true, 'MODE: ' + mode.toUpperCase());
                     this.createUI();
-                } else {
-                    this.playButtonResult(btn, false, res.reason || 'LOCKED');
+                    return;
                 }
+                // Locked fire mode: buy the gate track (DAMAGE L2 / ROF L2), then switch.
+                if (typeof economyConfig === 'undefined') {
+                    this.playButtonResult(btn, false, res.reason || 'LOCKED');
+                    return;
+                }
+                const track = btn.getAttribute('data-mode-unlock-track')
+                    || (economyConfig.itemFireModes && economyConfig.itemFireModes[mode]
+                        && economyConfig.itemFireModes[mode].unlockTrack)
+                    || '';
+                const modeDef = economyConfig.itemFireModes && economyConfig.itemFireModes[mode];
+                const needLv = (modeDef && modeDef.unlockLevel) || 1;
+                const trackMeta = (economyConfig.itemUpgradeTrackDefs[bucket] || {})[track];
+                const trackLabel = (trackMeta && trackMeta.label) || String(track).toUpperCase();
+                if (!track) {
+                    this.playButtonResult(btn, false, res.reason || 'LOCKED');
+                    return;
+                }
+                const before = profileManager.getItemTrackLevel(bucket, id, track);
+                if (before >= needLv) {
+                    this.playButtonResult(btn, false, res.reason || 'LOCKED');
+                    return;
+                }
+                const act = { type: 'item-track-upgrade', bucket: bucket, id: id, track: track };
+                const title = this._storageItemMeta(bucket, id).label + ' · ' + trackLabel;
+                let up = profileManager.purchaseItemTrackUpgrade(bucket, id, track);
+                if (!up.ok && up.reason === 'RESOURCES' && btn.hasAttribute('data-short')) {
+                    up = this.buyMissingThenAct(up.cost, act);
+                }
+                if (up.ok) {
+                    const level = up.level;
+                    if (level >= needLv) {
+                        res = profileManager.setItemMode(bucket, id, mode);
+                        this.playButtonResult(btn, !!res.ok,
+                            res.ok
+                                ? (trackLabel + ' L' + level + ' · MODE: ' + mode.toUpperCase())
+                                : (res.reason || 'LOCKED'));
+                    } else {
+                        this.playButtonResult(btn, true,
+                            trackLabel + ' L' + level + ' · NEED L' + needLv + ' FOR ' + mode.toUpperCase());
+                    }
+                    this.createUI();
+                    return;
+                }
+                if (up.reason === 'RESOURCES') {
+                    this.openResourceBuyModal({
+                        title: title + (up.nextLevel ? (' · L' + up.nextLevel) : ''),
+                        cost: up.cost,
+                        action: act
+                    });
+                    return;
+                }
+                this.playButtonResult(btn, false,
+                    'NEED ' + trackLabel + ' L' + needLv + ' (NOW L' + before + ')');
             });
         });
 

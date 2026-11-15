@@ -985,6 +985,8 @@ button.hs-faction-card.nav-focused {
     overflow: visible;
     padding: 8px 12px;
     box-sizing: border-box;
+    border-radius: 0;
+    clip-path: none;
 }
 .hs-ship-card tr { border-bottom: none !important; }
 .hs-ship-card > .hs-ship-id-row {
@@ -1052,8 +1054,8 @@ button.hs-faction-card.nav-focused {
     display: flex !important;
     flex-direction: column;
     justify-content: center;
-    /* start — do not stretch the bay to the ship-info column height (skews slot aspect). */
-    align-self: start;
+    /* center, not stretch — vertically centers the grid in the row without resizing it (skews slot aspect). */
+    align-self: center;
     margin: 6px 0;
     padding: 4px 4px 4px 16px;
     border-left: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 18%, transparent);
@@ -1633,8 +1635,16 @@ html body .home-station-overlay .home-station-content .hs-upgrade-root .hs-equip
     outline: 2px solid var(--color-primary);
 }
 .hs-equip-mode-btn.is-locked {
-    opacity: 0.45;
-    cursor: not-allowed;
+    opacity: 0.55;
+    cursor: pointer;
+}
+.hs-equip-mode-btn .hs-equip-mode-lock {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    opacity: 0.75;
+    line-height: 1.1;
+    margin-top: 2px;
 }
 .hs-equip-tune {
     display: flex;

@@ -43,9 +43,23 @@ extendClass(HomeStationUI, {
             const unlocked = available.indexOf(modeId) !== -1;
             const active = modeId === current;
             const trackLabel = def.unlockTrack && trackDefs[def.unlockTrack] ? trackDefs[def.unlockTrack].label : '';
-            const lockNote = !unlocked && def.unlockTrack ? ` title="Needs ${trackLabel} L${def.unlockLevel}"` : ` title="${def.desc}"`;
-            return `<button class="action-button hs-equip-mode-btn${active ? ' is-active' : ''}${unlocked ? '' : ' is-locked'}" ` +
-                `data-item-mode="${bucket}:${id}:${modeId}" ${unlocked ? '' : 'disabled'}${lockNote}>${def.label}</button>`;
+            const needLv = def.unlockLevel || 1;
+            const curLv = def.unlockTrack
+                ? profileManager.getItemTrackLevel(bucket, id, def.unlockTrack, profile)
+                : 0;
+            // Keep locked modes clickable so a tap can upgrade the gate track
+            // (or at least toast the requirement) instead of silently doing nothing.
+            let tip;
+            let label = def.label;
+            if (!unlocked && def.unlockTrack) {
+                tip = `UNLOCK: UPGRADE ${trackLabel} TO L${needLv} (NOW L${curLv}) · TAP TO BUY`;
+                label = `${def.label}<span class="hs-equip-mode-lock">L${needLv} ${trackLabel}</span>`;
+            } else {
+                tip = def.desc || def.label;
+            }
+            const tipAttr = ` data-ui-tip="${String(tip).replace(/"/g, '&quot;')}"`;
+            return `<button type="button" class="action-button hs-equip-mode-btn${active ? ' is-active' : ''}${unlocked ? '' : ' is-locked'}" ` +
+                `data-item-mode="${bucket}:${id}:${modeId}"${unlocked ? '' : ` data-mode-unlock-track="${def.unlockTrack}"`}${tipAttr}>${label}</button>`;
         }).join('');
         return `<div class="hs-equip-mode-row">` +
             `<span class="hs-equip-mode-label">FIRE MODE</span>` +

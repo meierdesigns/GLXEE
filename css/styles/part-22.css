@@ -341,8 +341,9 @@ html body .profile-start-main .profile-faction-preview { grid-template-rows: 56p
 html body .profile-start-main .profile-faction-preview .profile-faction-ship {
     grid-column: 1; grid-row: 2; align-self: center; justify-self: center; margin: 0 !important;
     width: auto !important; height: auto !important; max-width: 100% !important; max-height: 100% !important;
-    min-height: 0; aspect-ratio: 320 / 224 !important; object-fit: contain;
+    min-height: 0; aspect-ratio: auto !important; object-fit: contain;
     height: min(100%, clamp(300px, 62vh, 640px)) !important;
+    image-rendering: pixelated;
 }
 
 /* Bigger start ship: fills the area under the top bar. */
@@ -380,8 +381,8 @@ html body .profile-start-main .profile-faction-preview { min-height: clamp(520px
    rules above by specificity, so this one repeats the classes. */
 html body .profile-selection-name-mode.is-name-step .profile-start-main .profile-faction-info-row .profile-faction-preview .profile-faction-ship.profile-faction-ship {
     grid-column: 1; grid-row: 2; align-self: center; justify-self: center; margin: 0 !important;
-    width: calc(100% - 40px) !important; height: auto !important; max-width: none !important;
-    max-height: 100% !important; aspect-ratio: 320 / 224 !important; object-fit: contain; image-rendering: pixelated;
+    width: auto !important; height: auto !important; max-width: calc(100% - 40px) !important;
+    max-height: 100% !important; aspect-ratio: auto !important; object-fit: contain; image-rendering: pixelated;
 }
 html body .profile-start-main .profile-faction-preview { grid-template-columns: minmax(0, 1fr) minmax(280px, 300px) !important; }
 html body .profile-start-main .profile-faction-preview > .profile-loadout { min-width: 280px; }
@@ -702,8 +703,170 @@ html body .profile-start-main .pk-slot:not(.is-filled) .hs-slot-glyph { backgrou
   -webkit-user-drag: none;
 }
 
-/* Hangar sidebar → SLOTS view */
+/* Hangar sidebar → slot boxes (standalone / legacy) */
 .hs-slotview { display: flex; flex-direction: column; gap: 10px; padding: 10px; overflow-y: auto; min-height: 0; }
+/* Merged PARTS: one row = slot icon + part info */
+.hs-hangar-slot-pair {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+html body .hs-hangar-part.is-merged {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 5px 8px 5px 5px;
+    box-sizing: border-box;
+    border: 2px solid color-mix(in srgb, var(--pk-c, var(--color-primary)) 55%, transparent);
+    background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 8%, #05060a);
+    box-shadow: none;
+    cursor: pointer;
+}
+html body .hs-hangar-part.is-merged.is-equipped {
+    border-color: var(--pk-c, var(--color-primary));
+    background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 14%, #05060a);
+}
+html body .hs-hangar-part.is-merged.is-empty {
+    border-style: dashed;
+    opacity: 0.75;
+    letter-spacing: 2px;
+}
+html body .hs-hangar-part.is-merged:hover,
+html body .hs-hangar-part.is-merged:focus-visible {
+    background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 20%, #05060a);
+    border-color: var(--pk-c, var(--color-primary));
+}
+/* Real S/M/L footprint via --svw/--svh. Border (not outline): dashed
+   outline + negative offset drifts off the dark fill. */
+.hs-hangar-part.is-merged > .hs-hangar-part-slot.hs-slotview-cell {
+    order: 0;
+    position: relative;
+    flex: 0 0 auto;
+    display: inline-grid;
+    place-items: center;
+    width: var(--svw, 40px);
+    height: var(--svh, 40px);
+    box-sizing: border-box;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--pk-c) 40%, transparent);
+    outline: none;
+    overflow: hidden;
+    pointer-events: none;
+}
+.hs-hangar-part.is-merged.is-equipped > .hs-hangar-part-slot.hs-slotview-cell,
+.hs-hangar-part.is-merged > .hs-hangar-part-slot.hs-slotview-cell.is-filled {
+    border-style: solid;
+    border-color: var(--pk-c);
+}
+.hs-hangar-part.is-merged > .hs-hangar-part-slot img,
+.hs-hangar-part.is-merged > .hs-hangar-part-slot canvas,
+.hs-hangar-part.is-merged > .hs-hangar-part-slot svg {
+    display: block;
+    image-rendering: pixelated;
+}
+.hs-hangar-part.is-merged > .hs-hangar-part-slot:not(.is-filled) img {
+    width: 28px;
+    height: 28px;
+}
+.hs-hangar-part-slot .hs-slotview-part {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+}
+.hs-hangar-part-slot .hs-slotview-part.is-mount {
+    border: 0;
+    background: transparent;
+}
+.hs-hangar-part-slot .hs-slotview-part.is-mount .hs-hangar-part-mount {
+    order: 0;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+}
+.hs-hangar-part-slot .hs-slotview-part.is-mount .hs-hangar-part-mount img {
+    width: min(56px, 90%);
+    height: auto;
+    max-height: 90%;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.hs-hangar-part-slot .hs-slotview-size {
+    position: absolute;
+    top: 1px;
+    right: 3px;
+    font-size: 10px;
+    line-height: 1;
+    opacity: 0.85;
+    pointer-events: none;
+}
+.hs-hangar-part.is-merged > .hs-hangar-part-name {
+    order: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 3px;
+}
+html body .hs-hangar-part.is-merged .hs-hangar-part-title {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+    font-size: var(--font-text, 12px);
+    letter-spacing: 1px;
+}
+html body .hs-hangar-part.is-merged .hs-hangar-weapon-stats {
+    gap: 8px;
+    font-size: var(--font-small, 11px);
+    letter-spacing: 0.04em;
+    opacity: 0.9;
+}
+html body .hs-hangar-part.is-merged .hs-hangar-weapon-stat {
+    gap: 2px;
+}
+html body .hs-hangar-part.is-merged .hs-hangar-weapon-stat img {
+    width: 12px;
+    height: 12px;
+}
+html body .hs-hangar-list .hs-hangar-parts {
+    gap: 6px;
+    padding: 0 2px 8px;
+}
+/* Bay inventory filter chips also drive the PARTS list (hide other kinds). */
+html body .hs-hangar-parts[data-filter="weapon"] > .hs-hangar-parts-section:not([data-part-section="weapon"]),
+html body .hs-hangar-parts[data-filter="defense"] > .hs-hangar-parts-section:not([data-part-section="defense"]),
+html body .hs-hangar-parts[data-filter="ability"] > .hs-hangar-parts-section:not([data-part-section="ability"]),
+html body .hs-hangar-parts[data-filter="energy"] > .hs-hangar-parts-section:not([data-part-section="energy"]) {
+    display: none;
+}
+html body .hs-hangar-parts-section {
+    margin-top: 6px;
+}
+html body .hs-hangar-parts-section:first-child {
+    margin-top: 0;
+}
+html body .hs-hangar-parts-section .hs-hangar-parts-title {
+    min-height: 28px;
+    margin-bottom: 4px;
+    padding-left: 8px;
+    padding-right: 6px;
+    gap: 8px;
+}
+html body .hs-hangar-parts-grid {
+    gap: 4px;
+}
+html body .hs-hangar-slot-pair {
+    min-width: 0;
+}
+.hs-hangar-parts-section.is-collapsed > .hs-hangar-parts-grid { display: none; }
 /* Label above its slots, not beside them: a fixed 96px label column left almost no room for the
    slots in this narrow sidebar, so same-row cells (e.g. a wing pair) wrapped onto separate lines
    instead of sitting side by side — the slots now get the row's full width to lay out in. */
@@ -720,8 +883,8 @@ html body .profile-start-main .pk-slot:not(.is-filled) .hs-slot-glyph { backgrou
 .hs-tree-area-toggle input { accent-color: var(--color-primary); width: 12px; height: 12px; margin: 0; }
 .hs-slotview-slots { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; justify-content: flex-start; }
 .hs-slotview-slots em { font-style: normal; opacity: .5; font-size: var(--font-h3, 12px); letter-spacing: 2px; }
-.hs-slotview-cell { display: inline-grid; place-items: center; width: var(--svw, 44px); height: var(--svh, 44px); box-sizing: border-box; background: #05060a; border: 0; outline: 2px dashed color-mix(in srgb, var(--pk-c) 55%, transparent); outline-offset: -2px; }
-.hs-slotview-cell.is-filled { outline-style: solid; outline-color: var(--pk-c); }
+.hs-slotview-cell { display: inline-grid; place-items: center; width: var(--svw, 44px); height: var(--svh, 44px); box-sizing: border-box; background: #05060a; border: 2px dashed color-mix(in srgb, var(--pk-c) 55%, transparent); outline: none; overflow: hidden; }
+.hs-slotview-cell.is-filled { border-style: solid; border-color: var(--pk-c); }
 .hs-slotview-cell img { display: block; width: 28px; height: 28px; image-rendering: pixelated; }
 
 /* Hangar slot picker: grid inventory with sort buttons on top. */
@@ -949,8 +1112,91 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     letter-spacing: 2px; white-space: nowrap; cursor: pointer;
 }
 .hs-bay-invtoggle:hover { background: var(--color-primary); color: #05060a; }
-/* Bay inventory: hug each grid, place SHIP + STATION side-by-side when they fit —
-   was one ultra-wide column with dead space beside the narrower grid. */
+/* Inventory column left of PARTS: full-width hide button + scroll body */
+html body .hs-hangar-inv > .hs-bay-invtoggle {
+    position: static;
+    flex: 0 0 auto;
+    width: 100%;
+    min-height: 42px;
+    padding: 10px 12px;
+    border-left: 0;
+    border-right: 0;
+    border-top: 0;
+    z-index: 1;
+}
+/* Bay status: slots row on top, ship stats row below */
+html body .hs-hangar-bay > .hs-hangar-bay-display {
+    flex: 0 0 auto;
+    margin: 0 0 8px;
+    padding: 12px 14px 14px;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
+    background:
+        repeating-linear-gradient(
+            -45deg,
+            color-mix(in srgb, var(--color-primary) 18%, transparent) 0 6px,
+            transparent 6px 12px
+        ) 0 0 / 100% 5px no-repeat,
+        color-mix(in srgb, #0a0912 92%, var(--color-primary));
+    overflow-x: auto;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-group.is-slots,
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-group.is-stats {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-hangar-stat {
+    padding: 6px 12px 6px 6px;
+    gap: 10px;
+    flex: 1 1 0;
+    min-width: max-content;
+    justify-content: flex-start;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-icon {
+    width: 22px;
+    height: 22px;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-icon img,
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-icon img.hs-pixel,
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-icon svg {
+    width: 22px;
+    height: 22px;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-value {
+    font-size: calc(var(--font-h2) + 2px);
+    letter-spacing: 1px;
+    line-height: 1.15;
+}
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-of,
+html body .hs-hangar-bay .hs-hangar-stats.is-row.is-mini .hs-stat-x {
+    font-size: var(--font-h2);
+}
+html body .hs-hangar-bay > .hs-hangar-bay-display::after {
+    content: '';
+    display: block;
+    height: 2px;
+    margin-top: 10px;
+    background: var(--color-primary);
+    clip-path: polygon(0 50%, 4px 0, calc(100% - 4px) 0, 100% 50%, calc(100% - 4px) 100%, 4px 100%);
+}
+/* Bay inventory: SHIP + STATION stacked (absolute when over the bay; static in sidebar column). */
 .hs-bay-inv {
     position: absolute; top: 0; left: 0; right: auto; bottom: 0; z-index: 4;
     display: flex; flex-direction: column; align-items: stretch;
@@ -960,20 +1206,55 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
     border-right: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     --cs: 56px;
 }
+html body .hs-hangar-inv > .hs-bay-inv {
+    position: static;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    min-height: 0;
+    border-right: 0;
+    padding-top: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+/* Hangar inv column: scale SHIP/STATION grids to the column width (no right clip).
+   Use cqi (not %): a % inside --fit-cs resolves against height when used in
+   height/grid-template-rows and collapses the bay to a thin accent strip.
+   content-box + border (--hs-gap) outside the track math — border-box width:100%
+   ate the frame and clipped the last column/row. */
+html body .hs-hangar-inv .hs-bay-inv-group {
+    container-type: inline-size;
+    min-width: 0;
+    overflow: hidden;
+}
+html body .hs-hangar-inv .hs-bay-inv.hs-slot-picker .hs-storage-grid.hs-pick-grid,
+html body .hs-hangar-inv .hs-storage-grid.hs-pick-grid {
+    --fit-cs: calc((100cqi - (var(--inv-cols, 6) + 1) * var(--hs-gap, 2px)) / var(--inv-cols, 6));
+    box-sizing: content-box;
+    align-self: start;
+    width: calc(var(--inv-cols, 6) * var(--fit-cs) + (var(--inv-cols, 6) - 1) * var(--hs-gap, 2px)) !important;
+    max-width: none;
+    --cs: var(--fit-cs);
+    grid-template-columns: repeat(var(--inv-cols, 6), var(--fit-cs)) !important;
+    grid-template-rows: repeat(var(--inv-rows, 2), var(--fit-cs)) !important;
+    height: calc(var(--inv-rows, 2) * var(--fit-cs) + (var(--inv-rows, 2) - 1) * var(--hs-gap, 2px)) !important;
+}
 .hs-bay-inv-bar { position: sticky; top: -8px; z-index: 2; margin: -8px -8px 0; padding: 8px; display: flex; flex-direction: column; gap: 8px; background: #0a0912; border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 35%, transparent); }
 .hs-bay-inv-body {
     display: flex;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    flex-direction: column;
+    align-items: stretch;
     gap: 10px;
     flex: 0 0 auto;
     min-width: 0;
+    width: 100%;
 }
 .hs-bay-inv-group {
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    width: max-content;
+    width: 100%;
     max-width: 100%;
     box-sizing: border-box;
     padding: 6px 8px 8px;
@@ -993,7 +1274,7 @@ html body .hs-slot-picker .hs-pick-ico, .hs-slotview-part:has(.hs-item-body) img
 html body .hs-bay-inv .hs-bay-inv-group .hs-storage-grid.hs-pick-grid {
     align-self: stretch;
 }
-.hs-bay-inv-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.hs-bay-inv-filters { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 6px; width: 100%; }
 html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; letter-spacing: 1px; cursor: pointer; }
 .hs-bay-inv-zoom { display: flex; align-items: center; gap: 10px; font-size: 10px; letter-spacing: 2px; opacity: .9; }
 .hs-bay-inv-zoom input { flex: 1; }
@@ -1001,14 +1282,120 @@ html body .hs-bay-inv .hs-pick-sortbtn { padding: 4px 8px; font-size: 10px; lett
 html body .hs-bay-inv .hs-pick-cell { cursor: grab; }
 html body .hs-res-buy-modal.hs-slot-picker .hs-pick-cell:not(:disabled) { cursor: grab; }
 html body .hs-slot-picker .hs-pick-cell.is-equipped { box-shadow: 0 0 0 2px #05060a, 0 0 0 4px var(--pk-c); }
+/* Bay SHIP grid: hull slots as highlighted containers (empty + filled, S/M/L).
+   Same frames in hangar bay, station ship row, in-stage/trading-post shop, victory. */
+html body :is(.hs-bay-inv, .hs-ship-storage-row, .vf-iss-ship-inv, .hs-tps-ship-inv, .victory-loadout) .hs-storage-cell.is-ship-slot {
+    background: color-mix(in srgb, var(--pk-c) 10%, #05060a);
+    border: 1px solid color-mix(in srgb, var(--pk-c) 70%, transparent);
+    box-shadow:
+        inset 0 0 0 1px #05060a,
+        0 0 0 1px color-mix(in srgb, var(--pk-c) 25%, transparent);
+}
+html body :is(.hs-bay-inv, .hs-ship-storage-row, .vf-iss-ship-inv, .hs-tps-ship-inv, .victory-loadout) .hs-storage-cell.is-ship-slot.is-empty {
+    border: 2px dashed color-mix(in srgb, var(--pk-c) 70%, transparent);
+    background: color-mix(in srgb, var(--pk-c) 5%, #05060a);
+    cursor: pointer;
+}
+html body :is(.hs-bay-inv, .hs-ship-storage-row, .vf-iss-ship-inv, .hs-tps-ship-inv, .victory-loadout) .hs-storage-cell.is-ship-slot.is-equipped {
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--pk-c);
+    animation: hs-storage-cell-equipped-glow 3.6s ease-in-out infinite;
+}
+/* Equipped M/L: keep the split dash thin (1px), behind the part art. */
+html body :is(.hs-bay-inv, .hs-ship-storage-row, .vf-iss-ship-inv, .hs-tps-ship-inv, .victory-loadout) .hs-storage-cell.is-ship-slot.is-equipped.is-span-h::before {
+    border-top-width: 1px;
+    opacity: 0.85;
+}
+html body :is(.hs-bay-inv, .hs-ship-storage-row, .vf-iss-ship-inv, .hs-tps-ship-inv, .victory-loadout) .hs-storage-cell.is-ship-slot.is-equipped.is-span-w::after {
+    border-left-width: 1px;
+    opacity: 0.85;
+}
+/* Nested part footprint inside a (possibly larger) hull slot — S in M stays S-sized. */
+.hs-storage-cell.is-ship-slot .hs-storage-slot-part,
+.hs-pick-cell.is-ship-slot .hs-storage-slot-part {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    box-sizing: border-box;
+}
+.hs-storage-cell.is-ship-slot .hs-storage-slot-part .hs-item-body,
+.hs-pick-cell.is-ship-slot .hs-storage-slot-part .hs-item-body {
+    inset: 2px;
+}
+.hs-storage-slot-size {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    z-index: 2;
+    font-size: 9px;
+    line-height: 1;
+    letter-spacing: 0.5px;
+    color: var(--pk-c, var(--color-primary));
+    pointer-events: none;
+}
+.hs-storage-cell.is-ship-slot .hs-storage-slot-glyph,
+.hs-storage-cell.is-ship-slot .hs-slot-glyph {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    background: color-mix(in srgb, var(--pk-c) 55%, transparent);
+}
+.hs-storage-cell.is-ship-slot .hs-slot-glyph::after {
+    inset: 3px;
+    background: #05060a;
+}
+/* Empty hull slot: large faded type icon in the BG (weapon/defense/ability/energy). */
+.hs-storage-cell.is-ship-slot.is-empty {
+    cursor: grab;
+}
+.hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-type-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    opacity: 0.9;
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 1px 0 #05060a)
+        drop-shadow(0 0 3px color-mix(in srgb, var(--pk-c) 55%, transparent));
+}
+.hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-type-bg .hs-storage-slot-type,
+.hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-type-bg img {
+    width: 70% !important;
+    height: 70% !important;
+    max-width: 44px;
+    max-height: 44px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    pointer-events: none;
+}
+.hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-size {
+    z-index: 2;
+}
 /* Bay zoom sits at the left, under the INVENTORY button. */
 html body .hs-hangar-bay-stage .hs-bay-zoom { top: 52px; right: auto; left: 10px; }
 html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: 10px; left: 10px; right: auto; }
-/* Inventory filter: icon buttons; active = filled with the kind colour, dark icon. */
-html body .hs-bay-inv .hs-bay-inv-filter { appearance: none; display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; background: #05060a; border: 1px solid color-mix(in srgb, var(--fc) 45%, #05060a); transition: background .12s, border-color .12s, box-shadow .12s; }
+/* Inventory filter: larger width-filling tabs; active = filled with the kind colour. */
+html body .hs-bay-inv .hs-bay-inv-filter {
+    appearance: none;
+    display: inline-grid;
+    place-items: center;
+    flex: 1 1 0;
+    min-width: 0;
+    width: auto;
+    height: 44px;
+    padding: 0;
+    cursor: pointer;
+    background: #05060a;
+    border: 2px solid color-mix(in srgb, var(--fc) 45%, #05060a);
+    transition: background .12s, border-color .12s, box-shadow .12s;
+}
 .hs-bay-inv-filter img {
-    width: 16px !important;
-    height: 16px !important;
+    width: 24px !important;
+    height: 24px !important;
     display: block;
     image-rendering: -moz-crisp-edges;
     image-rendering: pixelated;
@@ -1047,16 +1434,7 @@ html body .hs-bay-inv .hs-pick-cell.is-anim-equip { animation: hs-item-equip .5s
 html body .hs-bay-inv .hs-pick-cell.is-anim-unequip { animation: hs-item-unequip .4s ease-out; }
 html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 40%; background: linear-gradient(transparent, color-mix(in srgb, var(--pk-c) 70%, #fff), transparent); opacity: .7; pointer-events: none; animation: hs-item-sweep .5s ease-out; }
 @media (prefers-reduced-motion: reduce) { html body .hs-bay-inv .hs-pick-cell.is-anim-equip, html body .hs-bay-inv .hs-pick-cell.is-anim-unequip, html body .hs-bay-inv .hs-pick-cell.is-anim-equip::after { animation: none; } }
-/* Inventory on the left: covers the bay's left-hand GUI (zoom etc.); only the INVENTORY toggle stays on top to close it.
-   top:0 (not 50px) so its own background fills in behind the toggle button too — the
-   content is pushed clear of the button with padding-top instead, so no gap shows the
-   stage floor through. */
-html body .hs-hangar-bay-stage .hs-bay-inv { left: 0; right: auto; top: 0; padding-top: 50px; z-index: 8; }
-/* The sticky top:-8px / negative-margin trick (normal .hs-bay-inv-bar) assumes an 8px
-   parent padding-top; here it's 50px, so that trick overlaps the bar over the SHIP
-   label and the grid's first row instead of sitting flush above them. Simpler fix for
-   this context: no sticky, flow normally below the 50px padding. */
-html body .hs-hangar-bay-stage .hs-bay-inv .hs-bay-inv-bar { position: static; margin: 0 -8px 8px; }
+html body .hs-hangar-inv .hs-bay-inv .hs-bay-inv-bar { position: static; margin: 0 -8px 8px; }
 html body .hs-hangar-bay-stage .hs-bay-invtoggle { z-index: 9; }
 /* Installed items animate while hovered: pulsing frame, gentle bob, slow light sweep. */
 @keyframes hs-item-hover-ring { 0%, 100% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 0 2px var(--pk-c), inset 0 0 0 3px #05060a, 0 0 10px 2px var(--pk-c); } }
@@ -1126,13 +1504,13 @@ html body .hs-hangar-bay-stage .hs-bay-zoom { top: auto; bottom: calc(10px + var
 /* Start step: the start inventory sits in the hull sidebar, under the hull areas. */
 html body .profile-start-inv { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid color-mix(in srgb, var(--faction-accent, currentColor) 40%, transparent); }
 html body .profile-start-inv-title { letter-spacing: 2px; color: var(--faction-accent, var(--color-primary)); }
-html body .profile-start-inv .hs-bay-inv { width: auto !important; padding: 0; background: none; border: 0; }
-html body .profile-start-inv .hs-bay-inv .hs-pick-grid { flex: 0 0 auto; padding: 0; overflow: visible; min-height: 0; max-height: none; }
+html body .profile-start-inv .hs-bay-inv { width: 100% !important; max-width: 100% !important; padding: 0; background: none; border: 0; overflow: hidden !important; }
+html body .profile-start-inv .hs-bay-inv .hs-pick-grid { flex: 0 0 auto; padding: 0; overflow: hidden !important; min-height: 0; max-height: none; max-width: 100%; scrollbar-gutter: auto !important; }
 /* Filled hull slots carry the item graphic: no extra frame or glow behind it. */
 html body .profile-start-main .pk-slot.is-filled:has(.hs-item-body) { border-color: transparent; background: none; box-shadow: none; }
 html body .profile-start-main .pk-slot .hs-slotview-part { position: relative; display: block; }
 /* The grid borrows the hangar inventory classes: drop their absolute bay placement here. */
-html body .profile-start-inv .hs-slot-picker.hs-bay-inv { position: static !important; inset: auto !important; transform: none !important; margin: 0 !important; width: auto !important; height: auto !important; max-height: none !important; display: block; box-shadow: none !important; }
+html body .profile-start-inv .hs-slot-picker.hs-bay-inv { position: static !important; inset: auto !important; transform: none !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; height: auto !important; max-height: none !important; display: block; box-sizing: border-box; box-shadow: none !important; overflow: hidden !important; }
 
 /* Kit bonus strip: head line (label + blurb), then one chip per bonus. */
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-kit-info { flex-direction: column; align-items: stretch; gap: 12px; padding: 14px 24px 16px; }
@@ -1149,8 +1527,59 @@ html body .profile-start-inv-title { font-size: 16px; }
 html body .profile-start-inv { align-items: stretch; }
 html body .profile-start-inv-title { display: flex; justify-content: space-between; align-items: baseline; }
 html body .profile-start-inv-title b { color: #d8dbe2; font-weight: normal; }
-html body .profile-start-inv .hs-slot-picker.hs-bay-inv { align-self: center; padding: 6px !important; background: #05060a !important; border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent) !important; }
-html body .profile-start-inv .hs-bay-inv.hs-slot-picker .hs-pick-grid { box-sizing: content-box; background-color: #151223; background-image: linear-gradient(90deg, transparent calc(100% - 4px), #05060a 0), linear-gradient(180deg, transparent calc(100% - 4px), #05060a 0); background-size: calc(var(--cs) + 4px) calc(var(--cs) + 4px); background-position: 0 0; }
+html body .profile-start-inv .hs-slot-picker.hs-bay-inv { align-self: stretch; padding: 6px !important; background: #05060a !important; border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 55%, transparent) !important; }
+html body .profile-start-inv .hs-bay-inv.hs-slot-picker .hs-pick-grid {
+    box-sizing: border-box;
+    gap: 4px;
+    margin: 0 auto;
+    background-color: #05060a;
+    background-image: none;
+    overflow: hidden !important;
+    scrollbar-gutter: auto !important;
+}
+html body .profile-start-inv .hs-pick-cell {
+    box-sizing: border-box;
+    border: 2px solid color-mix(in srgb, var(--faction-accent, var(--color-primary)) 45%, #3a4560) !important;
+    background: #12101c !important;
+}
+html body .profile-start-inv .hs-pick-cell.is-equipped {
+    border-color: var(--pk-c, var(--faction-accent, var(--color-primary))) !important;
+    background: color-mix(in srgb, var(--pk-c, var(--faction-accent, var(--color-primary))) 12%, #05060a) !important;
+}
+html body .profile-start-inv .hs-pick-cell.hs-pick-cell-empty {
+    border-style: solid !important;
+    border-color: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 35%, #2a3144) !important;
+    background: #0c0b14 !important;
+    opacity: 1 !important;
+    pointer-events: none;
+}
+/* Hull equipment mounts on the start inventory (filled + vacant), hangar-style. */
+html body .profile-start-inv .hs-pick-cell.is-ship-slot {
+    position: relative;
+    display: grid;
+    place-items: center;
+}
+html body .profile-start-inv .hs-pick-cell.is-ship-slot.is-empty {
+    border-style: dashed !important;
+    border-color: color-mix(in srgb, var(--pk-c, var(--faction-accent, var(--color-primary))) 55%, #3a4560) !important;
+    background: color-mix(in srgb, var(--pk-c, var(--faction-accent)) 8%, #0c0b14) !important;
+    opacity: 1 !important;
+    pointer-events: auto;
+}
+html body .profile-start-inv .hs-pick-cell.is-ship-slot .hs-slot-glyph {
+    width: 55%;
+    height: 55%;
+    opacity: 0.7;
+}
+html body .profile-start-inv .hs-pick-cell.is-ship-slot .hs-pick-size {
+    display: block !important;
+    position: absolute;
+    top: 1px;
+    right: 3px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: color-mix(in srgb, var(--pk-c, #c8c4d8) 80%, #fff);
+}
 html body .profile-start-inv .hs-pick-size { font-size: 10px; }
 /* Start sidebar uses its height: wider column, compact area rows, the three part rows side by side,
    the inventory takes what is left (scrolls only if it must). */
@@ -1160,7 +1589,7 @@ html body .profile-start-main .profile-loadout > .pl-wrap { gap: 2px; }
 html body .profile-start-main .pl-row { gap: 8px; min-height: 40px; }
 html body .profile-start-main .pl-parts { flex-direction: row; justify-content: space-between; gap: 8px; margin-top: 4px; padding-top: 8px; }
 html body .profile-start-main .pl-parts > .pl-row { grid-template-columns: 32px auto; gap: 6px; }
-html body .profile-start-main .profile-loadout > .profile-start-inv { flex: 1 1 auto; min-height: 0; overflow-y: auto; margin-top: 10px; padding-top: 10px; }
+html body .profile-start-main .profile-loadout > .profile-start-inv { flex: 1 1 auto; min-height: 0; overflow: hidden; margin-top: 10px; padding-top: 10px; }
 /* Stats live in the sidebar now (2 x 2 tiles), not as a strip above the ship. */
 html body .profile-start-main .profile-faction-preview .profile-kit-ship > .profile-kit-stats { display: none !important; }
 html body .profile-start-main .profile-side-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
@@ -1168,19 +1597,25 @@ html body .profile-start-main .profile-side-stats .pk-stat { display: grid; grid
 html body .profile-start-main .profile-side-stats .pk-ico { grid-area: i; display: block; width: 32px; height: 32px; background: var(--pk-c); -webkit-mask: var(--pk-img) center / contain no-repeat; mask: var(--pk-img) center / contain no-repeat; image-rendering: pixelated; }
 html body .profile-start-main .profile-side-stats .pk-stat b { grid-area: v; font-size: 20px; line-height: 1.1; color: var(--pk-c); text-shadow: 1px 1px 0 #05060a; }
 html body .profile-start-main .profile-side-stats .pk-stat small { grid-area: l; font-size: 12px; letter-spacing: 2px; opacity: .85; }
-/* Start sidebar: the profile's 1-2 weapon types as icons only (name in the tooltip); the faction weapon is the big focus tile. */
-html body .profile-start-main .profile-side-weapons { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 10px 0 14px; }
-html body .profile-start-main .profile-side-weapons .pk-weapon { display: grid; place-items: center; width: 56px; height: 56px; box-sizing: border-box; background: #05060a; border: 1px solid color-mix(in srgb, var(--pk-c) 40%, transparent); opacity: .8; cursor: help; }
+/* Start sidebar: every hull weapon mount (filled + empty); focus tile is the equipped gun. */
+html body .profile-start-main .profile-side-weapons {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 10px; margin: 10px 0 14px;
+}
+html body .profile-start-main .profile-side-weapons .pk-weapon { display: grid; place-items: center; width: 48px; height: 48px; box-sizing: border-box; background: #05060a; border: 1px solid color-mix(in srgb, var(--pk-c) 40%, transparent); opacity: .8; cursor: help; }
 html body .profile-start-main .profile-side-weapons .pk-weapon { position: relative; }
 html body .profile-start-main .profile-side-weapons .pk-weapon.is-empty { border-style: dashed; opacity: .6; }
 html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wslot,
 html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wkey { position: absolute; min-width: 14px; padding: 1px 3px; box-sizing: border-box; font-size: 10px; line-height: 12px; text-align: center; letter-spacing: 1px; background: #05060a; pointer-events: none; }
 html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wslot { top: -6px; left: -6px; color: #c8c4d8; border: 1px solid #3a3550; }
 html body .profile-start-main .profile-side-weapons .pk-weapon .pk-wkey { bottom: -6px; right: -6px; color: var(--pk-c); border: 1px solid var(--pk-c); }
-html body .profile-start-main .profile-side-weapons .pk-weapon img { width: 36px; height: 36px; image-rendering: pixelated; }
+html body .profile-start-main .profile-side-weapons .pk-weapon img { width: 28px; height: 28px; image-rendering: pixelated; }
 html body .profile-start-main .profile-side-weapons .pk-weapon:hover { opacity: 1; }
-html body .profile-start-main .profile-side-weapons .pk-weapon.is-focus { width: 76px; height: 76px; opacity: 1; border: 2px solid var(--pk-c); box-shadow: 0 0 0 2px #05060a, 0 0 12px color-mix(in srgb, var(--pk-c) 45%, transparent); }
-html body .profile-start-main .profile-side-weapons .pk-weapon.is-focus img { width: 52px; height: 52px; }
+html body .profile-start-main .profile-side-weapons .pk-weapon.is-focus { width: 64px; height: 64px; opacity: 1; border: 2px solid var(--pk-c); box-shadow: 0 0 0 2px #05060a, 0 0 12px color-mix(in srgb, var(--pk-c) 45%, transparent); }
+html body .profile-start-main .profile-side-weapons .pk-weapon.is-focus img { width: 40px; height: 40px; }
+html body .profile-start-main .profile-side-weapons .pk-weapon.is-empty .hs-slot-glyph {
+    width: 22px; height: 22px; opacity: 0.55;
+}
 /* Inventory items show their size by their footprint in the grid: no S / M / L label. */
 html body .hs-bay-inv .hs-pick-size, html body .profile-start-inv .hs-pick-size { display: none !important; }
 /* Start step: name bar and kit bonus strip span the full width (over the sidebar); ship and hull sidebar share the row below. */
@@ -1191,8 +1626,16 @@ html body .profile-selection-name-mode .profile-start-main .profile-faction-prev
 }
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview .profile-kit-ship { grid-column: 1 / -1; }
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-loadout { grid-row: 3 / -1; }
-/* Start inventory fills the rest of the sidebar as a size container: the grid cells (--cs, core-kits.js) scale to fit instead of scrolling. */
-html body .profile-start-main .profile-loadout > .profile-start-inv { container-type: size; flex: 1 1 0; min-height: 0; overflow: hidden; align-self: stretch; width: auto; }
+/* Start inventory fills the rest of the sidebar as a size container: the grid cells (--cs, core-kits.js) scale to fit — never scroll. */
+html body .profile-start-main .profile-loadout > .profile-start-inv {
+    container-type: size;
+    flex: 1 1 0;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden !important;
+    align-self: stretch;
+    width: auto;
+}
 /* Kit strip: label + blurb on the left, icon chips to the right of it (wrap under it only when narrow). */
 html body .profile-selection-name-mode .profile-start-main .profile-faction-preview.profile-faction-preview.profile-faction-preview > .profile-kit-info { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px 24px; padding: 12px 20px; }
 html body .profile-start-main .profile-kit-info .pkb-head { flex: 1 1 280px; flex-wrap: wrap; gap: 4px 16px; }
@@ -1572,10 +2015,34 @@ html[data-vf-pixel-size="on"] .start-station-canvas {
 .gm-enemy-place { margin-left: auto; font-size: var(--font-small); letter-spacing: 2px; color: var(--color-text-secondary); }
 .gm-enemy-ship { translate: var(--ec-ship-x, 0) var(--ec-ship-y, 0); position: absolute; left: calc(12px + min(38%, 190px) - 18px); top: auto; bottom: 6px; width: 34%; height: 56%; transform: none; max-width: none; object-fit: contain; object-position: center; image-rendering: pixelated; filter: drop-shadow(3px 4px 0 #000) drop-shadow(0 0 8px #000); border: 0; outline: 0; box-shadow: none; background: none; z-index: 3 }
 
-/* Mission icon right of the navbar. */
+/* Mission scroll glyph: force bright white-cyan (baked tint stays dark on the slot). */
 .hs-mission-btn { color: var(--mission-accent, var(--color-primary)); border-color: var(--mission-accent, var(--color-primary)); }
-.hs-mission-btn.is-calm { opacity: 0.45; }
+.hs-mission-btn .hs-logout-icon { width: 40px; height: 40px; }
+html body .hs-mission-btn .hs-mission-ico,
+html body .hs-mission-btn .hs-mission-ico img,
+html body .hs-mission-btn .hs-logout-icon img {
+    width: 40px !important;
+    height: 40px !important;
+    opacity: 1 !important;
+    /* Black silhouette → invert to white, then slight cyan cast. */
+    filter: brightness(0) invert(1) sepia(0.4) saturate(5) hue-rotate(155deg) brightness(1.2) drop-shadow(0 0 1px #05060a) !important;
+    animation: hs-mission-scroll-wave 2.4s ease-in-out infinite;
+    transform-origin: 50% 0%;
+}
+@keyframes hs-mission-scroll-wave {
+    0%, 100% { transform: skewY(0); }
+    25% { transform: skewY(-6deg); }
+    75% { transform: skewY(6deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .hs-mission-btn .hs-mission-ico,
+    html body .hs-mission-btn .hs-mission-ico img,
+    html body .hs-mission-btn .hs-logout-icon img { animation: none; }
+}
+.hs-mission-btn.is-calm { opacity: 1; }
+.hs-mission-btn.is-calm .hs-logout-icon { opacity: 0.92; }
 .hs-mission-btn:hover { opacity: 1; }
+.hs-mission-btn:hover .hs-logout-icon { opacity: 1; }
 
 /* No frame line on the enemy side of the bottom bar (the card is the last block before the planet). */
 .galaxy-map-embedded .gm-map-stage .galaxy-map-ruler.is-bar .galaxy-map-ruler-stack:has(.gm-enemy-card) { border-right: 0; }
@@ -1667,7 +2134,13 @@ html body .hs-slot-picker .hs-pick-sortbtn.is-active { background: color-mix(in 
 .hs-pick-keyopt.is-on .hs-pick-keybox { box-shadow: inset 0 0 0 2px #05060a; }
 .hs-pick-keyname { font-size: 12px; letter-spacing: 2px; }
 /* Slot whose picker is open: marked in the SLOTS list (visible beside the modal). */
-html body .hs-slotview-cell.is-picking { position: relative; z-index: 1001; outline: 2px solid #fff; outline-offset: 2px; box-shadow: 0 0 12px var(--pk-c, var(--color-primary)); }
+html body .hs-slotview-cell.is-picking { position: relative; z-index: 1001; border-color: #fff; border-style: solid; box-shadow: 0 0 0 2px #fff, 0 0 12px var(--pk-c, var(--color-primary)); }
+html body .hs-hangar-part.is-merged.is-picking {
+    position: relative;
+    z-index: 1001;
+    border-color: #fff;
+    box-shadow: 0 0 12px var(--pk-c, var(--color-primary));
+}
 /* Shortcut sidebar only as wide as its widest chip (SPACE). */
 .hs-pick-keys { flex: 0 0 auto; width: max-content; }
 .hs-pick-keyopt { width: 100%; padding: 0 8px 0 6px; }
@@ -1739,29 +2212,9 @@ html body .profile-start-main .profile-setup-stage .hero-planet-canvas {
     pointer-events: none;
     image-rendering: pixelated;
 }
+/* SETUP: one ship only — the orbiting defender on the hero planet (no stacked preview canvas). */
 html body .profile-start-main .profile-setup-stage .profile-faction-ship-wrap {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    max-width: none;
-}
-html body .profile-selection-name-mode.is-name-step .profile-start-main .profile-setup-stage .profile-faction-ship.profile-faction-ship {
-    grid-column: auto;
-    grid-row: auto;
-    width: auto !important;
-    height: auto !important;
-    max-width: min(72%, 420px) !important;
-    max-height: min(72%, 320px) !important;
-    margin: 0 !important;
-    aspect-ratio: 320 / 224 !important;
-    object-fit: contain;
-    image-rendering: pixelated;
-    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+    display: none !important;
 }
 
 /* Galaxy map: locked planets stay opaque (only darker); reachable ones wear their atmosphere

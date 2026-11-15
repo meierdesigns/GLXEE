@@ -75,10 +75,10 @@ extendClass(HomeStationUI, {
             `</div></div>`;
     },
 
-    /** Cropped, crisp thumbnail (data URL) of a ship, drawn with the hangar's own voxel renderer. */
+    /** Cropped thumbnail (data URL): combat voxel lattice + integer NN upscale. */
     shipThumbSrc(shipId, box) {
         const cache = this._shipThumbCache || (this._shipThumbCache = {});
-        const key = shipId + '|' + box;
+        const key = shipId + '|' + box + '|combat';
         if (cache[key]) return cache[key];
         try {
             const loader = typeof graphicsManager !== 'undefined' && graphicsManager.shipAssetLoader;
@@ -86,22 +86,30 @@ extendClass(HomeStationUI, {
             const model = this.getHangarShipModel(shipId);
             if (!model) return '';
             const mw = Math.max(8, model.width || 20), mh = Math.max(8, model.height || 16);
-            const scale = Math.max(1, Math.floor(box / Math.max(mw, mh)));
-            const pad = scale * 4;
+            const footW = 18;
+            const unit = footW / 36;
+            const combatFit = Math.max(0.25, Math.min(unit, (footW * 1.3) / mw, (footW * 1.3) / mh));
+            const pad = 2;
             const c = document.createElement('canvas');
-            c.width = Math.ceil(mw * scale) + pad * 2;
-            c.height = Math.ceil(mh * scale) + pad * 2;
+            c.width = Math.ceil(mw * combatFit) + pad * 2;
+            c.height = Math.ceil(mh * combatFit) + pad * 2;
             const ctx = c.getContext('2d');
-            loader.renderShip(ctx, model, pad, pad, scale, null, 0, { allowColorMountSprites: true });
+            ctx.imageSmoothingEnabled = false;
+            loader.renderShip(ctx, model, pad, pad, combatFit, null, 0, { allowColorMountSprites: true });
             const d = ctx.getImageData(0, 0, c.width, c.height).data;
             let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1;
             for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
                 if (d[(y * c.width + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
             }
             if (x1 < 0) return '';
+            const srcW = x1 - x0 + 1, srcH = y1 - y0 + 1;
+            const zoom = Math.max(1, Math.floor(Math.min(box / srcW, box / srcH)));
             const o = document.createElement('canvas');
-            o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
-            o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height);
+            o.width = srcW * zoom;
+            o.height = srcH * zoom;
+            const octx = o.getContext('2d');
+            octx.imageSmoothingEnabled = false;
+            octx.drawImage(c, x0, y0, srcW, srcH, 0, 0, o.width, o.height);
             return (cache[key] = o.toDataURL());
         } catch (e) {
             return '';
@@ -277,8 +285,8 @@ extendClass(HomeStationUI, {
         };
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         const partSize = (id) => (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S');
-        const slotSize = slm && slm.getSlotSizeLevel
-            ? slm.slotSizeLabel(slm.getSlotSizeLevel(this.hangarShipId, kind, slot.index)) : 'S';
+        const slotSize = slm && (slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel)
+            ? slm.slotSizeLabel((slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel).call(slm, this.hangarShipId, kind, slot.index)) : 'S';
         const options = [`<option value="">EMPTY</option>`].concat(pool.map((id) => {
             const usedElsewhere = !!(equipped[id] && id !== current);
             const blocked = installBlocked(id);

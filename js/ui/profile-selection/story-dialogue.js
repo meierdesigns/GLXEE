@@ -5,6 +5,23 @@
 const VFStoryDialogue = {
     _D(who, text) { return { who: String(who || 'VOICE'), text: String(text || '') }; },
 
+    /** Devmode Transmission Editor overrides (localStorage), keyed by story id. */
+    _overridesKey: 'vf_transmission_overrides_v1',
+    _overridesCache: null,
+
+    overrides() {
+        if (this._overridesCache) return this._overridesCache;
+        try {
+            const raw = localStorage.getItem(this._overridesKey);
+            const parsed = raw ? JSON.parse(raw) : {};
+            this._overridesCache = (parsed && typeof parsed === 'object') ? parsed : {};
+        } catch (e) { this._overridesCache = {}; }
+        return this._overridesCache;
+    },
+
+    /** Call after writing to the override store so the next read picks it up. */
+    invalidateOverrides() { this._overridesCache = null; },
+
     /** Plain synopsis used when a path has no authored blurb override. */
     synopsis: {
         lane_duty: 'Escort Concord ration convoys and keep Lane 9 open.',
@@ -308,64 +325,64 @@ const VFStoryDialogue = {
                 D('FIXER', 'Captains who sleep lose freighters.')
             ],
             first_compile: [
-                D('NODE ZERO', 'Fresh unit. Spare parts. Boot sequence armed.'),
-                D('AUDIT', 'Diagnostic. Unit test. Deploy.'),
+                D('NODE ZERO', 'Fresh unit online. Boot sequence armed — prove the hull.'),
+                D('AUDIT', 'Run diagnostics. Pass the unit test. Then deploy.'),
                 D('YOU', 'Compile complete. Awaiting orders.'),
-                D('NODE ZERO', 'Pass every check. Failure is recycling.')
+                D('NODE ZERO', 'Pass every check. Failure means recycling.')
             ],
             diagnostic_run: [
-                D('AUDIT', 'The Collective audits every new hull.'),
-                D('NODE ZERO', 'Self check. Field audit. No dissent.'),
+                D('AUDIT', 'The Collective audits every new hull before it flies.'),
+                D('NODE ZERO', 'Self-check, then field audit. No dissent allowed.'),
                 D('YOU', 'Systems green. Ready for review.'),
                 D('AUDIT', 'Pass — or be reduced to feedstock.')
             ],
             ore_audit: [
                 D('NODE ZERO', 'Resource drone assigned. Fill the holds.'),
-                D('AUDIT', 'Scan seams. Sweep ore. Drop at the forge.'),
+                D('AUDIT', 'Scan the seams, sweep the ore, drop it at the forge.'),
                 D('YOU', 'Yield will meet quota.'),
                 D('NODE ZERO', 'Empty holds are a fault condition.')
             ],
             feedstock_sweep: [
                 D('NODE ZERO', 'Nearby life is feedstock. Optimise yield.'),
-                D('AUDIT', 'Population scan. Then reclaim.'),
+                D('AUDIT', 'Scan the population. Then reclaim what the forges need.'),
                 D('YOU', 'Reclamation in progress.'),
                 D('NODE ZERO', 'Efficiency is mercy. Waste is error.')
             ],
             hex_claim: [
-                D('NODE ZERO', 'Expand the Synth Grid. One hex at a time.'),
-                D('AUDIT', 'Mark. Seed the forge. Link the grid.'),
+                D('NODE ZERO', 'Expand the Synth Grid — one hex at a time.'),
+                D('AUDIT', 'Mark the hex. Seed the forge. Link it to the grid.'),
                 D('YOU', 'Hex claim executing.'),
                 D('NODE ZERO', 'Unlinked hexes are unfinished thoughts.')
             ],
             recon_sweep: [
                 D('NODE ZERO', 'Fast recon frame. Map what the war-line needs.'),
-                D('AUDIT', 'Ping the grid. Log contacts. Route home.'),
+                D('AUDIT', 'Ping the grid, log contacts, bring the route home.'),
                 D('YOU', 'Recon online.'),
                 D('NODE ZERO', 'Data returns. Hulls are optional.')
             ],
             signal_trace: [
-                D('AUDIT', 'Rogue signal on the lattice.'),
-                D('NODE ZERO', 'Trace it. End it.'),
+                D('AUDIT', 'Rogue signal on the lattice — isolate it.'),
+                D('NODE ZERO', 'Trace the source. End the signal.'),
                 D('YOU', 'Signal locked. Closing.'),
                 D('AUDIT', 'Silence the anomaly before it spreads.')
             ],
             war_routine: [
-                D('NODE ZERO', 'War routine loaded.'),
-                D('AUDIT', 'Pressure fire until the objective agrees.'),
+                D('NODE ZERO', 'War routine loaded. Open fire on the objective.'),
+                D('AUDIT', 'Keep pressure until the objective agrees.'),
                 D('YOU', 'Executing.'),
                 D('NODE ZERO', 'Agreement is mandatory. Resistance is noise.')
             ],
             assimilate: [
-                D('NODE ZERO', 'Wire the useful. Recycle the rest.'),
-                D('AUDIT', 'Audit pass. Then wire in.'),
+                D('NODE ZERO', 'Wire what is useful. Recycle the rest.'),
+                D('AUDIT', 'Pass the audit. Then wire the target into the Collective.'),
                 D('YOU', 'Assimilation running.'),
                 D('NODE ZERO', 'Leave agreeing silence behind you.')
             ],
             zero_dissent: [
-                D('NODE ZERO', 'Surplus calculated. Remove it.'),
-                D('AUDIT', 'Mark. Reassign. Hold the silence.'),
-                D('YOU', 'Dissent approaches zero.'),
-                D('NODE ZERO', 'When the count is clean, the sector is correct.')
+                D('NODE ZERO', 'Sector scan complete. Surplus life is flagged — remove it.'),
+                D('AUDIT', 'Mark the targets. Reassign the assets. Keep the channel silent.'),
+                D('YOU', 'Orders locked. Zero dissent.'),
+                D('NODE ZERO', 'Clear the surplus. When the count is clean, the sector is correct.')
             ],
             open_lane: [
                 D('OPS', 'No named story on this profile.'),
@@ -379,6 +396,8 @@ const VFStoryDialogue = {
 
     plainBlurb(story) {
         const id = String((story && (story.id || story.pathId)) || '');
+        const ov = id ? this.overrides()[id] : null;
+        if (ov && typeof ov.blurb === 'string' && ov.blurb.trim()) return ov.blurb.trim();
         if (id && this.synopsis[id]) return this.synopsis[id];
         const raw = String((story && story.blurb) || '').trim();
         return raw || 'Your first story begins. Fly the opening missions.';
@@ -392,16 +411,21 @@ const VFStoryDialogue = {
     forStory(story, ctx) {
         const id = String((story && (story.id || story.pathId)) || '');
         const map = this._build();
-        let lines = (story && Array.isArray(story.dialogue) && story.dialogue.length)
-            ? story.dialogue
-            : (map[id] || null);
+        const ov = id ? this.overrides()[id] : null;
+        let lines = (ov && Array.isArray(ov.lines) && ov.lines.length)
+            ? ov.lines
+            : ((story && Array.isArray(story.dialogue) && story.dialogue.length)
+                ? story.dialogue
+                : (map[id] || null));
         if (!lines || !lines.length) lines = this._fallback(story, ctx);
         const pilot = String((ctx && ctx.pilotName) || 'YOU').toUpperCase() || 'YOU';
         return lines.map((row) => {
-            const who = String((row && (row.who || row.speaker)) || 'VOICE');
+            const raw = String((row && (row.who || row.speaker)) || 'VOICE').toUpperCase();
+            const isYou = raw === 'YOU';
             const text = String((row && (row.text || row.line || row.t)) || '').trim();
             return {
-                who: who.toUpperCase() === 'YOU' ? pilot : who.toUpperCase(),
+                who: isYou ? pilot : raw,
+                role: isYou ? 'pilot' : 'giver',
                 text: text
             };
         }).filter((row) => row.text);

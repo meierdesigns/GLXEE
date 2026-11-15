@@ -388,7 +388,9 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
 .vf-bezel-tools {
     position: absolute;
     top: calc(2 * var(--bz-u));
-    right: calc(100 * var(--bz-u));
+    /* 100u sat right under the corner ornament's diamond tip at some stage
+       scales (dark tray touching the gold with no gap). 130u clears it. */
+    right: calc(130 * var(--bz-u));
     z-index: 9995;
     display: flex;
     align-items: center;
@@ -436,6 +438,99 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
     pointer-events: none;
 }
 .vf-bezel-tools button[hidden] { display: none; }
+.vf-bezel-voxel {
+    display: flex;
+    align-items: center;
+    gap: calc(6 * var(--bz-u));
+    margin-right: calc(4 * var(--bz-u));
+    padding: 0 calc(6 * var(--bz-u));
+    height: calc(40 * var(--bz-u));
+    font: bold 10px/1 monospace;
+    letter-spacing: 0.08em;
+    color: #ffd79a;
+    border: calc(2 * var(--bz-u)) solid color-mix(in srgb, #ffd79a 55%, transparent);
+    background: color-mix(in srgb, #ffd79a 14%, #0c0e12);
+    white-space: nowrap;
+    cursor: pointer;
+}
+.vf-bezel-speed {
+    display: flex;
+    align-items: center;
+    gap: calc(6 * var(--bz-u));
+    margin-right: calc(4 * var(--bz-u));
+    padding: 0 calc(8 * var(--bz-u));
+    height: calc(40 * var(--bz-u));
+    font: bold 10px/1 monospace;
+    letter-spacing: 0.08em;
+    color: var(--color-primary, #3dff6a);
+    border: calc(2 * var(--bz-u)) solid color-mix(in srgb, var(--color-primary, #3dff6a) 45%, transparent);
+    background: color-mix(in srgb, var(--color-primary, #3dff6a) 12%, #0c0e12);
+    white-space: nowrap;
+    cursor: default;
+}
+.vf-bezel-speed span { pointer-events: none; }
+.vf-bezel-speed output {
+    min-width: 2.6em;
+    color: #fff;
+    text-align: right;
+    pointer-events: none;
+}
+.vf-bezel-speed input[type="range"] {
+    width: calc(72 * var(--bz-u));
+    height: 6px;
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: linear-gradient(
+        to right,
+        var(--color-primary, #3dff6a) 0%,
+        var(--color-primary, #3dff6a) var(--look-fill, 33%),
+        #2c313b var(--look-fill, 33%),
+        #2c313b 100%
+    );
+    border: 0;
+    cursor: pointer;
+}
+.vf-bezel-speed input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border: 2px solid #05060a;
+    cursor: pointer;
+}
+.vf-bezel-speed input[type="range"]::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border: 2px solid #05060a;
+    border-radius: 0;
+    cursor: pointer;
+}
+.vf-bezel-voxel[hidden] { display: none; }
+.vf-bezel-voxel span { pointer-events: none; }
+.vf-bezel-voxel select {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    padding: 2px 18px 2px 4px;
+    min-width: 3.6em;
+    font: inherit;
+    letter-spacing: inherit;
+    color: #fff;
+    background: #0c0e12
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%23ffd79a' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")
+        no-repeat right 4px center / 8px 5px;
+    border: calc(1 * var(--bz-u)) solid #2c313b;
+    border-radius: 0;
+    cursor: pointer;
+}
+.vf-bezel-voxel select:focus-visible {
+    outline: none;
+    border-color: #ffd79a;
+}
 .vf-bezel-devmode {
     position: fixed;
     /* Placeholder spot before js/core/viewport-fit-part3.js (syncDevBadge) measures the actual tool
@@ -1139,6 +1234,25 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
     padding: var(--_ht) var(--_hr) var(--_hb) var(--_hl);
     box-sizing: border-box;
 }
+/* Home-station / start-screen / launch-cutscene content sits flush at the
+   glass edges with no --_gi inset on one or more sides (see the matching
+   position overrides: .home-station-overlay > .home-station-content above,
+   and .launch-cutscene in part-17.css — both explicitly "no inset, flush with
+   the rim"). This hole punch didn't know about those exceptions, so it kept
+   punching --_gi short there — the opaque band fill then painted over the
+   content's own edge/border on that side, reading as the border "disappearing
+   behind the bezel" even though the content itself was positioned correctly. */
+body:has(.home-station-overlay) .vf-bezel-back,
+body:has(.start-screen-overlay) .vf-bezel-back,
+body:has(.start-screen) .vf-bezel-back {
+    --_ht: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 12)) * var(--u))));
+}
+body:has(.launch-cutscene) .vf-bezel-back {
+    --_hl: var(--fr-ol, var(--fr-open-side, calc(44 * var(--u))));
+    --_hr: var(--fr-or, var(--fr-open-side, calc(44 * var(--u))));
+    --_ht: var(--fr-ot, var(--fr-open-top, calc((44 + var(--bz-extra, 12)) * var(--u))));
+    --_hb: var(--fr-ob, var(--fr-open-bottom, calc(44 * var(--u))));
+}
 
 /* Hangar bay zoom buttons, top right of the stage. */
 .hs-bay-zoom {
@@ -1273,6 +1387,9 @@ html body .home-station-overlay .hs-component-tree-header { gap: 2px; padding: 4
 
 /* Live preview: collapsed sidebar strip with a vertical label (default) */
 .hs-hangar-split.hs-hangar-right-collapsed { grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 44px; }
+.hs-hangar-split.is-inventory.hs-hangar-right-collapsed {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 44px;
+}
 .hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > :not(h3) { display: none !important; }
 .hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview > h3 > :not(.hs-sidebar-toggle) { display: none; }
@@ -1298,7 +1415,13 @@ html body .home-station-overlay .hs-component-tree-header { gap: 2px; padding: 4
 /* Ships / parts sidebar: collapsed strip with a vertical label, like the live preview. */
 .hs-hangar-list .hs-sidebar-strip { display: none; }
 .hs-hangar-split.hs-hangar-left-collapsed { grid-template-columns: 44px 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px); }
+.hs-hangar-split.is-inventory.hs-hangar-left-collapsed {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) 44px 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+}
 .hs-hangar-split.hs-hangar-left-collapsed.hs-hangar-right-collapsed { grid-template-columns: 44px 0 minmax(0, 1fr) 0 44px; }
+.hs-hangar-split.is-inventory.hs-hangar-left-collapsed.hs-hangar-right-collapsed {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) 44px 0 minmax(0, 1fr) 0 44px;
+}
 .hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
 .hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list > :not(h3) { display: none !important; }
 .hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list > h3 { flex: 1; padding: 0; margin: 0; display: flex; }

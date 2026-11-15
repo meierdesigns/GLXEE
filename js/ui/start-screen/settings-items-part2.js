@@ -176,6 +176,11 @@ extendClass(StartScreenManager, {
                 type: 'action',
                 action: 'soundtrackEditor'
             }, {
+                name: 'Transmission Editor',
+                value: 'OPEN ›',
+                type: 'action',
+                action: 'transmissionEditor'
+            }, {
                 name: 'Face Editor',
                 value: 'FLUX ›',
                 type: 'action',

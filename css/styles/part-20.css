@@ -595,6 +595,14 @@ html[data-faction="kronax"] { --fr-shape: var(--fr-shape-kronax); }
 html[data-faction="voidborn"] { --fr-shape: var(--fr-shape-voidborn); }
 html[data-faction="pirate"] { --fr-shape: var(--fr-shape-pirate); }
 html[data-faction="machine"] { --fr-shape: var(--fr-shape-machine); }
+/* Mirror of --fr-hole-r (screen-frame.css, scoped to .vf-bezel) at the <html>
+   level: --vf-stage-shape below needs the glass opening's own corner radius,
+   but .vf-bezel is a sibling of the overlays, not an ancestor, so custom
+   properties don't cross. Without this it fell back to a hardcoded 24u round
+   corner on every faction — correct only for voidborn's own glass-r, but it
+   rounded the sharp-cornered panel content on every other faction too. */
+:root { --fr-hole-r: 0px; }
+html[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--bz-u)); }
 
 /* Stage is a rectangle; bezel silhouette has chamfers/notches. Without this,
    the black body corner peeks past the rounded rim as a square “screen” leak.
@@ -607,9 +615,6 @@ html:has(#vf-bezel) body {
 html:has(#vf-bezel) #vf-bezel {
     box-shadow: 0 0 0 2px var(--fr-band-fill, #000);
 }
-html[data-faction="voidborn"]:has(#vf-bezel) .vf-bezel-back {
-    background: #14041c !important;
-}
 /* Cables SVG is fixed to the window and draws plugs past the rim — reads as
    screen wings on the sides. Keep them off while the bezel is up. */
 html:has(#vf-bezel) :is(#vf-cables, #vf-cables-old) {
@@ -619,14 +624,17 @@ html:has(#vf-bezel) :is(#vf-cables, #vf-cables-old) {
 /* Glass opening shape (freiraum stays black via .vf-bezel-back).
    Top has NO glass-inset: bezel ::before already ends at --fr-open-top;
    stacking +inset there left a black/hull gutter under the rim. Side/bottom
-   keep the inset so chrome does not eat the opaque band. */
+   keep the inset so chrome does not eat the opaque band.
+   Corner radius follows --fr-hole-r (0 for every faction but voidborn) — a
+   hardcoded 24u round here clipped the sharp-cornered panel content on every
+   other faction into a rounded corner it was never designed to have. */
 html:has(#vf-bezel) {
     --vf-stage-shape: inset(
         var(--fr-open-top)
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
-        round calc(24 * var(--bz-u))
+        round var(--fr-hole-r, 0px)
     );
 }
 html[data-vf-frame-px="on"][data-vf-frame-sil] {
@@ -635,7 +643,7 @@ html[data-vf-frame-px="on"][data-vf-frame-sil] {
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
-        round calc(24 * var(--bz-u))
+        round var(--fr-hole-r, 0px)
     );
 }
 /* Tint/glow that fill the stage box may clip to the silhouette.
@@ -772,11 +780,12 @@ html body .home-station-overlay .home-station-content .hs-body { padding-left: 0
 html body .home-station-overlay .home-station-content .hs-body:not(.hs-body-play) { margin-left: -4px !important; }
 /* Sections: inner containers sit flush on the same left line (16px from the bezel opening) */
 html body .home-station-overlay .home-station-content .hs-body :is(.hs-section, .hs-panel) { padding-left: 0 !important; }
-/* Station storage grid: clear clip-path stairs (~6–10px) AND the inset frame rings
-   on .hs-panel (box-shadow inset up to 24px). 14px still sat under the frame. */
+/* Station storage grid: clear clip-path stairs (~6–10px) AND the 16px border-image
+   / inset frame rings on .hs-panel. Horizontal 14px still sat under the frame;
+   top/bottom must match — otherwise OWNED SHIPS / storage card tops are clipped
+   and the frame ring's inner corners read as heavy rounding on the cards. */
 html body .home-station-overlay .home-station-content .hs-body .hs-station-grid .hs-panel {
-    padding-left: 28px !important;
-    padding-right: 28px !important;
+    padding: 28px !important;
 }
 /* Title's own 14px left pad was for flush panels; panel pad now owns the inset. */
 html body .home-station-overlay .home-station-content .hs-body .hs-station-grid .hs-panel .hs-panel-title {
@@ -1770,6 +1779,17 @@ html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block 
 html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-fd-row b { justify-self: end; justify-content: flex-end; text-align: right; line-height: 1.2; }
 html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 { display: grid; grid-template-columns: 34px auto; align-items: center; column-gap: 16px; line-height: 1; }
 html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block h4 .hs-fd-row-ico { margin: 0; }
+/* Fleet title: icon + full label on one horizontal line (not word-stacked in the 34px icon column). */
+html body .home-station-overlay .home-station-content .hs-faction-fleets .hs-fd-block > h4 {
+    grid-template-columns: 34px minmax(0, 1fr);
+    white-space: nowrap;
+}
+html body .home-station-overlay .home-station-content .hs-faction-fleets .hs-fd-block > h4 > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .hs-fd-resval { display: inline-flex; align-items: center; line-height: 1; }
 .hs-fd-resval img, .hs-fd-weapon img { flex: 0 0 auto; display: block; }
 html body .home-station-overlay .home-station-content .hs-factions .hs-fd-block .hs-chip { display: inline-flex; align-items: center; line-height: 1; }

@@ -153,6 +153,14 @@ extendClass(HomeStationUI, {
         if (bonus.impulseDrive) parts.push('IMPULSE READY');
         if (bonus.warpDrive) parts.push('WARP ' + bonus.warpDrive);
         if (bonus.exploreBudget) parts.push('+' + bonus.exploreBudget + ' EXPLORE');
+        if (bonus.repGainMul && bonus.repGainMul > 1) {
+            parts.push('+' + Math.round((bonus.repGainMul - 1) * 100) + '% REP');
+        }
+        if (bonus.tradeBonus) parts.push('+' + Math.round(bonus.tradeBonus * 100) + '% TRADE');
+        if (bonus.contractRepBonus) parts.push('+' + bonus.contractRepBonus + ' CONTRACT REP');
+        if (bonus.contractPayMul && bonus.contractPayMul > 1) {
+            parts.push('+' + Math.round((bonus.contractPayMul - 1) * 100) + '% CONTRACT PAY');
+        }
         return parts.join(' · ') || 'ACTIVE';
     },
 

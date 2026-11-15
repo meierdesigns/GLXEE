@@ -208,9 +208,33 @@ extendClass(ProfileManager, {
         return { ok: true, credits: credits, amount: n };
     },
 
+    /** Moves a pending cargo blueprint into station inventory (`profile.blueprints`).
+     *  Blueprints are craft-only — they never board the ship. `amount` defaults to the
+     *  full stack; pass 1 for one victory-grid cell (or the whole stacked ×N cell). */
+    takeCargoBlueprintToStation(key, amount) {
+        const profile = this.getActiveProfile();
+        if (!profile) return { ok: false, reason: 'NO PROFILE' };
+        this.ensureEconomyDefaults(profile);
+        const available = (profile.cargo.blueprints || {})[key] || 0;
+        if (available <= 0) return { ok: false, reason: 'NONE LEFT' };
+        const bp = this.parseBlueprintKey(key);
+        if (!bp) return { ok: false, reason: 'INVALID' };
+        const n = amount == null
+            ? available
+            : Math.max(1, Math.min(available, Math.round(Number(amount) || 1)));
+        profile.blueprints[bp.key] = (profile.blueprints[bp.key] || 0) + n;
+        const left = available - n;
+        if (left > 0) profile.cargo.blueprints[key] = left;
+        else delete profile.cargo.blueprints[key];
+        const discoverCat = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[bp.kind];
+        if (discoverCat && this.discover) this.discover(discoverCat, bp.id);
+        this.save();
+        return { ok: true, amount: n, blueprint: true };
+    },
+
     /** Files a pending cargo part onto `shipId`'s storage: grants real ownership (profile.parts)
      *  and marks it filed on that ship in one step, then clears it out of cargo. Blueprints
-     *  stay craft-only (station), so only `profile.cargo.parts` entries can be taken this way.
+     *  use takeCargoBlueprintToStation instead.
      *  `amount` defaults to the full stack; pass 1 for one victory-grid cell. */
     takeCargoPartToShip(shipId, key, amount) {
         const profile = this.getActiveProfile();
@@ -253,15 +277,28 @@ extendClass(ProfileManager, {
         return { ok: true, amount: n, rolls: rolls };
     },
 
-    /** Drops whatever found parts/blueprints the player never took or sold — called when the
-     *  victory screen closes (next stage / leave planet), so the decision can't be skipped. */
+    /** Sells whatever found parts/blueprints the player never took into ship inventory —
+     *  called when the victory screen closes (next stage / leave planet). */
     clearPendingCargo() {
         const profile = this.getActiveProfile();
         if (!profile) return;
         this.ensureEconomyDefaults(profile);
+        let credits = 0;
+        const sellBucket = (bucket, asBlueprint) => {
+            Object.keys(bucket || {}).forEach((key) => {
+                const n = Math.max(0, Math.round(Number(bucket[key]) || 0));
+                if (n <= 0) return;
+                const unit = this.getCargoPartSellValue ? this.getCargoPartSellValue(key) : 0;
+                credits += unit * n;
+            });
+        };
+        sellBucket(profile.cargo.parts, false);
+        sellBucket(profile.cargo.blueprints, true);
+        if (credits > 0 && this.addCredits) this.addCredits(credits, true);
         profile.cargo.parts = {};
         profile.cargo.blueprints = {};
         this.save();
+        return { ok: true, credits: credits };
     },
 
     spendResources(costMap) {

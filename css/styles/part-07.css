@@ -946,7 +946,7 @@ button.hs-logout-btn.nav-focused {
     display: grid;
     /* Equal slot lines = opaque gap colour between cells. Frame stroke uses the same
        --hs-gap (JS snaps cell+gap so lines stay even under glass transform:scale). */
-    --hs-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 42%, #05060a);
+    --hs-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
     gap: var(--hs-gap, 2px);
     min-width: 0;
     flex: 0 0 auto;
@@ -988,11 +988,11 @@ html body .hs-storage-cell.is-dest-full[draggable="true"] {
 /* Equipped (sitting in a ship slot, not just stored): a slow colored pulse behind the icon,
    in the part's own --pk-c color — tells it apart from merely-stored copies at a glance. */
 @keyframes hs-storage-cell-equipped-glow {
-    0%, 100% { background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, #05060a); box-shadow: inset 0 0 0 var(--ui-border-width, 2px) color-mix(in srgb, var(--pk-c, var(--color-primary)) 55%, transparent); }
-    50% { background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 38%, #05060a); box-shadow: inset 0 0 0 var(--ui-border-width, 2px) color-mix(in srgb, var(--pk-c, var(--color-primary)) 85%, transparent); }
+    0%, 100% { background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, #05060a); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pk-c, var(--color-primary)) 55%, transparent); }
+    50% { background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 38%, #05060a); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pk-c, var(--color-primary)) 85%, transparent); }
 }
 .hs-storage-cell.is-equipped {
-    animation: hs-storage-cell-equipped-glow 1.8s ease-in-out infinite;
+    animation: hs-storage-cell-equipped-glow 3.6s ease-in-out infinite;
 }
 /* Drop preview: the dragged item's own casing sitting in the hovered tile, not a highlighted
    box — no frame, no fill, just dimmed so it still reads as "not placed yet". */
@@ -1049,7 +1049,47 @@ html body .hs-storage-cell.is-dest-full[draggable="true"] {
     box-shadow: none;
 }
 /* Real item casing (physical-item.js): fills the filled cell; no icon badge on top of it. */
-.hs-storage-cell .hs-item-body { position: absolute; inset: 3px; }
+.hs-storage-cell .hs-item-body { position: absolute; inset: 3px; z-index: 1; }
+/* M/L footprints: colored dashed split line(s) in the BG at cell boundaries. */
+.hs-storage-cell.is-span {
+    --span-cs: var(--cs, 56px);
+    --span-gap: var(--hs-gap, 2px);
+    --span-line: color-mix(in srgb, var(--pk-c, var(--color-primary)) 75%, #fff);
+}
+.hs-storage-cell.is-span-h::before,
+.hs-storage-cell.is-span-w::after {
+    content: '';
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+/* Horizontal split (1×2 / 2×2): dashed line across each row boundary. */
+.hs-storage-cell.is-span-h::before {
+    left: 3px;
+    right: 3px;
+    top: calc(var(--span-cs) + var(--span-gap) / 2);
+    height: 0;
+    border-top: 1px dashed var(--span-line);
+    background: none;
+}
+/* Vertical split (2×1 / 2×2): dashed line down each column boundary. */
+.hs-storage-cell.is-span-w::after {
+    top: 3px;
+    bottom: 3px;
+    left: calc(var(--span-cs) + var(--span-gap) / 2);
+    width: 0;
+    border-left: 1px dashed var(--span-line);
+    background: none;
+}
+.hs-storage-cell.is-span .hs-storage-slot-part,
+.hs-storage-cell.is-span .hs-storage-slot-size,
+.hs-storage-cell.is-span .hs-storage-slot-glyph,
+.hs-storage-cell.is-span .hs-slot-glyph,
+.hs-storage-cell.is-span .hs-storage-cell-icon,
+.hs-storage-cell.is-span .hs-storage-cell-qty {
+    z-index: 1;
+}
 /* Blueprint tiles: recipe, not the owned part — right half as unfinished wireframe schematic. */
 .hs-storage-cell.is-blueprint .hs-item-body::before {
     content: '';

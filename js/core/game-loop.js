@@ -130,8 +130,14 @@ class GameLoop {
         }
         
         // Cap deltaTime to prevent extreme speed on first frame or lag spikes
-        const cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
-        
+        let cappedDeltaTime = Math.min(safeDeltaTime, 50); // Max 50ms = 20 FPS minimum
+        // Bezel SPD slider (0.5×–2×) — scales sim time without changing the frame clock.
+        try {
+            const sp = (typeof window !== 'undefined' && typeof window.vfGetGameSpeed === 'function')
+                ? window.vfGetGameSpeed() : 1;
+            if (Number.isFinite(sp) && sp !== 1) cappedDeltaTime *= sp;
+        } catch (e) { /* ignore */ }
+
         this.update(cappedDeltaTime);
         // Paused: keep the last frame; the pause overlay is CSS on top. While the remote control is open the
         // field is frozen by it, but still repainted so slider changes (sizes, effects) show up live.

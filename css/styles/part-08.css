@@ -1027,6 +1027,7 @@ button.hs-shop-cat.active.nav-focused {
 }
 .hs-hangar-split {
     display: grid;
+    /* PARTS | bay | preview — inventory column prepended when .is-inventory */
     grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
     gap: 4px;
     flex: 1 1 auto;
@@ -1034,37 +1035,97 @@ button.hs-shop-cat.active.nav-focused {
     align-items: stretch;
     margin-top: 0;
 }
+.hs-hangar-split.is-inventory {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+}
 .hs-hangar-split > .pe-resize-handle {
     width: 8px;
     margin: 0;
 }
+.hs-hangar-split > .hs-hangar-inv { display: none; }
+.hs-hangar-split.is-inventory > .hs-hangar-inv {
+    display: flex;
+    flex-direction: column;
+    grid-column: 1;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+    gap: 0;
+    position: relative;
+}
+/* Overlaid on the inventory column's own inner edge — no extra grid track needed, so it
+   can't disturb the neighbouring PARTS column's independently-set --hs-hangar-left-w. */
+.hs-hangar-inv > .pe-resize-handle[data-resize="inv"] {
+    position: absolute;
+    top: 0;
+    right: -5px;
+    bottom: 0;
+    width: 10px;
+    margin: 0;
+    z-index: 3;
+    cursor: col-resize;
+    touch-action: none;
+    background: transparent;
+    border: 0;
+}
+.hs-hangar-inv > .pe-resize-handle[data-resize="inv"]::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 2px;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 70%, transparent);
+    opacity: 0;
+    transition: opacity .12s;
+}
+.hs-hangar-inv > .pe-resize-handle[data-resize="inv"]:hover::after,
+.hs-hangar-inv > .pe-resize-handle[data-resize="inv"].pe-resize-active::after {
+    opacity: .8;
+}
 .hs-hangar-split > .hs-hangar-list {
     grid-column: 1;
+    min-width: 240px;
 }
+.hs-hangar-split.is-inventory > .hs-hangar-list { grid-column: 2; }
 .hs-hangar-split > .pe-resize-handle[data-resize="left"] {
     grid-column: 2;
 }
+.hs-hangar-split.is-inventory > .pe-resize-handle[data-resize="left"] { grid-column: 3; }
 .hs-hangar-split > .hs-hangar-detail {
     grid-column: 3;
+    min-width: 0;
 }
+.hs-hangar-split.is-inventory > .hs-hangar-detail { grid-column: 4; }
 .hs-hangar-split > .pe-resize-handle[data-resize="right"] {
     grid-column: 4;
 }
+.hs-hangar-split.is-inventory > .pe-resize-handle[data-resize="right"] { grid-column: 5; }
 .hs-hangar-split > .hs-hangar-preview {
     grid-column: 5;
 }
+.hs-hangar-split.is-inventory > .hs-hangar-preview { grid-column: 6; }
 .hs-hangar-split.hs-hangar-left-collapsed {
-    grid-template-columns: 0 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+    grid-template-columns: 44px 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
+}
+.hs-hangar-split.is-inventory.hs-hangar-left-collapsed {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) 44px 0 minmax(0, 1fr) 8px var(--hs-hangar-right-w, 220px);
 }
 .hs-hangar-split.hs-hangar-right-collapsed {
-    grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 0;
+    grid-template-columns: var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 44px;
+}
+.hs-hangar-split.is-inventory.hs-hangar-right-collapsed {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) var(--hs-hangar-left-w, 320px) 8px minmax(0, 1fr) 0 44px;
 }
 .hs-hangar-split.hs-hangar-left-collapsed.hs-hangar-right-collapsed {
-    grid-template-columns: 0 0 minmax(0, 1fr) 0 0;
+    grid-template-columns: 44px 0 minmax(0, 1fr) 0 44px;
 }
-.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list,
-.hs-hangar-split.hs-hangar-right-collapsed > .hs-hangar-preview {
-    display: none;
+.hs-hangar-split.is-inventory.hs-hangar-left-collapsed.hs-hangar-right-collapsed {
+    grid-template-columns: var(--hs-inv-w, min(400px, 36vw)) 44px 0 minmax(0, 1fr) 0 44px;
+}
+.hs-hangar-split.hs-hangar-left-collapsed > .hs-hangar-list {
+    min-width: 0;
 }
 .hs-hangar-split.hs-hangar-left-collapsed > .pe-resize-handle[data-resize="left"],
 .hs-hangar-split.hs-hangar-right-collapsed > .pe-resize-handle[data-resize="right"] {

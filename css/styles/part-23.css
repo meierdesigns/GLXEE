@@ -20,9 +20,10 @@ html[data-faction="kronax"] {
     --faction-clip: var(--faction-ctl-clip);
 }
 
-/* Pirate: welded scrap — uneven, notched edges, no two corners alike. */
+/* Pirate: welded scrap — uneven flanks, but a straight top so panel titles and
+   inner cards (OWNED SHIPS) are not cut by the silhouette notches. */
 html[data-faction="pirate"] {
-    --faction-panel-clip: polygon(6px 0, 38% 0, calc(38% + 6px) 4px, calc(100% - 16px) 2px, 100% 10px, calc(100% - 2px) 46%, 100% calc(46% + 8px), 100% calc(100% - 6px), calc(100% - 10px) 100%, 62% 100%, calc(62% - 6px) calc(100% - 4px), 14px calc(100% - 2px), 0 calc(100% - 14px), 2px 30%, 0 calc(30% - 8px), 0 6px);
+    --faction-panel-clip: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 10px) 100%, 62% 100%, calc(62% - 6px) calc(100% - 4px), 14px calc(100% - 2px), 0 calc(100% - 14px), 2px 30%, 0 calc(30% - 8px), 0 0);
     --faction-ctl-clip: polygon(4px 0, calc(100% - 10px) 0, 100% 6px, calc(100% - 2px) calc(100% - 4px), calc(100% - 6px) 100%, 8px 100%, 0 calc(100% - 8px), 2px 4px);
     --faction-clip: var(--faction-ctl-clip);
 }
@@ -431,11 +432,12 @@ html body .victory-screen .victory-body {
 html body .victory-screen .victory-panels {
     display: flex !important;
     flex-direction: row !important;
-    flex-wrap: wrap;
+    flex-wrap: nowrap !important;
     align-items: flex-start !important;
     justify-content: center !important;
     gap: 16px !important;
     width: 100% !important;
+    overflow-x: auto !important;
 }
 html body .victory-screen :is(.victory-loot, .victory-loadout) {
     flex: 0 0 auto !important;
@@ -460,14 +462,56 @@ html body .victory-screen .victory-loadout {
 }
 html body .victory-screen .victory-loadout-bags {
     display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 14px;
     width: max-content;
     max-width: 100%;
-    overflow: visible;
+    overflow-x: auto;
 }
 html body .victory-screen .victory-loadout-col {
+    flex: 0 0 auto;
     width: max-content;
+    max-width: none;
 }
 html body .victory-screen .victory-loot-title { flex: none; margin: 0 !important; }
+html body .victory-screen .victory-loot-row-wrap {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 14px !important;
+    width: max-content !important;
+    max-width: 100%;
+}
+html body .victory-screen .victory-loot-sell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    min-width: 72px;
+    flex: none;
+    color: var(--faction-accent, var(--color-primary));
+    font-family: 'Silkscreen', var(--ui-font-family, monospace);
+    letter-spacing: 1px;
+    text-align: right;
+    user-select: none;
+}
+html body .victory-screen .victory-loot-sell.is-empty {
+    opacity: 0.35;
+}
+html body .victory-screen .victory-loot-sell-label {
+    font-size: var(--font-small, 10px);
+    letter-spacing: 2px;
+    opacity: 0.75;
+}
+html body .victory-screen .victory-loot-sell-value {
+    font-size: var(--font-h2, 20px);
+    font-weight: bold;
+    line-height: 1;
+    color: #e8c85a;
+}
 html body .victory-screen .victory-loot-list {
     display: block !important;
     width: max-content !important;
@@ -618,6 +662,55 @@ html body .victory-screen .victory-loot-amount {
     background: currentColor;
     clip-path: polygon(0 0, 4px 0, 4px 3px, 9px 3px, 9px 5px, 14px 5px, 14px 9px, 9px 9px, 9px 11px, 4px 11px, 4px 14px, 0 14px);
     transform: rotate(var(--gm-edge-angle, 0deg)) translateX(38px);
+    pointer-events: none;
+}
+
+/* Galaxy map: off-screen active-mission marker (click = focus mission planet). */
+#gmMapArea .gm-mission-edge {
+    position: absolute;
+    z-index: 5;
+    width: 36px;
+    height: 36px;
+    margin: -18px 0 0 -18px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: var(--gm-mission-edge-accent, var(--color-primary));
+    background: #05060a;
+    border: 1px solid currentColor;
+    box-shadow: 0 0 0 1px #05060a;
+    image-rendering: pixelated;
+}
+#gmMapArea .gm-mission-edge[hidden] { display: none; }
+#gmMapArea .gm-mission-edge:is(:hover, :focus-visible) {
+    background: color-mix(in srgb, currentColor 22%, #05060a);
+    outline: none;
+}
+.gm-mission-edge-ico {
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+}
+.gm-mission-edge-img {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    pointer-events: none;
+    opacity: 1 !important;
+    filter: brightness(0) invert(1) !important;
+}
+.gm-mission-edge-arrow {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    margin: -5px 0 0 -5px;
+    background: currentColor;
+    clip-path: polygon(0 0, 3px 0, 3px 2px, 6px 2px, 6px 4px, 10px 4px, 10px 6px, 6px 6px, 6px 8px, 3px 8px, 3px 10px, 0 10px);
+    transform: rotate(var(--gm-edge-angle, 0deg)) translateX(26px);
     pointer-events: none;
 }
 
@@ -2239,29 +2332,21 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     width: 18px !important;
     height: 18px !important;
 }
+/* Same opaque gap-slot lines as hangar bay (bg = --hs-line, cells = #05060a). */
 #vf-in-stage-shop .hs-storage-grid, .hs-tps .hs-storage-grid{
-    border-color: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 55%, #1a2230);
-    background-color: transparent;
-    --hs-line: color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 42%, #141a24);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 28%, #0a0e14);
+    --hs-line: color-mix(in srgb, var(--iss-accent, var(--faction-accent, var(--color-primary))) 60%, #05060a);
+    border-color: var(--hs-line);
+    background-color: var(--hs-line);
+    box-shadow: none;
 }
-#vf-in-stage-shop .hs-storage-grid :is(.hs-storage-cell, .vf-iss-stock-cell, button.hs-storage-cell),
-.hs-tps .hs-storage-grid :is(.hs-storage-cell, .vf-iss-stock-cell, button.hs-storage-cell){
-    background: color-mix(in srgb, #05060a 12%, transparent) !important;
-    box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 32%, #1c2430),
-        inset 0 0 0 2px color-mix(in srgb, #05060a 55%, transparent);
-}
+#vf-in-stage-shop .hs-storage-grid :is(.hs-storage-cell, .vf-iss-stock-cell, button.hs-storage-cell):not(.is-ship-slot),
+.hs-tps .hs-storage-grid :is(.hs-storage-cell, .vf-iss-stock-cell, button.hs-storage-cell):not(.is-ship-slot),
 #vf-in-stage-shop .hs-storage-cell-empty, .hs-tps .hs-storage-cell-empty{
-    background: color-mix(in srgb, #05060a 22%, transparent) !important;
-    box-shadow:
-        inset 0 0 0 1px color-mix(in srgb, var(--iss-accent, var(--faction-accent)) 28%, #1a2230),
-        inset 0 0 0 2px color-mix(in srgb, #000 35%, transparent);
+    background: #05060a !important;
 }
-#vf-in-stage-shop .hs-storage-cell.is-equipped,
-.hs-tps .hs-storage-cell.is-equipped{
+#vf-in-stage-shop .hs-storage-cell.is-equipped:not(.is-ship-slot),
+.hs-tps .hs-storage-cell.is-equipped:not(.is-ship-slot){
     animation: hs-storage-cell-equipped-glow 1.8s ease-in-out infinite;
-    background: transparent !important;
 }
 #vf-in-stage-shop .vf-iss-empty-bag, .hs-tps .vf-iss-empty-bag{
     position: relative;
@@ -2518,6 +2603,20 @@ html body .victory-screen .victory-loadout {
     width: auto !important;
     background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 10%, #05060a) !important;
 }
+/* Same opaque gap-slot lines as hangar / shop. */
+html body .victory-screen .hs-storage-grid {
+    --hs-line: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 60%, #05060a);
+    border-color: var(--hs-line);
+    background-color: var(--hs-line);
+    box-shadow: none;
+}
+html body .victory-screen .hs-storage-grid :is(.hs-storage-cell, button.hs-storage-cell):not(.is-ship-slot),
+html body .victory-screen .hs-storage-cell-empty {
+    background: #05060a !important;
+}
+html body .victory-screen .hs-storage-cell.is-equipped:not(.is-ship-slot) {
+    animation: hs-storage-cell-equipped-glow 1.8s ease-in-out infinite;
+}
 html body .victory-screen .victory-loot-list {
     display: block !important;
     width: max-content !important;
@@ -2553,3 +2652,34 @@ html body .victory-screen .victory-button {
     width: auto !important;
     justify-content: center;
 }
+
+/* Ship inventory everywhere (shops, trading post, equipment tab): equipped parts get the
+   same highlighted slot outline as the hangar bay SHIP grid. */
+html body :is(.vf-iss-ship-inv, .hs-tps-ship-inv, .hs-row) .hs-storage-cell.is-equipped:not(.is-ship-slot) {
+    background: color-mix(in srgb, var(--pk-c) 10%, #05060a);
+    border: 2px solid var(--pk-c);
+    box-shadow:
+        inset 0 0 0 1px #05060a,
+        0 0 0 1px color-mix(in srgb, var(--pk-c) 25%, transparent);
+    animation: hs-storage-cell-equipped-glow 1.8s ease-in-out infinite;
+}
+
+/* Dragging a part out of a hull slot: the slot frame stays fully visible, only the part fades. */
+.hs-storage-cell.is-ship-slot.is-dragging { opacity: 1; }
+.hs-storage-cell.is-ship-slot.is-dragging .hs-item-body { opacity: 0.35; }
+
+/* Slot size (S/M/L) is not shown as a label on hull slots. */
+.hs-storage-slot-size { display: none !important; }
+
+/* Station storage grid: centred horizontally inside its framed container. */
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row .hs-storage-grid {
+    margin-left: auto;
+    margin-right: auto;
+}
+.hs-station-grid > .hs-panel-stack > .hs-station-section > .hs-station-storage-row > .hs-row {
+    justify-content: center;
+}
+
+/* Type icons are not shown on hull slots (tooltip only). */
+.hs-storage-cell.is-ship-slot .hs-storage-slot-glyph,
+.hs-storage-cell.is-ship-slot .hs-slot-glyph { display: none !important; }

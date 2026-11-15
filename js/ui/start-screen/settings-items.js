@@ -78,15 +78,6 @@ extendClass(StartScreenManager, {
                 type: 'shipRenderStyle'
             },
             {
-                name: 'Voxel Size',
-                value: (typeof uiAppearanceManager !== 'undefined')
-                    ? String(uiAppearanceManager.voxelSize || '1') : '1',
-                options: (typeof uiAppearanceManager !== 'undefined')
-                    ? uiAppearanceManager.getVoxelSizeOptions()
-                    : ['1', '2', '3', '4'],
-                type: 'voxelSize'
-            },
-            {
                 name: 'Player Size',
                 value: (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.getSizePx)
                     ? String(Math.round(uiAppearanceManager.getSizePx('player'))) : '18',

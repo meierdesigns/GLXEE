@@ -162,15 +162,17 @@ extendClass(HomeStationUI, {
             if (ctx.msImageSmoothingEnabled !== undefined) ctx.msImageSmoothingEnabled = false;
             const mw = Math.max(8, model.width || 20);
             const mh = Math.max(8, model.height || 16);
-            // Integer base render at the largest scale that fits the thumb, then a
-            // small nearest-neighbor stretch for the leftover fraction — fills the
-            // box without the chunky 32px HUD base that looked too coarse at 140×110.
+            // Same combat footprint fit as in-game (PLAYER_FOOTPRINT), then integer
+            // nearest-neighbor zoom into the thumb — keeps voxels chunky like flight,
+            // not the fine lattice that filled 140×110 1:1.
             const pad = 1;
             const maxW = Math.max(1, c.width - pad * 2);
             const maxH = Math.max(1, c.height - pad * 2);
-            const baseFit = Math.max(1, Math.floor(Math.min(maxW / mw, maxH / mh)) || 1);
-            const bw = Math.max(1, Math.round(mw * baseFit));
-            const bh = Math.max(1, Math.round(mh * baseFit));
+            const footW = 18;
+            const unit = footW / 36;
+            const combatFit = Math.max(0.25, Math.min(unit, (footW * 1.3) / mw, (footW * 1.3) / mh));
+            const bw = Math.max(1, Math.ceil(mw * combatFit));
+            const bh = Math.max(1, Math.ceil(mh * combatFit));
             const base = document.createElement('canvas');
             base.width = bw;
             base.height = bh;
@@ -178,7 +180,7 @@ extendClass(HomeStationUI, {
             if (!bctx) return;
             bctx.imageSmoothingEnabled = false;
             try {
-                loader.renderShip(bctx, model, 0, 0, baseFit, null, 0, { allowColorMountSprites: true });
+                loader.renderShip(bctx, model, 0, 0, combatFit, null, 0, { allowColorMountSprites: true });
             } catch (e) { return; }
             // Table thumbs (no area outline): crop transparent padding so the
             // hull fills the box. Area rows keep the full model bounds.
@@ -206,11 +208,12 @@ extendClass(HomeStationUI, {
                 } catch (e) { /* keep full bounds */ }
             }
             const fill = Math.min(maxW / srcW, maxH / srcH);
-            const rw = Math.max(1, Math.round(srcW * fill));
-            const rh = Math.max(1, Math.round(srcH * fill));
+            const zoom = Math.max(1, Math.floor(fill));
+            const rw = Math.max(1, srcW * zoom);
+            const rh = Math.max(1, srcH * zoom);
             const ox = Math.floor((c.width - rw) / 2);
             const oy = Math.floor((c.height - rh) / 2);
-            const scale = rw / mw;
+            const scale = (rw / srcW) * combatFit;
             ctx.drawImage(base, srcX, srcY, srcW, srcH, ox, oy, rw, rh);
             // Hide the placeholder icon once the canvas actually has ship pixels.
             if (c.parentNode && c.parentNode.classList) {

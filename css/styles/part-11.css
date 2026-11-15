@@ -830,15 +830,25 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
     opacity: 1;
 }
 
-/* Upgrade sub-tabs (ships / modules): scroll the list instead of squashing
-   panels; the station tree keeps its own inner scroller. */
+/* Upgrade tab: tree + hangar/factions panels scroll together. */
 .hs-upgrade-root .hs-tab-fill {
     overflow-x: hidden;
     overflow-y: auto;
     scroll-padding: 12px 0;
 }
-.hs-upgrade-root .hs-tab-fill > :is(.hs-panel, .hs-line, .hs-empty-slot) {
+.hs-upgrade-root .hs-tab-fill > :is(.hs-panel, .hs-line, .hs-empty-slot, .hs-upg-branch) {
     flex: 0 0 auto;
+}
+.hs-upg-branch {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: var(--ui-border-width) solid color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+.hs-upg-branch .hs-hint { margin-bottom: 10px; }
+.hs-upg-branch-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 /* Affordability hint on still-focusable upgrade buttons. */
 :is(.hs-upgrade-root, .hs-shop-root) .action-button[data-short] {
@@ -1097,22 +1107,14 @@ html .home-station-overlay :is(.hs-menu-tab-btn, .hs-tab, .hs-home-btn).active :
 @keyframes gm-lamp-pulse { 50% { opacity: 0.25; } }
 @keyframes gm-lamp-strobe { 0%, 88% { opacity: 0.1; } 90%, 100% { opacity: 1; } }
 
-/* Player ship marker on the galaxy map. */
+/* Player ship marker on the galaxy map (icon only — no selection chrome). */
 .gm-ship-marker { pointer-events: none; }
+.gm-ship-marker.is-you { z-index: 5; }
 .gm-ship-marker-body {
     fill: var(--color-primary);
     stroke: var(--color-background, #050508);
     stroke-width: 1.5;
     filter: drop-shadow(2px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(-2px 0 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(0 2px 0 color-mix(in srgb, var(--color-primary) 55%, transparent)) drop-shadow(0 -2px 0 color-mix(in srgb, var(--color-primary) 55%, transparent));
-}
-.gm-ship-location-label {
-    fill: var(--color-primary, #ff9b54);
-    font: bold 9px monospace;
-    letter-spacing: 1px;
-    paint-order: stroke;
-    stroke: #050508;
-    stroke-width: 3px;
-    text-anchor: middle;
 }
 
 /* Explorations: every entry listed with its discovered count; empty dimmed. */

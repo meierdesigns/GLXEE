@@ -914,16 +914,16 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 .launch-cutscene-card {
     position: absolute;
     left: 50%;
-    top: 10%;
+    top: 8%;
     transform: translateX(-50%);
     z-index: 5;
-    width: min(520px, 86%);
+    width: min(560px, 90%);
     padding: 14px 18px 16px;
     text-align: center;
     pointer-events: none;
     opacity: 0;
     color: #f4f0e4;
-    background: rgba(2, 4, 10, 0.72);
+    background: rgba(2, 4, 10, 0.78);
     border: 1px solid rgba(244, 240, 228, 0.35);
     box-shadow: 0 0 0 1px #000, 0 8px 24px rgba(0, 0, 0, 0.55);
     text-shadow:
@@ -939,8 +939,48 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
     font-size: 12px;
     letter-spacing: 0.28em;
     opacity: 0.9;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     color: var(--color-primary, #e8c56a);
+}
+.launch-cutscene-faces {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin: 0 0 10px;
+}
+.launch-cutscene-face {
+    width: 72px;
+    height: 84px;
+    flex: 0 0 auto;
+    overflow: hidden;
+    border: 1px solid rgba(244, 240, 228, 0.4);
+    background: rgba(0, 0, 0, 0.55);
+    box-shadow: 0 0 0 1px #000;
+}
+.launch-cutscene-face canvas.hero-portrait.vx-portrait,
+.launch-cutscene-face svg.hero-portrait {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    object-fit: cover;
+    object-position: 50% 0;
+}
+.launch-cutscene-face.is-pilot { border-color: color-mix(in srgb, var(--color-primary, #e8c56a) 70%, #fff); }
+.launch-cutscene-face.is-giver { border-color: rgba(180, 200, 220, 0.55); }
+.launch-cutscene-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    text-align: left;
+}
+.launch-cutscene-row .launch-cutscene-face {
+    width: 80px;
+    height: 92px;
+}
+.launch-cutscene-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
 }
 .launch-cutscene-title {
     font-size: clamp(22px, 4vw, 36px);
@@ -958,11 +998,36 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
     color: #d8d2c4;
     text-transform: none;
 }
+.launch-cutscene-next {
+    margin-top: 10px;
+    font-size: clamp(11px, 1.4vw, 13px);
+    letter-spacing: 0.08em;
+    line-height: 1.35;
+    color: var(--color-primary, #e8c56a);
+}
+.launch-cutscene-cast {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    opacity: 0.7;
+    color: #d8d2c4;
+}
 .launch-cutscene-speaker {
     font-size: clamp(11px, 1.4vw, 13px);
     letter-spacing: 0.22em;
     color: var(--color-primary, #e8c56a);
+    margin-bottom: 2px;
+}
+.launch-cutscene-role {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    opacity: 0.65;
     margin-bottom: 8px;
+    color: #d8d2c4;
 }
 .launch-cutscene-line {
     font-size: clamp(14px, 2vw, 18px);
@@ -975,9 +1040,10 @@ body:has(#hsFullscreen) .vf-fullscreen-btn { display: none; }
 .launch-cutscene-title-mini {
     margin-top: 12px;
     font-size: 11px;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.12em;
     opacity: 0.55;
     color: #d8d2c4;
+    text-align: center;
 }
 .launch-cutscene-hint {
     position: absolute;
@@ -1387,22 +1453,6 @@ html body .game-over .game-over-content p {
     16% { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .gm-battle-px { animation: none; opacity: 0.6; fill: #ffb347; } }
-
-/* Raid/hunt mission: minimal chevron fleet in space around the planet. */
-.gm-fleet { pointer-events: none; }
-.gm-fleet-ship { opacity: 0.55; }
-.gm-fleet-ship path { fill: var(--fac, var(--color-primary)); }
-.gm-fleet-ship {
-    animation: gm-fleet-blink 2.8s steps(2, end) infinite;
-    animation-delay: var(--bd, 0s);
-}
-@keyframes gm-fleet-blink {
-    0%, 100% { opacity: 0.95; }
-    50%      { opacity: 0.35; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .gm-fleet-ship { animation: none; opacity: 0.75; }
-}
 
 /* Start galaxy card: real planet sprites on a star field, readable text. */
 .profile-start-galaxy-map .stars rect { fill: #cfe4ff; }

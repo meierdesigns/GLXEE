@@ -514,12 +514,39 @@ extendClass(ProfileSelectionManager, {
             model.faction = id;
             const mw = Math.max(1, model.width || 20);
             const mh = Math.max(1, model.height || 16);
-            // Start step: draw at 2x model resolution (finer detail) and let CSS scale it up crisply.
+            // Start step: same voxel lattice as in-game combat (PLAYER_FOOTPRINT fit),
+            // then an integer UI multiply so CSS can show it 1:1 without stretching.
+            let scale;
             if (inStart) {
-                const gw = Math.round(mw * 2) + 24, gh = Math.round(mh * 2) + 24;
-                if (canvas.width !== gw || canvas.height !== gh) { canvas.width = gw; canvas.height = gh; canvas.style.aspectRatio = `${gw} / ${gh}`; }
+                const footW = 18;
+                const unit = footW / 36;
+                const combatFit = Math.min(unit, (footW * 1.3) / mw, (footW * 1.3) / mh);
+                // Prefer ~280px tall preview; keep integer zoom over combatFit.
+                const want = 280;
+                const mul = Math.max(1, Math.round(want / Math.max(1, mh * combatFit)));
+                scale = Math.max(0.25, combatFit * mul);
+                const pad = 8;
+                const gw = Math.max(1, Math.round(mw * scale) + pad * 2);
+                const gh = Math.max(1, Math.round(mh * scale) + pad * 2);
+                if (canvas.width !== gw || canvas.height !== gh) {
+                    canvas.width = gw;
+                    canvas.height = gh;
+                }
+                // Intrinsic bitmap aspect only — never force 320/224 (that stretched ships soft).
+                canvas.style.width = '';
+                canvas.style.height = '';
+                canvas.style.aspectRatio = 'auto';
+                canvas.style.maxWidth = 'min(72%, 420px)';
+                canvas.style.maxHeight = 'min(72%, 320px)';
+                canvas.style.objectFit = 'contain';
+                canvas.style.imageRendering = 'pixelated';
+            } else {
+                canvas.style.maxWidth = '';
+                canvas.style.maxHeight = '';
+                canvas.style.objectFit = '';
+                canvas.style.aspectRatio = '';
+                scale = Math.max(1, Math.floor(Math.min((canvas.width - 16) / mw, (canvas.height - 16) / mh)));
             }
-            const scale = inStart ? 2 : Math.max(1, Math.floor(Math.min((canvas.width - 16) / mw, (canvas.height - 16) / mh)));
             ctx.imageSmoothingEnabled = false;
             const ox = Math.floor((canvas.width - mw * scale) / 2), oy = Math.floor((canvas.height - mh * scale) / 2);
             const lay = model.layout || {};

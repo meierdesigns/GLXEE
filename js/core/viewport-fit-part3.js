@@ -3,7 +3,17 @@
 // viewport-fit part 3 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const { CTX_MENU_ICON, FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, STYLE_FLAT, STYLE_VOXEL, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    const CTX_MENU_KEY = 'vf_dev_ctx_menu_v1';
+    function loadCtxMenuPref() {
+        try { return localStorage.getItem(CTX_MENU_KEY) === 'true'; } catch (e) { return false; }
+    }
+    function saveCtxMenuPref(on) {
+        try { localStorage.setItem(CTX_MENU_KEY, on ? 'true' : 'false'); } catch (e) { /* ignore */ }
+        window.vfAllowBrowserCtxMenu = !!on;
+    }
+    // Honor a saved DevMode preference as soon as this module loads (flag stays false until DevMode).
+    window.vfAllowBrowserCtxMenu = false;
     Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
 
     // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
@@ -175,6 +185,11 @@
                 toggleFrameEdit();
                 btn.classList.toggle('is-open', !!vfs.frameEditOn);
             },
+            ctxMenu: function (btn) {
+                const on = !loadCtxMenuPref();
+                saveCtxMenuPref(on);
+                btn.classList.toggle('is-open', on);
+            },
             save: function (btn) {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.save();
@@ -184,12 +199,25 @@
             reset: function () {
                 if (typeof hudLayoutEditor === 'undefined') return;
                 hudLayoutEditor.resetLayout();
+            },
+            style: function (btn) {
+                if (typeof uiAppearanceManager === 'undefined' || !uiAppearanceManager.setShipRenderStyle) return;
+                const cur = String(uiAppearanceManager.shipRenderStyle || 'VOXEL').toUpperCase();
+                const next = cur === 'VOXEL' ? 'FLAT' : 'VOXEL';
+                uiAppearanceManager.setShipRenderStyle(next);
+                const voxel = next === 'VOXEL';
+                btn.innerHTML = voxel ? STYLE_VOXEL : STYLE_FLAT;
+                btn.title = voxel ? 'Style · VOXEL' : 'Style · FLAT';
+                btn.setAttribute('aria-label', btn.title);
+                btn.dataset.state = voxel ? 'voxel' : 'flat';
             }
         };
         const meta = {
             save: ['Save layout', SAVE_ICON], reset: ['Reset layout', RESET_ICON], layout: ['Layout edit', LAYOUT_ICON],
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
+            ctxMenu: ['Browser context menu', CTX_MENU_ICON],
             res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], soundtrack: ['Music settings', MUSIC_ICON],
+            style: ['Style · VOXEL', STYLE_VOXEL],
             fs: ['Fullscreen', FS_OFF], fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
         };
         // The keys are static markup in index.html (painted with the first frame); this
@@ -204,7 +232,7 @@
                 btn.title = meta[key][0];
                 btn.setAttribute('aria-label', meta[key][0]);
                 btn.innerHTML = meta[key][1];
-                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit' || key === 'soundtrack') btn.hidden = true;
+                if (key === 'hud' || key === 'layout' || key === 'save' || key === 'reset' || key === 'frameEdit' || key === 'ctxMenu' || key === 'soundtrack') btn.hidden = true;
                 tools.appendChild(btn);
             });
             frame.appendChild(tools);
@@ -236,6 +264,68 @@
             if (after && after.nextSibling) tools.insertBefore(feBtn, after.nextSibling);
             else tools.appendChild(feBtn);
             tools.dataset.wired = '0';
+        }
+        // DevMode: browser context-menu toggle (Inspect / Reload) after frame-edit.
+        if (!tools.querySelector('[data-tool="ctxMenu"]') && meta.ctxMenu) {
+            const ctxBtn = document.createElement('button');
+            ctxBtn.type = 'button';
+            ctxBtn.dataset.tool = 'ctxMenu';
+            ctxBtn.title = meta.ctxMenu[0];
+            ctxBtn.setAttribute('aria-label', meta.ctxMenu[0]);
+            ctxBtn.innerHTML = meta.ctxMenu[1];
+            ctxBtn.hidden = true;
+            const after = tools.querySelector('[data-tool="frameEdit"]') || tools.querySelector('[data-tool="hud"]');
+            if (after && after.nextSibling) tools.insertBefore(ctxBtn, after.nextSibling);
+            else tools.appendChild(ctxBtn);
+            tools.dataset.wired = '0';
+        }
+        // Style toggle (FLAT ↔ VOXEL) — inject before mute / fullscreen.
+        if (!tools.querySelector('[data-tool="style"]') && meta.style) {
+            const styleBtn = document.createElement('button');
+            styleBtn.type = 'button';
+            styleBtn.dataset.tool = 'style';
+            styleBtn.title = meta.style[0];
+            styleBtn.setAttribute('aria-label', meta.style[0]);
+            styleBtn.innerHTML = meta.style[1];
+            const before = tools.querySelector('[data-tool="mute"]') || tools.querySelector('[data-tool="fs"]');
+            if (before) tools.insertBefore(styleBtn, before);
+            else tools.appendChild(styleBtn);
+            tools.dataset.wired = '0';
+        }
+        // Game speed slider — sits left of style / mute.
+        let speedLab = tools.querySelector('.vf-bezel-speed');
+        if (!speedLab) {
+            speedLab = document.createElement('label');
+            speedLab.className = 'vf-bezel-speed';
+            speedLab.title = 'Game speed';
+            speedLab.innerHTML = '<span>SPD</span>' +
+                '<input type="range" min="50" max="200" step="25" aria-label="Game speed">' +
+                '<output></output>';
+            const before = tools.querySelector('[data-tool="style"]')
+                || tools.querySelector('[data-tool="mute"]')
+                || tools.querySelector('[data-tool="fs"]');
+            if (before) tools.insertBefore(speedLab, before);
+            else tools.appendChild(speedLab);
+            const speedInp = speedLab.querySelector('input');
+            const speedOut = speedLab.querySelector('output');
+            const syncSpeedUi = function () {
+                const sp = (typeof window.vfGetGameSpeed === 'function') ? window.vfGetGameSpeed() : 1;
+                const pct = Math.round(sp * 100);
+                if (String(speedInp.value) !== String(pct)) speedInp.value = String(pct);
+                speedOut.textContent = (Math.round(sp * 100) / 100) + '×';
+                speedInp.style.setProperty('--look-fill', ((pct - 50) / 150 * 100) + '%');
+            };
+            syncSpeedUi();
+            speedInp.addEventListener('input', function (e) {
+                e.stopPropagation();
+                const pct = parseInt(speedInp.value, 10) || 100;
+                if (typeof window.vfSetGameSpeed === 'function') window.vfSetGameSpeed(pct / 100);
+                syncSpeedUi();
+            });
+            ['keydown', 'keyup', 'click', 'mousedown', 'pointerdown'].forEach(function (t) {
+                speedInp.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+            speedLab._syncSpeedUi = syncSpeedUi;
         }
         // Older saves / markup without the mute key: inject it just before fullscreen.
         if (!tools.querySelector('[data-tool="mute"]') && meta.mute) {
@@ -276,6 +366,26 @@
             fxSlot.title = meta.fx[0];
             fxSlot.setAttribute('aria-label', meta.fx[0]);
         }
+        // DevMode: Voxel Size dropdown at the left of the bezel tool strip.
+        let voxelLab = tools.querySelector('.vf-bezel-voxel');
+        if (!voxelLab) {
+            voxelLab = document.createElement('label');
+            voxelLab.className = 'vf-bezel-voxel';
+            voxelLab.title = 'Voxel Size';
+            voxelLab.hidden = true;
+            voxelLab.innerHTML = '<span>VOXEL</span><select aria-label="Voxel Size"></select>';
+            tools.insertBefore(voxelLab, tools.firstChild);
+            const voxelSel = voxelLab.querySelector('select');
+            voxelSel.addEventListener('change', function (e) {
+                e.stopPropagation();
+                if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setVoxelSize) {
+                    uiAppearanceManager.setVoxelSize(voxelSel.value);
+                }
+            });
+            ['keydown', 'keyup', 'click', 'mousedown'].forEach(function (t) {
+                voxelSel.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+        }
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
@@ -296,6 +406,19 @@
         };
         q('res').classList.toggle('is-open', vfs.resOpen);
         q('fx').classList.toggle('is-open', vfs.fxOpen);
+        const styleBtn = q('style');
+        if (styleBtn) {
+            const voxel = typeof uiAppearanceManager !== 'undefined'
+                && String(uiAppearanceManager.shipRenderStyle || 'VOXEL').toUpperCase() === 'VOXEL';
+            const st = voxel ? 'voxel' : 'flat';
+            if (styleBtn.dataset.state !== st) {
+                styleBtn.dataset.state = st;
+                styleBtn.innerHTML = voxel ? STYLE_VOXEL : STYLE_FLAT;
+                styleBtn.title = voxel ? 'Style · VOXEL' : 'Style · FLAT';
+                styleBtn.setAttribute('aria-label', styleBtn.title);
+            }
+        }
+        if (speedLab && speedLab._syncSpeedUi) speedLab._syncSpeedUi();
         const muteBtn = q('mute');
         if (muteBtn) {
             muteBtn.classList.toggle('is-open', vfs.volOpen);
@@ -312,6 +435,25 @@
         if (soundtrackBtn) {
             const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
             soundtrackBtn.hidden = !devOn;
+        }
+        {
+            const voxelDev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+            voxelLab.hidden = !voxelDev;
+            if (voxelDev && typeof uiAppearanceManager !== 'undefined') {
+                const opts = uiAppearanceManager.getVoxelSizeOptions
+                    ? uiAppearanceManager.getVoxelSizeOptions()
+                    : ['0.25', '0.5', '0.75', '1', '2', '3', '4', '5', '6', '7', '8'];
+                const cur = String(uiAppearanceManager.voxelSize || '1');
+                const voxelSel = voxelLab.querySelector('select');
+                const optKey = opts.join('|');
+                if (voxelSel.dataset.opts !== optKey) {
+                    voxelSel.dataset.opts = optKey;
+                    voxelSel.innerHTML = opts.map(function (o) {
+                        return '<option value="' + o + '">' + o + '×</option>';
+                    }).join('');
+                }
+                if (voxelSel.value !== cur) voxelSel.value = cur;
+            }
         }
         const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);
         const fsBtn = q('fs');
@@ -367,6 +509,16 @@
         }
         if (!devOn && vfs.frameEditOn) toggleFrameEdit(false);
         if (vfs.frameEditOn) renderFrameEditGrips();
+        const ctxMenuBtn = q('ctxMenu');
+        if (ctxMenuBtn) {
+            ctxMenuBtn.hidden = !devOn;
+            // Preference persists, but the browser menu is only allowed while DevMode is on.
+            const ctxOn = !!devOn && loadCtxMenuPref();
+            window.vfAllowBrowserCtxMenu = ctxOn;
+            ctxMenuBtn.classList.toggle('is-open', ctxOn);
+        } else if (!devOn) {
+            window.vfAllowBrowserCtxMenu = false;
+        }
         const saveBtn = q('save');
         if (saveBtn) saveBtn.hidden = !nowEditing;
         const resetBtn = q('reset');

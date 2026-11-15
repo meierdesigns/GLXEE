@@ -16,6 +16,8 @@ extendClass(HomeStationUI, {
                 if (localStorage.getItem('vf_hs_bay_inv') === '1') this._bayInv = true;
                 const fl = localStorage.getItem('vf_hs_bay_inv_filter');
                 if (fl) this._bayInvFilter = fl;
+                const invW = parseInt(localStorage.getItem('vf_hs_bay_inv_w'), 10);
+                if (invW) this._hangarInvW = `${invW}px`;
             } catch (err) { /* ignore */ }
         }
         // The TRAVEL tab is a page listing the galaxies; the planet map still opens its own travel modal.
@@ -342,7 +344,7 @@ extendClass(HomeStationUI, {
                     `<button type="button" class="hs-ship-icon-btn hs-ship-hangar-badge" data-open-hangar="${id}" data-nav-item data-ui-tip="EDIT ANATOMY" aria-label="Edit ship anatomy">` +
                     `${this.iconHtml('hsHangar', 20, 'hs-pixel hs-pixel-20', false)}</button>`);
                 const storageRow = `<tr class="hs-ship-storage-row"><td colspan="4">` +
-                    `<div class="hs-row">${this.renderShipStorage(profile, id)}</div>` +
+                    `<div class="hs-row">${this.renderBayShipInventoryGrid ? this.renderBayShipInventoryGrid(profile, id) : this.renderShipStorage(profile, id)}</div>` +
                     `</td></tr>`;
                 return `<tbody class="hs-ship-card">${row}${storageRow}</tbody>`;
             }).join('')}</table>`
@@ -507,7 +509,16 @@ extendClass(HomeStationUI, {
         } else {
             this._softBodyParkFp = '';
             // Drop any stale hangar park from older builds / mid-session hot reload.
-            if (leavingTab === 'hangar' && this._softBodyCache) delete this._softBodyCache.hangar;
+            if (leavingTab === 'hangar' && this._softBodyCache) {
+                delete this._softBodyCache.hangar;
+                // Equip/move/storage-position edits in Hangar don't touch any field the
+                // fingerprint tracks (tab/activeShipId/credits/ownedShipIds.length/...), so a
+                // parked STATION body would get restored stale on return — the OWNED SHIPS
+                // card showing items in the positions they were in before the Hangar visit
+                // ("nicht wie im Shipyard gesynced"). Drop it so Station always rebuilds fresh
+                // after Hangar.
+                delete this._softBodyCache.station;
+            }
         }
 
         this.unmountMenuTab();
@@ -766,6 +777,7 @@ extendClass(HomeStationUI, {
         }
         if (this.tab === 'hangar') {
             this.setupHangarPanelResize();
+            this.setupHangarInvResize();
             // Soft: hangar canvas draw was ~30–65ms on the click path.
             // Left-panel tabs (SHIPS / PARTS / SLOTS) bind right away so they
             // work even when the deferred frame is late or the draw throws.
@@ -785,6 +797,7 @@ extendClass(HomeStationUI, {
             }
         } else {
             this.destroyHangarPanelResize();
+            this.destroyHangarInvResize();
             this._hangarOpenSlot = null;
             if (this._hangarBayResizeObs) {
                 this._hangarBayResizeObs.disconnect();
@@ -1042,9 +1055,10 @@ extendClass(HomeStationUI, {
         const tip = (gm && gm.formatSituationTip) ? gm.formatSituationTip(sit)
             : { head: 'NO ACTIVE MISSION', body: 'TAKE ONE AT THE HANGAR MISSION BOARD' };
         const accent = info && info.accent ? info.accent : 'var(--color-primary)';
+        // Icon always bright white-cyan — faction accent can be too dark on the slot fill.
         return `<button type="button" class="hs-logout-btn hs-mission-btn${calm ? ' is-calm' : ''}" id="hsMissionBtn" style="--mission-accent:${accent}" ` +
             `data-ui-tip-head="${esc(tip.head)}" data-ui-tip="${esc(tip.body)}" aria-label="${esc(tip.head)}" data-nav-item>` +
-            `<span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('navScroll', 32, 'hs-tab-pixel', false)}</span></button>`;
+            `<span class="hs-logout-icon" aria-hidden="true">${this.iconHtml('navScroll', 40, 'hs-tab-pixel hs-mission-ico', false, '#f2fbff')}</span></button>`;
     },
     bindMissionButton() {
         const btn = this.overlay && this.overlay.querySelector('#hsMissionBtn');

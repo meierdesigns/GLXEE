@@ -49,13 +49,16 @@ class LaunchCutsceneManager {
         this._onDone = (typeof onDone === 'function') ? onDone : null;
         this._faction = String(faction || (profile && profile.faction) || 'pirate').toLowerCase();
         this._story = story || (profile && profile.storyPath) || null;
+        this._profile = profile || null;
         this._style = this.resolveStyle(this._story, this._faction);
         this._bits = this._seedBits();
         const pilotName = (profile && profile.name) || (story && story.pilotName) || 'YOU';
+        this._pilotName = String(pilotName).toUpperCase();
         this._dialogue = (typeof VFStoryDialogue !== 'undefined' && VFStoryDialogue.forStory)
             ? VFStoryDialogue.forStory(this._story, { faction: this._faction, pilotName: pilotName })
             : [];
         this._dialogIndex = 0;
+        this._npcLookCache = Object.create(null);
         this._skipArmedAt = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + 500;
         this._buildOverlay();
         this._loadShipImage(shipId, this._faction);
@@ -174,6 +177,7 @@ class LaunchCutsceneManager {
         card.innerHTML = this._cardHtmlTitle();
         overlay.appendChild(card);
         this._card = card;
+        this._mountPortraits();
         const skipBtn = document.createElement('button');
         skipBtn.type = 'button';
         skipBtn.className = 'launch-cutscene-skip';
@@ -225,11 +229,53 @@ class LaunchCutsceneManager {
         }, 0);
     }
 
+    /** First mission line for the title card — what happens after this intro. */
+    _firstMissionHint() {
+        const m = this._story && this._story.missions && this._story.missions[0];
+        if (!m) return 'Open the lane and survive your first sortie.';
+        const name = String(m.name || 'SORTIE').toUpperCase();
+        const type = String(m.type || 'patrol').replace(/_/g, ' ').toUpperCase();
+        return 'First mission: ' + name + ' · ' + type;
+    }
+
     _cardHtmlTitle() {
         const esc = this._escHtml || ((s) => String(s || ''));
-        return `<div class="launch-cutscene-kicker">STORY</div>` +
+        const faces = this._pilotFaceHtml() + this._giverFaceHtml('BRIEFING');
+        return `<div class="launch-cutscene-kicker">STORY BRIEFING</div>` +
+            `<div class="launch-cutscene-faces" aria-hidden="true">${faces}</div>` +
             `<div class="launch-cutscene-title">${esc(this._titleText)}</div>` +
-            (this._blurbText ? `<div class="launch-cutscene-blurb">${esc(this._blurbText)}</div>` : '');
+            (this._blurbText ? `<div class="launch-cutscene-blurb">${esc(this._blurbText)}</div>` : '') +
+            `<div class="launch-cutscene-next">${esc(this._firstMissionHint())}</div>` +
+            `<div class="launch-cutscene-cast"><span>PILOT · ${esc(this._pilotName || 'YOU')}</span><span>BRIEFING · MISSION GIVER</span></div>`;
+    }
+
+    /** Stable NPC look seed from speaker name + faction. */
+    _npcLook(who) {
+        const key = String(who || 'VOICE').toUpperCase();
+        if (this._npcLookCache[key]) return this._npcLookCache[key];
+        let seed = 2166136261;
+        const raw = key + '|' + this._faction;
+        for (let i = 0; i < raw.length; i++) { seed ^= raw.charCodeAt(i); seed = Math.imul(seed, 16777619); }
+        const look = (typeof heroPortrait !== 'undefined' && heroPortrait.randomLook)
+            ? heroPortrait.randomLook(this._faction, seed >>> 0)
+            : { faction: this._faction, v: seed % 16 };
+        this._npcLookCache[key] = look;
+        return look;
+    }
+
+    _pilotFaceHtml() {
+        if (typeof heroPortrait === 'undefined' || !heroPortrait.html) return '';
+        const accent = this._accent();
+        const look = (this._profile && this._profile.portrait)
+            || (typeof heroPortrait.heroLook === 'function' ? heroPortrait.heroLook(this._faction) : { faction: this._faction, v: 0 });
+        return `<div class="launch-cutscene-face is-pilot" title="${this._escHtml(this._pilotName || 'PILOT')}">${heroPortrait.html(look, accent, { nobg: true })}</div>`;
+    }
+
+    _giverFaceHtml(who) {
+        if (typeof heroPortrait === 'undefined' || !heroPortrait.html) return '';
+        const accent = this._accent();
+        const look = this._npcLook(who || 'COMMAND');
+        return `<div class="launch-cutscene-face is-giver" title="${this._escHtml(who || 'MISSION GIVER')}">${heroPortrait.html(look, accent, { nobg: true })}</div>`;
     }
 
     _cardHtmlDialog(line, index, total) {
@@ -237,22 +283,37 @@ class LaunchCutsceneManager {
         const who = esc(line && line.who);
         const text = esc(line && line.text);
         const step = `${index + 1}/${total}`;
+        const isPilot = !!(line && line.role === 'pilot');
+        const role = isPilot ? 'YOUR PILOT' : 'MISSION GIVER';
+        const face = isPilot ? this._pilotFaceHtml() : this._giverFaceHtml(line && line.who);
         return `<div class="launch-cutscene-kicker">TRANSMISSION · ${esc(step)}</div>` +
+            `<div class="launch-cutscene-row">` +
+            face +
+            `<div class="launch-cutscene-body">` +
             `<div class="launch-cutscene-speaker">${who}</div>` +
+            `<div class="launch-cutscene-role">${esc(role)}</div>` +
             `<div class="launch-cutscene-line">${text}</div>` +
-            `<div class="launch-cutscene-title-mini">${esc(this._titleText)}</div>`;
+            `</div></div>` +
+            `<div class="launch-cutscene-title-mini">${esc(this._titleText)} · ${esc(this._firstMissionHint())}</div>`;
+    }
+
+    _mountPortraits() {
+        if (!this._card) return;
+        if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) voxelPortrait.scan(this._card);
     }
 
     _renderDialogCard() {
         if (!this._card) return;
         if (this.phase === 'title') {
             this._card.innerHTML = this._cardHtmlTitle();
+            this._mountPortraits();
             if (this._hint) this._hint.style.opacity = '0.35';
             return;
         }
         if (this.phase === 'dialog' && this._dialogue.length) {
             const line = this._dialogue[this._dialogIndex] || this._dialogue[0];
             this._card.innerHTML = this._cardHtmlDialog(line, this._dialogIndex, this._dialogue.length);
+            this._mountPortraits();
             if (this._hint) this._hint.style.opacity = '1';
             return;
         }
@@ -263,6 +324,7 @@ class LaunchCutsceneManager {
         } else {
             this._card.innerHTML = this._cardHtmlTitle();
         }
+        this._mountPortraits();
         if (this._hint) this._hint.style.opacity = '0';
     }
 

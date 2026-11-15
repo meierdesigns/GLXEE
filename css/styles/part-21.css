@@ -600,6 +600,8 @@ html body .hs-explore-cluster-title { font-size: 28px !important; letter-spacing
     width: 100%;
     padding: 6px 10px;
     box-sizing: border-box;
+    border-radius: 0;
+    clip-path: none;
 }
 .hs-ship-table tbody.hs-ship-card > .hs-ship-id-row {
     grid-column: 1;
@@ -674,7 +676,7 @@ html body .home-station-overlay .hs-ship-thumb-action .hs-ship-hangar-badge:is(:
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    align-self: start;
+    align-self: center;
     grid-column: 2;
     grid-row: 1;
     gap: 0;

@@ -142,9 +142,7 @@ extendClass(GalaxyMapManager, {
             const y = H / 2 + (at.y - 0.5) * (H - pad * 2) * mapSpread;
             // Ship centred on the location, nose up (never flipped), gently hovering up and
             // down instead of orbiting.
-            const r = loc.kind === 'post' ? 18 : 32;
             const icon = this.getShipIconUrl(this.getMapDetail());
-            // Sized to the ring: ~39×51 on a planet, ~26×34 on a trading post.
             // Whole-pixel magnification of the 13×17 icon, so every pixel is the same size.
             const box = this.shipIconBox();
             const k = box.w / 11;
@@ -154,14 +152,6 @@ extendClass(GalaxyMapManager, {
             const shipSvg = icon
                 ? `<image href="${icon}" ${box.attrs} class="gm-ship-marker-img"/>`
                 : `<path d="M0 -7 L6 6 L0 3 L-6 6 Z" class="gm-ship-marker-body" transform="scale(${k})"/>`;
-            const view = this.getMapViewBox(W, H, pad);
-            const centered = Math.hypot(
-                x - (view[0] + view[2] / 2),
-                y - (view[1] + view[3] / 2)
-            ) < Math.min(view[2], view[3]) * 0.12;
-            const showShipLabel = (this.mapZoom || 1) < 1.1 &&
-                !centered &&
-                this._shipLabelReady;
             // Under GP a plain sub-pixel tween fights the shared screen lattice (shimmers
             // between lattice cells instead of looking like clean pixel steps), so snap the
             // bob's amplitude to whole lattice cells and step between them (calcMode=discrete)
@@ -172,11 +162,13 @@ extendClass(GalaxyMapManager, {
                     ? `<animateTransform attributeName="transform" type="translate" values="0 0; 0 -${uLat}; 0 0; 0 ${uLat}; 0 0" keyTimes="0;0.25;0.5;0.75;1" calcMode="discrete" dur="2.4s" repeatCount="indefinite"/>`
                     : '')
                 : '<animateTransform attributeName="transform" type="translate" values="0 0; 0 -2; 0 0; 0 2; 0 0" dur="2.4s" repeatCount="indefinite"/>';
+            const zShip = Math.max(0.35, this.mapZoom || 1);
+            // Keep the ship readable when zoomed out (≈ constant on-screen size).
+            const youK = Math.max(0.9, Math.min(2.4, 1.75 / Math.sqrt(zShip))).toFixed(3);
             shipHtml = `
-                <g class="gm-ship-marker" transform="translate(${shipPt.x},${shipPt.y})">
-                    <title>YOUR SHIP</title>
-                    <g class="gm-ship-scale" transform="scale(1)">
-                    ${showShipLabel ? `<text class="gm-ship-location-label" x="0" y="${-r - 8}">YOU ARE HERE</text>` : ''}
+                <g class="gm-ship-marker is-you" transform="translate(${shipPt.x},${shipPt.y})">
+                    <title>YOUR SHIP · the craft you play</title>
+                    <g class="gm-ship-scale" transform="scale(${youK})">
                     <g>
                         ${bob}
                         ${shipSvg}

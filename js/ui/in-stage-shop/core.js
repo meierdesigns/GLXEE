@@ -2637,21 +2637,25 @@ class InStageShop {
             `</div>`;
     }
 
-    /** Ship cargo bay at shop slot size. */
+    /** Ship bay at shop slot size — same hull-slot highlights as hangar. */
     shipInventoryHtml() {
         const profile = this.getProfile();
         const shipId = profile && profile.activeShipId;
-        if (!profile || !shipId || typeof homeStationUI === 'undefined' || !homeStationUI.renderShipStorage) {
+        if (!profile || !shipId || typeof homeStationUI === 'undefined') {
             return this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
         }
-        const bagCols = this.shopStockLayout().cols;
-        const { html } = this.withShopSlotSize(() => homeStationUI.renderShipStorage(profile, shipId, {
-            tipAction: false,
-            extraGridClass: 'vf-iss-inv-grid',
-            // Real S/M/L footprints — bag width follows this shop's offer size.
-            compactSpans: false,
-            maxCols: bagCols
-        }));
+        const { html } = this.withShopSlotSize(() => {
+            if (homeStationUI.renderBayShipInventoryGrid) {
+                return homeStationUI.renderBayShipInventoryGrid(profile, shipId);
+            }
+            if (!homeStationUI.renderShipStorage) return '';
+            return homeStationUI.renderShipStorage(profile, shipId, {
+                tipAction: false,
+                extraGridClass: 'vf-iss-inv-grid',
+                compactSpans: false,
+                maxCols: this.shopStockLayout().cols
+            });
+        });
         return html || this.fallbackInventoryGrid(this.slotLayout(), 'vf-iss-inv-grid');
     }
 

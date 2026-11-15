@@ -7,7 +7,11 @@ extendClass(EconomyConfig, {
         const stats = Object.assign({}, this.stationBaseStats, {
             impulseDrive: 0,
             warpDrive: 0,
-            exploreBudget: 1
+            exploreBudget: 1,
+            repGainMul: 1,
+            tradeBonus: 0,
+            contractRepBonus: 0,
+            contractPayMul: 1
         });
         this.stationUpgradeOrder.forEach((id) => {
             const node = this.stationUpgradeNodes[id];
@@ -16,7 +20,12 @@ extendClass(EconomyConfig, {
             if (n <= 0) return;
             const bonus = node.effect(n) || {};
             Object.keys(bonus).forEach((k) => {
-                stats[k] = (stats[k] || 0) + (bonus[k] || 0);
+                // Multipliers replace (take max), additive stats sum.
+                if (k === 'repGainMul' || k === 'contractPayMul') {
+                    stats[k] = Math.max(stats[k] || 1, bonus[k] || 1);
+                } else {
+                    stats[k] = (stats[k] || 0) + (bonus[k] || 0);
+                }
             });
         });
         stats.resourceCap = Math.max(1, Math.round(stats.resourceCap));
@@ -28,6 +37,10 @@ extendClass(EconomyConfig, {
         stats.impulseDrive = Math.max(0, Math.round(stats.impulseDrive || 0));
         stats.warpDrive = Math.max(0, Math.round(stats.warpDrive || 0));
         stats.exploreBudget = Math.max(1, Math.round(this.getExploreBudget(lv)));
+        stats.repGainMul = Math.max(1, Number(stats.repGainMul) || 1);
+        stats.tradeBonus = Math.max(0, Math.min(0.35, Number(stats.tradeBonus) || 0));
+        stats.contractRepBonus = Math.max(0, Math.round(stats.contractRepBonus || 0));
+        stats.contractPayMul = Math.max(1, Number(stats.contractPayMul) || 1);
         return stats;
     },
 

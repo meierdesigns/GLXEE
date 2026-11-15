@@ -44,9 +44,10 @@ const MENU_ORDER_DEFAULT_ESC = MENU_ORDER.esc.slice();
 // The first tab of an area is where a click on the area lands first.
 const MENU_AREAS = [
     { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station'], defaultTab: 'station' },
+    { id: 'upgrade', label: 'UPGRADE', icon: 'hsUpgrade', tabs: ['upgrade'], defaultTab: 'upgrade' },
     // defaultTab: where a click on the area lands (PLAY / the galaxy map is
     // only opened on purpose).
-    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'upgrade', 'missions', 'craft', 'shop'], defaultTab: 'upgrade' },
+    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'missions', 'craft', 'shop'], defaultTab: 'hangar' },
     { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] },
     { id: 'explore', label: 'WIKI', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
 ];
@@ -109,6 +110,11 @@ function getAreaOrder() {
     });
     ids.forEach((id) => {
         if (out.indexOf(id) !== -1) return;
+        // Older saves had no UPGRADE area — keep it next to HANGAR, not at the end.
+        if (id === 'upgrade' && out.indexOf('hangar') !== -1) {
+            out.splice(out.indexOf('hangar'), 0, 'upgrade');
+            return;
+        }
         if (out.length && out[out.length - 1] !== '|') out.push('|');
         out.push(id);
     });
@@ -178,8 +184,31 @@ function resetMenuAreas() {
 
 (function loadSavedMenuAreas() {
     try {
-        const saved = JSON.parse(localStorage.getItem(MENU_AREAS_STORAGE_KEY) || 'null');
-        if (saved) applyMenuAreasLayout(saved);
+        let saved = JSON.parse(localStorage.getItem(MENU_AREAS_STORAGE_KEY) || 'null');
+        if (!saved) return;
+        // UPGRADE is its own top-level area again — pull it out of HANGAR (or any other area).
+        let migrated = false;
+        const next = saved.map((entry) => {
+            if (!entry || !Array.isArray(entry.tabs)) return entry;
+            if (entry.id === 'upgrade') {
+                if (entry.tabs.length !== 1 || entry.tabs[0] !== 'upgrade') migrated = true;
+                return Object.assign({}, entry, { tabs: ['upgrade'], defaultTab: 'upgrade' });
+            }
+            if (entry.tabs.indexOf('upgrade') === -1) return entry;
+            migrated = true;
+            const tabs = entry.tabs.filter((t) => t !== 'upgrade');
+            const defaultTab = entry.defaultTab === 'upgrade' ? (tabs[0] || null) : entry.defaultTab;
+            return Object.assign({}, entry, { tabs: tabs, defaultTab: defaultTab });
+        });
+        if (!next.some((e) => e && e.id === 'upgrade')) {
+            migrated = true;
+            const hangarIdx = next.findIndex((e) => e && e.id === 'hangar');
+            const upg = { id: 'upgrade', tabs: ['upgrade'], defaultTab: 'upgrade' };
+            if (hangarIdx !== -1) next.splice(hangarIdx, 0, upg);
+            else next.push(upg);
+        }
+        saved = next;
+        if (applyMenuAreasLayout(saved) && migrated) saveMenuAreas();
     } catch (e) { /* ignore */ }
 })();
 

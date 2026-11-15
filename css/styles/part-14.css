@@ -181,7 +181,7 @@
 
 /* Galaxy map without focus: no planet / post selection frame — only the
    player ship marker shows where you are. */
-.galaxy-map-embedded:not(.is-input-active):not(.is-picked) .gm-selection-frame {
+.galaxy-map-embedded:not(.is-input-active):not(.is-picked) :is(.gm-node, .gm-post-node, .gm-border-station) .gm-selection-frame {
     display: none;
 }
 

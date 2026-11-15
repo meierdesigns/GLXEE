@@ -26,6 +26,11 @@
             : 220;
         let rightW = hasRight ? options.defaults.right : null;
         let resizingSide = null;
+        // Relative drag: absolute clientX-from-body.left jumps when preceding
+        // columns exist (e.g. hangar inventory before the ship list).
+        let dragStartX = 0;
+        let dragStartLeft = 0;
+        let dragStartRight = 0;
 
         if (storageKey) {
             try {
@@ -52,16 +57,23 @@
             // Pointer is in visual px, column widths in CSS px: measure the real scale (zoomed / scaled stage).
             const sc = body.offsetWidth && rect.width ? rect.width / body.offsetWidth : 1;
             const total = body.offsetWidth || rect.width;
-            const gaps = 4 * (hasRight ? 4 : 2);   // grid column gaps
+            // Measure actual column gaps from the live grid instead of assuming a fixed column
+            // count: a grid can grow an extra leading column (e.g. the hangar's inventory sidebar)
+            // that this helper doesn't know about.
+            const cs = getComputedStyle(body);
+            const colGap = parseFloat(cs.columnGap || cs.gap) || 0;
+            const colCount = cs.gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+            const gaps = colGap * Math.max(0, colCount - 1);
             const rightOff = hasRight && typeof options.isRightHidden === 'function' && options.isRightHidden();
             const rightVal = hasRight && !rightOff ? rightW : 0;
             const handles = (hasRight && !rightOff ? handleW * 2 : handleW + (options.hiddenRightW || 0)) + gaps;
+            const dx = (e.clientX - dragStartX) / sc;
             if (resizingSide === 'left') {
                 const maxLeft = total - rightVal - mins.center - handles;
-                leftW = Math.round(clamp((e.clientX - rect.left) / sc, mins.left, maxLeft));
+                leftW = Math.round(clamp(dragStartLeft + dx, mins.left, maxLeft));
             } else if (hasRight) {
                 const maxRight = total - leftW - mins.center - handles;
-                rightW = Math.round(clamp((rect.right - e.clientX) / sc, mins.right, maxRight));
+                rightW = Math.round(clamp(dragStartRight - dx, mins.right, maxRight));
             }
             apply();
         };
@@ -87,6 +99,9 @@
             e.preventDefault();
             resizingSide = handle.getAttribute('data-resize');
             if (!hasRight && resizingSide === 'right') return;
+            dragStartX = e.clientX;
+            dragStartLeft = leftW;
+            dragStartRight = rightW;
             document.body.classList.add('pe-resizing');
             handle.classList.add('pe-resize-active');
         };

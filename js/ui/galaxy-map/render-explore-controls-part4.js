@@ -500,10 +500,99 @@ extendClass(GalaxyMapManager, {
         return out;
     },
     /**
-     * Active mission mark on the target planet. Combat raids/hunts show a
-     * minimal fleet in space (same spirit as planetBattleSvg explosions on
-     * invaded worlds); other mission types keep a small icon pin + tooltip.
+     * Active mission mark on the target planet: icon pin + tooltip.
+     * Off-screen direction uses the edge arrow (syncMissionEdgeMarker), not
+     * decorative fleet chevrons around the disc.
      */
+    /** Sample a cubic bezier into map points for pixelLineSvg. */
+    pinCurvePoints(x0, y0, c1x, c1y, c2x, c2y, x1, y1, n) {
+        const steps = Math.max(6, n | 0);
+        const pts = [];
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const u = 1 - t;
+            const uu = u * u;
+            const tt = t * t;
+            pts.push({
+                x: uu * u * x0 + 3 * uu * t * c1x + 3 * u * tt * c2x + tt * t * x1,
+                y: uu * u * y0 + 3 * uu * t * c1y + 3 * u * tt * c2y + tt * t * y1
+            });
+        }
+        return pts;
+    },
+
+    /** Pixel stem from icon to planet tip — single-cell dashes (no glow brush). */
+    pinPoleSvg(cls, icoX, tipX, y0, y1) {
+        const c1x = icoX;
+        const c1y = y0 + (y1 - y0) * 0.45;
+        const c2x = tipX;
+        const c2y = y0 + (y1 - y0) * 0.7;
+        const pts = this.pinCurvePoints(icoX, y0, c1x, c1y, c2x, c2y, tipX, y1, 12);
+        const p = (this.mapPxLatticeUnit && this.mapPxLatticeUnit()) || 1;
+        // Dash = 2 cells on, 3 off; 6 march frames.
+        const dash = p * 2;
+        const period = p * 5;
+        const F = 6;
+        const dur = 1.1;
+        const put = (map, gx, gy) => {
+            let row = map.get(gy);
+            if (!row) { row = new Set(); map.set(gy, row); }
+            row.add(gx);
+        };
+        const frame = (shift) => {
+            const cells = new Map();
+            let trav = 0;
+            for (let i = 0; i < pts.length - 1; i++) {
+                const a = pts[i], b = pts[i + 1];
+                const len = Math.hypot(b.x - a.x, b.y - a.y);
+                const n = Math.max(1, Math.ceil(len / (p * 0.5)));
+                for (let s = 0; s <= n; s++) {
+                    const m = (((trav + len * s / n - shift) % period) + period) % period;
+                    if (m >= dash) continue;
+                    const cx = (a.x + (b.x - a.x) * s / n) / p;
+                    const cy = (a.y + (b.y - a.y) * s / n) / p;
+                    put(cells, Math.floor(cx), Math.floor(cy));
+                }
+                trav += len;
+            }
+            return cells;
+        };
+        const cellPath = (map) => {
+            let out = '';
+            map.forEach((row, gy) => {
+                const xs = Array.from(row).sort((a, b) => a - b);
+                for (let k = 0; k < xs.length;) {
+                    let e = k;
+                    while (e + 1 < xs.length && xs[e + 1] === xs[e] + 1) e++;
+                    out += `M${+(xs[k] * p).toFixed(3)} ${+(gy * p).toFixed(3)}h${+((e - k + 1) * p).toFixed(3)}v${+p.toFixed(3)}h${-+((e - k + 1) * p).toFixed(3)}z`;
+                    k = e + 1;
+                }
+            });
+            return out;
+        };
+        let frames = '';
+        for (let k = 0; k < F; k++) {
+            const st = `animation-duration:${dur}s;animation-delay:${((k / F - 1) * dur).toFixed(3)}s`;
+            const f0 = k ? '' : ' gm-pxflow-f0';
+            frames += `<path class="gm-pin-run gm-run-cells${f0}" d="${cellPath(frame(k * period / F))}" style="${st}"/>`;
+        }
+        return `<g class="${cls} gm-pxline gm-pxline-run gm-pin-pxline" shape-rendering="crispEdges">${frames}</g>`;
+    },
+
+    /** True when this planet has both an active mission pin and an invasion pin. */
+    planetHasTwinPins(planetId) {
+        if (typeof profileManager === 'undefined') return false;
+        let mission = false;
+        const p = profileManager.getActiveProfile && profileManager.getActiveProfile();
+        const m = p && p.activeMission;
+        if (m && m.planetId && String(m.planetId) === String(planetId)) {
+            if (!m.galaxyId || !this.galaxyId || String(m.galaxyId) === String(this.galaxyId)) mission = true;
+        }
+        const invaded = profileManager.getInvadedPlanetId
+            && profileManager.getInvadedPlanetId(this.galaxyId) === planetId;
+        return !!(mission && invaded);
+    },
+
     missionMarkerSvg(planetId, size) {
         if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return '';
         const p = profileManager.getActiveProfile();
@@ -524,82 +613,80 @@ extendClass(GalaxyMapManager, {
             ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
         const fStyle = m.factionId && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
             ? factionShipStyles.getFactionStyle(m.factionId) : null;
-        const accent = (fStyle && fStyle.accent) || 'var(--color-primary)';
-        const f = size / 2 + 10;
+        const accent = (fStyle && fStyle.accent && String(fStyle.accent).charAt(0) === '#')
+            ? fStyle.accent : null;
+        let frame = accent;
+        if (!frame) {
+            try {
+                const v = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim();
+                if (v && v.charAt(0) === '#') frame = v;
+            } catch (e) { /* ignore */ }
+        }
+        if (!frame) frame = '#7dffd4';
+        const f = size / 2 + 4;
+        const lift = 18;
+        // Icons spread apart; tip-dots stay near center (no overlap).
+        const twin = this.planetHasTwinPins(planetId);
+        const icoX = twin ? -20 : 0;
+        const tipX = twin ? -3 : 0;
+        // Small gap under the icon (rounded tip shouldn't kiss the glyph).
+        const y0 = -(f + lift - 9);
+        const y1 = -f;
         const icon = (typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml)
-            ? iconRenderer.imgHtml('navScroll', 12, 'gm-mission-mark-ico', accent, false)
+            ? iconRenderer.imgHtml('navScroll', 12, 'gm-mission-mark-ico', frame, false)
             : '';
-        const iconPin = (oy) =>
-            `<g class="gm-mission-sign" transform="translate(0,${oy})">` +
-            `<rect class="gm-mission-sign-board" x="-9" y="-9" width="18" height="18"/>` +
-            `<rect class="gm-mission-sign-board-in" x="-7" y="-7" width="14" height="14"/>` +
-            `<foreignObject class="gm-mission-sign-fo" x="-8" y="-8" width="16" height="16">` +
+        return `<g class="gm-mission-mark" style="--fac:${frame};color:${frame}">` +
+            `<g class="gm-mission-sign" transform="translate(${icoX},${-(f + lift)})">` +
+            `<foreignObject class="gm-mission-sign-fo" x="-7" y="-7" width="14" height="14">` +
             `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-mission-sign-icon"` +
             ` data-ui-tip-head="${esc(tipHead)}" data-ui-tip="${esc(tipBody)}"` +
             ` aria-label="${esc(tipHead)}">${icon}</div></foreignObject>` +
+            `</g>` +
+            this.pinPoleSvg('gm-mission-pin-line', icoX, tipX, y0, y1) +
             `</g>`;
-        const fleetType = (type === 'RAID' || type === 'HUNT');
-        if (fleetType) {
-            return `<g class="gm-mission-mark is-fleet" style="--fac:${accent}">` +
-                this.missionFleetSvg(planetId) +
-                iconPin(f + 14) +
-                `</g>`;
-        }
-        return `<g class="gm-mission-mark" style="--fac:${accent}">` +
-            iconPin(-(f + 14)) +
-            `<line class="gm-mission-sign-pole" x1="0" y1="${-(f + 5)}" x2="0" y2="${-f}"/>` +
-            `<circle class="gm-mission-sign-dot" cx="0" cy="${-f}" r="2.5"/>` +
-            `</g>`;
-    },
-    /**
-     * Tiny chevron fleet in space around a raid/hunt planet — outside the
-     * disc, seeded per planet, pulsing like the invasion battle pixels.
-     */
-    missionFleetSvg(planetId) {
-        const k = this.getMapObjectScale();
-        const cell = Math.max(1.5, (this.planetPixelSize ? this.planetPixelSize(planetId) : 2) * k);
-        const r = this.planetSurfaceRadius(planetId) * k;
-        let seed = 0xF1EE7;
-        for (const ch of String(planetId)) seed = (Math.imul(seed, 31) + ch.charCodeAt(0)) >>> 0;
-        const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) >>> 8) / 16777216;
-        const n = 5 + Math.floor(rnd() * 3);
-        let out = '<g class="gm-fleet" shape-rendering="crispEdges">';
-        for (let i = 0; i < n; i++) {
-            const a = rnd() * Math.PI * 2;
-            const d = r + cell * (2.2 + rnd() * 4.5);
-            const x = Math.cos(a) * d;
-            const y = Math.sin(a) * d;
-            // Nose along the orbit tangent so the pack reads as flying, not stuck.
-            const deg = (a * 180 / Math.PI) + 90 + (rnd() - 0.5) * 28;
-            const s = (0.55 + rnd() * 0.35) * Math.max(0.85, cell / 2);
-            const delay = (rnd() * 2.8).toFixed(2);
-            out += `<g class="gm-fleet-ship" transform="translate(${x.toFixed(2)},${y.toFixed(2)}) rotate(${deg.toFixed(1)}) scale(${s.toFixed(2)})" style="--bd:${delay}s">` +
-                `<path d="M0 -4 L3 3 L0 1.5 L-3 3 Z"/>` +
-                `</g>`;
-        }
-        return out + '</g>';
     },
 
-    /** "UNDER ATTACK" marker on the planet of an active invasion (invasion-scenario.js). */
+    /** Invasion pin: corner squares + stem — sits beside the mission pin when both are on. */
     invasionMarkerSvg(planetId, size) {
         if (typeof profileManager === 'undefined' || !profileManager.getInvadedPlanetId) return '';
         if (profileManager.getInvadedPlanetId(this.galaxyId) !== planetId) return '';
         const inv = profileManager.getActiveInvasion(null, this.galaxyId);
         const st = typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
             ? factionShipStyles.getFactionStyle(inv.attacker) : null;
-        const accent = (st && st.accent) || '#ff4a3a';
-        const emblem = typeof profileSelectionManager !== 'undefined' && profileSelectionManager.getFactionEmblemHtml
-            ? profileSelectionManager.getFactionEmblemHtml(inv.attacker, 14) : '';
-        const f = size / 2 + 12;
-        return `<g class="gm-invasion" style="--fac:${accent}">` +
-            `<title>${String(inv.attacker).toUpperCase()} INVASION · ${inv.ally ? 'DEFEND YOUR ' + String(inv.defender).toUpperCase() + ' ALLIES HERE' : 'WIN A STAGE HERE TO REPEL IT'}</title>` +
-            `<rect class="gm-invasion-ring" x="${-f}" y="${-f}" width="${f * 2}" height="${f * 2}"/>` +
-            `<rect class="gm-invasion-ring gm-invasion-ring-2" x="${-f - 6}" y="${-f - 6}" width="${f * 2 + 12}" height="${f * 2 + 12}"/>` +
+        const accent = (st && st.accent && String(st.accent).charAt(0) === '#')
+            ? st.accent : '#ff4a3a';
+        const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) =>
+            ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+        const tipHead = inv.ally ? 'ALLY UNDER ATTACK' : 'UNDER ATTACK';
+        const tipBody = String(inv.attacker).toUpperCase() + ' INVASION'
+            + (inv.ally
+                ? ' — DEFEND YOUR ' + String(inv.defender).toUpperCase() + ' ALLIES HERE'
+                : ' — WIN A STAGE HERE TO REPEL IT');
+        const f = size / 2 + 4;
+        const lift = 18;
+        const twin = this.planetHasTwinPins(planetId);
+        const icoX = twin ? 20 : 0;
+        const tipX = twin ? 3 : 0;
+        const y0 = -(f + lift - 9);
+        const y1 = -f;
+        const sq = 3;
+        const gap = 8;
+        const o = gap / 2;
+        const corners =
+            `<rect class="gm-invasion-sq" x="${-o}" y="${-o}" width="${sq}" height="${sq}"/>` +
+            `<rect class="gm-invasion-sq" x="${o - sq}" y="${-o}" width="${sq}" height="${sq}"/>` +
+            `<rect class="gm-invasion-sq" x="${-o}" y="${o - sq}" width="${sq}" height="${sq}"/>` +
+            `<rect class="gm-invasion-sq" x="${o - sq}" y="${o - sq}" width="${sq}" height="${sq}"/>`;
+        return `<g class="gm-invasion" style="--fac:${accent};color:${accent}">` +
             this.planetBattleSvg(planetId) +
-            `<text class="gm-invasion-label gm-vec-text" x="0" y="${f + 14}">UNDER ATTACK</text>` +
-            `<g class="gm-stage-anchor gm-px-only" data-r="${f + 14}" transform="translate(0,${f + 14})">${this.pixelTextGroup('UNDER ATTACK', 0, 0, 'middle')}</g>` +
-            `<foreignObject x="${f - 10}" y="${-f - 10}" width="20" height="20">` +
-            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-emblem" data-fac="${inv.attacker}">${emblem}</div></foreignObject>` +
+            `<g class="gm-invasion-sign" transform="translate(${icoX},${-(f + lift)})">` +
+            `${corners}` +
+            `<foreignObject class="gm-invasion-fo" x="-8" y="-8" width="16" height="16">` +
+            `<div xmlns="http://www.w3.org/1999/xhtml" class="gm-invasion-hit"` +
+            ` data-ui-tip-head="${esc(tipHead)}" data-ui-tip="${esc(tipBody)}"` +
+            ` aria-label="${esc(tipHead)}"></div></foreignObject>` +
+            `</g>` +
+            this.pinPoleSvg('gm-invasion-pin-line', icoX, tipX, y0, y1) +
             `</g>`;
     },
     /**

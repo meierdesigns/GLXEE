@@ -213,6 +213,7 @@ extendClass(HomeStationUI, {
         const res = (id) => this.resourceIconKey(id);
         const sets = {
             station: ['hsStation', 'hsShop', res('ore'), res('crystal')],
+            upgrade: ['hsUpgrade', 'hsShip', 'statWeapon', 'statArmor'],
             hangar: ['hsShip', 'hsCraft', 'statWeapon', 'statArmor'],
             factions: ['menuPeoples', 'hsShip', 'statAbilities', 'statWeapon'],
             explore: ['hsExplore', 'hsBlueprint', 'statEnergy', res('voltex')],

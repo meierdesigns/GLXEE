@@ -196,6 +196,63 @@ function createAdvancedStationUpgradeNodes() {
                 { scrap: 680, ore: 320, crystal: 200, voltex: 130 },
                 { scrap: 920, ore: 440, crystal: 280, voltex: 190 }
             ]
+        },
+        // FACTIONS branch — diplomacy / trade / war council live on the station tree.
+        embassy: {
+            id: 'embassy',
+            label: 'EMBASSY',
+            icon: 'menuPeoples',
+            maxLevel: 5,
+            requires: 'core',
+            requireLevel: 2,
+            treeX: 88,
+            treeY: 28,
+            desc: 'Open a diplomatic wing. Reputation gains from contracts scale up.',
+            effect: (lv) => ({ repGainMul: 1 + lv * 0.12 }),
+            costs: [
+                { scrap: 90, crystal: 40 },
+                { scrap: 150, ore: 40, crystal: 70 },
+                { scrap: 230, ore: 70, crystal: 110, voltex: 25 },
+                { scrap: 330, ore: 110, crystal: 155, voltex: 50 },
+                { scrap: 460, ore: 160, crystal: 210, voltex: 80 }
+            ]
+        },
+        trade_desk: {
+            id: 'trade_desk',
+            label: 'TRADE DESK',
+            icon: 'hsShop',
+            maxLevel: 5,
+            requires: 'embassy',
+            requireLevel: 1,
+            treeX: 92,
+            treeY: 48,
+            desc: 'Better faction trade prices (buy cheaper / sell higher).',
+            effect: (lv) => ({ tradeBonus: lv * 0.04 }),
+            costs: [
+                { scrap: 110, ore: 40, crystal: 35 },
+                { scrap: 180, ore: 70, crystal: 60 },
+                { scrap: 270, ore: 110, crystal: 95, voltex: 30 },
+                { scrap: 380, ore: 160, crystal: 135, voltex: 55 },
+                { scrap: 520, ore: 220, crystal: 180, voltex: 85 }
+            ]
+        },
+        war_room: {
+            id: 'war_room',
+            label: 'WAR ROOM',
+            icon: 'navCrosshair',
+            maxLevel: 4,
+            requires: 'embassy',
+            requireLevel: 2,
+            treeX: 84,
+            treeY: 52,
+            desc: 'Faction contract payouts and reputation rewards rise.',
+            effect: (lv) => ({ contractRepBonus: lv * 2, contractPayMul: 1 + lv * 0.08 }),
+            costs: [
+                { scrap: 140, ore: 50, crystal: 45 },
+                { scrap: 220, ore: 90, crystal: 80, voltex: 25 },
+                { scrap: 330, ore: 140, crystal: 120, voltex: 50 },
+                { scrap: 470, ore: 200, crystal: 170, voltex: 85 }
+            ]
         }
     };
 }

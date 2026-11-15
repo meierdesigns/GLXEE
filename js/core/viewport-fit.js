@@ -355,16 +355,41 @@
     const LAYOUT_CANCEL_ICON = svg16('<path d="M3 3l10 10M13 3L3 13"/>');
     // Frame edit: crosshair/target, for the on-screen BEZEL FILL / VINE INSET grips.
     const FRAME_EDIT_ICON = svg16('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>');
+    // DevMode: allow the native browser right-click menu (Inspect / Reload).
+    const CTX_MENU_ICON = svg16('<rect x="3" y="2" width="10" height="12"/><path d="M5 5h6M5 8h6M5 11h4"/>');
     const SAVE_ICON = svg16('<rect x="2" y="2" width="12" height="12"/><path d="M6 2v3h4V2"/><rect x="5" y="9" width="6" height="5"/>');
     const RESET_ICON = svg16('<path d="M0.7 2.7v4h4"/><path d="M2.3 10a6 6 0 1 0 1.4-6.2L0.7 6.7"/>');
     const MUTE_ON = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5c1.5 1 1.5 5 0 6M13 3c3 2.5 3 7.5 0 10"/>');
     const MUTE_OFF = svg16('<path d="M2 6h3l4-4v12l-4-4H2z"/><path d="M11 5l5 6M16 5l-5 6"/>');
     // Music settings (Soundtrack Editor): note glyph.
     const MUSIC_ICON = svg16('<circle cx="5" cy="12" r="2"/><circle cx="11" cy="10" r="2"/><path d="M7 12V3l6-1v8"/>');
-    Object.assign(NS, { MUTE_ON, MUTE_OFF, MUSIC_ICON });
+    // Ship render style: flat slab vs voxel cube.
+    const STYLE_FLAT = svg16('<rect x="2" y="4" width="12" height="8"/><path d="M2 8h12"/>');
+    const STYLE_VOXEL = svg16('<path d="M8 1l6 3.5v7L8 15 2 11.5v-7z"/><path d="M8 8v7M2 4.5l6 3.5 6-3.5"/>');
+    Object.assign(NS, { MUTE_ON, MUTE_OFF, MUSIC_ICON, STYLE_FLAT, STYLE_VOXEL });
     vfs.resOpen = false;
     vfs.fxOpen = false;
     vfs.volOpen = false;
+    // Combat / sim speed (0.5×–2×). Read by game-loop via window.vfGetGameSpeed.
+    const SPEED_KEY = 'vf_game_speed';
+    (function initGameSpeed() {
+        let n = 1;
+        try {
+            const raw = parseFloat(localStorage.getItem(SPEED_KEY));
+            if (Number.isFinite(raw)) n = Math.max(0.5, Math.min(2, raw));
+        } catch (e) { /* ignore */ }
+        vfs.gameSpeed = n;
+    })();
+    window.vfGetGameSpeed = function () {
+        const n = Number(vfs.gameSpeed);
+        return Number.isFinite(n) ? Math.max(0.5, Math.min(2, n)) : 1;
+    };
+    window.vfSetGameSpeed = function (v) {
+        const n = Math.max(0.5, Math.min(2, Number(v) || 1));
+        vfs.gameSpeed = n;
+        try { localStorage.setItem(SPEED_KEY, String(n)); } catch (e) { /* ignore */ }
+        return n;
+    };
 
     // Per-faction frame style overrides (bevel, plate colours, deco), kept in localStorage.
     const FACTIONS = ['terran', 'kronax', 'voidborn', 'pirate', 'machine'];
@@ -883,5 +908,5 @@
     vfs.fxScroll = {};
     try { vfs.fxScroll = JSON.parse(localStorage.getItem('vf-fx-scroll') || '{}') || {}; } catch (e) { vfs.fxScroll = {}; }
     vfs.fxScrollLock = false;
-    Object.assign(NS, { FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
+    Object.assign(NS, { CTX_MENU_ICON, FACTIONS, FIGHT_INSET, FRAME_EDIT_ICON, FR_LIGHT, FR_SAT, FS_OFF, FS_ON, FXTAB_KEY, FX_ICON, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, OVERLAY_CHROME, POWER, RESET_ICON, RES_ICON, ROOT, RO_SUPPRESS_MS, SAVE_ICON, SIDE_MAX, SIDE_MIN, SIZE_EPS, perf });
 })(window.vfFitScope || (window.vfFitScope = {}));

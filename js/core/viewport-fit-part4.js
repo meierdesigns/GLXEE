@@ -321,6 +321,13 @@
             if (performance.now() < vfs.suppressROUntil) return;
             scheduleUpdate();
         });
+        // Embedded hosts (e.g. a VSCode webview panel) can settle to their real size after
+        // 'load' without ever firing window/visualViewport 'resize' — those only cover an
+        // actual top-level browser window being dragged. Watching <html> directly catches
+        // the host-container resize too, so the stage never gets stuck scaled for a stale
+        // early measurement (reads as a permanently cropped bezel with no way to scroll to it,
+        // since html is overflow:hidden by design — see part-01.css).
+        ro.observe(document.documentElement);
         const watch = function () {
             const container = document.querySelector('.game-container');
             if (container) {

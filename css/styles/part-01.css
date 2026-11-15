@@ -1,33 +1,25 @@
 
-/* Chosen mission: small icon pin above the target planet (type in tooltip). */
+/* Chosen mission: scroll + stem to planet (no board outline). */
 .gm-mission-mark { pointer-events: none; shape-rendering: crispEdges; }
-.gm-mission-mark .gm-mission-sign-board {
-    fill: #05060a;
-    stroke: var(--fac, var(--color-primary));
-    stroke-width: 1.5;
+.gm-mission-mark .gm-mission-pin-line {
+    color: var(--fac, var(--color-primary));
 }
-.gm-mission-mark .gm-mission-sign-board-in {
-    fill: color-mix(in srgb, var(--fac, var(--color-primary)) 22%, #05060a);
-    stroke: none;
-}
-.gm-mission-mark .gm-mission-sign-pole {
-    stroke: var(--fac, var(--color-primary));
-    stroke-width: 1.5;
+.gm-pin-pxline .gm-pin-run {
+    fill: currentColor;
 }
 .gm-mission-mark .gm-mission-sign-fo {
     overflow: visible;
     pointer-events: auto;
 }
 .gm-mission-mark .gm-mission-sign-icon {
-    width: 16px;
-    height: 16px;
+    width: 14px;
+    height: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
     cursor: help;
     pointer-events: auto;
-    animation: gm-mission-sign-pulse 1.4s steps(2, end) infinite;
 }
 .gm-mission-mark .gm-mission-sign-icon .gm-mission-mark-ico,
 .gm-mission-mark .gm-mission-sign-icon img {
@@ -35,59 +27,32 @@
     height: 12px !important;
     image-rendering: pixelated;
     display: block;
-}
-.gm-mission-mark .gm-mission-sign-dot {
-    fill: var(--fac, var(--color-primary));
-    animation: gm-mission-sign-pulse 1.4s steps(2, end) infinite;
-}
-@keyframes gm-mission-sign-pulse {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.4; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .gm-mission-mark .gm-mission-sign-icon,
-    .gm-mission-mark .gm-mission-sign-dot { animation: none; }
+    opacity: 1 !important;
+    filter: drop-shadow(0 0 1px #05060a) drop-shadow(0 1px 0 #05060a) !important;
 }
 
-/* Galaxy map: planet under attack (invasion-scenario.js). */
+/* Galaxy map: invasion pin — corner squares + stem (like mission pin). */
 .gm-invasion { pointer-events: none; shape-rendering: crispEdges; }
-.gm-invasion .gm-invasion-ring {
-    fill: none;
-    stroke: var(--fac);
-    stroke-width: 3;
-    stroke-dasharray: 8 4;
-    animation: gm-invasion-pulse 1.1s steps(2, end) infinite;
+.gm-invasion .gm-invasion-sq {
+    fill: var(--fac, #ff4a3a);
+    stroke: none;
+    pointer-events: none;
 }
-.gm-invasion .gm-invasion-ring-2 {
-    stroke-width: 2;
-    opacity: 0.5;
-    animation-delay: -0.55s;
+.gm-invasion .gm-invasion-fo {
+    overflow: visible;
+    pointer-events: auto;
 }
-.gm-invasion .gm-invasion-label {
-    fill: var(--fac);
-    font-size: var(--font-small);
-    font-weight: bold;
-    letter-spacing: 2px;
-    text-anchor: middle;
-    animation: gm-invasion-pulse 1.1s steps(2, end) infinite;
+.gm-invasion .gm-invasion-hit {
+    width: 16px;
+    height: 16px;
+    cursor: help;
+    pointer-events: auto;
 }
-.gm-invasion .gm-invasion-emblem {
-    width: 20px;
-    height: 20px;
-    background: #000;
-    border: var(--ui-border-width, 2px) solid var(--fac);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
+.gm-invasion .gm-invasion-pin-line {
+    color: var(--fac, #ff4a3a);
 }
-@keyframes gm-invasion-pulse {
-    0%, 100% { opacity: 1; }
-    50%      { opacity: 0.35; }
-}
-@media (prefers-reduced-motion: reduce) {
-    .gm-invasion .gm-invasion-ring,
-    .gm-invasion .gm-invasion-label { animation: none; }
+.gm-invasion .gm-pin-pxline .gm-pin-run {
+    fill: currentColor;
 }
 
 /* Galaxy map space: black background + pixel starfield (galaxyStarsSvg). */

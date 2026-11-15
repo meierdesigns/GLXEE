@@ -46,6 +46,7 @@ EDITOR_PREFIXES = (
     "js/ui/enhanced-palette-ui",
     "js/ui/hud-layout-editor",
     "js/ui/soundtrack-editor.js",
+    "js/ui/transmission-editor.js",
 )
 
 STATION_PREFIXES = (

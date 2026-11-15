@@ -303,8 +303,8 @@ extendClass(ProfileSelectionManager, {
             let key = kindIcon[kind];
             if (id && slm && slm.resolveModuleIcon) { try { key = slm.resolveModuleIcon({ kind, id }) || key; } catch (e) { /* keep type icon */ } }
             const name = id ? String(id).replace(/_/g, ' ').toUpperCase() : 'EMPTY ' + kind.toUpperCase() + ' SLOT';
-            // Slot size = base (slot-sizes.js): single centre-line slots M, split / wing slots S; a fresh pilot has no slot upgrades yet.
-            const sLv = lvl != null ? lvl : 1;
+            // Slot size = base (slot-sizes.js): nose gun M, everything else S; a fresh pilot has no slot upgrades yet.
+            const sLv = lvl != null ? lvl : 0;
             const partSz = id && slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : null;
             const sizeTxt = '&#10;SLOT SIZE: ' + size(sLv) + (partSz ? '&#10;PART SIZE: ' + partSz : '');
             const title = (id ? tipOf(kind, id) : 'NO PART INSTALLED') + sizeTxt;
@@ -360,7 +360,8 @@ extendClass(ProfileSelectionManager, {
             const txt = n ? Array.from({ length: n }, (_, i) => (a.id === 'front' ? filled('weapon', ws[0] || startWeaponId, wLv(a.id), 'front') : (a.id === 'center' ? filled('weapon', ws[0] || (dl.weapons && dl.weapons[0]) || startWeaponId, wLv(a.id), 'center') : filled('weapon', ws[1 + i] || null, i === 0 && w2 && slm && slm.getPartSizeLevel ? Math.max(wLv(a.id), slm.getPartSizeLevel('weapon', w2)) : wLv(a.id), 'wing:' + i)))).join('') : '<em>NO WEAPON SLOT</em>';
             return `<div class="pl-row">${areaIco(a.id, a.label)}<span class="pl-slots">${txt}</span></div>`;
         }).join('');
-        const many = (kind, n, list) => Array.from({ length: n }, (_, i) => filled(kind, (list || [])[i] || null)).join('') || '<em>–</em>';
+        // Non-weapon start slots are S (lvl 0) — matches getSlotBaseSizeLevel.
+        const many = (kind, n, list) => Array.from({ length: n }, (_, i) => filled(kind, (list || [])[i] || null, 0)).join('') || '<em>–</em>';
         const parts = `<div class="pl-parts">` +
             [['defense', caps.defenses, dl.defenses], ['energy', caps.energy, dl.energy], ['ability', caps.abilities, dl.abilities]].map(([k, n, l]) => `<div class="pl-row">${kindIco(k, k.toUpperCase())}<span class="pl-slots">${many(k, n || 0, l)}</span></div>`).join('') + `</div>`;
         const invHtml = this.renderStartInvHtml(kitObj, [['weapon', (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId],
@@ -405,33 +406,95 @@ extendClass(ProfileSelectionManager, {
             <div class="profile-side-stats" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">${stats}</div>
             <div class="profile-start-inv" data-tip-side="left">${invHtml}</div>`;
     },
-    /** Start inventory: the kit's grid (hull start size + kit rows) holding the start parts. */
+    /**
+     * Start inventory grid: every hull equipment slot the ship offers (filled +
+     * empty), then free cargo cells — same idea as the hangar SHIP inventory.
+     */
     renderStartInvHtml(kitObj, parts, kindColor, tipOf) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         const ship = this.startShipId();
         const st = slm && slm.inventoryStart ? slm.inventoryStart(ship) : [4, 2];
         const cols = Math.max(3, Math.min(8, st[0] + (Number((kitObj.bonus || {}).invCols) || 0)));
-        const rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
+        let rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
         const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
-        const cells = parts.filter((p) => p[1]).map(([kind, id, inst = true]) => {
-            const lv = Math.max(0, Math.min(2, slm && slm.getPartSizeLevel ? slm.getPartSizeLevel(kind, id) | 0 : 0));
-            const span = [[1, 1], [1, 2], [2, 2]][lv];
-            const body = typeof physicalItem !== 'undefined' ? physicalItem.wrap(kind, id, span[0] * 48 + (span[0] - 1) * 4 - 8, span[1] * 48 + (span[1] - 1) * 4 - 8, kindColor[kind], '') : '';
-            const name = String(id).replace(/_/g, ' ').toUpperCase();
-            // Same data as the shipyard inventory: full part stats, size, status.
-            const tip = (tipOf ? tipOf(kind, id) + '&#10;' : '') + 'SIZE: ' + (slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : 'S') + '&#10;STATUS: ' + (inst ? 'INSTALLED' : 'IN INVENTORY');
-            // Part icon lives only in the tooltip (hidden on the cell); hangar bay cells do the same.
-            let key = kind === 'weapon' ? null : (slm && slm.resolveModuleIcon ? slm.resolveModuleIcon({ kind, id }) : null);
-            const raw = !ir ? '' : (kind === 'weapon' && ir.weaponImgHtml
-                ? ir.weaponImgHtml(id, 32, 'hs-pixel', false)
-                : ir.imgHtml(key || 'statArmor', 32, 'hs-pixel', kindColor[kind], false));
-            const ico = String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '');
-            return `<span class="hs-pick-cell${inst ? ' is-equipped' : ''}" style="grid-column: span ${span[0]}; grid-row: span ${span[1]}; --pk-c:${kindColor[kind]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ico}</span><span class="hs-pick-size">${slm && slm.partSizeLabel ? slm.partSizeLabel(kind, id) : ''}</span></span>`;
-        }).join('');
-        // Cells as big as the sidebar allows, at most 56px: fitted to the free width AND height (.profile-start-inv is a size
-        // container), so a tall grid scales down instead of scrolling. 50px = title + gap + picker padding / border; 16px = picker padding / border.
-        const cs = `clamp(16px, min((100cqw - 16px - ${(cols - 1) * 4}px) / ${cols}, (100cqh - 50px - ${(rows - 1) * 4}px) / ${rows}), 56px)`;
-        return `<div class="profile-start-inv-title">INVENTORY <b>${cols} × ${rows}</b></div><div class="hs-slot-picker hs-bay-inv" style="--cs:${cs}"><div class="hs-pick-grid" style="grid-template-columns: repeat(${cols}, var(--cs)); grid-template-rows: repeat(${rows}, var(--cs)); width: calc(${cols} * var(--cs) + ${cols - 1} * 4px); height: calc(${rows} * var(--cs) + ${rows - 1} * 4px)">${cells}</div></div>`;
+        // Start profiles: small base (1 per kind); kit area / weapon2 bonuses open more.
+        // Do NOT use full class mounts — those unlock later via frame / hangar upgrades.
+        const caps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
+        const lvOf = (id) => Math.min(2, Number(((kitObj.bonus || {}).areas || {})[id]) || 0);
+        (slm && slm.getShipAreas ? slm.getShipAreas() : []).forEach((a) => {
+            (slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((key) => {
+                caps[key] = (caps[key] || 0) + 1;
+            });
+        });
+        if ((kitObj.bonus || {}).slot) caps.weapons += Number(kitObj.bonus.slot) || 0;
+        // Weapon mounts match the WEAPONS strip (nose + wing rows / weapon2).
+        caps.weapons = Math.max(caps.weapons, this.startWeaponSlots(null).length);
+
+        // Parts queued per kind (start loadout), consumed into slots in order.
+        const queue = { weapon: [], defense: [], energy: [], ability: [] };
+        (parts || []).forEach(([kind, id]) => {
+            if (id && queue[kind]) queue[kind].push(id);
+        });
+        const spanOf = (lv) => [[1, 1], [1, 2], [2, 2]][Math.max(0, Math.min(2, lv | 0))];
+        const sizeLab = (lv) => (slm && slm.slotSizeLabel ? slm.slotSizeLabel(lv) : 'SML'[lv]);
+        const glyph = (kind) => `<span class="hs-slot-glyph" data-slot-kind="${kind}" aria-hidden="true"></span>`;
+        const cells = [];
+        let used = 0;
+        const pushSlot = (kind, index, id) => {
+            // Slot footprint is always the hull slot size — never shrink to a smaller equipped part.
+            // Split wing mounts use effective size (≥ M) so M start guns fit the bay cell.
+            let slotLv = 0;
+            if (slm && (slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel)) {
+                try {
+                    const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
+                    slotLv = sizeFn.call(slm, ship, kind, index) | 0;
+                } catch (e) { slotLv = 0; }
+            } else if (kind === 'weapon' && index === 0) slotLv = 1; // nose mount starts as M
+            else if (kind === 'weapon' && index > 0) slotLv = 1; // wing pair effective M
+            slotLv = Math.max(0, Math.min(2, slotLv));
+            const span = spanOf(slotLv);
+            const pk = kindColor[kind] || '#8a84a8';
+            used += span[0] * span[1];
+            if (id) {
+                const name = String(id).replace(/_/g, ' ').toUpperCase();
+                const tip = (tipOf ? tipOf(kind, id) + '&#10;' : '') +
+                    'SLOT ' + (index + 1) + ' · SIZE ' + sizeLab(slotLv) + '&#10;STATUS: INSTALLED';
+                let key = kind === 'weapon' ? null : (slm && slm.resolveModuleIcon ? slm.resolveModuleIcon({ kind, id }) : null);
+                const raw = !ir ? '' : (kind === 'weapon' && ir.weaponImgHtml
+                    ? ir.weaponImgHtml(id, 32, 'hs-pixel', false)
+                    : ir.imgHtml(key || 'statArmor', 32, 'hs-pixel', pk, false));
+                const ico = String(raw || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '');
+                const partLv = slm && slm.getPartSizeLevel
+                    ? Math.max(0, Math.min(slotLv, slm.getPartSizeLevel(kind, id) | 0)) : slotLv;
+                const partSpan = spanOf(partLv);
+                const pw = partSpan[0] * 48 + (partSpan[0] - 1) * 4 - 8;
+                const ph = partSpan[1] * 48 + (partSpan[1] - 1) * 4 - 8;
+                const body = typeof physicalItem !== 'undefined'
+                    ? `<span class="hs-storage-slot-part" style="width:${partSpan[0] * 48 + (partSpan[0] - 1) * 4}px;height:${partSpan[1] * 48 + (partSpan[1] - 1) * 4}px">${physicalItem.wrap(kind, id, pw, ph, pk, '')}</span>`
+                    : '';
+                cells.push(`<span class="hs-pick-cell is-ship-slot is-equipped" style="grid-column:span ${span[0]};grid-row:span ${span[1]};--pk-c:${pk}" data-part-kind="${kind}" data-slot-index="${index}" data-part-span-w="${partSpan[0]}" data-part-span-h="${partSpan[1]}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${body}<span class="hs-pick-ico">${ico}</span><span class="hs-pick-size">${sizeLab(slotLv)}</span></span>`);
+                return;
+            }
+            const name = 'EMPTY ' + String(kind).toUpperCase() + ' SLOT';
+            const tip = 'SLOT ' + (index + 1) + ' · SIZE ' + sizeLab(slotLv) + '&#10;NO PART INSTALLED';
+            cells.push(`<span class="hs-pick-cell is-ship-slot is-empty" style="grid-column:span ${span[0]};grid-row:span ${span[1]};--pk-c:${pk}" data-part-kind="${kind}" data-slot-index="${index}" data-ui-tip-instant data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="${tip}">${glyph(kind)}<span class="hs-pick-size">${sizeLab(slotLv)}</span></span>`);
+        };
+        // Mount order matches hangar: weapons, defenses, energy, abilities.
+        [['weapon', 'weapons'], ['defense', 'defenses'], ['energy', 'energy'], ['ability', 'abilities']].forEach(([kind, capKey]) => {
+            const n = Math.max(0, Number(caps[capKey]) || 0);
+            for (let i = 0; i < n; i++) pushSlot(kind, i, queue[kind].shift() || null);
+        });
+        // Grow the grid if ship slots need more room than the cargo start size.
+        while (used > cols * rows) rows += 1;
+        const emptyN = Math.max(0, cols * rows - used);
+        for (let i = 0; i < emptyN; i++) {
+            cells.push('<span class="hs-pick-cell hs-pick-cell-empty" aria-hidden="true"></span>');
+        }
+        const gap = 4;
+        const cs = `clamp(14px, min((100cqw - 20px - ${(cols - 1) * gap}px) / ${cols}, (100cqh - 44px - ${(rows - 1) * gap}px) / ${rows}), 48px)`;
+        return `<div class="profile-start-inv-title">INVENTORY <b>${cols} × ${rows}</b></div>` +
+            `<div class="hs-slot-picker hs-bay-inv" style="--cs:${cs};--inv-cols:${cols};--inv-rows:${rows}">` +
+            `<div class="hs-pick-grid" style="grid-template-columns:repeat(${cols},minmax(0,var(--cs)));grid-template-rows:repeat(${rows},var(--cs));grid-auto-flow:dense;width:min(100%,calc(${cols} * var(--cs) + ${(cols - 1) * gap}px));max-width:100%;height:calc(${rows} * var(--cs) + ${(rows - 1) * gap}px)">${cells.join('')}</div></div>`;
     },
     /** Kit bonus + blurb: its own strip above the ship, beside the hull sidebar. */
     renderKitInfoHtml() {

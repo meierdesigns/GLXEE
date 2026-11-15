@@ -124,9 +124,13 @@ extendClass(GalaxyMapManager, {
             cur.style.setProperty('--gm-px', String(1 / Math.max(0.5, dFloat)));
             this.updateSelectionFrames();
             try { if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.dirtyMapPxCanvas) uiAppearanceManager.dirtyMapPxCanvas(); } catch (e) { /* */ }
-            // Ship grows only gently when zooming in (1/√zoom), so it stays readable.
+            // Ship stays readable when zoomed out (≈ constant on-screen size).
             const shipScale = cur.querySelector('.gm-ship-scale');
-            if (shipScale) shipScale.setAttribute('transform', 'scale(1)');
+            if (shipScale) {
+                const z = Math.max(0.35, this.mapZoom || 1);
+                const k = Math.max(0.9, Math.min(2.4, 1.75 / Math.sqrt(z)));
+                shipScale.setAttribute('transform', `scale(${k.toFixed(3)})`);
+            }
             const stageK = (this.getMapObjectScale() * this.stageTextScale()).toFixed(4);
             cur.querySelectorAll('.gm-stage-anchor').forEach((g) => g.setAttribute('transform', `translate(0,${g.getAttribute('data-r')}) scale(${stageK})`));
             // Global Pixel Size: the pixel unit follows the live zoom, but the detail steps are coarse.

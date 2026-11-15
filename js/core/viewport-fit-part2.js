@@ -364,6 +364,52 @@
             else if (d.toolsAction === 'assetGen' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator(null);
             else if (d.toolsAction === 'assetGenFaction' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
             else if (d.toolsAction === 'assetGenFactionShips' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
+            else if (d.toolsAction === 'transmissionEditor') {
+                const openTx = () => { if (typeof transmissionEditorUI !== 'undefined') transmissionEditorUI.show(); };
+                if (typeof transmissionEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openTx);
+                else openTx();
+            }
+            else if (d.toolsAction === 'difficultyEditor') {
+                const openDiff = () => { if (typeof difficultyEditorUI !== 'undefined') difficultyEditorUI.show(); };
+                if (typeof difficultyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openDiff);
+                else openDiff();
+            }
+            else if (d.toolsAction === 'themeEditor') {
+                const open = () => { if (typeof themeEditorUI !== 'undefined') themeEditorUI.show(); };
+                if (typeof themeEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'shipEditor') {
+                const open = () => { if (typeof shipEditorUI !== 'undefined') shipEditorUI.show(); };
+                if (typeof shipEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'enemyEditor') {
+                const open = () => { if (typeof enemyEditorUI !== 'undefined') enemyEditorUI.show(); };
+                if (typeof enemyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'planetEditor') {
+                const open = () => { if (typeof planetEditorUI !== 'undefined') planetEditorUI.show(); };
+                if (typeof planetEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'componentEditor') {
+                const open = () => { if (typeof componentEditorUI !== 'undefined') componentEditorUI.open({}); };
+                if (typeof componentEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'abilityEditor') {
+                const open = () => { if (typeof abilityEditorUI !== 'undefined') abilityEditorUI.show(); };
+                if (typeof abilityEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'hangarTestArena') {
+                const open = () => { if (typeof hangarTestArena !== 'undefined') hangarTestArena.show({}); };
+                if (typeof hangarTestArena === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            }
+            else if (d.toolsAction === 'hudLayoutEditor' && typeof hudLayoutEditor !== 'undefined') hudLayoutEditor.toggleEdit();
         }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
         else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }

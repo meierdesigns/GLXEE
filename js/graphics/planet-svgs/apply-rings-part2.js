@@ -24,8 +24,12 @@ extendClass(PlanetSVGManager, {
         const feat = Object.assign({}, features);
         feat.bands = st === 'banded' || (!!feat.bands && st === style);
         feat.craters = st === 'pocked' || (!!feat.craters && st === style);
-        // Any style can carry rings now and then.
-        feat.rings = st === 'ringed' || style === 'ringed' || rng() < 0.14;
+        // Any style can carry rings now and then — but hero homeworlds stay ring-light
+        // (orbit lane + atmosphere already read as rings; Saturn stacks look cluttered).
+        const isHero = String(id || '').indexOf('hero-') === 0;
+        feat.rings = isHero
+            ? false
+            : (st === 'ringed' || style === 'ringed' || rng() < 0.14);
         if (rng() < 0.3) feat.storms = true;
         if (rng() < 0.2) feat.ice = true;
 

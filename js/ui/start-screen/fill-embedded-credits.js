@@ -427,7 +427,7 @@ extendClass(StartScreenManager, {
             item.type === 'bgParallax' ||
             item.type === 'controlsHints'
         );
-        const isVoxelItem = (item) => item.type === 'shipRenderStyle' || item.type === 'voxelSize'
+        const isVoxelItem = (item) => item.type === 'shipRenderStyle'
             || (item.type === 'uiFx' && typeof uiAppearanceManager !== 'undefined'
                 && (item.fxKey === 'guiVoxel' || item.fxKey === 'gvCell' || item.fxKey === 'framePx' || item.fxKey === 'pixelSize' || item.fxKey === 'frameRound' || !!uiAppearanceManager.gvPartKey(item.fxKey)));
         addSection(bare ? left : middle, 'voxel', 'VOXEL', isVoxelItem);

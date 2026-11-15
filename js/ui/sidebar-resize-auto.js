@@ -114,12 +114,16 @@
             const cur = placement(side);
             if (!cur) return;
             const startX = e.clientX;
-            const startW = side.getBoundingClientRect().width;
-            const maxW = Math.max(MIN_W, cur.parent.getBoundingClientRect().width - MIN_CENTER);
+            const sideRect = side.getBoundingClientRect();
+            const parentRect = cur.parent.getBoundingClientRect();
+            // Visual px → CSS px (scaled stage); getBoundingClientRect alone jumps on first move.
+            const sc = side.offsetWidth && sideRect.width ? sideRect.width / side.offsetWidth : 1;
+            const startW = side.offsetWidth || (sideRect.width / sc);
+            const maxW = Math.max(MIN_W, (cur.parent.offsetWidth || (parentRect.width / sc)) - MIN_CENTER);
             document.body.classList.add('pe-resizing');
             handle.classList.add('is-active');
             const move = (ev) => {
-                const dx = ev.clientX - startX;
+                const dx = (ev.clientX - startX) / sc;
                 const w = Math.max(MIN_W, Math.min(maxW, startW + (cur.edge === 'right' ? dx : -dx)));
                 if (applyWidth(side, cur, w)) saved[key] = Math.round(w);
                 window.dispatchEvent(new Event('resize'));

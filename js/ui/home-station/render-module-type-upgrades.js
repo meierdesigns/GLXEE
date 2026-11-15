@@ -59,23 +59,22 @@ extendClass(HomeStationUI, {
             return `<div class="hs-section hs-panel">${this.panelTitle('hsUpgrade', 'UPGRADES')}` +
                 `<p class="hs-muted">Upgrade system unavailable.</p></div>`;
         }
+        // Legacy saves may still point at removed ships/modules sub-tabs.
+        if (this.upgradeSubTab === 'ships' || this.upgradeSubTab === 'modules'
+            || this.upgradeSubTab === 'factions' || this.upgradeSubTab === 'hangar') {
+            this.upgradeSubTab = 'station';
+        }
         let inner = '';
         let title = 'STATION UPGRADE TREE';
-        let hint = 'Spend station resources to expand capacity, hangar slots, drives and station systems.';
+        let hint = 'Station systems, hangar bays, drives — plus hangar hull/module upgrades and the factions wing on one tree.';
         let showHead = true;
-        if (this.upgradeSubTab === 'ships') {
-            title = 'HULL AREAS';
-            hint = 'Upgrade a hull area to grow its slots S → M → L (bigger parts fit) and open extra slots. Every level adds hull HP and armor.';
-            inner = this.renderShipFrameUpgrades(profile);
-        } else if (this.upgradeSubTab === 'modules') {
-            title = 'MODULE TYPE UPGRADES';
-            hint = 'Global bonuses for weapons, defenses, abilities — and charge systems (after buying charge parts).';
-            inner = this.renderModuleTypeUpgrades(profile);
-        } else if (this.upgradeSubTab === 'equipment') {
+        if (this.upgradeSubTab === 'equipment') {
             showHead = false;
             inner = this.renderEquipmentUpgrades(profile);
         } else {
-            inner = this.renderStationUpgradeTree(profile);
+            inner = this.renderStationUpgradeTree(profile) +
+                this.renderTreeHangarUpgrades(profile) +
+                this.renderTreeFactionUpgrades(profile);
         }
 
         return `<div class="hs-section hs-panel hs-upgrade-root">` +
@@ -85,6 +84,60 @@ extendClass(HomeStationUI, {
                   `<p class="hs-muted hs-hint">${hint}</p>`
                 : '') +
             `<div class="hs-tab-fill">${inner}</div>` +
+            `</div>`;
+    },
+
+    /** Hull areas + module tracks — hangar upgrades embedded under the station tree. */
+    renderTreeHangarUpgrades(profile) {
+        const ships = this.renderShipFrameUpgrades
+            ? this.renderShipFrameUpgrades(profile)
+            : '';
+        const modules = this.renderModuleTypeUpgrades
+            ? this.renderModuleTypeUpgrades(profile)
+            : '';
+        return `<div class="hs-upg-branch hs-upg-branch-hangar">` +
+            `${this.panelTitle('hsShip', 'HANGAR UPGRADES')}` +
+            `<p class="hs-muted hs-hint">Hull areas and global module tracks — same buys as before, now on the station tree page.</p>` +
+            `<div class="hs-upg-branch-body">${ships}${modules}</div>` +
+            `</div>`;
+    },
+
+    /** Factions wing status — nodes are on the tree; this lists levels + live bonuses. */
+    renderTreeFactionUpgrades(profile) {
+        const ids = ['embassy', 'trade_desk', 'war_room'];
+        const stats = profileManager.getStationStats ? profileManager.getStationStats(profile) : {};
+        const rows = ids.map((id) => {
+            const node = economyConfig.getStationUpgradeNode(id);
+            if (!node) return '';
+            const level = profileManager.getStationUpgradeLevel(id, profile);
+            const maxed = level >= node.maxLevel;
+            const check = profileManager.canUnlockStationUpgrade(id, profile);
+            const locked = !maxed && check.reason === 'LOCKED';
+            const canBuy = !maxed && !locked && check.ok;
+            const effect = level > 0 && this.formatUpgradeEffect
+                ? this.formatUpgradeEffect(node, level)
+                : 'NOT BUILT';
+            return `<div class="hs-line hs-shop-line">` +
+                `<span class="hs-line-name">` +
+                `<span class="hs-chip-icon">${this.iconHtml(node.icon || 'menuPeoples', 32, 'hs-pixel')}</span>` +
+                `<span class="hs-line-text">` +
+                `<strong>${node.label}</strong>` +
+                `<span class="hs-line-meta">L${level}/${node.maxLevel} · ${effect}</span>` +
+                `</span></span>` +
+                (canBuy
+                    ? `<button type="button" class="action-button hs-line-action" data-upgrade="${id}" data-nav-item>UPGRADE</button>`
+                    : `<span class="hs-muted hs-line-action">${maxed ? 'MAX' : (locked ? 'LOCKED' : 'NEED')}</span>`) +
+                `</div>`;
+        }).join('');
+        const bonusLine = [
+            stats.repGainMul > 1 ? ('REP ×' + (Math.round(stats.repGainMul * 100) / 100)) : '',
+            stats.tradeBonus > 0 ? ('TRADE +' + Math.round(stats.tradeBonus * 100) + '%') : '',
+            stats.contractRepBonus > 0 ? ('CONTRACT REP +' + stats.contractRepBonus) : ''
+        ].filter(Boolean).join(' · ') || 'BUILD EMBASSY ON THE TREE TO START';
+        return `<div class="hs-upg-branch hs-upg-branch-factions">` +
+            `${this.panelTitle('menuPeoples', 'FACTIONS UPGRADES')}` +
+            `<p class="hs-muted hs-hint">Embassy → Trade Desk / War Room on the tree. Live bonuses: ${bonusLine}</p>` +
+            `<div class="hs-upg-branch-body">${rows}</div>` +
             `</div>`;
     },
 
@@ -567,11 +620,10 @@ extendClass(HomeStationUI, {
                     const out = [];
                     for (let i = 0; i < (count || 0); i++) {
                         const split = isSplit && isSplit(i);
-                        let sizeLevel = (slm && slm.getSlotSizeLevel) ? slm.getSlotSizeLevel(id, kind, i) : 1;
-                        // A split mount's own slot level is stored as S (it's a pair of
-                        // half-size sockets) but displays as its full M/L mount size —
-                        // same bump shipLoadoutManager.partFitsSlot applies for fit checks.
-                        if (split) sizeLevel = Math.max(sizeLevel, 1);
+                        const sizeFn = slm && (slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel);
+                        let sizeLevel = sizeFn ? sizeFn.call(slm, id, kind, i) : 1;
+                        // Fallback when effective size is unavailable: split mounts ≥ M.
+                        if (split && !slm.getSlotEffectiveSizeLevel) sizeLevel = Math.max(sizeLevel, 1);
                         out.push(dot(kind, label, list[i] || null, split, sizeLevel));
                     }
                     return out;
@@ -591,9 +643,8 @@ extendClass(HomeStationUI, {
                 // of the same kind share that column (side by side), so a second gun never
                 // pushes Energy's bar under Speed.
                 const col = (key, statHtml, dots) => {
-                    const dotsHtml = (dots && dots.length)
-                        ? `<span class="hs-ship-slot-dots">${dots.join('')}</span>`
-                        : `<span class="hs-ship-slot-dots is-empty" aria-hidden="true"></span>`;
+                    // Slot boxes live in the ship inventory grid now — not under the stats.
+                    const dotsHtml = '';
                     return `<div class="hs-ship-meta-col" data-stat-col="${key}">${statHtml}${dotsHtml}</div>`;
                 };
                 return `<div class="hs-ship-meta">` +

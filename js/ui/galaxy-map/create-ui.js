@@ -185,7 +185,7 @@ extendClass(GalaxyMapManager, {
         const tip = (gm && gm.formatSituationTip) ? gm.formatSituationTip(sit) : { head: 'MISSION', body: '' };
         const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
         const icon = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml
-            ? iconRenderer.imgHtml('navScroll', 28, 'hs-tab-pixel') : '';
+            ? iconRenderer.imgHtml('navScroll', 40, 'hs-tab-pixel hs-mission-ico', '#f2fbff', false) : '';
         return `<button type="button" class="hs-logout-btn hs-mission-btn gm-ship-bar-mission${calm ? ' is-calm' : ''}" ` +
             `id="gmShipBarMissionBtn" style="--mission-accent:${accent}" data-ui-tip-head="${esc(tip.head)}" data-ui-tip="${esc(tip.body)}" aria-label="${esc(tip.head)}">` +
             `<span class="hs-logout-icon" aria-hidden="true">${icon}</span></button>`;

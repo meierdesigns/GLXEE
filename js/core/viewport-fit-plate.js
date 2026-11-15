@@ -304,7 +304,6 @@
             h += '</div>';
         } else if (vfs.fxTab === 'voxelpixel') {
             h += '<div class="vf-fx-title">VOXEL &amp; PIXEL SIZE</div>' +
-                fxOptSlider('VOXEL SIZE', 'vxsize', ui.getVoxelSizeOptions(), ui.voxelSize) +
                 fxOptSlider('PIXEL SIZE', 'pxsize', ui.getFxOptions('pixelSize'), ui.getFxValue('pixelSize')) +
                 '<div class="vf-fx-title">FRAME OUTSIDE THE SCREEN</div>' +
                 fxOptSlider('FRAME PIXEL', 'framepx', ui.getFxOptions('framePx'), ui.getFxValue('framePx')) +
@@ -575,7 +574,21 @@
                 '<button type="button" class="vf-fx-launch" data-tools-action="assetGen"><em>ASSET GENERATOR</em><i aria-hidden="true">›</i></button>' +
                 '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFaction"><em>FACTION EMBLEMS</em><i aria-hidden="true">›</i></button>' +
                 '<button type="button" class="vf-fx-launch" data-tools-action="assetGenFactionShips"><em>FACTION SHIPS</em><i aria-hidden="true">›</i></button>' +
-                '</div></section>';
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="transmissionEditor"><em>TRANSMISSION EDITOR</em><i aria-hidden="true">›</i></button>' : '') +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="difficultyEditor"><em>COMBAT TUNING</em><i aria-hidden="true">›</i></button>' : '') +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="themeEditor"><em>COLOR APPEARANCE</em><i aria-hidden="true">›</i></button>' : '') +
+                '</div></section>' +
+                (fxDevModeOn() ? '<section class="vf-fx-tools-sec">' +
+                '<div class="vf-fx-title">CONTENT EDITORS</div>' +
+                '<div class="vf-fx-tools-actions">' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="shipEditor"><em>SHIP EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="enemyEditor"><em>ENEMY EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="planetEditor"><em>PLANET EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="componentEditor"><em>COMPONENT EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="abilityEditor"><em>ABILITY EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="hangarTestArena"><em>HANGAR TEST ARENA</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="hudLayoutEditor"><em>HUD LAYOUT EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '</div></section>' : '');
             if (fxDevModeOn()) {
                 let ppBgv = 0, ppBga = 2;
                 try {

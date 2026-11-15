@@ -51,9 +51,9 @@ class HomeStationUI {
         this._stationColResizeObs = null;
         this._hangarLeftCollapsed = false;
         this._hangarRightCollapsed = true;
-        // Hangar left sidebar view (SLOTS | PARTS) — ship picking moved into its own
-        // dropdown above this, so "ships" is no longer a view here. Still remembered
-        // across reloads (and an old saved "ships" value falls back to "slots").
+        // Hangar left sidebar view (SLOTS | PARTS) — ship picking lives in the title
+        // row dropdown, so "ships" is no longer a view here. Still remembered across
+        // reloads (and an old saved "ships" value falls back to "slots").
         this._hangarLeftView = 'slots';
         try {
             { const v = localStorage.getItem('vf_hs_hangar_left_view'); if (v === 'parts' || v === 'slots') this._hangarLeftView = v; }
@@ -74,7 +74,8 @@ class HomeStationUI {
             }
         } catch (e) { /* ignore */ }
         this.applyMenuOrder();
-        this._upgradeSubTabs = ['station', 'ships', 'modules', 'equipment'];
+        // Hangar + factions upgrades live inside the station tree page.
+        this._upgradeSubTabs = ['station', 'equipment'];
         this.selectedUpgradeNode = null;
         this.expandedEquipItem = null;
         this._upgTipHost = null;
@@ -88,9 +89,7 @@ class HomeStationUI {
         // Exact area button to refocus after soft remount (station/profiles/…).
         this._navPreferAreaKey = null;
         this._upgradeSubMeta = {
-            station: { label: 'STATION', icon: 'hsStation' },
-            ships: { label: 'SHIPS', icon: 'hsShip' },
-            modules: { label: 'MODULES', icon: 'hsCraft' },
+            station: { label: 'TREE', icon: 'hsStation' },
             equipment: { label: 'EQUIPMENT', icon: 'hsHangar' }
         };
         this._shopCategories = ['resources', 'ships', 'blueprints', 'parts', 'portals', 'styles'];

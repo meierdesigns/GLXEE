@@ -302,6 +302,26 @@ extendClass(StartScreenManager, {
             }
             return;
         }
+        if (item.action === 'transmissionEditor') {
+            // Needs both the editor UI (editors bundle) and the story data it edits
+            // (VFStoryDialogue / ProfileSelectionManager live in the profiles bundle).
+            const open = () => {
+                if (typeof transmissionEditorUI !== 'undefined') transmissionEditorUI.show();
+            };
+            const withProfiles = () => {
+                if (typeof profileSelectionManager === 'undefined' && typeof window.ensureVfProfiles === 'function') {
+                    window.ensureVfProfiles(open);
+                } else {
+                    open();
+                }
+            };
+            if (typeof transmissionEditorUI === 'undefined' && typeof window.ensureVfEditors === 'function') {
+                window.ensureVfEditors(withProfiles);
+            } else {
+                withProfiles();
+            }
+            return;
+        }
         if (item.action === 'openFxTab') {
             const scope = window.vfFitScope;
             if (scope && scope.vfs && scope.setFxOpen) {

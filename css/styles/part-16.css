@@ -1514,12 +1514,20 @@ html body #victoryOverlay .victory-button:is(.selected, :hover, :focus-visible) 
 }
 .gi-weapon-flash { animation: gi-stat-pulse 0.5s steps(2) 4; }
 
-/* LOADOUT → all slotted weapons; breathing glow during temporary boosts (power shot). */
+/* LOADOUT → all slotted weapons side-by-side; breathing glow during power shot. */
 :is(.game-info-panel, .gi-loadout-side) .gi-weapon-chips {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
     gap: 4px;
     padding-top: 4px;
+    overflow-x: auto;
+}
+:is(.game-info-panel, .gi-loadout-side) .gi-weapon-chips .gi-chip-weapon {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
 }
 :is(.game-info-panel, .gi-loadout-side) .gi-chip.gi-chip-weapon :is(.gi-icon, img) {
     filter: drop-shadow(0 0 1px #05060a);

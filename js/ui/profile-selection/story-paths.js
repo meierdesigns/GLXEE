@@ -8,11 +8,20 @@ extendClass(ProfileSelectionManager, {
      */
     storyPathDefs() {
         const M = (id, name, type, difficulty) => ({ id, name, type, difficulty });
+        // Devmode Transmission Editor overrides (title/blurb only — dialogue lines are
+        // read straight from VFStoryDialogue, keyed by id, at display time).
+        const ov = (typeof VFStoryDialogue !== 'undefined' && VFStoryDialogue.overrides) ? VFStoryDialogue.overrides() : {};
         // cut = launch-cutscene style (defaults to first mission type).
-        const P = (id, title, blurb, icon, missions, cut) => ({
-            id, title, blurb, icon, missions,
-            cut: cut || (missions[0] && missions[0].type) || 'patrol'
-        });
+        const P = (id, title, blurb, icon, missions, cut) => {
+            const o = ov[id] || {};
+            return {
+                id,
+                title: (typeof o.title === 'string' && o.title.trim()) ? o.title.trim() : title,
+                blurb: (typeof o.blurb === 'string' && o.blurb.trim()) ? o.blurb.trim() : blurb,
+                icon, missions,
+                cut: cut || (missions[0] && missions[0].type) || 'patrol'
+            };
+        };
         return {
             // —— TERRAN ——
             standard_issue: [

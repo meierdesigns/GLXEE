@@ -48,7 +48,13 @@ extendClass(FactionManager, {
         const key = String(id || '').toLowerCase();
         if (!this.factions[key]) return 0;
         if (!this.state.reputation) this.state.reputation = {};
-        const next = Math.max(FACTION_REP_MIN, Math.min(FACTION_REP_MAX, this.getReputation(key) + (Number(delta) || 0)));
+        let d = Number(delta) || 0;
+        // Station EMBASSY scales positive reputation gains.
+        if (d > 0 && typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+            const st = profileManager.getStationStats(profileManager.getActiveProfile());
+            if (st && st.repGainMul > 1) d = Math.round(d * st.repGainMul);
+        }
+        const next = Math.max(FACTION_REP_MIN, Math.min(FACTION_REP_MAX, this.getReputation(key) + d));
         this.state.reputation[key] = next;
         this.save();
         return next;
@@ -101,8 +107,13 @@ extendClass(FactionManager, {
         const t = this.getTradeTerms(id);
         const buyBase = (economyConfig.getResourceBuyCost(mat, 10) || { credits: 0 }).credits / 10;
         const sellBase = (economyConfig.getResourceSellPayout(mat, 10) || { credits: 0 }).credits / 10;
-        const buyMult = (mat === t.specialty ? 0.6 : 1) * (1 - t.discount);
-        const sellMult = (mat === t.demand ? 1.5 : (mat === t.specialty ? 0.6 : 1)) * (1 + t.discount);
+        let desk = 0;
+        if (typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+            const st = profileManager.getStationStats(profileManager.getActiveProfile());
+            desk = (st && st.tradeBonus) || 0;
+        }
+        const buyMult = (mat === t.specialty ? 0.6 : 1) * (1 - t.discount - desk);
+        const sellMult = (mat === t.demand ? 1.5 : (mat === t.specialty ? 0.6 : 1)) * (1 + t.discount + desk);
         return {
             buy: Math.max(1, Math.ceil(buyBase * buyMult)),
             sell: Math.max(1, Math.floor(sellBase * sellMult))
@@ -324,7 +335,12 @@ extendClass(ProfileManager, {
     ProfileManager.prototype.completeMissionFor = function (planetId, profile) {
         const paid = base.call(this, planetId, profile);
         if (paid && paid.factionId && typeof factionManager !== 'undefined') {
-            factionManager.addReputation(paid.factionId, paid.repGain || 5);
+            let rep = paid.repGain || 5;
+            if (typeof profileManager !== 'undefined' && profileManager.getStationStats) {
+                const st = profileManager.getStationStats(profile || this.getActiveProfile());
+                if (st && st.contractRepBonus) rep += st.contractRepBonus;
+            }
+            factionManager.addReputation(paid.factionId, rep);
             // Conquest: the issuer now holds the planet; the loser resents it.
             if (paid.kind === 'conquer') {
                 const p = profile || this.getActiveProfile();

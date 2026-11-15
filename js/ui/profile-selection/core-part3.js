@@ -40,7 +40,7 @@ extendClass(ProfileSelectionManager, {
         const title = !create ? 'RENAME PROFILE' : (pickFaction ? 'CHOOSE FACTION' : (pilotStep ? 'CREATE YOUR PILOT' : (galaxyStep ? 'CHOOSE YOUR GALAXY' : (missionStep ? 'CHOOSE YOUR STORY' : 'START SETUP'))));
         // Wizard progress: faction -> pilot -> setup -> galaxy -> story (same order the NEXT/BACK buttons walk).
         const stepIdx = pickFaction ? 0 : (pilotStep ? 1 : (galaxyStep ? 3 : (missionStep ? 4 : 2)));
-        const stepperHtml = create ? `<ol class="profile-stepper${pickFaction ? ' onboarding-stepper' : ''}" aria-label="Step ${stepIdx + 1} of 5">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY'], ['mission', 'STORY']].map(([key, label], i) => `
+        const stepperHtml = create ? `<ol class="profile-stepper onboarding-stepper" aria-label="Step ${stepIdx + 1} of 5">${[['faction', 'FACTION'], ['pilot', 'PILOT'], ['name', 'SETUP'], ['galaxy', 'GALAXY'], ['mission', 'STORY']].map(([key, label], i) => `
             <li class="profile-stepper-step${i < stepIdx ? ' is-done' : ''}${i === stepIdx ? ' is-current' : ''}"${i === stepIdx ? ' aria-current="step"' : ''}>
                 ${i < stepIdx ? `<button type="button" class="profile-stepper-btn" data-step-go="${key}" tabindex="-1" title="Back to ${label}">` : '<span class="profile-stepper-btn">'}
                 <span class="profile-stepper-dot">${ProfileSelectionManager.stepIconHtml(key)}</span><span class="profile-stepper-label">${label}</span>
@@ -148,15 +148,15 @@ extendClass(ProfileSelectionManager, {
                 ${create && !missionStep ? this.renderStartOptionsHtml(pilotStep ? true : (startStep ? 'none' : false)) : ''}
                 ${startStep ? `<div class="profile-start-main">${this.renderKitListHtml()}${previewHtml}</div>` : (missionStep ? missionHtml : previewHtml)}
             </div>`}
-            <div class="profile-selection-bar${pickFaction ? ' onboarding-bar' : ''}"><div class="profile-selection-actions">
+            <div class="profile-selection-bar${create ? ' onboarding-bar' : ''}"><div class="profile-selection-actions">
                 <button class="action-button secondary" id="psCancelMode">${btnIcon(secondary === 'BACK' ? 'back' : 'cancel')}${secondary}</button>
                 <button class="action-button" id="psSave">${btnIcon((pickFaction || pilotStep || startStep || galaxyStep) ? 'next' : 'save')}${primary}</button>
             </div>
             <div class="profile-selection-instructions"><p>${hint}</p></div></div>
         `);
         if (!reuse) (this.host || document.body).appendChild(this.overlay);
-        // Reuse onboarding homeworld CSS while on the faction stage.
-        this.overlay.classList.toggle('onboarding-overlay', !!pickFaction);
+        // Reuse onboarding stepper/bar chrome for every create-wizard step (homeworld-only CSS below stays inert elsewhere).
+        this.overlay.classList.toggle('onboarding-overlay', !!create);
         this.fitWizardBars();
         requestAnimationFrame(() => this.fitWizardBars());
         if (pilotStep) this.ensurePilotPicksFit();
@@ -182,6 +182,10 @@ extendClass(ProfileSelectionManager, {
             if (!this._heroPlanetBackdrop) this._heroPlanetBackdrop = new HeroPlanetBackdrop();
             if (this._heroPlanetBackdrop.setLayout) this._heroPlanetBackdrop.setLayout('stage');
             this._heroPlanetBackdrop.setFaction(this.pendingFaction);
+            // SETUP: defense demo focuses on the chosen start-profile hull.
+            if (this._heroPlanetBackdrop.setFocusShip) {
+                this._heroPlanetBackdrop.setFocusShip(startStep ? this.startShipId() : null);
+            }
             const mountHome = () => {
                 if (!this.overlay || !homeStage.isConnected) return;
                 this._heroPlanetBackdrop.mount(homeStage);
@@ -191,6 +195,7 @@ extendClass(ProfileSelectionManager, {
             };
             requestAnimationFrame(() => requestAnimationFrame(mountHome));
         } else if (this._heroPlanetBackdrop) {
+            if (this._heroPlanetBackdrop.setFocusShip) this._heroPlanetBackdrop.setFocusShip(null);
             if (this._heroPlanetBackdrop.setLayout) this._heroPlanetBackdrop.setLayout('card');
             this._heroPlanetBackdrop.unmount();
         }
@@ -300,6 +305,9 @@ extendClass(ProfileSelectionManager, {
                 if (group === 'kit' || group === 'ship') {
                     // Coalesce ship redraw + session save so rapid kit clicks stay snappy.
                     const fid = this.pendingFaction;
+                    if (this._heroPlanetBackdrop && this._heroPlanetBackdrop.setFocusShip) {
+                        this._heroPlanetBackdrop.setFocusShip(this.startShipId());
+                    }
                     if (this._kitShipRaf) cancelAnimationFrame(this._kitShipRaf);
                     this._kitShipRaf = requestAnimationFrame(() => {
                         this._kitShipRaf = 0;

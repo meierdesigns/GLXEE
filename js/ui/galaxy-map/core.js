@@ -142,10 +142,17 @@ class GalaxyMapManager {
         if (!reuse) this.loadMap();
         this.createUI();
         if (this.startOrbitLoop) this.startOrbitLoop();
-        // Open with the route to the selected planet centred (animated).
+        // Open on the ship you play: mark its location, follow, and zoom in.
         // Skip camera tween when reusing a parked map — it already frames the selection.
         if (!reuse) {
-            requestAnimationFrame(() => { if (this.isVisible && this.frameSelectionCamera) this.frameSelectionCamera('follow'); });
+            // Double rAF: wait until the SVG has layout before framing the ship.
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (!this.isVisible) return;
+                    if (this.returnCameraToShip) this.returnCameraToShip({ zoom: 3 });
+                    else if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+                });
+            });
         }
         if (typeof menuStateManager !== 'undefined' && !this._mountEl) {
             menuStateManager.setScreen('galaxyMap');

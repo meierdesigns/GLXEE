@@ -87,6 +87,8 @@ class CollisionManager {
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
         const gateEnter = typeof objectiveManager !== 'undefined'
             && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
+        // Exit sluice / warp on screen: lips and frame stay solid, but must not scrape the ship.
+        const atExitGate = typeof objectiveManager !== 'undefined' && !!objectiveManager.goal;
         const player = playerManager.getPosition();
         // During sluice enter the ship is pulled into the tube — wall scrapes must not kill it.
         if (player && !gateEnter) {
@@ -104,7 +106,7 @@ class CollisionManager {
                     player.x = walls.right - player.width - 1;
                 }
                 const now = Date.now();
-                if (hitX != null && hitSide >= 0 && now - (this._terrainHitAt || 0) > 600) {
+                if (hitX != null && hitSide >= 0 && !atExitGate && now - (this._terrainHitAt || 0) > 600) {
                     this._terrainHitAt = now;
                     const hy = player.y + player.height / 2;
                     const wr = obstacleManager.terrainRowAtY(hy);

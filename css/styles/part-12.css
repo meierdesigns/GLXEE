@@ -627,28 +627,29 @@
     opacity: 1;
 }
 
-/* --- Hangar left sidebar: ship picker dropdown, sits above the SLOTS/PARTS toggle
-   (ship picking used to be its own sidebar tab; now it's just which ship is "open"). */
-.hs-hangar-ship-dropdown-row {
-    padding: 8px 10px 0;
-}
+/* --- Hangar title row: ship picker dropdown (replaces the static name label). */
 .hs-hangar-ship-dropdown {
     position: relative;
+    flex: 0 1 auto;
+    min-width: 0;
 }
 .hs-hangar-ship-dropdown-btn {
-    width: 100%;
     box-sizing: border-box;
-    display: flex;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
-    padding: 8px 10px;
+    max-width: 100%;
+    padding: 4px 8px;
     font: inherit;
     letter-spacing: 0.08em;
     background: color-mix(in srgb, var(--color-primary) 14%, #05060a);
     color: var(--color-text, #fff);
     border: var(--ui-border-width, 2px) solid color-mix(in srgb, var(--color-primary) 55%, transparent);
     cursor: pointer;
+}
+.hs-hangar-ship-dropdown-btn .hs-hangar-head-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .hs-hangar-ship-dropdown-btn:hover,
 .hs-hangar-ship-dropdown.is-open .hs-hangar-ship-dropdown-btn {
@@ -665,9 +666,10 @@
     display: none;
     position: absolute;
     left: 0;
-    right: 0;
+    min-width: 100%;
+    width: max-content;
     top: 100%;
-    z-index: 6;
+    z-index: 20;
     max-height: 240px;
     overflow-y: auto;
     background: #0a0912;
@@ -685,6 +687,7 @@
     padding: 8px 10px;
     font: inherit;
     letter-spacing: 0.08em;
+    white-space: nowrap;
     background: transparent;
     color: var(--color-text, #fff);
     border: 0;

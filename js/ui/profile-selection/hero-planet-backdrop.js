@@ -23,12 +23,16 @@ class HeroPlanetBackdrop {
         this._raf = 0;
         this._lastT = 0;
         this._accum = 0;
-        // Stage homeworld is expensive (SVG spin + orbits) — 8fps is enough to read.
+        // Card peek stays cheap; stage homeworld (orbits + defense demo) needs smoother motion.
         this._frameInterval = 1000 / 8;
         this._reduceMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
         // 'card' = wizard preview (planet peeks left of crest). 'stage' = full pane, centered.
         this._layout = 'card';
         this._orbitFleet = null;
+        this._focusShipId = null; // SETUP kit hull — that ship leads the defense demo
+        this._camX = null;
+        this._camY = null;
+        this._camZ = null;
         this._fgBake = null;
         this._orbitSpriteCache = null;
         this._weaponDemo = null;
@@ -44,12 +48,23 @@ class HeroPlanetBackdrop {
         }
     }
 
+    /** SETUP step: focus defense on the chosen start-profile hull (interceptor, heavy, …). */
+    setFocusShip(shipId) {
+        const next = shipId ? String(shipId) : null;
+        this._focusShipId = next;
+        this._orbitFleet = null;
+        this._orbitSpriteCache = null;
+        this._weaponDemo = null;
+        this._camX = this._camY = this._camZ = null;
+        if (this.el && this.el.isConnected && this.draw) this.draw(false);
+    }
+
     setLayout(mode) {
         const next = (mode === 'stage') ? 'stage' : 'card';
         if (next === this._layout) return;
         this._layout = next;
-        // Card peek used to run at 16fps with a 60Hz rAF gate — too hot on the main thread.
-        this._frameInterval = 1000 / 8;
+        // Stage defense scene: 20fps so orbits / dives don't stutter. Card peek stays 8fps.
+        this._frameInterval = next === 'stage' ? (1000 / 20) : (1000 / 8);
         this._staticLayer = null;
         this._staticKey = '';
         this._planetLayer = null;
@@ -110,6 +125,7 @@ class HeroPlanetBackdrop {
         this._fgBake = null;
         this._orbitSpriteCache = null;
         this._weaponDemo = null;
+        // Keep _focusShipId — SETUP kit persists across faction recolour.
         this._demoLastT = 0;
         this._staticLayer = null;
         this._staticKey = '';
@@ -206,7 +222,7 @@ class HeroPlanetBackdrop {
                 return;
             }
             this._lastT = now;
-            this.draw(true);
+            try { this.draw(true); } catch (err) { /* keep the stage loop alive */ }
             schedule(this._frameInterval);
         };
         this._raf = requestAnimationFrame(tick);
@@ -344,6 +360,11 @@ class HeroPlanetBackdrop {
         c.rect(stage.x, stage.y, stage.w, stage.h);
         c.clip();
 
+        // SETUP: camera follows + zooms the kit hull you play.
+        if (stageLayout && this._focusShipId) {
+            this._applyFocusCamera(c, orbit, cx, cy);
+        }
+
         if (stageLayout) {
             this._blitStaticLayer(c, accent, hull, cx, cy, r);
             this._drawOrbitShips(c, orbit, false);
@@ -359,6 +380,34 @@ class HeroPlanetBackdrop {
             this._drawForegroundShips(c);
         }
         c.restore();
+    }
+
+    /**
+     * SETUP camera: ease toward the chosen kit hull and zoom in so YOU is readable.
+     * Target sits mostly on the ship, with a little planet still in frame.
+     */
+    _applyFocusCamera(c, orbit, planetCx, planetCy) {
+        const focus = (orbit || []).find((s) => s && s.ship && s.ship.isFocus);
+        const wantZ = 1.45;
+        let tx = planetCx;
+        let ty = planetCy;
+        if (focus) {
+            tx = focus.sx * 0.55 + planetCx * 0.45;
+            ty = focus.sy * 0.55 + planetCy * 0.45;
+        }
+        if (this._camX == null || this._camY == null || this._camZ == null) {
+            this._camX = tx;
+            this._camY = ty;
+            this._camZ = 1;
+        }
+        const ease = this._reduceMotion ? 1 : 0.14;
+        this._camX += (tx - this._camX) * ease;
+        this._camY += (ty - this._camY) * ease;
+        this._camZ += (wantZ - this._camZ) * ease;
+        const z = this._camZ;
+        c.translate(this.W * 0.5, this.H * 0.5);
+        c.scale(z, z);
+        c.translate(-this._camX, -this._camY);
     }
 
     /** Planet disc + halo; only recompose when the spin bitmap / seat changes. */
@@ -546,6 +595,8 @@ class HeroPlanetBackdrop {
     }
 
     _drawForegroundShips(c) {
+        // SETUP focus mode: only the kit hull — no crest overlays competing with it.
+        if (this._focusShipId) return;
         const crests = this._ensureFgBake();
         if (!crests.length) return;
         const t = this._reduceMotion ? 0 : Date.now();
@@ -563,16 +614,114 @@ class HeroPlanetBackdrop {
     }
 
     /**
-     * Homeworld stage showcase: hostiles dive toward the planet; a friendly
-     * fires one preferred-weapon volley at them, then scraps — so the
-     * panel only demonstrates which guns the faction fields.
+     * Homeworld stage showcase: hostiles dive toward the planet; orbiting
+     * friendlies cycle every gun the wizard lists for this faction
+     * (PREFERRED + BONUS affinity — same chips as the focus strip).
      */
-    _preferredWeapons() {
-        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons) {
-            const list = factionShipStyles.getFactionDefaultWeapons(this._faction);
-            if (list && list.length) return list;
+    _profileMgr() {
+        return (typeof profileSelectionManager !== 'undefined' && profileSelectionManager)
+            || (typeof window !== 'undefined' && window.profileSelectionManager)
+            || null;
+    }
+
+    /** Guns mounted on the chosen SETUP kit (nose + weapon2), in slot order. */
+    _kitWeaponIds() {
+        const psm = this._profileMgr();
+        const out = [];
+        const add = (wid) => {
+            const id = String(wid || '').toLowerCase();
+            if (!id || out.indexOf(id) !== -1) return;
+            out.push(id);
+        };
+        if (psm && this._focusShipId) {
+            try {
+                const cfg = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig)
+                    ? shipConfigManager.getConfig(this._focusShipId) : null;
+                const core = (cfg && (cfg.defaultWeapon || cfg.weapon)) || 'laser';
+                if (typeof psm.startWeaponSlots === 'function') {
+                    (psm.startWeaponSlots(core) || []).forEach(add);
+                } else {
+                    add(core);
+                    const kit = psm.currentKit && psm.currentKit();
+                    if (kit && kit.bonus && kit.bonus.weapon2) add(kit.bonus.weapon2);
+                }
+            } catch (err) { /* fall through */ }
         }
-        return ['laser'];
+        return out.length ? out : this._preferredWeapons().slice(0, 2);
+    }
+
+    _preferredWeapons() {
+        const fid = this._faction;
+        const out = [];
+        const add = (wid) => {
+            const id = String(wid || '').toLowerCase();
+            if (!id || out.indexOf(id) !== -1) return;
+            out.push(id);
+        };
+        if (this._focusShipId) {
+            this._kitWeaponIds().forEach(add);
+            if (out.length) return out;
+        }
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionDefaultWeapons) {
+            (factionShipStyles.getFactionDefaultWeapons(fid) || []).forEach(add);
+        }
+        const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
+        if (wcm && wcm.getFactionWeaponAffinity) {
+            (wcm.getFactionWeaponAffinity(fid) || []).forEach(add);
+        }
+        // Kit second-guns from the wizard start kits (e.g. railgun / laser_twin).
+        const psm = this._profileMgr();
+        if (psm && typeof psm.kitDefs === 'function') {
+            try {
+                const defs = psm.kitDefs();
+                const pack = defs && defs[fid];
+                if (pack && pack.length) {
+                    pack.forEach((kit) => {
+                        const w2 = kit && kit.bonus && kit.bonus.weapon2;
+                        if (w2) add(w2);
+                    });
+                }
+            } catch (err) { /* ignore */ }
+        }
+        // Doctrine seconds even if kitDefs isn't mounted yet (faction-pick stage).
+        const doctrineExtra = {
+            terran: ['railgun', 'laser_twin'],
+            kronax: ['plasma', 'spike_burst'],
+            voidborn: ['ion', 'pierce'],
+            pirate: ['burst', 'rapid'],
+            machine: ['pierce']
+        }[fid];
+        if (doctrineExtra) doctrineExtra.forEach(add);
+        return out.length ? out : ['laser'];
+    }
+
+    /**
+     * Hardpoint offsets for the focus hull: nose on the aim axis, extras on the wings.
+     * Returns [{ wid, lat, fwd }] in ship-local px (fwd along aim, lat perpendicular).
+     */
+    _focusHardpoints(ship) {
+        const guns = this._kitWeaponIds();
+        const sw = (ship && ship._sw) || 24;
+        const sh = (ship && ship._sh) || 18;
+        const n = Math.max(1, guns.length);
+        const pts = [];
+        for (let i = 0; i < n; i++) {
+            const wid = guns[i] || guns[0] || 'laser';
+            if (n === 1) {
+                pts.push({ wid, lat: 0, fwd: sh * 0.48 });
+            } else if (i === 0) {
+                pts.push({ wid, lat: 0, fwd: sh * 0.48 });
+            } else {
+                const side = (i % 2 === 1) ? -1 : 1;
+                const row = Math.floor((i - 1) / 2);
+                pts.push({
+                    wid,
+                    lat: side * sw * (0.32 + row * 0.08),
+                    fwd: sh * (0.12 - row * 0.06)
+                });
+            }
+        }
+        return pts;
     }
 
     /** Faction playstyle ratings (1–5) from the onboarding focus strip. */
@@ -601,27 +750,34 @@ class HeroPlanetBackdrop {
 
     _weaponFx(wid) {
         const id = String(wid || 'laser').toLowerCase();
-        // Prefer live weapon registry counts (Spread = 2) so the demo matches combat.
-        const live = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon)
-            ? weaponConfigManager.getWeapon(id) : null;
-        const table = {
-            laser: { color: '#7ec8ff', kind: 'beam', count: 1, speed: 7.2, w: 3, h: 14 },
-            claw_beam: { color: '#ff6a4a', kind: 'beam', count: 1, speed: 6.4, w: 4, h: 16 },
-            wave: { color: '#c084fc', kind: 'wave', count: 1, speed: 5.2, w: 18, h: 6 },
-            spread: { color: '#fbbf24', kind: 'pellet', count: 2, speed: 5.8, w: 4, h: 4 },
-            missile: { color: '#94a3b8', kind: 'missile', count: 1, speed: 4.6, w: 5, h: 10 },
-            plasma: { color: '#34d399', kind: 'blob', count: 1, speed: 5.0, w: 8, h: 8 },
-            rapid: { color: '#67e8f9', kind: 'pellet', count: 2, speed: 8.0, w: 3, h: 3 },
-            burst: { color: '#fb923c', kind: 'pellet', count: 2, speed: 6.2, w: 4, h: 4 },
-            twin_laser: { color: '#93c5fd', kind: 'beam', count: 2, speed: 7.0, w: 2, h: 12 },
-            laser_twin: { color: '#93c5fd', kind: 'beam', count: 2, speed: 7.0, w: 2, h: 12 },
-            railgun: { color: '#e2e8f0', kind: 'beam', count: 1, speed: 9.0, w: 2, h: 18 }
+        const wcm = typeof weaponConfigManager !== 'undefined' ? weaponConfigManager : null;
+        const live = wcm && wcm.getWeapon ? wcm.getWeapon(id) : null;
+        const uiColor = wcm && wcm.getWeaponUiColor ? wcm.getWeaponUiColor(id) : null;
+        // Shape / feel per family — counts/spread/speed come from the live registry when present.
+        const kinds = {
+            laser: 'beam', laser_twin: 'beam', twin_laser: 'beam', railgun: 'beam',
+            pierce: 'beam', claw_beam: 'beam',
+            wave: 'wave',
+            missile: 'missile',
+            plasma: 'blob', nova: 'nova',
+            spread: 'pellet', rapid: 'pellet', burst: 'pellet',
+            spike_burst: 'pellet', ion: 'pellet'
         };
-        const base = table[id] || table.laser;
-        if (live && live.bulletCount != null) {
-            return Object.assign({}, base, { count: Math.max(1, Math.round(Number(live.bulletCount) || base.count)) });
-        }
-        return base;
+        const kind = kinds[id] || (live && live.pierce ? 'beam'
+            : (live && Number(live.bulletCount) > 1 ? 'pellet' : 'beam'));
+        const count = Math.max(1, Math.round(Number((live && live.bulletCount) || (kind === 'pellet' ? 2 : 1))));
+        const spread = Number((live && live.spreadAngle) || (count > 1 ? 0.28 : 0));
+        const spacing = Number((live && live.bulletSpacing) || 0);
+        const speed = Math.max(3.2, Number((live && live.speed) || 10) * 0.55);
+        const w = Math.max(2, Math.round(Number((live && live.width) || 2) + (kind === 'blob' || kind === 'nova' ? 4 : 1)));
+        const h = Math.max(3, Math.round(Number((live && live.height) || 8) * (kind === 'beam' ? 1.1 : 0.9)));
+        const color = uiColor
+            || ({ laser: '#4da6ff', laser_twin: '#7ec8ff', railgun: '#d8ecff', pierce: '#a8ffd8',
+                claw_beam: '#ff4a2a', wave: '#d65cff', missile: '#3dff9c', plasma: '#ff7a3d',
+                nova: '#ffb3f2', spread: '#ffd84a', rapid: '#e8b43a', burst: '#ffa640',
+                spike_burst: '#ffab5c', ion: '#ff7ae6' })[id]
+            || '#7ec8ff';
+        return { id, color, kind, count, spread, spacing, speed, w, h };
     }
 
     _ensureWeaponDemo() {
@@ -646,47 +802,40 @@ class HeroPlanetBackdrop {
         return this._weaponDemo;
     }
 
-    /** Spawn one rival hostile diving toward the homeworld. */
+    /** Spawn one rival hostile — from below the planet, climbing into its disc. */
     _spawnDemoRival(demo, W, H, planetX, planetY, speedMul) {
         const spd = (0.45 + Math.random() * 0.35) * (0.85 + (speedMul || 1) * 0.25);
-        const edge = Math.random();
-        let sx; let sy;
-        if (edge < 0.7) {
-            // Enter from bottom edge — already on-screen so they read immediately.
-            sx = Math.round(W * (0.15 + Math.random() * 0.7));
-            sy = H - 10;
-        } else if (edge < 0.85) {
-            sx = 12;
-            sy = Math.round(H * (0.55 + Math.random() * 0.35));
-        } else {
-            sx = W - 12;
-            sy = Math.round(H * (0.55 + Math.random() * 0.35));
-        }
-        const dx0 = planetX - sx;
-        const dy0 = planetY - sy;
-        const len0 = Math.max(1, Math.hypot(dx0, dy0));
+        const stage = this._stageRect();
+        const planetR = Math.max(24, (stage && stage.r) || 40);
+        // Spawn under the planet so the climb hits the disc, not empty space beside it.
+        const sx = Math.round(planetX + (Math.random() - 0.5) * planetR * 0.9);
+        const sy = H - 10;
         const rival = this._demoRivalFaction();
         const cls = (['scout', 'assault', 'heavy'])[Math.floor(Math.random() * 3)];
         const disp = (typeof factionShipStyles !== 'undefined' && factionShipStyles.displaySizeForClass)
             ? factionShipStyles.displaySizeForClass(cls)
             : { width: 32, height: 24 };
-        const mul = 0.7;
+        const mul = 0.95;
         const fp = (typeof flightProfiles !== 'undefined' && flightProfiles.resolve)
             ? flightProfiles.resolve(rival, cls)
             : { speedMul: 1, wobbleAmp: 0.2, wobbleFreq: 0.8 };
-        const dive = spd * (fp.speedMul || 1);
+        const dive = spd * (fp.speedMul || 1) * 1.15;
         demo.enemies.push({
             x: sx,
             y: sy,
-            w: Math.max(20, Math.round(disp.width * mul)),
-            h: Math.max(16, Math.round(disp.height * mul)),
-            vx: (dx0 / len0) * dive,
-            vy: (dy0 / len0) * dive,
+            homeX: sx,
+            targetX: planetX,
+            w: Math.max(26, Math.round(disp.width * mul)),
+            h: Math.max(20, Math.round(disp.height * mul)),
+            vx: 0,
+            vy: -dive,
+            strafeAmp: 10 + Math.random() * 12,
+            strafePhase: Math.random() * Math.PI * 2,
+            strafeSpeed: 0.03 + Math.random() * 0.015,
             hp: 1,
             faction: rival,
             cls,
-            fp,
-            wobblePhase: Math.random() * Math.PI * 2
+            fp
         });
     }
 
@@ -717,39 +866,35 @@ class HeroPlanetBackdrop {
             demo.nextEnemyAt = now + Math.round((900 + Math.random() * 500) / Math.max(0.7, speedMul));
         }
 
-        const arriveR = planetR * 0.92;
+        // Impact on the planet's lower face (not center) so climbs don't slip past the sides.
+        const impactY = planetY + planetR * 0.88;
         // Refresh orbit seats so every faction hull can aim from its live path.
         this._orbitPositions(planetX, planetY, planetR);
         const fleet = this._ensureOrbitFleet();
         const steps = Math.max(1, Math.round(dt / 16.67));
         for (let s = 0; s < steps; s++) {
             demo.enemies.forEach((e) => {
-                // Keep steering toward the planet — no free wandering.
-                const dx = planetX - e.x;
-                const dy = planetY - e.y;
-                const len = Math.max(1, Math.hypot(dx, dy));
-                let spd = Math.max(0.35, Math.hypot(e.vx || 0, e.vy || 0));
-                e.vx = (dx / len) * spd;
-                e.vy = (dy / len) * spd;
-                e.x += e.vx;
-                e.y += e.vy;
-                if (e.fp && e.fp.wobbleAmp > 0) {
-                    e.wobblePhase = (e.wobblePhase || 0) + (e.fp.wobbleFreq || 0.8) * 0.08;
-                    e.x += Math.sin(e.wobblePhase) * e.fp.wobbleAmp * 2.2;
-                }
+                // Drift lane toward planet center, then strafe — still climbs straight up.
+                const tx = e.targetX != null ? e.targetX : planetX;
+                e.homeX = (e.homeX != null ? e.homeX : e.x) + (tx - e.homeX) * 0.02;
+                e.strafePhase = (e.strafePhase || 0) + (e.strafeSpeed || 0.04);
+                e.x = e.homeX + Math.sin(e.strafePhase) * (e.strafeAmp || 12);
+                e.y += e.vy || -0.5;
             });
             demo.enemies = demo.enemies.filter((e) => {
                 if (e.hp <= 0) return false;
-                // Reached the homeworld — dive complete.
-                return Math.hypot(e.x - planetX, e.y - planetY) > arriveR;
+                // Hit the planet underside — remove before they can climb past.
+                return e.y > impactY;
             });
 
             const inbound = demo.enemies.filter((e) => {
-                const d = Math.hypot(e.x - planetX, e.y - planetY);
-                return d < fireRange && d > arriveR;
+                return e.y < planetY + fireRange && e.y > impactY
+                    && Math.abs(e.x - planetX) < planetR * 1.4;
             });
 
-            // Every orbiting faction hull fires — staggered cooldowns, from its seat.
+            // Friendly hulls only shoot straight down (nose stays fixed).
+            const dirX = 0;
+            const dirY = 1;
             (fleet.ships || []).forEach((ship) => {
                 if (ship.muzzle > 0) ship.muzzle -= 1;
                 ship.cooldown = (ship.cooldown || 0) - 18 * speedMul;
@@ -757,55 +902,71 @@ class HeroPlanetBackdrop {
                 const ax = ship._sx;
                 const ay = ship._sy;
                 if (ax == null || ay == null) return;
-                const t = inbound.slice().sort((a1, b1) => {
-                    const da = Math.hypot(a1.x - ax, a1.y - ay);
-                    const db = Math.hypot(b1.x - ax, b1.y - ay);
-                    return da - db;
-                })[0] || null;
-                if (!t) {
-                    ship.aimDirX = 0;
-                    ship.aimDirY = 1;
+                // Only fire when something is below this hull.
+                const below = inbound.some((e) => e.y > ay + 8 && Math.abs(e.x - ax) < 90);
+                if (!below) {
+                    ship.aimDirX = dirX;
+                    ship.aimDirY = dirY;
                     return;
                 }
-                const toX = t.x - ax;
-                const toY = t.y - ay;
-                const toLen = Math.max(1, Math.hypot(toX, toY));
-                const dirX = toX / toLen;
-                const dirY = toY / toLen;
                 ship.aimDirX = dirX;
                 ship.aimDirY = dirY;
                 const fp = ship.fp || {};
+                const hardpoints = ship.isFocus
+                    ? this._focusHardpoints(ship)
+                    : [{
+                        wid: (demo.weapons && demo.weapons[(demo.wIdx || 0) % demo.weapons.length])
+                            || this._preferredWeapons()[0] || 'laser',
+                        lat: 0,
+                        fwd: (ship._sh || 18) * 0.45
+                    }];
+                if (!ship.isFocus) demo.wIdx = (demo.wIdx || 0) + 1;
+                const primary = hardpoints[0] && hardpoints[0].wid;
+                ship.weapon = primary;
+                const cdWid = primary || 'laser';
+                const cdBase = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon)
+                    ? Number((weaponConfigManager.getWeapon(cdWid) || {}).cooldown) || 320
+                    : 320;
                 ship.cooldown = Math.round(
-                    (200 + Math.random() * 180) / Math.max(0.65, speedMul * (fp.speedMul || 1))
-                    + (ship.cls === 'capital' ? 120 : 0)
+                    (cdBase * (ship.isFocus ? 0.28 : (0.35 + Math.random() * 0.25)))
+                    / Math.max(0.65, speedMul * (fp.speedMul || 1))
+                    + (ship.cls === 'capital' && !ship.isFocus ? 80 : 0)
                 );
                 ship.muzzle = 8;
-                const fx = this._weaponFx(ship.weapon);
-                const shotSpeed = fx.speed * (0.75 + dmgMul * 0.45);
-                const sw = ship._sw || 22;
-                const sh = ship._sh || 18;
-                const muzzleX = ax + dirX * (sw / 2);
-                const muzzleY = ay + dirY * (sh / 2);
-                for (let i = 0; i < fx.count; i++) {
-                    const spread = fx.count > 1 ? (i - (fx.count - 1) / 2) * 0.22 : 0;
-                    const cos = Math.cos(spread);
-                    const sin = Math.sin(spread);
-                    const sx = dirX * cos - dirY * sin;
-                    const sy = dirX * sin + dirY * cos;
-                    demo.shots.push({
-                        x: muzzleX + (fx.kind === 'beam' && fx.count > 1
-                            ? (i - (fx.count - 1) / 2) * 6 * -dirY : 0),
-                        y: muzzleY + (fx.kind === 'beam' && fx.count > 1
-                            ? (i - (fx.count - 1) / 2) * 6 * dirX : 0),
-                        vx: sx * shotSpeed,
-                        vy: sy * shotSpeed,
-                        w: fx.w,
-                        h: fx.h,
-                        kind: fx.kind,
-                        color: fx.color,
-                        life: 90
-                    });
-                }
+                hardpoints.forEach((hp) => {
+                    const wid = hp.wid || 'laser';
+                    const fx = this._weaponFx(wid);
+                    const shotSpeed = fx.speed * (0.85 + dmgMul * 0.35);
+                    // Nose down: fwd along +Y, lat along ±X.
+                    const muzzleX = ax + hp.lat;
+                    const muzzleY = ay + hp.fwd;
+                    const gap = fx.spacing || (fx.kind === 'beam' && fx.count > 1 ? 5 : 0);
+                    for (let i = 0; i < fx.count; i++) {
+                        const off = i - (fx.count - 1) / 2;
+                        let vx = 0;
+                        let vy = shotSpeed;
+                        let px = muzzleX + off * gap;
+                        let py = muzzleY;
+                        if (fx.kind === 'nova') {
+                            // Still dump downward as a short burst of pellets.
+                            vx = off * 0.6;
+                            vy = shotSpeed;
+                            px = ax + off * 4;
+                            py = ay + 6;
+                        }
+                        demo.shots.push({
+                            x: px,
+                            y: py,
+                            vx, vy,
+                            w: fx.w,
+                            h: fx.h,
+                            kind: fx.kind,
+                            color: fx.color,
+                            weapon: wid,
+                            life: fx.kind === 'missile' ? 110 : (fx.kind === 'nova' ? 70 : 90)
+                        });
+                    }
+                });
             });
             demo.allies = [];
 
@@ -816,7 +977,8 @@ class HeroPlanetBackdrop {
             });
             demo.shots = demo.shots.filter((sh) => {
                 if (sh.life <= 0 || sh.y < -20 || sh.y > H + 20 || sh.x < -20 || sh.x > W + 20) return false;
-                if (Math.hypot(sh.x - planetX, sh.y - planetY) < arriveR * 0.85) return false;
+                // Cull shots that reach the planet disc.
+                if (Math.hypot(sh.x - planetX, sh.y - planetY) < planetR * 0.85) return false;
                 for (let i = 0; i < demo.enemies.length; i++) {
                     const e = demo.enemies[i];
                     if (Math.abs(sh.x - e.x) < (e.w + sh.w) * 0.55
@@ -858,9 +1020,7 @@ class HeroPlanetBackdrop {
             const sprite = this._orbitHullSprite(e.cls || 'assault', e.w, e.h, e.faction || this._demoRivalFaction());
             c.save();
             c.translate(Math.round(e.x), Math.round(e.y));
-            // Point the nose along the dive toward the planet (+Y = default hull facing).
-            const ang = Math.atan2(e.vy || -1, e.vx || 0) - Math.PI / 2;
-            c.rotate(ang);
+            // Stay upright — no dive rotation.
             c.drawImage(sprite, -Math.floor(e.w / 2), -Math.floor(e.h / 2));
             c.restore();
         });
@@ -870,23 +1030,41 @@ class HeroPlanetBackdrop {
         demo.shots.forEach((sh) => {
             c.save();
             c.translate(Math.round(sh.x), Math.round(sh.y));
+            c.rotate(Math.atan2(sh.vy || 1, sh.vx || 0) - Math.PI / 2);
             c.fillStyle = sh.color || accent;
             if (sh.kind === 'beam') {
                 c.fillRect(-Math.floor(sh.w / 2), 0, sh.w, sh.h);
+                c.globalAlpha = 0.55;
+                c.fillStyle = '#fff';
+                c.fillRect(-Math.max(1, Math.floor(sh.w / 4)), 0, Math.max(1, Math.floor(sh.w / 2)), Math.max(3, Math.floor(sh.h * 0.55)));
             } else if (sh.kind === 'wave') {
                 c.fillRect(-Math.floor(sh.w / 2), 0, sh.w, sh.h);
                 c.globalAlpha = 0.45;
                 c.fillRect(-Math.floor(sh.w / 2) - 4, 2, sh.w + 8, Math.max(2, sh.h - 2));
+                c.globalAlpha = 0.3;
+                c.fillRect(-Math.floor(sh.w / 2) - 8, 4, sh.w + 16, Math.max(2, sh.h - 3));
             } else if (sh.kind === 'missile') {
                 c.fillRect(-Math.floor(sh.w / 2), 0, sh.w, sh.h);
                 c.fillStyle = '#f87171';
-                c.fillRect(-1, sh.h, 2, 3);
-            } else if (sh.kind === 'blob') {
+                c.fillRect(-1, sh.h, 2, 4);
+                c.fillStyle = '#fbbf24';
+                c.fillRect(-2, sh.h + 3, 4, 2);
+            } else if (sh.kind === 'blob' || sh.kind === 'nova') {
+                const r = Math.max(2, Math.floor(sh.w / 2));
                 c.beginPath();
-                c.arc(0, Math.floor(sh.h / 2), Math.floor(sh.w / 2), 0, Math.PI * 2);
+                c.arc(0, 0, r, 0, Math.PI * 2);
+                c.fill();
+                c.globalAlpha = 0.4;
+                c.fillStyle = '#fff';
+                c.beginPath();
+                c.arc(0, 0, Math.max(1, Math.floor(r * 0.45)), 0, Math.PI * 2);
                 c.fill();
             } else {
+                // Pellets (spread / rapid / burst / ion / spike).
                 c.fillRect(-Math.floor(sh.w / 2), 0, sh.w, sh.h);
+                c.globalAlpha = 0.5;
+                c.fillStyle = '#fff8d0';
+                c.fillRect(-Math.max(1, Math.floor(sh.w / 2) - 1), 0, Math.max(1, sh.w - 2), Math.max(2, Math.floor(sh.h * 0.4)));
             }
             c.restore();
         });
@@ -910,10 +1088,11 @@ class HeroPlanetBackdrop {
         })[this._faction] || 'pirate';
     }
 
-    _orbitHullSprite(cls, w, h, factionId) {
+    _orbitHullSprite(cls, w, h, factionId, playerShipId) {
         if (!this._orbitSpriteCache) this._orbitSpriteCache = Object.create(null);
         const fid = factionId || this._faction;
-        const key = fid + '|' + cls + '|' + w + 'x' + h;
+        const pid = playerShipId ? String(playerShipId) : '';
+        const key = fid + '|' + (pid || cls) + '|' + w + 'x' + h;
         let sprite = this._orbitSpriteCache[key];
         if (sprite) return sprite;
         const gm = typeof graphicsManager !== 'undefined' ? graphicsManager : null;
@@ -927,26 +1106,60 @@ class HeroPlanetBackdrop {
         canvas.height = Math.max(4, h);
         const bc = canvas.getContext('2d');
         bc.imageSmoothingEnabled = false;
-        // Transparent bake — no solid fill (that became bars) and no guns (wing mounts stuck out as bars).
-        const enemy = {
-            x: 0, y: 0, width: canvas.width, height: canvas.height,
-            type: 'spaceship',
-            faction: fid,
-            enemyClass: cls,
-            hullSeed: 1,
-            tier: cls === 'capital' ? 3 : 1,
-            level: cls === 'capital' ? 5 : 1,
-            skipGuns: true
-        };
+        // Transparent bake — never fill the canvas AABB.
         let ok = false;
-        try {
-            if (gm && gm.renderEnemyShip) {
-                gm.renderEnemyShip(bc, enemy, 1);
-                ok = true;
-            }
-        } catch (err) { ok = false; }
+        if (pid && typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel) {
+            try {
+                const loader = gm && gm.shipAssetLoader;
+                const model = Object.assign({}, shipConfigManager.getMergedModel(pid), {
+                    id: pid, faction: fid, factionPreview: true
+                });
+                // Bake kit guns onto the defender so shots leave visible hardpoints.
+                if (pid === this._focusShipId) {
+                    const guns = this._kitWeaponIds();
+                    model.previewSingleGun = true;
+                    model.previewCoreGun = guns[0] || null;
+                    model.previewWeapon2 = guns[1] || null;
+                    const psm = this._profileMgr();
+                    if (psm && typeof psm.startWingRows === 'function') {
+                        try { model.previewWingRows = psm.startWingRows(); } catch (e) { /* ignore */ }
+                    }
+                }
+                if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
+                    try { shipLoadoutManager.applyLayoutToModel(model, pid); } catch (e) { /* ignore */ }
+                }
+                const mw = Math.max(1, model.width || 20);
+                const mh = Math.max(1, model.height || 16);
+                const scale = Math.max(0.5, Math.min(canvas.width / mw, canvas.height / mh) * 0.92);
+                const ox = Math.floor((canvas.width - mw * scale) / 2);
+                const oy = Math.floor((canvas.height - mh * scale) / 2);
+                if (loader && loader.renderShip) {
+                    loader.renderShip(bc, model, ox, oy, scale, null, 0, {
+                        showThrusterGlow: false, allowColorMountSprites: true
+                    });
+                    ok = true;
+                }
+            } catch (err) { ok = false; }
+        }
         if (!ok) {
-            // Tiny silhouette only — never a full-canvas block.
+            const enemy = {
+                x: 0, y: 0, width: canvas.width, height: canvas.height,
+                type: 'spaceship',
+                faction: fid,
+                enemyClass: cls,
+                hullSeed: 1,
+                tier: cls === 'capital' ? 3 : 1,
+                level: cls === 'capital' ? 5 : 1,
+                skipGuns: true
+            };
+            try {
+                if (gm && gm.renderEnemyShip) {
+                    gm.renderEnemyShip(bc, enemy, 1);
+                    ok = true;
+                }
+            } catch (err) { ok = false; }
+        }
+        if (!ok) {
             const cw = canvas.width, ch = canvas.height;
             const bw = Math.max(3, Math.floor(cw * 0.45));
             const bh = Math.max(4, Math.floor(ch * 0.7));
@@ -967,83 +1180,125 @@ class HeroPlanetBackdrop {
         c.save();
         c.strokeStyle = accent;
         c.lineWidth = 1;
-        // Three lanes only — enough to read orbits without per-frame ellipse spam.
-        [1.28, 1.55, 1.82].forEach((mul, i) => {
-            c.globalAlpha = 0.16 - i * 0.03;
-            c.beginPath();
-            c.ellipse(cx, cy, r * mul, r * mul * (0.52 + i * 0.04), -0.18, 0, Math.PI * 2);
-            c.stroke();
-        });
+        // One soft lane — multi-ring stacks competed with planetary rings / atmosphere.
+        c.globalAlpha = 0.14;
+        c.beginPath();
+        c.ellipse(cx, cy, r * 1.42, r * 1.42 * 0.56, -0.18, 0, Math.PI * 2);
+        c.stroke();
         c.restore();
     }
 
     _ensureOrbitFleet() {
-        if (this._orbitFleet && this._orbitFleet.faction === this._faction) return this._orbitFleet;
+        const focusKey = this._focusShipId || '';
+        if (this._orbitFleet
+            && this._orbitFleet.faction === this._faction
+            && this._orbitFleet.focus === focusKey) return this._orbitFleet;
         const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
         const ratingSpeed = this._statMul('speed');
-        // Full class ladder — every hull of the faction orbits and can fire.
-        const classes = (fss && fss.classes)
-            ? fss.classes.slice()
-            : ['scout', 'assault', 'heavy', 'elite', 'capital'];
-        const ships = classes.map((cls, i) => {
-            const disp = fss && fss.displaySizeForClass
+        const weapons = this._preferredWeapons();
+        const mk = (cls, i, opts) => {
+            const o = opts || {};
+            const disp = o.disp || (fss && fss.displaySizeForClass
                 ? fss.displaySizeForClass(cls)
-                : { width: 36 + i * 12, height: 28 + i * 8 };
-            const isCapital = cls === 'capital';
+                : { width: 36 + i * 12, height: 28 + i * 8 });
             const fp = (typeof flightProfiles !== 'undefined' && flightProfiles.resolve)
                 ? flightProfiles.resolve(this._faction, cls)
                 : { speedMul: 1, wobbleAmp: 0.2, wobbleFreq: 0.8, formationTightness: 0.7 };
-            const base = isCapital ? 0.00012 : (0.0002 + i * 0.000028);
-            // In-game flightProfiles × rating SPEED drive orbit tempo.
+            const base = o.baseSpeed != null ? o.baseSpeed : (0.00034 + i * 0.00004);
             const tempo = base * ratingSpeed * fp.speedMul;
-            const weapons = this._preferredWeapons();
             return {
                 kind: 'ship',
                 cls,
-                orbit: isCapital ? 1.55 : (1.18 + i * 0.12),
-                speed: (i % 2 === 0 ? 1 : -1) * tempo,
-                phase: (i / Math.max(1, classes.length)) * Math.PI * 2 + i * 0.55,
-                tilt: isCapital ? 0.42 : (0.46 + (i % 3) * 0.05),
-                sizeMul: isCapital ? 1.55 : 1,
+                playerShipId: o.playerShipId || null,
+                orbit: o.orbit != null ? o.orbit : (1.22 + i * 0.08),
+                speed: (i % 2 === 0 ? 1 : -1) * tempo * (o.tempoMul || 1),
+                phase: o.phase != null ? o.phase : (i * 1.1),
+                tilt: o.tilt != null ? o.tilt : (0.46 + (i % 3) * 0.05),
+                sizeMul: o.sizeMul != null ? o.sizeMul : 1.35,
                 baseW: disp.width,
                 baseH: disp.height,
                 fp,
                 weapon: weapons[i % weapons.length],
-                cooldown: 50 + i * 70 + Math.floor(Math.random() * 80),
+                cooldown: 40 + i * 55 + Math.floor(Math.random() * 60),
                 muzzle: 0,
                 aimDirX: 0,
-                aimDirY: 1
+                aimDirY: 1,
+                isFocus: !!o.isFocus
             };
-        });
-        this._orbitFleet = { faction: this._faction, ships };
+        };
+        let ships;
+        if (this._focusShipId) {
+            // SETUP: single chosen kit hull — one defender, always in front of the planet.
+            const role = ({
+                player_scrap: 'scout',
+                player_interceptor: 'assault',
+                player_heavy: 'heavy',
+                player_assault: 'elite'
+            })[this._focusShipId] || 'assault';
+            const cfg = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig)
+                ? shipConfigManager.getConfig(this._focusShipId) : null;
+            const focusDisp = {
+                width: Math.max(22, Math.min(36, Number((cfg && cfg.width) || 28))),
+                height: Math.max(18, Math.min(28, Number((cfg && cfg.height) || 22)))
+            };
+            ships = [
+                mk(role, 0, {
+                    playerShipId: this._focusShipId,
+                    disp: focusDisp,
+                    orbit: 1.38,
+                    tilt: 0.52,
+                    sizeMul: 1.85,
+                    baseSpeed: 0.00018,
+                    phase: Math.PI * 0.55,
+                    isFocus: true
+                }),
+                mk('scout', 1, { orbit: 1.62, sizeMul: 0.55, phase: 2.5, tempoMul: 1.2 }),
+                mk('scout', 2, { orbit: 1.68, sizeMul: 0.5, phase: 4.7, tempoMul: 1.1 }),
+                mk('assault', 3, { orbit: 1.78, sizeMul: 0.58, phase: 1.2, tempoMul: 0.95 })
+            ];
+        } else {
+            // Faction homeworld: full class ladder.
+            const classes = (fss && fss.classes)
+                ? fss.classes.slice()
+                : ['scout', 'assault', 'heavy', 'elite', 'capital'];
+            ships = classes.map((cls, i) => mk(cls, i, {
+                orbit: cls === 'capital' ? 1.48 : (1.22 + i * 0.08),
+                sizeMul: cls === 'capital' ? 1.85 : 1.35,
+                baseSpeed: cls === 'capital' ? 0.00022 : undefined,
+                tilt: cls === 'capital' ? 0.42 : undefined,
+                phase: (i / Math.max(1, classes.length)) * Math.PI * 2 + i * 0.55
+            }));
+        }
+        this._orbitFleet = { faction: this._faction, focus: focusKey, ships };
         return this._orbitFleet;
     }
 
     _orbitPositions(cx, cy, r) {
         const fleet = this._ensureOrbitFleet();
         const t = this._reduceMotion ? 0 : Date.now();
-        // Stage homeworld needs readable hulls — old 0.18–0.38 made everything pin-dots.
-        const scale = Math.max(0.55, Math.min(0.95, (r * 0.42) / 48));
-        const tight = fleet.ships[0] && fleet.ships[0].fp
-            ? fleet.ships[0].fp.formationTightness : 0.7;
+        // Stage defense: own fleet must read clearly against the dark grid.
+        const scale = Math.max(0.85, Math.min(1.25, (r * 0.55) / 48));
+        const n = fleet.ships.length || 1;
         return fleet.ships.map((s, i) => {
-            const a = s.phase + t * s.speed;
-            const fp = s.fp || {};
-            // Faction wobble (voidborn swirls, machine locks, kronax drives straight).
-            const wobble = this._reduceMotion ? 0
-                : Math.sin(t * 0.001 * (fp.wobbleFreq || 0.8) + i) * (fp.wobbleAmp || 0) * 10;
-            const rx = r * s.orbit * (0.92 + tight * 0.08);
-            const ry = rx * s.tilt;
-            const sx = Math.round(cx + Math.cos(a) * rx + wobble);
-            const sy = Math.round(cy + Math.sin(a) * ry + wobble * 0.35);
+            // Smooth station-keeping: slow strafe + surge (ms → rad/s), no pixel snap.
+            const lane = (i - (n - 1) / 2) / Math.max(1, n - 1);
+            const baseX = cx + lane * r * (s.isFocus ? 0.12 : 0.85);
+            const baseY = cy + r * (s.isFocus ? 0.72 : (0.55 + (i % 3) * 0.12));
+            const strafeAmp = r * (s.isFocus ? 0.18 : 0.12);
+            const surgeAmp = r * (s.isFocus ? 0.08 : 0.06);
+            const strafeHz = 0.00055 + i * 0.00008;
+            const surgeHz = 0.0004 + i * 0.00005;
+            const strafe = this._reduceMotion ? 0
+                : Math.sin(t * strafeHz + s.phase) * strafeAmp;
+            const surge = this._reduceMotion ? 0
+                : Math.sin(t * surgeHz + s.phase * 1.3) * surgeAmp;
+            const sx = baseX + strafe;
+            const sy = baseY + surge;
             const mul = scale * (s.sizeMul || 1);
-            const w = Math.max(18, Math.round(s.baseW * mul));
-            const h = Math.max(14, Math.round(s.baseH * mul));
-            // Hysteresis so front/back layer doesn't pop when sin(a) ≈ 0.
-            const sn = Math.sin(a);
-            if (s._front == null) s._front = sn >= 0;
-            else if (s._front && sn < -0.18) s._front = false;
-            else if (!s._front && sn > 0.18) s._front = true;
+            const w = Math.max(s.isFocus ? 42 : 22, Math.round(s.baseW * mul));
+            const h = Math.max(s.isFocus ? 32 : 16, Math.round(s.baseH * mul));
+            // Always in front of the disc — no orbit flip behind the planet.
+            s._front = true;
             s._sx = sx;
             s._sy = sy;
             s._sw = w;
@@ -1052,10 +1307,12 @@ class HeroPlanetBackdrop {
                 kind: s.kind || 'ship',
                 cls: s.cls,
                 ship: s,
-                sx, sy, w, h,
-                front: s._front,
+                sx: Math.round(sx),
+                sy: Math.round(sy),
+                w, h,
+                front: true,
                 muzzle: s.muzzle || 0,
-                alpha: 0.88
+                alpha: 1
             };
         });
     }
@@ -1076,13 +1333,16 @@ class HeroPlanetBackdrop {
             if (s.kind === 'station') {
                 this._drawOrbitStation(c, s.w, s.h, hull, edge, accent);
             } else {
-                // Face the current aim when firing; otherwise stay upright.
+                // Stay upright — fire without yawing; only strafe / surge in position.
                 const ship = s.ship;
-                if (ship && ship.muzzle > 0 && (ship.aimDirX || ship.aimDirY)) {
-                    c.rotate(Math.atan2(ship.aimDirY, ship.aimDirX) - Math.PI / 2);
-                }
-                const sprite = this._orbitHullSprite(s.cls, s.w, s.h);
-                c.drawImage(sprite, -Math.floor(s.w / 2), -Math.floor(s.h / 2));
+                if (ship && ship.isFocus) this._drawYouMarker(c, s, accent);
+                const sprite = this._orbitHullSprite(
+                    s.cls, s.w, s.h, this._faction, ship && ship.playerShipId
+                );
+                const ox = -Math.floor(s.w / 2);
+                const oy = -Math.floor(s.h / 2);
+                // Sprite canvas stays alpha-cleared — never fill a solid AABB behind it.
+                c.drawImage(sprite, ox, oy);
                 if (ship && ship.muzzle > 0) {
                     c.globalAlpha = Math.min(1, ship.muzzle / 8);
                     c.fillStyle = '#fff6c8';
@@ -1093,6 +1353,51 @@ class HeroPlanetBackdrop {
             }
             c.restore();
         });
+    }
+
+    /** Mark the SETUP kit hull as the craft you play (glow + ring + YOU). */
+    _drawYouMarker(c, s, accent) {
+        const rr = Math.max(s.w, s.h) * 0.78;
+        const pulse = this._reduceMotion ? 0.7
+            : (0.45 + 0.55 * (0.5 + 0.5 * Math.sin(Date.now() / 420)));
+        c.save();
+        c.globalAlpha = 0.28 * pulse;
+        c.fillStyle = accent;
+        c.beginPath();
+        c.arc(0, 0, rr * 1.2, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 0.55 + 0.45 * pulse;
+        c.strokeStyle = accent;
+        c.lineWidth = 2.5;
+        c.setLineDash([5, 4]);
+        c.beginPath();
+        c.arc(0, 0, rr, 0, Math.PI * 2);
+        c.stroke();
+        c.setLineDash([]);
+        // Corner brackets
+        const arm = Math.max(6, Math.round(rr * 0.35));
+        const gap = rr * 0.72;
+        c.lineWidth = 2;
+        c.globalAlpha = 0.95;
+        [[-1, -1], [1, -1], [-1, 1], [1, 1]].forEach(([sx, sy]) => {
+            const x = sx * gap;
+            const y = sy * gap;
+            c.beginPath();
+            c.moveTo(x, y + sy * arm);
+            c.lineTo(x, y);
+            c.lineTo(x + sx * arm, y);
+            c.stroke();
+        });
+        const labelY = -rr - 10;
+        c.font = 'bold 12px monospace';
+        c.textAlign = 'center';
+        c.textBaseline = 'bottom';
+        c.lineWidth = 4;
+        c.strokeStyle = '#050508';
+        c.strokeText('YOU', 0, labelY);
+        c.fillStyle = accent;
+        c.fillText('YOU', 0, labelY);
+        c.restore();
     }
 
     /** Pixel outpost / orbital station in the active faction's hull colors. */

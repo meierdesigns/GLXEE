@@ -12,6 +12,16 @@ class InputHandler {
     setupEventListeners() {
         document.addEventListener('keydown', (e) => this.handleKeyDown(e));
         document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+        // Kill the native browser context menu everywhere in the game (right-click
+        // is used for equip / unequip / map fly / editor pan — never for Back/Inspect).
+        // DevMode bezel toggle can re-enable it for Inspect Element. Text fields stay open.
+        document.addEventListener('contextmenu', (e) => {
+            const t = e.target;
+            if (t && t.closest && t.closest('input, textarea, [contenteditable="true"]')) return;
+            const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+            if (devOn && window.vfAllowBrowserCtxMenu) return;
+            e.preventDefault();
+        }, true);
         // FIRE TO START: mouse / pointer click (overlay is pointer-events: none)
         document.addEventListener('pointerdown', (e) => {
             if (e.button != null && e.button !== 0) return;

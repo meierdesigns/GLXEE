@@ -306,6 +306,9 @@ extendClass(HomeStationUI, {
         const id = this._factionDetail;
         const style = fss.getFactionStyle(id);
         const up = (v) => String(v || '').replace(/_/g, ' ').toUpperCase();
+        const ir = typeof iconRenderer !== 'undefined' ? iconRenderer : null;
+        const accent = style.accent || style.hull || '#7ec8ff';
+        const titleIco = ir && ir.imgHtml ? ir.imgHtml('hsHangar', 24, '', accent, false) : '';
         const classes = fss.classes;
         const sel = classes.indexOf(this._factionFleetShip) !== -1 || this._factionFleetShip === 'player' ? this._factionFleetShip : 'all';
         const zoom = Math.max(0.5, Math.min(2.5, Number(this._factionFleetZoom) || 1));
@@ -324,7 +327,7 @@ extendClass(HomeStationUI, {
             `<span class="hs-tab-icon" title="${this.factionLabel(fid)}">${this.factionEmblemHtml({ faction: fid }, 32)}</span></button>`).join('');
         return `<div class="hs-factions hs-fd hs-faction-fleets">` +
             `<nav class="hs-fd-tabs hs-fleet-faction-picker" aria-label="Factions">${picker}</nav>` +
-            `<section class="hs-panel hs-fd-block"><h4>${this.factionLabel(id)} FLEET · ${up(style.silhouette || '')} HULLS</h4>` +
+            `<section class="hs-panel hs-fd-block"><h4><i class="hs-fd-row-ico">${titleIco}</i><span>${this.factionLabel(id)} FLEET · ${up(style.silhouette || '')} HULLS</span></h4>` +
                 `<div class="hs-fd-fleet">` +
                     `<div class="hs-fd-fleet-list" role="listbox">${list}</div>` +
                     `<div class="hs-fd-fleet-stage" data-fleet-preview-viewport>` +

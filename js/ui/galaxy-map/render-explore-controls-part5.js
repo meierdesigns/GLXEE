@@ -750,6 +750,121 @@ extendClass(GalaxyMapManager, {
         btn.setAttribute('aria-hidden', show ? 'false' : 'true');
 
         this.syncShipEdgeMarker(show);
+        this.syncMissionEdgeMarker();
+    },
+
+    /** Active-mission planet point in map coords, or null when none / other galaxy. */
+    getActiveMissionPoint() {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return null;
+        if (!this.locationPoint) return null;
+        const p = profileManager.getActiveProfile();
+        const m = p && p.activeMission;
+        if (!m || !m.planetId) return null;
+        if (m.galaxyId && this.galaxyId && String(m.galaxyId) !== String(this.galaxyId)) return null;
+        return this.locationPoint({ kind: 'planet', id: m.planetId });
+    },
+
+    /** True when the active-mission planet lies in the visible map viewport. */
+    isActiveMissionOnScreen() {
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return true;
+        const pt = this.getActiveMissionPoint();
+        if (!pt) return true;
+        const vb = svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        if (!vb.width || !vb.height || !r.width || !r.height) return true;
+        const s = Math.min(r.width / vb.width, r.height / vb.height);
+        const visW = r.width / s;
+        const visH = r.height / s;
+        const left = vb.x + (vb.width - visW) / 2;
+        const top = vb.y + (vb.height - visH) / 2;
+        const pad = 16;
+        return pt.x >= left - pad && pt.x <= left + visW + pad
+            && pt.y >= top - pad && pt.y <= top + visH + pad;
+    },
+
+    /**
+     * Active mission off screen: edge arrow points toward its planet.
+     * Click focuses the camera on that mission planet.
+     */
+    syncMissionEdgeMarker() {
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!area || !svg) return;
+        let el = area.querySelector('.gm-mission-edge');
+        const pt = this.getActiveMissionPoint();
+        const show = !!(pt && !this._flight && !this.isActiveMissionOnScreen());
+        if (!show) {
+            if (el && !el.hidden) el.hidden = true;
+            return;
+        }
+        const p = profileManager.getActiveProfile();
+        const m = p && p.activeMission;
+        const planetId = m && m.planetId;
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        const ar = area.getBoundingClientRect();
+        if (!planetId || !vb || !vb.width || !r.width || !ar.width) {
+            if (el) el.hidden = true;
+            return;
+        }
+        if (!el) {
+            el = document.createElement('button');
+            el.type = 'button';
+            el.className = 'gm-mission-edge';
+            el.innerHTML = `<span class="gm-mission-edge-arrow"></span><span class="gm-mission-edge-ico" aria-hidden="true"></span>`;
+            el.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const id = el._missionPlanetId;
+                if (!id) return;
+                if (this.selectPlanet) this.selectPlanet(id);
+                else if (this.frameSelectionCamera) this.frameSelectionCamera('follow');
+            });
+            ['pointerdown', 'mousedown', 'wheel'].forEach((t) => el.addEventListener(t, (ev) => ev.stopPropagation()));
+            area.appendChild(el);
+        }
+        el._missionPlanetId = planetId;
+        const type = String((m && m.type) || 'MISSION').toUpperCase();
+        el.title = type + ' · center map on mission';
+        el.setAttribute('aria-label', 'Center map on active mission');
+        const fStyle = m.factionId && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle
+            ? factionShipStyles.getFactionStyle(m.factionId) : null;
+        const accent = (fStyle && fStyle.accent) || '';
+        if (accent) el.style.setProperty('--gm-mission-edge-accent', accent);
+        else el.style.removeProperty('--gm-mission-edge-accent');
+        const icoHost = el.querySelector('.gm-mission-edge-ico');
+        if (icoHost && el._missionIcoKey !== type + '|' + accent) {
+            el._missionIcoKey = type + '|' + accent;
+            icoHost.innerHTML = (typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml)
+                ? iconRenderer.imgHtml('navScroll', 18, 'gm-mission-edge-img', '#f2fbff', false)
+                : '';
+        }
+        if (el.hidden) el.hidden = false;
+        const s = Math.min(r.width / vb.width, r.height / vb.height);
+        const visW = r.width / s;
+        const visH = r.height / s;
+        const left = vb.x + (vb.width - visW) / 2;
+        const top = vb.y + (vb.height - visH) / 2;
+        const missionX = r.left + (pt.x - left) * s;
+        const missionY = r.top + (pt.y - top) * s;
+        const inset = 60;
+        const cx = ar.left + ar.width / 2;
+        const cy = ar.top + ar.height / 2;
+        const dx = missionX - cx;
+        const dy = missionY - cy;
+        const hx = ar.width / 2 - inset;
+        const hy = ar.height / 2 - inset;
+        const k = Math.min(dx ? hx / Math.abs(dx) : Infinity, dy ? hy / Math.abs(dy) : Infinity);
+        const z = area.offsetWidth ? ar.width / area.offsetWidth : 1;
+        const x = Math.round((ar.width / 2 + dx * k) / z);
+        const y = Math.round((ar.height / 2 + dy * k) / z);
+        const ang = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+        const key = x + '|' + y + '|' + ang + '|' + planetId;
+        if (el._edgeKey === key) return;
+        el._edgeKey = key;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+        el.style.setProperty('--gm-edge-angle', ang + 'deg');
     },
 
     /**
@@ -822,35 +937,100 @@ extendClass(GalaxyMapManager, {
     },
 
     /** Glide the camera (current zoom) back to centre on the player ship. */
-    returnCameraToShip() {
-        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
-        if (!svg || !svg.viewBox || !svg.viewBox.baseVal || !this.locationPoint) return;
+    /**
+     * Centre on the ship you play and zoom in. opts.zoom (default 2.4) is the
+     * target mapZoom; higher = closer. Also selects the ship's planet/post.
+     */
+    returnCameraToShip(opts) {
+        if (!this.locationPoint) return;
         const loc = profileManager.getShipLocation ? profileManager.getShipLocation(this.galaxyId) : null;
         const p = loc ? this.locationPoint(loc) : null;
         if (!p) return;
+        // Mark the location under the ship as the active selection.
+        if (loc) {
+            if (loc.kind === 'post') {
+                this.selectedPostId = loc.id;
+                const post = this.getTradingPosts && this.getTradingPosts().find((q) => q.id === loc.id);
+                if (post && post.planetId) this.selectedPlanetId = post.planetId;
+            } else if (loc.kind === 'planet' || !loc.kind) {
+                this.selectedPostId = null;
+                this.selectedPlanetId = loc.id;
+            }
+            this._camKey = '';
+            this._picked = true;
+            if (this.overlay) this.overlay.classList.add('is-picked');
+            if (this.updateDetails) this.updateDetails();
+            if (this.raiseSelectedMarker) this.raiseSelectedMarker();
+        }
+        // Re-query after details refresh — never animate a detached SVG.
+        let svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!svg || !svg.viewBox || !svg.viewBox.baseVal) return;
         const cur = svg.viewBox.baseVal;
+        const aspect = cur.width / Math.max(1, cur.height);
         const from = [cur.x, cur.y, cur.width, cur.height];
-        const to = [p.x - cur.width / 2, p.y - cur.height / 2, cur.width, cur.height];
-        if (Math.hypot(to[0] - from[0], to[1] - from[1]) < 2) {
+        const wantZoom = Math.max(2.2, Math.min(4.5,
+            Number(opts && opts.zoom) || Math.max(this.mapZoom || 1, 3)));
+        const baseW = cur.width * (this.mapZoom || 1);
+        const w = baseW / wantZoom;
+        const h = w / aspect;
+        const to = [p.x - w / 2, p.y - h / 2, w, h];
+        const panDist = Math.hypot((to[0] + to[2] / 2) - (from[0] + from[2] / 2),
+            (to[1] + to[3] / 2) - (from[1] + from[3] / 2));
+        const zoomDelta = Math.abs(Math.log(w / Math.max(1, cur.width)));
+        const applyShipScale = () => {
+            const live = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            const shipScale = live && live.querySelector('.gm-ship-scale');
+            if (!shipScale) return;
+            const z = Math.max(0.35, this.mapZoom || 1);
+            const k = Math.max(0.9, Math.min(2.4, 1.75 / Math.sqrt(z)));
+            shipScale.setAttribute('transform', `scale(${k.toFixed(3)})`);
+        };
+        if (panDist < 2 && zoomDelta < 0.05) {
+            this.mapZoom = wantZoom;
+            this._panAnchor = { x: p.x, y: p.y };
+            this.mapPan = { x: 0, y: 0 };
+            svg.setAttribute('viewBox', to.map((v) => v.toFixed(2)).join(' '));
+            svg.classList.toggle('gm-close-view', wantZoom >= 2.5);
+            if (this.updateSelectionFrames) this.updateSelectionFrames();
+            applyShipScale();
             this.syncLocateShipButton();
             return;
         }
         this._panAnchor = { x: p.x, y: p.y };
         this.mapPan = { x: 0, y: 0 };
+        if (this._userMapZoom == null) this._userMapZoom = this.mapZoom || 1;
         const start = performance.now();
-        // Longer glide with ease-in-out: starts and settles gently.
-        const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
-        const dur = Math.min(2200, 1100 + dist * 1.2);
+        const dur = Math.min(2400, 900 + panDist * 1.1 + zoomDelta * 400);
         const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+        const fcx = from[0] + from[2] / 2;
+        const fcy = from[1] + from[3] / 2;
+        const tcx = p.x;
+        const tcy = p.y;
+        const lw0 = Math.log(from[2]);
+        const lw1 = Math.log(w);
         const token = (this._camAnim = {});
         const step = (now) => {
-            if (this._camAnim !== token || !svg.isConnected || this._flight) return;
+            svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+            if (this._camAnim !== token || !svg || !svg.isConnected || this._flight) return;
             const t = Math.min(1, (now - start) / dur);
             const k = ease(t);
-            svg.setAttribute('viewBox', from.map((v, i) => (v + (to[i] - v) * k).toFixed(2)).join(' '));
-            this.updateSelectionFrames();
-            if (t < 1) requestAnimationFrame(step);
-            else this.syncLocateShipButton();
+            const vw = Math.exp(lw0 + (lw1 - lw0) * k);
+            const vh = vw / aspect;
+            const vcx = fcx + (tcx - fcx) * k;
+            const vcy = fcy + (tcy - fcy) * k;
+            svg.setAttribute('viewBox', [vcx - vw / 2, vcy - vh / 2, vw, vh].map((v) => v.toFixed(2)).join(' '));
+            if (this.updateSelectionFrames) this.updateSelectionFrames();
+            if (t < 1) {
+                requestAnimationFrame(step);
+                return;
+            }
+            this.mapZoom = wantZoom;
+            this._panAnchor = { x: p.x, y: p.y };
+            this.mapPan = { x: 0, y: 0 };
+            svg.classList.toggle('gm-close-view', wantZoom >= 2.5);
+            this._camAnim = null;
+            applyShipScale();
+            this.syncLocateShipButton();
         };
         requestAnimationFrame(step);
     },

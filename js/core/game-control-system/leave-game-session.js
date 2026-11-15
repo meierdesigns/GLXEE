@@ -251,6 +251,8 @@ extendClass(GameControlSystem, {
         if (loadoutList && this.renderVictoryLoadoutHtml) {
             loadoutList.innerHTML = this.renderVictoryLoadoutHtml();
         }
+        const loadoutTitle = document.querySelector('#victoryLoadout .victory-loot-title span');
+        if (loadoutTitle) loadoutTitle.textContent = 'INVENTORY';
 
         const victoryOverlay = document.getElementById('victoryOverlay');
         if (victoryOverlay && this.bindVictoryCargoDrag) {
@@ -267,6 +269,35 @@ extendClass(GameControlSystem, {
                 : 0;
             creditsElement.textContent = credits + 'c';
         }
+
+        // Pending found loot → sell value if left behind (right of this is the loot grid).
+        const sellEl = document.getElementById('victoryLootSellValue');
+        if (sellEl) {
+            const total = this.getPendingCargoSellValue ? this.getPendingCargoSellValue() : 0;
+            sellEl.textContent = total + 'c';
+            const wrap = document.getElementById('victoryLootSell');
+            if (wrap) wrap.classList.toggle('is-empty', total <= 0);
+        }
+    },
+
+    /** Credits you'd get if every still-pending found part/blueprint were sold. */
+    getPendingCargoSellValue() {
+        if (typeof profileManager === 'undefined' || !profileManager.getActiveProfile) return 0;
+        const profile = profileManager.getActiveProfile();
+        if (!profile || !profile.cargo) return 0;
+        let total = 0;
+        const add = (bucket) => {
+            Object.keys(bucket || {}).forEach((key) => {
+                const n = Math.max(0, Math.round(Number(bucket[key]) || 0));
+                if (n <= 0) return;
+                const unit = profileManager.getCargoPartSellValue
+                    ? profileManager.getCargoPartSellValue(key) : 0;
+                total += unit * n;
+            });
+        };
+        add(profile.cargo.parts);
+        add(profile.cargo.blueprints);
+        return Math.max(0, Math.round(total));
     },
 
     /** Remember an end screen so a page refresh lands on it again (menu-state/restore.js). */

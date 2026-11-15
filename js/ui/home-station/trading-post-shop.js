@@ -1004,16 +1004,21 @@ extendClass(HomeStationUI, {
 
     renderTradingPostShipBag(profile) {
         const shipId = profile && profile.activeShipId;
-        if (!profile || !shipId || !this.renderShipStorage) {
+        if (!profile || !shipId) {
             return this.tradingPostEmptyBag('SHIP EMPTY');
         }
-        const bagCols = this.tradingPostStockBag().cols;
-        const { html } = this.withTradingPostSlotSize(() => this.renderShipStorage(profile, shipId, {
-            tipAction: false,
-            extraGridClass: 'vf-iss-inv-grid',
-            compactSpans: false,
-            maxCols: bagCols
-        }));
+        const { html } = this.withTradingPostSlotSize(() => {
+            if (this.renderBayShipInventoryGrid) {
+                return this.renderBayShipInventoryGrid(profile, shipId);
+            }
+            if (!this.renderShipStorage) return '';
+            return this.renderShipStorage(profile, shipId, {
+                tipAction: false,
+                extraGridClass: 'vf-iss-inv-grid',
+                compactSpans: false,
+                maxCols: this.tradingPostStockBag().cols
+            });
+        });
         return html || this.tradingPostEmptyBag('SHIP EMPTY');
     },
 

@@ -1527,6 +1527,8 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     background: color-mix(in srgb, var(--color-primary) 4%, transparent);
     padding: 10px;
     box-sizing: border-box;
+    border-radius: 0;
+    clip-path: none;
     /* Never grow the framed bay to match a taller sibling column. */
     align-self: start;
     width: 100%;

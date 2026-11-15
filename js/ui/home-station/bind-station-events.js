@@ -226,6 +226,19 @@ extendClass(HomeStationUI, {
                 this._equipFromStorageCell(cell);
             });
         });
+        // Right-click a part sitting in a hull slot: take it out onto the next free non-slot tile.
+        this.overlay.querySelectorAll('.hs-storage-grid[data-storage-target="ship"] .hs-storage-cell.is-ship-slot.is-equipped[data-part-id]').forEach((cell) => {
+            if (cell.closest('.hs-bay-inv')) return;
+            cell.addEventListener('contextmenu', (e) => e.preventDefault());
+            cell.addEventListener('pointerdown', (e) => {
+                if (e.button !== 2) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const shipId = cell.getAttribute('data-drag-ship') || (cell.closest('.hs-storage-grid') || {}).getAttribute('data-ship');
+                this._applyStorageSlotChoice(shipId, cell.getAttribute('data-part-kind'),
+                    Number(cell.getAttribute('data-slot-index')), '', cell, cell.getAttribute('data-part-id'));
+            });
+        });
     },
 
     _equipFromStorageCell(cell) {
@@ -241,10 +254,12 @@ extendClass(HomeStationUI, {
         const L = slm.getLoadout(shipId);
         const list = key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || []);
         const at = list.indexOf(id);
-        if (at !== -1) { this._applyStorageSlotChoice(shipId, kind, at, '', cell, id); return; } // installed: right-click unequips
+        // Only the slotted copy itself unequips; a loose cargo copy of the same part never does.
+        if (at !== -1 && cell.classList.contains('is-equipped')) { this._applyStorageSlotChoice(shipId, kind, at, '', cell, id); return; }
         const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(shipId, kind, id, i).ok;
         let target = -1;
         for (let i = 0; i < cap; i++) { if (!(list[i] || null) && fits(i)) { target = i; break; } }
+        // No free slot: leave everything as it is (no swapping).
         if (target === -1) { this.playButtonResult(cell, false, 'NO FREE ' + kind.toUpperCase() + ' SLOT'); return; }
         this._applyStorageSlotChoice(shipId, kind, target, id, cell);
     },
@@ -265,7 +280,8 @@ extendClass(HomeStationUI, {
             if (res.reason === 'NO_SLOT') msg = 'NO SLOT';
             if (res.reason === 'TOO_BIG') msg = this.hangarModuleLabel(moduleId) + ' DOESN\'T FIT · UPGRADE THE SLOT';
             if (res.reason === 'AREA_OFF') msg = 'THAT AREA IS OFF';
-            this.playButtonResult(sourceEl, false, msg);
+            if (sourceEl) this.playButtonResult(sourceEl, false, msg);
+            if (this.showStatusToast) this.showStatusToast(msg);
             return;
         }
         const profile = this.getProfile ? this.getProfile() : null;
@@ -281,6 +297,10 @@ extendClass(HomeStationUI, {
             if (moduleId && profileManager.consumeFiledPart) {
                 profileManager.consumeFiledPart(profile, shipId, bucket, moduleId);
             }
+        }
+        // Never let an unequipped part vanish: it must be visible in this ship's storage afterwards.
+        if (profile && !moduleId && clearedId && profileManager.getShipStorageQty(profile, shipId, shipLoadoutManager.kindToLoadoutKey(kind), clearedId) <= 0) {
+            profileManager.fileUnequippedPart(profile, shipId, shipLoadoutManager.kindToLoadoutKey(kind), clearedId);
         }
         const label = moduleId ? (this.hangarModuleLabel(moduleId) + ' EQUIPPED') : 'SLOT CLEARED';
         this.playButtonResult(sourceEl, true, label);
@@ -299,6 +319,8 @@ extendClass(HomeStationUI, {
         // Binding both here would double-attach a pointerdown handler to the same cell.
         this.overlay.querySelectorAll('.hs-storage-cell[data-drag-key]').forEach((cell) => {
             if (cell.closest('.hs-bay-inv')) return;
+            // Empty hull slots are fixed containers — nothing to drag.
+            if (cell.classList.contains('is-ship-slot') && !cell.classList.contains('is-equipped')) return;
             cell.setAttribute('draggable', 'false');
             cell.addEventListener('dragstart', (e) => e.preventDefault());
             cell.addEventListener('pointerdown', (ev) => this._storageDragStart(ev, cell));
@@ -328,8 +350,13 @@ extendClass(HomeStationUI, {
             const m = (css || '').match(/span\s+(\d+)/);
             return m ? Math.max(1, parseInt(m[1], 10)) : 1;
         };
-        const spanW = spanMatch(cell.style.gridColumn);
-        const spanH = spanMatch(cell.style.gridRow);
+        // Hull slots may hold a smaller part (S in M): drag footprint follows the part, not the slot frame.
+        const partSpanW = Number(cell.getAttribute('data-part-span-w')) || 0;
+        const partSpanH = Number(cell.getAttribute('data-part-span-h')) || 0;
+        const spanW = (cell.classList.contains('is-ship-slot') && partSpanW > 0)
+            ? partSpanW : spanMatch(cell.style.gridColumn);
+        const spanH = (cell.classList.contains('is-ship-slot') && partSpanH > 0)
+            ? partSpanH : spanMatch(cell.style.gridRow);
         let hoverCell = null;
         let previewBox = null;
         let previewGrid = null; // the .hs-storage-grid previewBox is currently appended into
@@ -385,7 +412,18 @@ extendClass(HomeStationUI, {
             // item drifts away from the cursor while dragging.
             ghost = document.createElement('div');
             ghost.className = 'hs-storage-drag-ghost';
-            const ghostInner = cell.cloneNode(true);
+            let ghostInner = cell.cloneNode(true);
+            const partBox = cell.classList.contains('is-ship-slot')
+                ? cell.querySelector('.hs-storage-slot-part') : null;
+            if (cell.classList.contains('is-ship-slot')) {
+                // Hull slot: only the part travels; the slot frame stays put on the grid.
+                const travel = partBox || cell.querySelector('.hs-item-body');
+                if (travel) {
+                    ghostInner = document.createElement('div');
+                    ghostInner.style.cssText = 'display:grid;place-items:center;width:100%;height:100%;';
+                    ghostInner.appendChild(travel.cloneNode(true));
+                }
+            }
             ghostInner.classList.add('hs-storage-drag-ghost-inner');
             ghost.appendChild(ghostInner);
             // Inline, not left to CSS: the dev server hot-rebuilds the JS bundle but not
@@ -402,26 +440,29 @@ extendClass(HomeStationUI, {
             const o = ghost.getBoundingClientRect();
             ghost.style.left = '100px';
             const k = (ghost.getBoundingClientRect().left - o.left) / 100 || 1;
+            // Ghost size follows the part footprint when dragging out of a larger slot.
+            const gcs = getComputedStyle(cell.closest('.hs-storage-grid') || cell);
+            const cs = parseFloat(gcs.getPropertyValue('--cs')) || this.STORAGE_CELL_PX;
+            const gap = parseFloat(gcs.getPropertyValue('--hs-gap')) || this.STORAGE_GAP_PX;
+            const ghostW = partBox ? partBox.offsetWidth : (spanW * cs + (spanW - 1) * gap);
+            const ghostH = partBox ? partBox.offsetHeight : (spanH * cs + (spanH - 1) * gap);
             place = (x, y) => {
-                ghost.style.left = `${(x - o.left) / k - (cell.offsetWidth / 2)}px`;
-                ghost.style.top = `${(y - o.top) / k - (cell.offsetHeight / 2)}px`;
+                ghost.style.left = `${(x - o.left) / k - (ghostW / 2)}px`;
+                ghost.style.top = `${(y - o.top) / k - (ghostH / 2)}px`;
             };
-            ghost.style.width = cell.offsetWidth + 'px';
-            ghost.style.height = cell.offsetHeight + 'px';
+            ghost.style.width = ghostW + 'px';
+            ghost.style.height = ghostH + 'px';
             // Drop-position preview: the item itself shown sitting in the hovered tile — no
             // frame or fill, just its own casing — sized to its full footprint (spanW x spanH
             // cells), rather than a plain highlighted box. Appended into whichever grid is
             // hovered, in markDropCell.
-            const gcs = getComputedStyle(cell.closest('.hs-storage-grid') || cell);
-            const cs = parseFloat(gcs.getPropertyValue('--cs')) || this.STORAGE_CELL_PX;
-            const gap = parseFloat(gcs.getPropertyValue('--hs-gap')) || this.STORAGE_GAP_PX;
             previewBox = document.createElement('div');
             previewBox.className = 'hs-storage-cell hs-storage-drop-preview';
             previewBox.style.cssText = 'position:absolute;margin:0;pointer-events:none;z-index:5;box-sizing:border-box;display:none;';
             previewBox.style.width = (spanW * cs + (spanW - 1) * gap) + 'px';
             previewBox.style.height = (spanH * cs + (spanH - 1) * gap) + 'px';
-            const previewBody = cell.querySelector('.hs-item-body');
-            if (previewBody) previewBox.appendChild(previewBody.cloneNode(true));
+            const previewPart = partBox || cell.querySelector('.hs-item-body');
+            if (previewPart) previewBox.appendChild(previewPart.cloneNode(true));
         };
         // Coalesce pointer moves to one update per frame, same as the hangar part drag
         // (hangar-parts-grid-part2.js) — the grid hit-test and ghost placement both read layout.
@@ -592,10 +633,97 @@ extendClass(HomeStationUI, {
     },
 
     _storageDragDrop(key, source, shipId, grid, dropTarget) {
+        if (source === 'ship-slot') {
+            // Equipped mount dragged out: unequip it, then file it into the target storage.
+            // Hull slots themselves stay fixed; dropping on the same ship grid does nothing.
+            const target0 = grid.getAttribute('data-storage-target');
+            const targetShip0 = grid.getAttribute('data-ship') || '';
+            if (target0 === 'ship' && targetShip0 === shipId) {
+                // Same ship grid: dropped on another slot → move the part there; on a free tile → unequip
+                // (part becomes cargo at that tile). The slot frames themselves never move.
+                const pp = key.split(':');
+                const kind1 = pp[1], idx1 = Number(pp[2]);
+                const srcEl = grid.querySelector(`.hs-storage-cell[data-drag-key="${key}"]`);
+                const mod1 = srcEl ? srcEl.getAttribute('data-part-id') : '';
+                if (!mod1 || typeof shipLoadoutManager === 'undefined') return;
+                const lay = this._readStorageLayout(grid);
+                const hitKey = Object.keys(lay).find((k) => k !== key && k.indexOf('slot:') === 0
+                    && dropTarget.col < lay[k].col + lay[k].w && lay[k].col < dropTarget.col + dropTarget.w
+                    && dropTarget.row < lay[k].row + lay[k].h && lay[k].row < dropTarget.row + dropTarget.h);
+                const ownHit = lay[key] && dropTarget.col < lay[key].col + lay[key].w && lay[key].col < dropTarget.col + dropTarget.w
+                    && dropTarget.row < lay[key].row + lay[key].h && lay[key].row < dropTarget.row + dropTarget.h;
+                if (ownHit) return;
+                const prof = this.getProfile();
+                if (hitKey) {
+                    const hp = hitKey.split(':');
+                    if (hp[1] !== kind1) { if (this.showStatusToast) this.showStatusToast('WRONG SLOT TYPE'); return; }
+                    this._applyStorageSlotChoice(shipId, kind1, Number(hp[2]), mod1, srcEl);
+                    return;
+                }
+                const bk = kind1 === 'weapon' ? 'weapons' : (kind1 === 'defense' ? 'defenses' : (kind1 === 'energy' ? 'energy' : 'abilities'));
+                // Pin first: _applyStorageSlotChoice files the part into ship cargo and re-renders.
+                profileManager.setStoragePos(prof, 'ship', shipId, bk + ':' + mod1, dropTarget.col, dropTarget.row);
+                this._applyStorageSlotChoice(shipId, kind1, idx1, '', srcEl, mod1);
+                return;
+            }
+            const parts = key.split(':');
+            const kind = parts[1];
+            const idx = Number(parts[2]);
+            const srcGrid = this._storageGridEl('ship', shipId);
+            const sc = srcGrid ? srcGrid.querySelector(`.hs-storage-cell[data-drag-key="${key}"]`) : null;
+            const modId = sc ? sc.getAttribute('data-part-id') : '';
+            if (!modId || typeof shipLoadoutManager === 'undefined') return;
+            const bucket = kind === 'weapon' ? 'weapons' : (kind === 'defense' ? 'defenses' : (kind === 'energy' ? 'energy' : 'abilities'));
+            const profile0 = this.getProfile();
+            this._applyStorageSlotChoice(shipId, kind, idx, '', sc, modId);
+            const L9 = shipLoadoutManager.getLoadout(shipId);
+            const k9 = shipLoadoutManager.kindToLoadoutKey(kind);
+            const l9 = k9 === 'weapons' ? ((L9 && (L9.weaponSlots || L9.weapons)) || []) : ((L9 && L9[k9]) || []);
+            if (l9[idx]) return; // unequip refused
+            const res0 = this._transferStorageItem(profile0, 'ship', shipId, target0 === 'ship' ? 'ship' : 'station', targetShip0, bucket, modId);
+            this.setStatus(res0.ok ? 'MOVED OUT OF SLOT' : (res0.reason || 'FAILED'));
+            if (res0.ok) {
+                profileManager.setStoragePos(profile0, target0 === 'ship' ? 'ship' : 'station', target0 === 'ship' ? targetShip0 : null, res0.instanceKey || (bucket + ':' + modId), dropTarget.col, dropTarget.row);
+                profileManager.save();
+            }
+            this.createUI();
+            return;
+        }
         const sep = key.indexOf(':');
         const bucket = sep === -1 ? '' : key.slice(0, sep);
         const id = sep === -1 ? key : key.slice(sep + 1);
         const target = grid.getAttribute('data-storage-target');
+        // Dropped onto a hull slot of a ship grid: equip the part there (never pin cargo on a slot tile).
+        if (target === 'ship' && grid.getAttribute('data-ship-slots') === '1' && typeof shipLoadoutManager !== 'undefined') {
+            const lay = this._readStorageLayout(grid);
+            const hit = Object.keys(lay).find((k) => {
+                if (k.indexOf('slot:') !== 0) return false;
+                const o = lay[k];
+                return dropTarget.col < o.col + o.w && o.col < dropTarget.col + dropTarget.w
+                    && dropTarget.row < o.row + o.h && o.row < dropTarget.row + dropTarget.h;
+            });
+            if (hit) {
+                const sp = hit.split(':');
+                const srcG = this._storageGridEl(source, shipId);
+                const sc = srcG ? srcG.querySelector(`.hs-storage-cell[data-drag-key="${key}"]`) : null;
+                const kind = sc ? sc.getAttribute('data-part-kind') : '';
+                const tShip = grid.getAttribute('data-ship') || '';
+                const profile1 = this.getProfile();
+                if (kind !== sp[1] || bucket === 'blueprints') { if (this.showStatusToast) this.showStatusToast('WRONG SLOT TYPE'); return; }
+                const parsed = profileManager.parsePartInstanceId ? profileManager.parsePartInstanceId(id) : { defId: id };
+                const defId = parsed.defId || id;
+                const tr = this._transferStorageItem(profile1, source, shipId, 'ship', tShip, bucket, id);
+                if (!tr.ok) { if (this.showStatusToast) this.showStatusToast(tr.reason || 'MOVE FAILED'); return; }
+                this._applyStorageSlotChoice(tShip, kind, Number(sp[2]), defId, sc);
+                profileManager.save();
+                return;
+            }
+            if (source === 'ship' && shipId === (grid.getAttribute('data-ship') || '')) {
+                // Cargo rearranged within a slot grid must not land on a slot tile.
+                const lay2 = this._readStorageLayout(grid);
+                if (Object.keys(lay2).some((k) => k.indexOf('slot:') === 0 && dropTarget.col < lay2[k].col + lay2[k].w && lay2[k].col < dropTarget.col + dropTarget.w && dropTarget.row < lay2[k].row + lay2[k].h && lay2[k].row < dropTarget.row + dropTarget.h)) return;
+            }
+        }
         const targetShip = grid.getAttribute('data-ship') || '';
         const profile = this.getProfile();
         const scope = target === 'ship' ? 'ship' : 'station';
@@ -870,22 +998,6 @@ extendClass(HomeStationUI, {
                 const kind = btn.getAttribute('data-toggle-mod');
                 const modId = btn.getAttribute('data-mod-id');
                 this.openComponentEditorForModule(kind, modId);
-            });
-        });
-
-        // Main voxel size slider in the hangar header: live redraw, and keep
-        // the other voxel sliders (area panels) in step.
-        this.overlay.querySelectorAll('[data-hangar-voxel]').forEach((input) => {
-            input.addEventListener('input', () => {
-                if (typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.setVoxelScale) return;
-                const value = Number(input.value);
-                shipLoadoutManager.setVoxelScale(this.hangarShipId, value);
-                const out = this.overlay.querySelector('[data-hangar-voxel-out]');
-                if (out) out.textContent = value.toFixed(2) + '×';
-                this.overlay.querySelectorAll('[data-voxel-scale]').forEach((other) => {
-                    if (other !== input) other.value = String(value);
-                });
-                this.drawHangarBay();
             });
         });
 

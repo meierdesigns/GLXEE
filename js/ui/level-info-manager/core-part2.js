@@ -18,7 +18,11 @@ extendClass(LevelInfoManager, {
         const fitted = (sm && sm.loadout && Array.isArray(sm.loadout.weapons) && sm.loadout.weapons.length)
             ? sm.loadout.weapons.filter((w, i, a) => w && a.indexOf(w) === i)
             : [weaponId];
-        const weaponName = fitted.map(nameOf).join(' · ');
+        const weaponChips = this.weaponChipsHtml ? this.weaponChipsHtml() : '';
+        // Multi-gun: chips sit side-by-side under the row; row keeps a short active name.
+        const weaponName = weaponChips
+            ? nameOf(weaponId)
+            : fitted.map(nameOf).join(' · ');
 
         const session = this.clusterHtml('SESSION',
             `<div class="gi-metrics gi-metrics-session">` +
@@ -33,7 +37,8 @@ extendClass(LevelInfoManager, {
         const loadout = this.clusterHtml('LOADOUT',
             this.rowHtml('menuEnemies', 'ENEMY', String(d.enemyType || '—').toUpperCase(), 'enemyType') +
             this.rowHtml('hsShip', 'SHIP', String(d.playerShipType || '—'), 'playerShipType') +
-            this.weaponRowHtml(weaponId, 'WEAPON', weaponName, 'giCurrentWeapon'),
+            this.weaponRowHtml(weaponId, 'WEAPON', weaponName, 'giCurrentWeapon') +
+            weaponChips,
             'gi-cluster-loadout'
         );
 

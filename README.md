@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.15 · FOUND LOOT · SHOT HANG · TRADER · WIZARD           │
+│  BUILD           1.14.16 · HANGAR INV · FIRE MODE · LOOT · EMBASSY            │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,9 +717,9 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.15** ships victory found-item UX (range tip → final roll, LMB/RMB),
-shot hang + Shot Behavior editor, planet trader overhaul, onboarding→wizard,
-station chrome, and asset-gen portraits — on top of the 1.14.14 shot-flight work.
+Build **1.14.16** ships hangar bay inventory drag, equipment fire-mode unlock
+(DAMAGE/ROF gates), victory keep/sell chrome, embassy station tree, galaxy map
+and pilot backdrop polish — on top of the 1.14.15 found-loot / trader work.
 
 <img src="assets/ui/readme-h-layout.svg" alt="CH.12 ARCHITECTURE" width="960" />
 
@@ -1098,6 +1098,11 @@ be reviewed or reverted independently.
 | 75D | Dev helpers + CSS | DOM helpers, enemy drop table, balance/economy tweaks, style pack polish |
 | 75E | Deferred bundle rebuild | Rebuild feature + CSS app packs for 74X–75D |
 | 75F | Release 1.14.15 | Deploy ZIP `.claude/GLXEE-V1.14.15.zip` — found loot, shot hang, trader, wizard, station, asset-gen (74X–75E) |
+| 75G | Hangar bay inventory | Cross-grid part drag, hull-slot reposition, faction-tinted hangar storage |
+| 75H | Fire-mode unlock UX | BURST/AUTO show DAMAGE/ROF gates; tap buys the track and unlocks the mode |
+| 75I | Loot embassy map pilot | Victory keep/sell chrome, embassy tree, galaxy map explore, pilot backdrop, transmission editor |
+| 75J | Deferred bundle rebuild | Rebuild feature + CSS app packs for 75G–75I |
+| 75K | Release 1.14.16 | Deploy ZIP `.claude/GLXEE-V1.14.16.zip` — hangar inv, fire mode, loot, embassy, map/pilot (75G–75J) |
 
 The wave commit convention is:
 
@@ -1147,5 +1152,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.15** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.16** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

@@ -5,7 +5,11 @@ import { extendClass } from '../../../core/extend-class-module.js';
 import { ShipAssetLoader } from './core.js';
 
 extendClass(ShipAssetLoader, {
-    /** 15-step module ramp from the ship's faction colours (14–15 = accent glow). */
+    /**
+     * 15-step module ramp: housing from the faction that prefers this weapon
+     * (laser→Terran blue, plasma→Kronax orange, …), glow from getWeaponUiColor.
+     * Falls back to the ship's faction palette when the weapon has no affinity.
+     */
     getWeaponShadeRamp(factionStyle, weaponId) {
         const toRgb = (h) => {
             const m = /^#?([0-9a-f]{6})$/i.exec(String(h || ''));
@@ -15,8 +19,15 @@ extendClass(ShipAssetLoader, {
         };
         const toHex = (c) => '#' + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
         const mix = (a, b, t) => [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * t);
-        const hull = factionStyle && toRgb(factionStyle.hull);
-        const edge = (factionStyle && toRgb(factionStyle.edge)) || (hull && mix(hull, [0, 0, 0], 0.6));
+        let style = factionStyle;
+        const prefFid = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponPreferredFaction)
+            ? weaponConfigManager.getWeaponPreferredFaction(weaponId) : null;
+        if (prefFid && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+            const pref = factionShipStyles.getFactionStyle(prefFid);
+            if (pref) style = pref;
+        }
+        const hull = style && toRgb(style.hull);
+        const edge = (style && toRgb(style.edge)) || (hull && mix(hull, [0, 0, 0], 0.6));
         const ramp = [null];
         const dark = hull ? mix(edge, [0, 0, 0], 0.45) : [36, 36, 36];
         const mid = hull ? mix(hull, [0, 0, 0], 0.28) : [120, 120, 120];
@@ -25,8 +36,9 @@ extendClass(ShipAssetLoader, {
             const t = (i - 1) / 12;
             ramp.push(toHex(t < 0.5 ? mix(dark, mid, t * 2) : mix(mid, light, (t - 0.5) * 2)));
         }
-        // Glow in the ship's own accent colour, not the weapon's UI tint.
-        const glow = (factionStyle && toRgb(factionStyle.accent)) || (hull && mix(hull, [255, 255, 255], 0.55)) || [255, 255, 255];
+        const uiGlow = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor)
+            ? toRgb(weaponConfigManager.getWeaponUiColor(weaponId)) : null;
+        const glow = uiGlow || (style && toRgb(style.accent)) || (hull && mix(hull, [255, 255, 255], 0.55)) || [255, 255, 255];
         ramp.push(toHex(glow));
         ramp.push(toHex(mix(glow, [255, 255, 255], 0.55)));
         return ramp;
@@ -84,17 +96,60 @@ extendClass(ShipAssetLoader, {
         const recvTop = Math.round(H * 0.62);
         const barrelTop = (f) => Math.round(H * f);
 
-        // Mount plate with bolts.
-        let [b0, b1] = span(0.94);
-        cyl(b0, b1, baseTop, H, 5);
-        set(H - 2, b0 + 1, 2); set(H - 2, b1 - 2, 2);
-        // Receiver block with a panel seam and a status light.
-        [b0, b1] = span(0.66);
-        cyl(b0, b1, recvTop, baseTop, 8);
-        fill(b0, b1, recvTop + Math.round((baseTop - recvTop) / 2), recvTop + Math.round((baseTop - recvTop) / 2) + 1, 4);
-        set(recvTop + 1, b0 + 1, 14);
-
         const id = String(weaponId || 'laser');
+        const prefFid = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponPreferredFaction)
+            ? weaponConfigManager.getWeaponPreferredFaction(id) : null;
+
+        // Mount + receiver shaped for the faction that prefers this gun family.
+        let [b0, b1] = span(prefFid === 'kronax' ? 0.72 : (prefFid === 'voidborn' ? 0.78 : 0.94));
+        if (prefFid === 'kronax') {
+            // Serrated claw plate.
+            cyl(b0, b1, baseTop, H, 5);
+            for (let c = b0; c < b1; c += 2) set(H - 1, c, 3);
+            pair(0.38, 0.1, (c0, c1) => fill(c0, c1, baseTop - 1, baseTop + 1, 6));
+        } else if (prefFid === 'pirate') {
+            // Offset scrap plate, mismatched bolts.
+            cyl(b0 + 1, b1, baseTop, H, 5);
+            fill(b0, b0 + Math.max(1, Math.round(W * 0.18)), baseTop + 1, H, 4);
+            set(H - 2, b0 + 1, 2); set(H - 2, b1 - 3, 8); set(H - 1, b1 - 2, 3);
+        } else if (prefFid === 'machine') {
+            // Notched circuit rack.
+            cyl(b0, b1, baseTop, H, 5);
+            for (let c = b0 + 1; c < b1 - 1; c += 2) set(baseTop, c, 14);
+            fill(b0, b0 + 1, baseTop, H, 3); fill(b1 - 1, b1, baseTop, H, 3);
+        } else if (prefFid === 'voidborn') {
+            // Hollow ring footing.
+            cyl(b0, b1, baseTop, H, 4);
+            fill(b0 + 2, b1 - 2, baseTop + 1, H - 1, 1);
+            set(H - 2, Math.floor(W / 2), 14);
+        } else {
+            // Terran modular plate with bolts.
+            cyl(b0, b1, baseTop, H, 5);
+            set(H - 2, b0 + 1, 2); set(H - 2, b1 - 2, 2);
+        }
+        // Receiver block — faction silhouette on the breech.
+        [b0, b1] = span(prefFid === 'kronax' ? 0.5 : (prefFid === 'machine' ? 0.78 : 0.66));
+        cyl(b0, b1, recvTop, baseTop, 8);
+        if (prefFid === 'kronax') {
+            pair(0.28, 0.08, (c0, c1) => fill(c0, c1, recvTop, recvTop + Math.max(2, Math.round(H * 0.08)), 10));
+        } else if (prefFid === 'voidborn') {
+            const cy = recvTop + (baseTop - recvTop) * 0.45;
+            const rad = Math.max(1.2, W * 0.18);
+            for (let r = 0; r < H; r++) for (let c = 0; c < W; c++) {
+                const d = Math.hypot(c + 0.5 - W / 2, r + 0.5 - cy);
+                if (d < rad && d > rad * 0.45) set(r, c, 14);
+            }
+        } else if (prefFid === 'pirate') {
+            fill(b0, b0 + Math.max(1, Math.round((b1 - b0) * 0.35)), recvTop, baseTop, 6);
+            fill(b0, b1, recvTop + 1, recvTop + 2, 3);
+        } else if (prefFid === 'machine') {
+            for (let r = recvTop + 1; r < baseTop - 1; r += 2) fill(b0 + 1, b1 - 1, r, r + 1, 14);
+            fill(b0, b1, recvTop + Math.round((baseTop - recvTop) / 2), recvTop + Math.round((baseTop - recvTop) / 2) + 1, 4);
+        } else {
+            fill(b0, b1, recvTop + Math.round((baseTop - recvTop) / 2), recvTop + Math.round((baseTop - recvTop) / 2) + 1, 4);
+            set(recvTop + 1, b0 + 1, 14);
+        }
+
         const tip = (c0, c1, r, v) => fill(c0, c1, r, r + Math.max(1, Math.round(H * 0.04)), v || 15);
         switch (id) {
             case 'laser_twin':

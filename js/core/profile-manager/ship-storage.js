@@ -272,5 +272,30 @@ extendClass(ProfileManager, {
         if (entry[bucket][defId] <= 0) delete entry[bucket][defId];
         this.save();
         return { ok: true, moved: move };
+    },
+
+    /** Safety net: a part must never be invisible. Starter-loadout parts (owned<=0) only live in
+     *  the ship's "filed" ledger once unequipped; if an older/buggy unequip skipped that, the part
+     *  is in no grid. Re-file every default-loadout part of this ship that is neither equipped nor
+     *  stored anywhere. Cheap and idempotent. */
+    reconcileShipParts(profile, shipId) {
+        if (!profile || !shipId || typeof shipLoadoutManager === 'undefined' || !shipLoadoutManager.defaultLoadoutFromShip) return 0;
+        let def;
+        try { def = shipLoadoutManager.defaultLoadoutFromShip(shipId); } catch (e) { return 0; }
+        if (!def) return 0;
+        const map = { weapons: def.weaponSlots || def.weapons, defenses: def.defenses, abilities: def.abilities, energy: def.energy };
+        let fixed = 0;
+        Object.keys(map).forEach((bucket) => {
+            (map[bucket] || []).forEach((id) => {
+                if (!id) return;
+                if (this._ownedStorageCount(profile, bucket, id) > 0) return; // owned parts always show (station/ship)
+                if (this.getShipStorageQty(profile, shipId, bucket, id) > 0) return; // filed or equipped here
+                // Starter part not equipped/filed on this ship: only restore if no other ship holds it.
+                if (this._allocatedStorageCount(profile, bucket, id) > 0 || this._equippedStorageCountAll(profile, bucket, id) > 0) return;
+                this.fileUnequippedPart(profile, shipId, bucket, id);
+                fixed++;
+            });
+        });
+        return fixed;
     }
 });

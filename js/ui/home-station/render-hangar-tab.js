@@ -45,15 +45,12 @@ extendClass(HomeStationUI, {
                     : null));
         const frameMaxed = frameLevel >= frameMax;
 
-        // Ship picker: a dropdown above the SLOTS/PARTS sidebar instead of its own tab —
-        // one ship is "open" at a time, so a whole tab for picking it cost more space
-        // than the choice itself needs. A custom button+list, not a native <select>: a
-        // native popup can't be themed (looked out of place against the pixel UI) and its
-        // close interferes with the overlay's own click handling.
+        // Ship picker lives in the hangar title row (replaces the static name label).
+        // Custom button+list, not a native <select>: theming + overlay click handling.
         const shipLabel = (id) => `${this.shipName(id)}${id === profile.activeShipId ? ' ★' : ''}`;
         const shipDropdown = `<div class="hs-hangar-ship-dropdown${this._hangarShipDropdownOpen ? ' is-open' : ''}" data-hangar-ship-dropdown>` +
             `<button type="button" class="hs-hangar-ship-dropdown-btn" data-hangar-ship-dropdown-toggle aria-haspopup="listbox" aria-expanded="${!!this._hangarShipDropdownOpen}">` +
-            `<span>${shipLabel(shipId)}</span><span class="hs-hangar-ship-dropdown-arrow" aria-hidden="true">▾</span></button>` +
+            `<span class="hs-hangar-head-name">${shipLabel(shipId)}</span><span class="hs-hangar-ship-dropdown-arrow" aria-hidden="true">▾</span></button>` +
             `<div class="hs-hangar-ship-dropdown-list" role="listbox">` +
             owned.map((id) => `<button type="button" class="hs-hangar-ship-dropdown-item${id === shipId ? ' is-active' : ''}" data-hangar-ship="${id}" role="option" aria-selected="${id === shipId}">${shipLabel(id)}</button>`).join('') +
             `</div></div>`;
@@ -114,64 +111,54 @@ extendClass(HomeStationUI, {
 
         const filledSlots = (hangarSlots.slots || []).filter((s) => s && !s.empty).length;
         const totalSlots = (hangarSlots.slots || []).length;
+        const previewSpeed = this.getHangarPreviewModel(shipId).speed;
+        const hangarStatsHtml = `<div class="hs-hangar-stats is-row">` +
+            `<div class="hs-stat-group is-slots" role="group" aria-label="Slots">` +
+            [['statWeapon', 'weapon', 'WEAPON SLOTS', loadout.weapons.length,
+                (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.weaponMountSlots)
+                    ? shipLoadoutManager.weaponMountSlots(caps.weapons) : caps.weapons],
+                ['statArmor', 'defense', 'DEFENSE SLOTS', loadout.defenses.length, caps.defenses],
+                ['statAbilities', 'ability', 'ABILITY SLOTS', loadout.abilities.length, caps.abilities],
+                ['statEnergy', 'energy', 'ENERGY SLOTS', (loadout.energy || []).length, caps.energy || 1]]
+                .map(([ic, kind, label, n, cap]) => this.hangarStatTile(ic, label, `${n}<span class="hs-stat-of">/${cap}</span>`,
+                    `${label}: ${n} of ${cap} used (${this.shipName(shipId)})`, '', ' is-slot' + (n >= cap ? ' is-full' : ''),
+                    (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor(kind) : null)).join('') +
+            `</div>` +
+            `<div class="hs-stat-group is-stats" role="group" aria-label="Ship stats">` +
+            this.hangarStatTile('hsShip', 'SIZE', `${layout.width}<span class="hs-stat-x">×</span>${layout.height}`, 'Hull footprint in voxels', '') +
+            this.hangarStatTile('statSpeed', 'SPEED', `${previewSpeed}`, 'Move speed (after abilities)', '', ' is-speed') +
+            this.hangarStatTile('statEnergy', 'POWER', `${netSign}${powerBudget.net}<span class="hs-stat-of">/s</span>`, powerLine, '',
+                powerBudget.net < 0 ? ' is-negative' : '',
+                (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor('energy') : null) +
+            `</div></div>`;
 
         return `
             <div class="hs-section hs-panel hs-hangar-root">
                 <div class="hs-hangar-detail-head hs-panel">
                     <div class="hs-hangar-head-title">
                         <span class="hs-chip-icon">${this.iconHtml('hsShip', 24, 'hs-pixel hs-pixel-24')}</span>
-                        <strong class="hs-hangar-head-name">${this.shipName(shipId)}</strong>
+                        ${shipDropdown}
                         ${shipId === profile.activeShipId
                             ? ''
                             : `<button type="button" class="action-button hs-activate-ship" data-activate-ship="${shipId}">SET ACTIVE</button>`}
-                        ${typeof startScreenManager !== 'undefined' && startScreenManager.devMode ? `<label class="hs-hangar-voxel is-in-title" title="Voxel size of the whole ship">
-                            <span>VOXEL SIZE</span>
-                            <input type="range" data-voxel-scale data-hangar-voxel min="0.2" max="1.5" step="0.05" value="${this.getVoxelScaleValue(this.hangarShipId)}">
-                            <output data-hangar-voxel-out>${this.getVoxelScaleValue(this.hangarShipId).toFixed(2)}×</output>
-                        </label>` : ''}
-                    </div>
-                    <div class="hs-hangar-stats is-row">
-                        <div class="hs-stat-group is-slots" role="group" aria-label="Slots">
-                        ${[['statWeapon', 'weapon', 'WEAPON SLOTS', loadout.weapons.length,
-                            // caps.weapons counts guns (a split pair = 2); a slot is one weapon, split or not.
-                            (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.weaponMountSlots)
-                                ? shipLoadoutManager.weaponMountSlots(caps.weapons) : caps.weapons],
-                            ['statArmor', 'defense', 'DEFENSE SLOTS', loadout.defenses.length, caps.defenses],
-                            ['statAbilities', 'ability', 'ABILITY SLOTS', loadout.abilities.length, caps.abilities],
-                            ['statEnergy', 'energy', 'ENERGY SLOTS', (loadout.energy || []).length, caps.energy || 1]]
-                            // One tile per slot type, in the global category colour code.
-                            .map(([ic, kind, label, n, cap]) => this.hangarStatTile(ic, label, `${n}<span class="hs-stat-of">/${cap}</span>`,
-                                `${label}: ${n} of ${cap} used (${this.shipName(shipId)})`, '', ' is-slot' + (n >= cap ? ' is-full' : ''),
-                                (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor(kind) : null)).join('')}
-                        </div>
-                        <div class="hs-stat-group is-stats" role="group" aria-label="Ship stats">
-                        ${this.hangarStatTile('hsShip', 'SIZE', `${layout.width}<span class="hs-stat-x">×</span>${layout.height}`, 'Hull footprint in voxels', '')}
-                        ${this.hangarStatTile('hsUpgrade', 'AREAS', `${frameLevel}<span class="hs-stat-of">/${frameMax}</span>`, 'Hull area levels (open new slots, add hull HP)', '')}
-                        ${(() => {
-                            // Move speed after ability effects; ability hover previews change it (bindHangarAbilityHover).
-                            const pm = this.getHangarPreviewModel(shipId);
-                            return this.hangarStatTile('statSpeed', 'SPEED', `${pm.speed}`, 'Move speed (after abilities)', '', ' is-speed');
-                        })()}
-                        ${this.hangarStatTile('statEnergy', 'POWER', `${netSign}${powerBudget.net}<span class="hs-stat-of">/s</span>`, powerLine, '',
-                            powerBudget.net < 0 ? ' is-negative' : '',
-                            (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor) ? iconRenderer.getModuleKindColor('energy') : null)}
-                        </div>
                     </div>
                 </div>
-                <div class="hs-hangar-split${this._hangarLeftCollapsed ? ' hs-hangar-left-collapsed' : ''}${this._hangarRightCollapsed ? ' hs-hangar-right-collapsed' : ''}">
+                <div class="hs-hangar-split${this._bayInv ? ' is-inventory' : ''}${this._hangarLeftCollapsed ? ' hs-hangar-left-collapsed' : ''}${this._hangarRightCollapsed ? ' hs-hangar-right-collapsed' : ''}"${this._bayInv && this._hangarInvW ? ` style="--hs-inv-w: ${this._hangarInvW}"` : ''}>
+                    ${this._bayInv && typeof physicalItem !== 'undefined' ? `
+                    <aside class="hs-hangar-inv hs-panel">
+                        <button type="button" class="hs-bay-invtoggle" data-bay-inv aria-pressed="true" title="Hide part inventory">HIDE INVENTORY</button>
+                        ${physicalItem.bayInventoryHtml(this)}
+                        <div class="pe-resize-handle" data-resize="inv" title="Resize inventory"></div>
+                    </aside>` : ''}
                     <aside class="hs-hangar-list hs-panel">
-                        <div class="hs-hangar-ship-dropdown-row">${shipDropdown}</div>
                         <h3 class="hs-panel-title">
                             <span class="hs-panel-icon">${this.iconHtml('hsShip', 32, 'hs-pixel')}</span>
-                            <span class="hs-panel-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SLOTS'}</span>
+                            <span class="hs-panel-label">PARTS</span>
                             <span class="hs-panel-scan" aria-hidden="true"></span>
-                            ${this.renderHangarLeftViewToggle()}
                             <button type="button" class="hs-sidebar-toggle hs-sidebar-strip" data-hangar-sidebar="left"
-                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">${this._hangarLeftView === 'parts' ? 'PARTS' : 'SLOTS'} ›</span></button>
+                                aria-label="Expand ship list" aria-expanded="${!this._hangarLeftCollapsed}"><span class="hs-collapsed-label">PARTS ›</span></button>
                         </h3>
-                        ${this._hangarLeftView === 'parts'
-                            ? this.renderHangarPartsGrid(inventory, loadout)
-                            : this.renderHangarSlotsView(hangarSlots.slots, layout)}
+                        ${this.renderHangarPartsGrid(inventory, loadout, hangarSlots.slots, layout)}
                         <div class="hs-component-details" id="hsComponentDetails">
                             <button type="button" class="hs-component-close" data-close-component>✕</button>
                             <h4 class="hs-component-title"></h4>
@@ -182,7 +169,8 @@ extendClass(HomeStationUI, {
                     <div class="pe-resize-handle" data-resize="left" title="Resize ship list"></div>
                     <div class="hs-hangar-detail">
                         <div class="hs-hangar-bay hs-panel">
-                            <div class="hs-hangar-bay-stage${this._bayInv ? ' is-inventory' : ''}" id="hsHangarBayStage">
+                            <div class="hs-hangar-bay-display" aria-label="Ship status">${hangarStatsHtml.replace('hs-hangar-stats is-row', 'hs-hangar-stats is-row is-mini')}</div>
+                            <div class="hs-hangar-bay-stage" id="hsHangarBayStage">
                                 <canvas id="hsHangarBayCanvas" class="hs-hangar-bay-canvas" width="420" height="320" aria-label="Open hangar ship"></canvas>
                                 <div class="hs-bay-zoom" role="group" aria-label="Zoom">
                                     <input type="range" id="hsBayZoomSlider" class="hs-bay-zoom-slider" min="0" max="100" step="1" value="63" aria-label="Zoom" title="Zoom (mouse wheel works too)">
@@ -196,8 +184,7 @@ extendClass(HomeStationUI, {
                                         <path d="M4 0h1v1h1v1H3V1h1zM4 2h1v5H4zM0 4h7v1H0zM1 3h1v3H1zM7 3h1v3H7zM8 4h1v1H8zM3 7h3v1H5v1H4V8H3zM2 4h5v1H2z"/>
                                     </svg>
                                 </button>
-                                <button type="button" class="hs-bay-invtoggle" data-bay-inv aria-pressed="${!!this._bayInv}" title="Switch between the ship and the part inventory">${this._bayInv ? 'HIDE INVENTORY' : 'INVENTORY'}</button>
-                                ${this._bayInv && typeof physicalItem !== 'undefined' ? physicalItem.bayInventoryHtml(this) : ''}
+                                ${this._bayInv ? '' : `<button type="button" class="hs-bay-invtoggle" data-bay-inv aria-pressed="false" title="Show part inventory">INVENTORY</button>`}
                                 <div class="hs-hangar-slot-layer" id="hsHangarSlotLayer">
                                     <svg class="hs-hangar-link-svg" id="hsHangarLinkSvg" aria-hidden="true"></svg>
                                     ${slotHtml}

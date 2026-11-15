@@ -327,8 +327,8 @@ extendClass(HomeStationUI, {
             if (res.reason === 'NEED_CHARGE_DRIVE') msg = 'NEED CHARGE DRIVE FIRST';
             if (res.reason === 'NO_SLOT') msg = 'NO SLOT';
             if (res.reason === 'TOO_BIG') {
-                // Size is per slot: split pairs (wings) are S, single centre
-                // slots M, each can be upgraded — say which applies here.
+                // Size is per slot: nose gun starts M, everything else S;
+                // each can be upgraded — say which applies here.
                 const slm = shipLoadoutManager;
                 const split = slm.isSplitSlot && slm.isSplitSlot(this.hangarShipId, kind, slotIndex);
                 msg = this.hangarModuleLabel(moduleId) + ' (' + slm.slotSizeLabel(res.need) + ')'

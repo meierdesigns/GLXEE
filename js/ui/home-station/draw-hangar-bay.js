@@ -98,7 +98,8 @@ extendClass(HomeStationUI, {
         // that stays visible. The anatomy modal has no inventory panel at all (and no
         // toggle to open one) — _bayInv is a persisted global flag left over from a
         // previous HANGAR tab visit, so it must not skew this view's centring.
-        const invPx = (this._bayInv && !anatomy) ? Math.min(428, Math.floor(w * 0.6)) : 0;
+        // Inventory lives in its own column left of PARTS — no bay offset.
+        const invPx = 0;
         const wv = w - invPx, cxView = invPx + wv / 2;
         const fitKey = shipId + '|' + w + '|' + h + '|' + invPx + (anatomy ? '|a' : '');
         // The view (zoom / pan) only starts fresh for another ship or a clearly different bay size. A rebuild of the
@@ -403,13 +404,20 @@ extendClass(HomeStationUI, {
         );
         const slots = (hangarSlots && hangarSlots.slots) || [];
         const layout = merged && merged.layout;
-        // SLOTS sidebar tab: follow slots dragged to another area without a full re-render.
-        const slotView = this.overlay.querySelector('.hs-slotview');
-        if (slotView && this.renderHangarSlotsView) {
-            const tmp = document.createElement('div');
-            tmp.innerHTML = this.renderHangarSlotsView(slots, layout);
-            const fresh = tmp.firstElementChild;
-            if (fresh && fresh.innerHTML !== slotView.innerHTML) slotView.innerHTML = fresh.innerHTML;
+        // Merged PARTS sidebar: refresh each row's slot icon when loadout/slots change.
+        if (this.hangarMergedSlotIconHtml) {
+            this.overlay.querySelectorAll('.hs-hangar-slot-pair[data-slot-kind] .hs-hangar-part-slot').forEach((icon) => {
+                const pair = icon.closest('.hs-hangar-slot-pair');
+                if (!pair) return;
+                const kind = pair.getAttribute('data-slot-kind');
+                const index = Number(pair.getAttribute('data-slot-index')) || 0;
+                const sl = slots.find((s) => s && s.kind === kind && s.index === index);
+                if (!sl) return;
+                const tmp = document.createElement('div');
+                tmp.innerHTML = this.hangarMergedSlotIconHtml(sl);
+                const fresh = tmp.firstElementChild;
+                if (fresh && icon.outerHTML !== fresh.outerHTML) icon.replaceWith(fresh);
+            });
         }
         const shipW = parseFloat(layer.style.getPropertyValue('--bay-ship-w')) || 0;
         const pxPerUnit = layout && layout.width ? shipW / layout.width : 0;
@@ -422,9 +430,11 @@ extendClass(HomeStationUI, {
             const pinX = Math.round((slot.nx != null ? slot.nx : 0.5) * 1000) / 1000;
             const pinY = Math.round((slot.ny != null ? slot.ny : 0.5) * 1000) / 1000;
             el.style.setProperty('--pin-x', String(pinX));
-            if (shipLoadoutManager.getSlotSizeLevel && shipLoadoutManager.slotSizeLabel) {
+            if ((shipLoadoutManager.getSlotEffectiveSizeLevel || shipLoadoutManager.getSlotSizeLevel)
+                && shipLoadoutManager.slotSizeLabel) {
+                const sizeFn = shipLoadoutManager.getSlotEffectiveSizeLevel || shipLoadoutManager.getSlotSizeLevel;
                 el.setAttribute('data-slot-size', shipLoadoutManager.slotSizeLabel(
-                    shipLoadoutManager.getSlotSizeLevel(shipId, slot.kind, slot.index)));
+                    sizeFn.call(shipLoadoutManager, shipId, slot.kind, slot.index)));
             }
             el.style.setProperty('--pin-y', String(pinY));
             // Wing slots are a mirrored pair: add / drop the second marker
@@ -469,8 +479,9 @@ extendClass(HomeStationUI, {
                     : (at === 'front' || at === 'back' ? at : 'center');
                 // Socket size follows the slot size: S (split pairs by default)
                 // ≈ 0.7 of the centred M socket, L 1.3×.
-                const sizeLv = shipLoadoutManager.getSlotSizeLevel
-                    ? shipLoadoutManager.getSlotSizeLevel(shipId, slot.kind, slot.index) : 1;
+                const sizeFn = shipLoadoutManager.getSlotEffectiveSizeLevel || shipLoadoutManager.getSlotSizeLevel;
+                const sizeLv = sizeFn
+                    ? sizeFn.call(shipLoadoutManager, shipId, slot.kind, slot.index) : 1;
                 const base = (ms.front || ms.center || ms[area] || 4) * [Math.SQRT1_2, 1, 1.3][sizeLv];
                 // Floor keeps sockets easy to see and grab at low zoom.
                 const px = Math.max(28, Math.round(base * pxPerUnit));

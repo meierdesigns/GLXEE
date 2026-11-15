@@ -8,13 +8,14 @@ extendClass(HomeStationUI, {
             if (pin.dataset.dragBound === '1') return;
             pin.dataset.dragBound = '1';
             let drag = null;
-            // Right-click a filled slot to empty it.
+            // Right-click a filled slot to empty it. Always suppress the browser
+            // menu — empty pins must not fall through to Back / Inspect Element.
             pin.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const modId = pin.getAttribute('data-mod-id') || '';
                 const kind = pin.getAttribute('data-hangar-slot-toggle');
                 if (!modId || !kind) return;
-                e.preventDefault();
-                e.stopPropagation();
                 this.applyHangarSlotChoice(kind, Number(pin.getAttribute('data-slot-index') || 0), '', null);
             });
             pin.addEventListener('pointerdown', (e) => {

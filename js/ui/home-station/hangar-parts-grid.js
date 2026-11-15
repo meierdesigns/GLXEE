@@ -16,73 +16,136 @@ extendClass(HomeStationUI, {
     slotGlyphHtml(kind, extraClass) {
         return `<span class="hs-slot-glyph${extraClass ? ' ' + extraClass : ''}" data-slot-kind="${kind}" aria-hidden="true"></span>`;
     },
-    renderHangarLeftViewToggle() {
-        const view = this._hangarLeftView === 'parts' ? 'parts' : 'slots';
-        const btn = (id, label, icon) =>
-            `<button type="button" class="hs-hangar-view-btn${view === id ? ' is-active' : ''}" data-hangar-left-view="${id}" aria-pressed="${view === id}">` +
-            `${this.iconHtml(icon, 40, 'hs-pixel hs-pixel-40', false, view === id ? '#05060a' : null)}<span>${label}</span></button>`;
-        return `<div class="hs-hangar-view-toggle" role="group" aria-label="Sidebar view">${btn('slots', 'SLOTS', 'hsUpgrade')}${btn('parts', 'PARTS', 'hsCraft')}</div>`;
+    /** @deprecated Toggle removed — slots + parts are one merged sidebar. */
+    renderHangarLeftViewToggle() { return ''; },
+    /** One slot box (optional mirror half for split wing weapons). */
+    /** Kind fallback tint, or the preferred-faction / weapon-family color when a part is installed. */
+    hangarPartColor(kind, id) {
+        const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d;
+        const fallback = { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') }[kind] || g(kind, '#7ec8ff');
+        if (!id || typeof physicalItem === 'undefined' || !physicalItem.partColor) return fallback;
+        return physicalItem.partColor(kind, id, fallback) || fallback;
     },
-    /** SLOTS view: the ship's slot layout per hull area (same idea as the start profile's HULL AREAS list). */
-    renderHangarSlotsView(slots, layout) {
+    /** Slot chrome / BG: weapons stay category red; item art uses hangarPartColor. */
+    hangarSlotColor(kind, id) {
+        const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d;
+        const fallback = { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') }[kind] || g(kind, '#7ec8ff');
+        if (typeof physicalItem !== 'undefined' && physicalItem.slotColor) {
+            return physicalItem.slotColor(kind, id, fallback) || fallback;
+        }
+        return fallback;
+    },
+    hangarSlotCellHtml(sl) {
         const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
-        // Same kind colours as the PARTS tab and the hangar stat tiles (iconRenderer.getModuleKindColor).
-        const color = (() => { const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d; return { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') }; })();
+        const pk = this.hangarPartColor(sl.kind, sl.id);
+        const slotC = this.hangarSlotColor(sl.kind, sl.id);
         const kindIcon = { weapon: 'statWeapon', defense: 'statArmor', energy: 'statEnergy', ability: 'statAbilities' };
-        const groups = [
-            { label: 'NOSE', lv: 'front', areas: ['front'] },
-            { label: 'CORE', lv: 'center', areas: ['center'] },
-            { label: 'AFT', lv: 'back', areas: ['back'] },
-            { label: 'WINGS', lv: 'wing', areas: ['wingLeft', 'wingRight'] }
-        ];
-        const known = [].concat.apply([], groups.map((g) => g.areas));
-        // A slot belongs to the hull area it currently sits in (it changes when the slot is dragged to another area).
-        const segs = (layout && layout.segments) || [];
-        const lw = Math.max(1, (layout && layout.width) || 1), lh = Math.max(1, (layout && layout.height) || 1);
-        const areaAt = (sl) => {
-            if (!segs.length || sl.nx == null || sl.ny == null) return sl.area;
-            const px = sl.nx * lw, py = sl.ny * lh;
-            let hit = segs.find((sg) => px >= sg.x && px <= sg.x + sg.width && py >= sg.y && py <= sg.y + sg.height);
-            if (!hit) {
-                let best = Infinity;
-                segs.forEach((sg) => {
-                    const d = Math.hypot(px - (sg.x + sg.width / 2), py - (sg.y + sg.height / 2));
-                    if (d < best) { best = d; hit = sg; }
-                });
-            }
-            return hit ? hit.id : sl.area;
-        };
-        const list = (slots || []).filter((sl) => sl).map((sl) => (sl.kind === 'weapon' ? Object.assign({}, sl, { area: areaAt(sl) }) : sl));
-        const levels = slm && slm.getAreaLevels ? (slm.getAreaLevels(this.hangarShipId) || {}) : {};
-        // Same footprints as the part grid: S = 1x1, M = 1 wide x 2 tall, L = 2x2 units (unit 40 px, 4 px gap).
         const dims = [[40, 40], [40, 84], [84, 84]];
-        // Size class drawn for one slot (0 S, 1 M, 2 L).
-        // Size class of the SLOT itself (0 S, 1 M, 2 L), filled or not: the box and its letter show the slot.
-        const slotLv = (sl) => {
-            try { return Math.max(0, Math.min(2, slm.getSlotSizeLevel(this.hangarShipId, sl.kind, sl.index) | 0)); } catch (e) { return 0; }
-        };
-        const cell = (sl, half) => {
-            // A split slot (mirrored pair) shows as two boxes, each one size smaller (M = two S); S stays S.
-            const lvl = sl.split && sl.kind === 'weapon' ? Math.max(0, slotLv(sl) - 1) : slotLv(sl);
+        let lvl = 0;
+        try {
+            const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
+            lvl = Math.max(0, Math.min(2, sizeFn.call(slm, this.hangarShipId, sl.kind, sl.index) | 0));
+        } catch (e) { lvl = 0; }
+        let key = kindIcon[sl.kind];
+        if (sl.id && slm && slm.resolveModuleIcon) { try { key = slm.resolveModuleIcon({ kind: sl.kind, id: sl.id }) || key; } catch (e) { /* type icon */ } }
+        const name = sl.id ? this.hangarModuleLabel(sl.id) : 'EMPTY ' + String(sl.kind).toUpperCase() + ' SLOT';
+        const img = ir ? String((sl.kind === 'weapon' && sl.id && ir.weaponImgHtml ? ir.weaponImgHtml(sl.id, 32, 'hs-pixel', false) : ir.imgHtml(key, 32, 'hs-pixel', pk, false)) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
+        const partSz = sl.id && slm && slm.partSizeLabel ? slm.partSizeLabel(sl.kind, sl.id) : null;
+        const slotSz = 'SML'[lvl];
+        const tip = ((sl.id ? this.hangarModuleTip(sl.kind, sl.id) : 'NO PART INSTALLED') + '\nSIZE_FIT:' + slotSz + ':' + (partSz || slotSz)).replace(/"/g, '&quot;');
+        // Slot keeps its S/M/L box; the part nests at its own footprint (S in M stays S-sized).
+        const partLv = sl.id && slm.getPartSizeLevel ? Math.max(0, Math.min(lvl, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : lvl;
+        const inner = sl.id
+            ? `<span class="hs-slotview-part" style="width:${dims[partLv][0]}px;height:${dims[partLv][1]}px">${typeof physicalItem !== 'undefined' ? physicalItem.wrap(sl.kind, sl.id, dims[partLv][0] - 4, dims[partLv][1] - 4, pk, img) : img}</span>`
+            : img;
+        return `<span class="hs-slotview-cell${sl.id ? ' is-filled' : ' is-empty'}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${tip}" style="--pk-c:${slotC};--svw:${dims[lvl][0]}px;--svh:${dims[lvl][1]}px" role="button" tabindex="0" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" data-part-kind="${sl.kind}" aria-label="${name}">${inner}<span class="hs-slotview-size">${slotSz}</span></span>`;
+    },
+    /** Slot boxes for the hangar sidebar / bay SHIP grid. Optional `kindFilter` limits to one slot type. */
+    renderHangarSlotsView(slots, layout, kindFilter) {
+        const shown = (slots || []).filter((sl) => sl && (!kindFilter || sl.kind === kindFilter));
+        const cells = shown.map((sl) => (sl.split && sl.kind === 'weapon'
+            ? this.hangarSlotCellHtml(sl) + this.hangarSlotCellHtml(sl)
+            : this.hangarSlotCellHtml(sl))).join('');
+        const kindAttr = kindFilter ? ` data-slot-kind="${kindFilter}"` : '';
+        return `<div class="hs-slotview"${kindAttr}><div class="hs-slotview-row"><span class="hs-slotview-slots">${cells || '<em>NO SLOT</em>'}</span></div></div>`;
+    },
+    /**
+     * Slot box for the merged row: real S/M/L footprint, part graphic inside (weapon mount
+     * when available), slot-size letter on the corner.
+     */
+    hangarMergedSlotIconHtml(sl) {
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        const pk = this.hangarPartColor(sl.kind, sl.id);
+        const slotC = this.hangarSlotColor(sl.kind, sl.id);
+        const kindIcon = { weapon: 'statWeapon', defense: 'statArmor', energy: 'statEnergy', ability: 'statAbilities' };
+        const dims = [[40, 40], [40, 84], [84, 84]];
+        let lvl = 0;
+        try {
+            const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
+            lvl = Math.max(0, Math.min(2, sizeFn.call(slm, this.hangarShipId, sl.kind, sl.index) | 0));
+        } catch (e) { lvl = 0; }
+        // Split wing pairs use effective mount size (≥ M) so M guns fit without shrinking.
+        const slotLetter = 'SML'[lvl];
+        const [sw, sh] = dims[lvl];
+        let inner = '';
+        if (sl.id && sl.kind === 'weapon') {
+            const mount = this.hangarWeaponMountHtml(sl.id);
+            if (mount) {
+                inner = `<span class="hs-slotview-part is-mount" style="width:${sw}px;height:${sh}px">${mount}</span>`;
+            }
+        }
+        if (!inner) {
             let key = kindIcon[sl.kind];
-            if (sl.id && slm && slm.resolveModuleIcon) { try { key = slm.resolveModuleIcon({ kind: sl.kind, id: sl.id }) || key; } catch (e) { /* type icon */ } }
-            const name = sl.id ? this.hangarModuleLabel(sl.id) : 'EMPTY ' + String(sl.kind).toUpperCase() + ' SLOT';
-            const img = ir ? String((sl.kind === 'weapon' && sl.id && ir.weaponImgHtml ? ir.weaponImgHtml(sl.id, 32, 'hs-pixel', false) : ir.imgHtml(key, 32, 'hs-pixel', color[sl.kind], false)) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
-            const partSz = sl.id && slm && slm.partSizeLabel ? slm.partSizeLabel(sl.kind, sl.id) : null;
-            const slotSz = 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(this.hangarShipId, sl.kind, sl.index) | 0))];
-            const tip = ((sl.id ? this.hangarModuleTip(sl.kind, sl.id) : 'NO PART INSTALLED') + '\nSIZE_FIT:' + slotSz + ':' + (partSz || slotSz)).replace(/"/g, '&quot;');
-            // The installed part sits inside its slot at its own footprint (never bigger than the slot).
-            const partLv = sl.id && slm.getPartSizeLevel ? Math.max(0, Math.min(lvl, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : lvl;
-            const inner = sl.id
-                ? `<span class="hs-slotview-part" style="width:${dims[partLv][0]}px;height:${dims[partLv][1]}px">${typeof physicalItem !== 'undefined' ? physicalItem.wrap(sl.kind, sl.id, dims[partLv][0] - 4, dims[partLv][1] - 4, color[sl.kind], img) : img}</span>`
-                : img;
-            return `<span class="hs-slotview-cell${sl.id ? ' is-filled' : ''}" data-ui-tip-instant data-ui-tip-head="${name}" data-ui-tip="${tip}" style="--pk-c:${color[sl.kind]};--svw:${dims[lvl][0]}px;--svh:${dims[lvl][1]}px" role="button" tabindex="0" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" aria-label="${name}">${inner}<span class="hs-slotview-size">${'SML'[partLv]}</span></span>`;
-        };
-        // Just the slots, side by side — no hull-area grouping/labels/toggles here any more
-        // (area on/off still lives in the AREAS/LAYOUT sub-tab, area-upgrades.js).
-        const cells = list.map((sl) => (sl.split && sl.kind === 'weapon' ? cell(sl, 0) + cell(sl, 1) : cell(sl))).join('');
-        return `<div class="hs-slotview"><div class="hs-slotview-row"><span class="hs-slotview-slots">${cells || '<em>NO SLOT</em>'}</span></div></div>`;
+            if (sl.id && slm && slm.resolveModuleIcon) {
+                try { key = slm.resolveModuleIcon({ kind: sl.kind, id: sl.id }) || key; } catch (e) { /* type icon */ }
+            }
+            const img = ir ? String((sl.kind === 'weapon' && sl.id && ir.weaponImgHtml
+                ? ir.weaponImgHtml(sl.id, 32, 'hs-pixel', false)
+                : ir.imgHtml(key, 32, 'hs-pixel', pk, false)) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
+            if (sl.id) {
+                const partLv = slm.getPartSizeLevel
+                    ? Math.max(0, Math.min(lvl, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : lvl;
+                const [pw, ph] = dims[partLv];
+                inner = `<span class="hs-slotview-part" style="width:${pw}px;height:${ph}px">${typeof physicalItem !== 'undefined' ? physicalItem.wrap(sl.kind, sl.id, pw - 4, ph - 4, pk, img) : img}</span>`;
+            } else {
+                inner = img;
+            }
+        }
+        return `<span class="hs-hangar-part-slot hs-slotview-cell${sl.id ? ' is-filled' : ''}" style="--pk-c:${slotC};--svw:${sw}px;--svh:${sh}px" aria-hidden="true">${inner}<span class="hs-slotview-size">${slotLetter}</span></span>`;
+    },
+    /** One merged row: sized slot box (left) + part info. */
+    hangarMergedSlotRowHtml(sec, sl, single) {
+        const slm = shipLoadoutManager;
+        const id = sl.id || '';
+        const slotC = this.hangarSlotColor(sec.kind, id);
+        const slot = this.hangarMergedSlotIconHtml(sl);
+        if (!id) {
+            return `<button type="button" class="hs-hangar-part is-empty is-merged" style="--pk-c:${slotC}"` +
+                ` data-slot-pick="${sec.kind}" data-slot-index="${sl.index}"` +
+                ` data-ui-tip="EMPTY ${String(sec.kind).toUpperCase()} SLOT — CLICK TO EQUIP" aria-label="Empty ${sec.kind} slot">` +
+                slot +
+                `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">EMPTY SLOT</span></span>` +
+                `</button>`;
+        }
+        const label = this.hangarModuleLabel(id);
+        const size = slm.partSizeLabel ? slm.partSizeLabel(sec.kind, id) : 'S';
+        const fits = !slm.partFitsSlot || slm.partFitsSlot(this.hangarShipId, sec.kind, id, sl.index).ok;
+        const isToggle = sec.kind !== 'weapon';
+        const expanded = this._hangarExpandedPart === sec.kind + ':' + id;
+        return `<button type="button" class="hs-hangar-part is-equipped is-merged${expanded ? ' is-expanded' : ''}${fits ? '' : ' is-too-big'}${isToggle ? ' is-toggle' : ''}"` +
+            (isToggle ? (single ? ` role="radio" aria-checked="true"` : ` role="switch" aria-checked="true"`) : '') +
+            ` style="--pk-c:${slotC}" data-part-kind="${sec.kind}" data-part-id="${id}" data-part-size="${size}"` +
+            ` data-slot-pick="${sec.kind}" data-slot-index="${sl.index}"` +
+            ` data-ui-tip="${String(this.hangarModuleTip(sec.kind, id)).replace(/"/g, '&quot;')}\nSIZE ${size} · EQUIPPED${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
+            slot +
+            `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">${label} ` +
+            `<span class="hs-hangar-part-size is-${size}">(${size})</span></span>` +
+            (sec.kind === 'weapon' ? this.hangarWeaponStatsHtml(id) : '') +
+            (sec.kind === 'energy' ? this.hangarEnergyStatsHtml(id) : '') +
+            (sec.kind === 'ability' ? this.hangarAbilityStatsHtml(id) : '') + `</span>` +
+            `</button>`;
     },
     /** Click on a slot in the SLOTS list: modal with the ship's real storage grid (same as bay / station). */
     openHangarSlotPicker(kind, index) {
@@ -96,7 +159,9 @@ extendClass(HomeStationUI, {
         const L = slm.getLoadout(shipId);
         const curList = (kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[poolKey]) || [];
         const current = curList[index] || '';
-        const pickSlotSz = 'SML'[Math.max(0, Math.min(2, slm.getSlotSizeLevel(shipId, kind, index) | 0))];
+        const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
+        const pickSlotLv = Math.max(0, Math.min(2, sizeFn.call(slm, shipId, kind, index) | 0));
+        const pickSlotSz = 'SML'[pickSlotLv];
         const kindColors = (() => { const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor && iconRenderer.getModuleKindColor(k)) || d; return { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') }; })();
         const blockedOf = (partKind, id) => {
             if (partKind !== kind) return 'WRONG SLOT TYPE';
@@ -121,7 +186,7 @@ extendClass(HomeStationUI, {
         modal.setAttribute('aria-modal', 'true');
         modal.innerHTML = `<div class="hs-res-buy-dialog hs-pick-dialog">` +
             `<div class="hs-res-buy-head"><h3>${String(kind).toUpperCase()} SLOT ${index + 1}</h3>` +
-            `<p class="hs-res-buy-sub">${this.shipName ? this.shipName(shipId) : ''} · SLOT SIZE ${slm.slotSizeLabel(slm.getSlotSizeLevel(shipId, kind, index))}</p></div>` +
+            `<p class="hs-res-buy-sub">${this.shipName ? this.shipName(shipId) : ''} · SLOT SIZE ${slm.slotSizeLabel(pickSlotLv)}</p></div>` +
             `<div class="hs-pick-body">` +
             `<div class="hs-slot-picker hs-bay-inv hs-pick-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div></div>${gridHtml}</div>` +
             (kind === 'weapon' ? `<div class="hs-pick-keys" role="group" aria-label="Shortcut"></div>` : '') +
@@ -558,67 +623,220 @@ extendClass(HomeStationUI, {
         return `<span class="hs-hangar-part-mount" data-ui-tip="SLOTTED">` +
             `<img src="${url}" alt="" draggable="false"></span>`;
     },
-    renderHangarPartsGrid(inventory, loadout) {
-        return `<div class="hs-hangar-parts">` + HANGAR_PART_SECTIONS.map((sec) => {
-            const equipped = (loadout && loadout[sec.key]) || [];
-            // PARTS view lists only what's fitted on the ship; the slot modal handles picking.
-            const ids = ((inventory && inventory[sec.key]) || []).filter((id) => equipped.indexOf(id) !== -1);
+    /**
+     * Bay SHIP inventory grid: every hull equipment slot (empty + filled) as a
+     * container cell on the same storage grid, sized S/M/L. Unequipped cargo
+     * still packs after the slots. Positions are pinned (storagePos) so a re-render
+     * never auto-reflows items the player already placed.
+     */
+    renderBayShipInventoryGrid(profile, shipId) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        if (!slm || !shipId || !this._storageGridHtml) {
+            return this.renderShipStorage ? this.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false }) : '';
+        }
+        const modelClass = this.shipModelClass
+            ? this.shipModelClass(shipId, typeof shipConfigManager !== 'undefined' ? shipConfigManager.getConfig(shipId) : null)
+            : 'starfighter';
+        const merged = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+            ? shipConfigManager.getMergedModel(shipId) : null;
+        try { if (profileManager.reconcileShipParts) profileManager.reconcileShipParts(profile, shipId); } catch (e) { /* ignore */ }
+        const hangarSlots = slm.buildHangarSlots
+            ? slm.buildHangarSlots(shipId, modelClass, merged) : { slots: [] };
+        const color = (() => {
+            const g = (k, d) => (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor
+                && iconRenderer.getModuleKindColor(k)) || d;
+            return { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') };
+        })();
+        const kindIcon = { weapon: 'statWeapon', defense: 'statArmor', energy: 'statEnergy', ability: 'statAbilities' };
+        const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        const layoutPx = this._storageLayoutPx ? this._storageLayoutPx() : { cell: 56, gap: 2 };
+        const cs = layoutPx.cell;
+        const spanOf = (lv) => [[1, 1], [1, 2], [2, 2]][Math.max(0, Math.min(2, lv | 0))];
+        const posMap = (typeof profileManager !== 'undefined' && profileManager.getStoragePosMap)
+            ? profileManager.getStoragePosMap(profile, 'ship', shipId) : {};
+        const cellSpecs = [];
+        const movePinUsed = {};
+        const equippedKeys = {};
+        // Explicit pins only — never leave pos null (dense auto-flow would reshuffle on re-render).
+        let baseGrid = this._storageGrid ? this._storageGrid(shipId) : { cols: 6, rows: 2 };
+        const cols = Math.max(baseGrid.cols || 4, 4);
+        let rows = Math.max(baseGrid.rows || 2, 2);
+        const claimed = new Set();
+        const cellsOf = (col, row, w, h) => {
+            const out = [];
+            for (let r = row; r < row + h; r++) for (let c = col; c < col + w; c++) out.push(c + ',' + r);
+            return out;
+        };
+        const fits = (col, row, w, h) => {
+            if (col < 1 || row < 1 || col + w - 1 > cols || row + h - 1 > rows) return false;
+            return !cellsOf(col, row, w, h).some((k) => claimed.has(k));
+        };
+        const mark = (col, row, w, h) => { cellsOf(col, row, w, h).forEach((k) => claimed.add(k)); };
+        const placeNext = (w, h) => {
+            for (let guard = 0; guard < 400; guard++) {
+                for (let r = 1; r <= rows - h + 1; r++) {
+                    for (let c = 1; c <= cols - w + 1; c++) {
+                        if (fits(c, r, w, h)) {
+                            mark(c, r, w, h);
+                            return [c, r];
+                        }
+                    }
+                }
+                rows += 1;
+            }
+            const fallback = [1, rows - h + 1];
+            mark(fallback[0], fallback[1], w, h);
+            return fallback;
+        };
+        const resolvePos = (pinned, w, h) => {
+            if (pinned && pinned[0] > 0 && pinned[1] > 0) {
+                while (pinned[1] + h - 1 > rows) rows += 1;
+                if (fits(pinned[0], pinned[1], w, h)) {
+                    mark(pinned[0], pinned[1], w, h);
+                    return [pinned[0], pinned[1]];
+                }
+            }
+            return placeNext(w, h);
+        };
+        const gap = layoutPx.gap || 2;
+        (hangarSlots.slots || []).forEach((sl) => {
+            if (!sl) return;
+            let slotLv = 0;
+            try {
+                const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
+                slotLv = Math.max(0, Math.min(2, sizeFn.call(slm, shipId, sl.kind, sl.index) | 0));
+            } catch (e) { slotLv = 0; }
+            // Split weapons use effective mount size (≥ M) so M guns fit without shrinking.
+            const span = spanOf(slotLv);
+            const sz = 'SML'[slotLv];
+            const pk = this.hangarPartColor(sl.kind, sl.id) || color[sl.kind] || 'var(--color-primary)';
+            const slotC = this.hangarSlotColor(sl.kind, sl.id) || color[sl.kind] || pk;
+            const slotKey = 'slot:' + sl.kind + ':' + sl.index;
+            const pos = resolvePos(posMap[slotKey], span[0], span[1]);
+            if (sl.id) {
+                const bucket = sl.kind === 'weapon' ? 'weapons'
+                    : (sl.kind === 'defense' ? 'defenses'
+                        : (sl.kind === 'energy' ? 'energy' : 'abilities'));
+                equippedKeys[bucket + ':' + sl.id] = true;
+                const label = this.hangarModuleLabel ? this.hangarModuleLabel(sl.id) : String(sl.id).toUpperCase();
+                let key = kindIcon[sl.kind];
+                if (slm.resolveModuleIcon) {
+                    try { key = slm.resolveModuleIcon({ kind: sl.kind, id: sl.id }) || key; } catch (e) { /* type */ }
+                }
+                const img = ir ? String((sl.kind === 'weapon' && ir.weaponImgHtml
+                    ? ir.weaponImgHtml(sl.id, 32, 'hs-pixel', false)
+                    : ir.imgHtml(key, 32, 'hs-pixel', pk, false)) || '').replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
+                // Part keeps its own S/M/L footprint nested inside the (possibly larger) slot.
+                const partLv = slm.getPartSizeLevel
+                    ? Math.max(0, Math.min(slotLv, slm.getPartSizeLevel(sl.kind, sl.id) | 0)) : slotLv;
+                const partSpan = spanOf(partLv);
+                const pw = partSpan[0] * cs + (partSpan[0] - 1) * gap - 6;
+                const ph = partSpan[1] * cs + (partSpan[1] - 1) * gap - 6;
+                const body = (typeof physicalItem !== 'undefined')
+                    ? physicalItem.wrap(sl.kind, sl.id, Math.max(8, pw), Math.max(8, ph), pk, '', { plain: true }) : '';
+                const partBox = `<span class="hs-storage-slot-part" style="width:${partSpan[0] * cs + (partSpan[0] - 1) * gap}px;height:${partSpan[1] * cs + (partSpan[1] - 1) * gap}px">${body}</span>`;
+                const tip = String(this.hangarModuleTip ? this.hangarModuleTip(sl.kind, sl.id) : label)
+                    .replace(/"/g, '&quot;') + '\nEQUIPPED · SLOT ' + sz;
+                // Equipped mounts are not free-drag cargo — keep them on their slot tile.
+                cellSpecs.push({
+                    span: span,
+                    pos: pos,
+                    html: `<button type="button" class="hs-storage-cell is-ship-slot is-equipped" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" data-part-kind="${sl.kind}" data-part-id="${sl.id}" data-part-span-w="${partSpan[0]}" data-part-span-h="${partSpan[1]}" data-drag-key="${slotKey}" data-drag-source="ship-slot" data-drag-ship="${shipId}" draggable="false" style="__SPAN__--pk-c:${slotC}" data-ui-tip-compact data-ui-tip-head="${label.replace(/"/g, '&quot;')}" data-ui-tip="${tip}" aria-label="${label} — equipped">` +
+                        `${partBox}<span class="hs-storage-slot-size">${sz}</span></button>`
+                });
+                return;
+            }
+            const name = 'EMPTY ' + String(sl.kind).toUpperCase() + ' SLOT';
+            const typeKey = kindIcon[sl.kind] || 'statWeapon';
+            const typeIco = ir
+                ? String(ir.imgHtml(typeKey, Math.max(28, Math.floor(cs * 0.7)), 'hs-storage-slot-type', slotC, false) || '')
+                    .replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '')
+                : (this.slotGlyphHtml ? this.slotGlyphHtml(sl.kind, 'hs-storage-slot-glyph') : '');
+            cellSpecs.push({
+                span: span,
+                pos: pos,
+                html: `<button type="button" class="hs-storage-cell is-ship-slot is-empty" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" data-part-kind="${sl.kind}" data-drag-key="${slotKey}" data-drag-source="ship-slot" data-drag-ship="${shipId}" draggable="false" style="__SPAN__--pk-c:${slotC}" data-ui-tip-compact data-ui-tip-head="${name}" data-ui-tip="NO PART INSTALLED · SLOT ${sz} — DRAG TO MOVE · CLICK TO EQUIP" aria-label="${name}">` +
+                    `<span class="hs-storage-slot-type-bg" aria-hidden="true">${typeIco}</span>` +
+                    `<span class="hs-storage-slot-size">${sz}</span></button>`
+            });
+        });
+        // Unequipped cargo — always explicit pos (pin or next free cell after slots).
+        if (typeof profileManager !== 'undefined' && profileManager.getShipStorageEntry && this._storageItemMeta) {
+            const entry = profileManager.getShipStorageEntry(profile, shipId);
+            const buckets = this.profileManagerShipStorageBuckets
+                ? this.profileManagerShipStorageBuckets()
+                : ['weapons', 'defenses', 'abilities', 'energy', 'blueprints'];
+            buckets.forEach((bucket) => {
+                Object.keys(entry[bucket] || {}).forEach((id) => {
+                    if ((entry[bucket][id] || 0) <= 0) return;
+                    if (bucket !== 'blueprints' && equippedKeys[bucket + ':' + id]) return;
+                    const defId = this._storageDefId ? this._storageDefId(id) : id;
+                    if (bucket !== 'blueprints' && equippedKeys[bucket + ':' + defId]) return;
+                    const units = (bucket !== 'blueprints' && this._expandPartUnits)
+                        ? this._expandPartUnits(bucket, defId, entry[bucket][id] || 1)
+                        : [{ bucket: bucket, id: id, defId: defId }];
+                    units.forEach((u) => {
+                        const unitKey = bucket + ':' + u.id;
+                        const moveKey = bucket + ':' + (u.defId || defId);
+                        if (equippedKeys[unitKey] || equippedKeys[moveKey]) return;
+                        const meta = this._storageItemMeta(bucket, u.defId || defId);
+                        const span = this._storageItemSpan ? this._storageItemSpan(bucket, u.defId || defId) : [1, 1];
+                        const body = (typeof physicalItem !== 'undefined')
+                            ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '', { plain: true }) : '';
+                        const tip = String(this.hangarModuleTip ? this.hangarModuleTip(meta.kind, meta.physId) : meta.label)
+                            .replace(/"/g, '&quot;');
+                        // A def-level pin (bucket:defId, written when a part is taken out of a slot) applies to
+                        // the first unit of that def shown, whatever its unit number is.
+                        const pinnedPos = posMap[unitKey] || (!movePinUsed[moveKey] ? posMap[moveKey] : null);
+                        if (!posMap[unitKey] && posMap[moveKey]) movePinUsed[moveKey] = true;
+                        const pos = resolvePos(pinnedPos, span[0], span[1]);
+                        cellSpecs.push({
+                            span: span,
+                            pos: pos,
+                            html: `<button type="button" class="hs-storage-cell" data-part-kind="${meta.kind}" data-part-id="${meta.physId}" data-move-to-station="${unitKey}" data-ship="${shipId}" data-drag-key="${unitKey}" data-drag-source="ship" data-drag-ship="${shipId}" draggable="true" style="__SPAN__--pk-c:${meta.slotColor || meta.color}" data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" data-ui-tip="${tip}" aria-label="${meta.label}">${body}</button>`
+                        });
+                    });
+                });
+            });
+        }
+        const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        cellSpecs.forEach((c) => {
+            if (c.pos) rows = Math.max(rows, (c.pos[1] || 1) + (c.span[1] || 1) - 1);
+            if (c.span[1] > rows) rows = c.span[1];
+        });
+        while (used > cols * rows) rows += 1;
+        return this._storageGridHtml(
+            cellSpecs,
+            { cols: cols, rows: rows },
+            `data-storage-target="ship" data-ship="${shipId}" data-ship-slots="1"`,
+            'hs-pick-grid'
+        );
+    },
+
+    /** Merged sidebar: per kind, each slot with its part info beside it (no section labels / collapse).
+     *  data-filter mirrors the bay inventory chips so WEAPON/DEFENSE/… hide other kinds. */
+    renderHangarPartsGrid(inventory, loadout, slots, layout) {
+        const filter = this._bayInvFilter || 'all';
+        return `<div class="hs-hangar-parts" data-filter="${filter}">` + HANGAR_PART_SECTIONS.map((sec) => {
             const slm = shipLoadoutManager;
-            // One slot of this kind → picking a part replaces the other: radio.
-            // Several slots → each part is independently on/off: switch.
             const caps = slm.getSlotCaps && slm.resolveModelClass
                 ? slm.getSlotCaps(this.hangarShipId, slm.resolveModelClass(this.hangarShipId)) : {};
             const single = Math.max(0, Number(caps[sec.key]) || 0) <= 1;
-            const cells = ids.map((id) => {
-                const on = equipped.indexOf(id) !== -1;
-                const label = this.hangarModuleLabel(id);
-                const size = slm.partSizeLabel ? slm.partSizeLabel(sec.kind, id) : 'S';
-                const fits = !slm.partFitsSlot || slm.partFitsSlot(this.hangarShipId, sec.kind, id).ok;
-                const isToggle = sec.kind !== 'weapon';
-                // No radio / switch box: the glowing icon and bright name show "on".
-                const state = '';
-                return `<button type="button" class="hs-hangar-part${on ? ' is-equipped' : ''}${on && this._hangarExpandedPart === sec.kind + ':' + id ? ' is-expanded' : ''}${fits ? '' : ' is-too-big'}${isToggle ? ' is-toggle' : ''}"` +
-                    (isToggle ? (single ? ` role="radio" aria-checked="${on}"` : ` role="switch" aria-checked="${on}"`) : '') +
-                    ` data-part-kind="${sec.kind}" data-part-id="${id}" data-part-size="${size}"` +
-                    ` data-ui-tip="${String(this.hangarModuleTip(sec.kind, id)).replace(/"/g, '&quot;')}\nSIZE ${size}${on ? ' · EQUIPPED' : ''}${fits ? '' : ' · NEEDS ' + size + ' SLOT'}">` +
-                    // No slot-type glyph per row: the section header already names the type.
-                    `<span class="hs-hangar-part-icon">` +
-                    `${this.moduleIconHtml(sec.kind, id, 32, 'hs-pixel', false)}</span>` +
-                    `<span class="hs-hangar-part-name"><span class="hs-hangar-part-title">${label} ` +
-                    `<span class="hs-hangar-part-size is-${size}">(${size})</span></span>` +
-                    (sec.kind === 'weapon' ? this.hangarWeaponStatsHtml(id) : '') +
-                    (sec.kind === 'energy' ? this.hangarEnergyStatsHtml(id) : '') +
-                    (sec.kind === 'ability' ? this.hangarAbilityStatsHtml(id) : '') + `</span>` +
-                    (sec.kind === 'weapon' && on ? this.hangarWeaponMountHtml(id) : '') + state +
-                    `</button>` +
-                    (on && this._hangarExpandedPart === sec.kind + ':' + id ? this.hangarPartDetailsHtml(sec.kind, id) : '');
+            const kindSlots = (slots || []).filter((sl) => sl && sl.kind === sec.kind);
+            const pairs = kindSlots.map((sl) => {
+                const row = this.hangarMergedSlotRowHtml(sec, sl, single);
+                const detailsOpen = sl.id && this._hangarExpandedPart === sec.kind + ':' + sl.id;
+                return `<div class="hs-hangar-slot-pair${sl.id ? ' is-filled' : ''}" data-slot-kind="${sec.kind}" data-slot-index="${sl.index}">` +
+                    row +
+                    (detailsOpen ? this.hangarPartDetailsHtml(sec.kind, sl.id) : '') +
+                    `</div>`;
             }).join('');
-            const collapsed = !!this.hangarCollapsedSections()[sec.kind];
-            // Pixel sprite + label in the section's category colour.
             const kindColor = typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor
                 ? iconRenderer.getModuleKindColor(sec.kind) : null;
-            return `<section class="hs-hangar-parts-section${collapsed ? ' is-collapsed' : ''}" data-part-section="${sec.kind}"${kindColor ? ` style="--kind-color:${kindColor}"` : ''}>` +
-                `<h4 class="hs-hangar-parts-title" data-part-section-toggle="${sec.kind}" role="button" tabindex="0" aria-expanded="${!collapsed}">` +
-                `<span class="hs-hangar-parts-icon">${this.iconHtml(sec.icon, 32, 'hs-pixel', false, kindColor)}</span>` +
-                `<span class="hs-hangar-parts-label">${sec.label}</span>` +
-                this.hangarSectionSlotStripHtml(sec, sec.kind === 'weapon' && loadout && loadout.weaponSlots && loadout.weaponSlots.length
-                    ? loadout.weaponSlots : equipped, caps) +
-                `<span class="hs-hangar-parts-caret" aria-hidden="true">${collapsed ? '▼' : '▲'}</span></h4>` +
-                `<div class="hs-hangar-parts-grid">${cells || this.emptyHtml('hsHangar', 'NONE EQUIPPED')}</div>` +
+            return `<section class="hs-hangar-parts-section" data-part-section="${sec.kind}"${kindColor ? ` style="--kind-color:${kindColor}"` : ''}>` +
+                `<div class="hs-hangar-parts-grid" data-slot-kind="${sec.kind}">${pairs || this.emptyHtml('hsHangar', 'NO SLOT')}</div>` +
                 `</section>`;
         }).join('') + `</div>`;
-    },
-    /** Collapsed parts sections { kind: true }, loaded once from localStorage. */
-    hangarCollapsedSections() {
-        if (!this._hangarCollapsedSections) {
-            let map = {};
-            try {
-                const raw = JSON.parse(localStorage.getItem('vf_hs_hangar_collapsed_sections') || '{}');
-                if (raw && typeof raw === 'object') map = raw;
-            } catch (err) { /* ignore */ }
-            this._hangarCollapsedSections = map;
-        }
-        return this._hangarCollapsedSections;
     },
     /**
      * Section header slot strip: one box per slot of this kind (weapons count
@@ -700,41 +918,6 @@ extendClass(HomeStationUI, {
                 this.createUI();
             });
         });
-        this.overlay.querySelectorAll('[data-part-section-toggle]').forEach((head) => {
-            const toggle = () => {
-                const kind = head.getAttribute('data-part-section-toggle');
-                const map = this.hangarCollapsedSections();
-                map[kind] = !map[kind];
-                // Remembered across reloads (like the AREAS / PARTS view).
-                try {
-                    localStorage.setItem('vf_hs_hangar_collapsed_sections', JSON.stringify(map));
-                } catch (err) { /* ignore */ }
-                const sec = head.closest('.hs-hangar-parts-section');
-                const c = this._hangarCollapsedSections[kind];
-                if (sec) sec.classList.toggle('is-collapsed', c);
-                head.setAttribute('aria-expanded', String(!c));
-                const caret = head.querySelector('.hs-hangar-parts-caret');
-                if (caret) caret.textContent = c ? '▼' : '▲';
-            };
-            head.addEventListener('click', (e) => {
-                // A plain click on a filled slot box in the section header used to unequip that
-                // part — too easy to trigger by accident while just opening/closing the section,
-                // right next to the collapse caret. Dragging a filled box off the ship still
-                // unequips it (below); a click here only toggles the section now.
-                const box = e.target.closest('[data-section-slot]');
-                if (box) {
-                    e.stopPropagation();
-                    if (box._vfDragged) { box._vfDragged = false; } // tail end of a drag, already handled
-                    return;
-                }
-                toggle();
-            });
-            head.addEventListener('keydown', (e) => {
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                toggle();
-            });
-        });
         // Drag a filled section-slot box onto a ship slot to move the part there, or off the ship to unequip it.
         this.overlay.querySelectorAll('.hs-section-slot.is-filled[data-section-slot]').forEach((box) => {
             box.addEventListener('pointerdown', (e) => {
@@ -750,7 +933,7 @@ extendClass(HomeStationUI, {
                 window.addEventListener('pointermove', mv, true); window.addEventListener('pointerup', off, true); window.addEventListener('pointercancel', off, true);
             });
         });
-        this.overlay.querySelectorAll('.hs-hangar-part').forEach((cell) => {
+        this.overlay.querySelectorAll('.hs-hangar-part:not(.is-empty)').forEach((cell) => {
             // Pointer drag instead of native DnD: only the icon follows the cursor.
             cell.setAttribute('draggable', 'false');
             cell.addEventListener('dragstart', (e) => e.preventDefault());
@@ -760,19 +943,22 @@ extendClass(HomeStationUI, {
             if (cell.getAttribute('data-part-kind') !== 'weapon') {
                 cell.addEventListener('click', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     this.toggleHangarPart(cell);
                 });
                 return;
             }
-            // No drag & drop from the PARTS list: slots are filled via the SLOTS view.
+            // Merged row: filled → details (picker via CHANGE in details); empty uses data-slot-pick.
             cell.addEventListener('click', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 if (cell.classList.contains('is-equipped')) this.toggleHangarPartDetails(cell);
                 else this.equipHangarPart(cell, null);
             });
             cell.addEventListener('keydown', (e) => {
                 if (e.key !== 'Enter' && e.key !== ' ') return;
                 e.preventDefault();
+                e.stopPropagation();
                 if (cell.classList.contains('is-equipped')) {
                     this.toggleHangarPartDetails(cell);
                     return;

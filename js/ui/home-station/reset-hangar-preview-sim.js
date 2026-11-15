@@ -65,6 +65,71 @@ extendClass(HomeStationUI, {
         });
     },
 
+    destroyHangarInvResize() {
+        if (this._hangarInvResizeOff) {
+            this._hangarInvResizeOff();
+            this._hangarInvResizeOff = null;
+        }
+    },
+
+    /** Dedicated drag handle for the bay inventory column (--hs-inv-w): a single standalone
+     *  track, not a left/right pair around a flexible centre, so this doesn't reuse
+     *  setupPanelResize — it only ever touches its own custom property, never the
+     *  grid-template-columns of sibling tracks (--hs-hangar-left-w stays independently
+     *  resizable via setupHangarPanelResize). */
+    setupHangarInvResize() {
+        this.destroyHangarInvResize();
+        const body = this.overlay && this.overlay.querySelector('.hs-hangar-split');
+        const handle = this.overlay && this.overlay.querySelector('.hs-hangar-inv > .pe-resize-handle[data-resize="inv"]');
+        if (!body || !handle) return;
+        const MIN_W = 280;
+        const MAX_W = 640;
+        let dragging = false;
+        let startX = 0;
+        let startW = 0;
+        const invAside = () => this.overlay && this.overlay.querySelector('.hs-hangar-inv');
+        const onMove = (e) => {
+            if (!dragging) return;
+            const aside = invAside();
+            if (!aside) return;
+            const rect = aside.getBoundingClientRect();
+            const sc = aside.offsetWidth && rect.width ? rect.width / aside.offsetWidth : 1;
+            const w = Math.round(Math.max(MIN_W, Math.min(MAX_W, startW + (e.clientX - startX) / sc)));
+            body.style.setProperty('--hs-inv-w', `${w}px`);
+        };
+        const onUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            document.body.classList.remove('pe-resizing');
+            handle.classList.remove('pe-resize-active');
+            const aside = invAside();
+            if (aside) {
+                try { localStorage.setItem('vf_hs_bay_inv_w', String(aside.offsetWidth)); } catch (_) { /* ignore */ }
+            }
+        };
+        const onDown = (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            const aside = invAside();
+            if (!aside) return;
+            dragging = true;
+            startX = e.clientX;
+            startW = aside.offsetWidth;
+            document.body.classList.add('pe-resizing');
+            handle.classList.add('pe-resize-active');
+        };
+        handle.addEventListener('mousedown', onDown);
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('blur', onUp);
+        this._hangarInvResizeOff = () => {
+            handle.removeEventListener('mousedown', onDown);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('blur', onUp);
+        };
+    },
+
     toggleHangarSidebar(side) {
         if (side === 'left') {
             return; // ship sidebar stays open

@@ -3,9 +3,9 @@
 // Slot sizes per slot (replaces "area level = size of every slot").
 //
 //   size = base + upgrades, capped at L
-//   base: split slots (wing pairs, split nose/core mounts) are S,
-//         single slots on the centreline (nose gun, core, aft) are M.
-//   upgrades: bought per slot in the hangar slot menu, S → M → L.
+//   base: almost everything starts S. Only a single centre-line weapon
+//         mount (nose gun) starts at M — wing pairs, defense, ability and
+//         energy stay S until upgraded in the hangar slot menu (S → M → L).
 //
 // Area upgrades still open new slots (see ship-areas.js); they no longer
 // change slot size. Stored as
@@ -36,7 +36,10 @@
     };
 
     slm.getSlotBaseSizeLevel = function (shipId, kind, index) {
-        return this.isSplitSlot(shipId, kind, index) ? 0 : 1;
+        // Fresh hull: only the single nose/core weapon is M. Everything else
+        // (wings, defense, ability, energy) is S so new profiles aren't all-M.
+        if (kind === 'weapon' && !this.isSplitSlot(shipId, kind, index)) return 1;
+        return 0;
     };
 
     /**
@@ -84,6 +87,7 @@
     /**
      * Size level (0 S, 1 M, 2 L) of a slot. Without an index, the largest
      * slot of that kind counts — "does this part fit anywhere".
+     * Upgrade UI uses this raw value (split wings start S and grow S→M→L).
      */
     slm.getSlotSizeLevel = function (shipId, kind, index) {
         if (index == null) {
@@ -99,6 +103,30 @@
         }
         return Math.min(MAX, this.getSlotBaseSizeLevel(shipId, kind, index)
             + this.getSlotUpgradeLevel(shipId, kind, index));
+    };
+
+    /**
+     * Size that governs fit + inventory footprint. A split weapon mount is a
+     * pair of half-sockets whose complete mount is at least M — so M guns
+     * fit wing/split slots even while the upgrade ladder still starts at S.
+     */
+    slm.getSlotEffectiveSizeLevel = function (shipId, kind, index) {
+        if (index == null) {
+            const caps = this.getSlotCaps(shipId, this.resolveModelClass(shipId));
+            const n = kind === 'weapon'
+                ? (this.weaponMountSlots ? this.weaponMountSlots(caps.weapons) : caps.weapons)
+                : caps[this.kindToLoadoutKey(kind)];
+            let best = 0;
+            for (let i = 0; i < Math.max(1, Number(n) || 1); i++) {
+                best = Math.max(best, this.getSlotEffectiveSizeLevel(shipId, kind, i));
+            }
+            return best;
+        }
+        let have = this.getSlotSizeLevel(shipId, kind, index);
+        if (kind === 'weapon' && this.isSplitSlot && this.isSplitSlot(shipId, kind, index)) {
+            have = Math.max(have, 1);
+        }
+        return have;
     };
 
     slm.getMaxSlotSizeLevel = function () {

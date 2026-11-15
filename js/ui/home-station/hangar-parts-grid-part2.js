@@ -67,6 +67,9 @@ extendClass(HomeStationUI, {
                     const slotEl = this.overlay.querySelector(`.hs-hangar-slot[data-slot-kind="${kind}"][data-slot-index="${index}"]`);
                     const pin = slotEl && slotEl.querySelector('.hs-hangar-slot-pin:not(.is-mirror)');
                     if (pin) pin.click();
+                } else if (act === 'swap' && index >= 0) {
+                    this._hangarExpandedPart = null;
+                    this.openHangarSlotPicker(kind, index);
                 } else if (act === 'fire-auto' || act === 'fire-charge') {
                     // Ship-wide fire mode (setHangarFireMode in bind-station-events.js).
                     const mode = act === 'fire-auto' ? 'auto' : 'charge';
@@ -112,6 +115,7 @@ extendClass(HomeStationUI, {
         return `<div class="hs-hangar-part-details">${html}` +
             `<div class="hs-hangar-part-detail-actions">` +
             iconBtn('show', 'navEye', 'SHOW ON SHIP') +
+            iconBtn('swap', 'hsCraft', 'CHANGE PART') +
             iconBtn('unequip', 'navDoor', 'UNEQUIP') +
             `</div></div>`;
     },
@@ -166,6 +170,7 @@ extendClass(HomeStationUI, {
         const stage = this.overlay && this.overlay.querySelector('#hsHangarBayStage');
         const kind = pull ? pull.kind : cell.getAttribute('data-part-kind');
         const iconEl = pull ? pull.iconEl : cell.querySelector('.hs-hangar-part-icon img, .hs-pick-ico img');
+        const emptySlot = !!(cell && cell.classList.contains('is-ship-slot') && cell.classList.contains('is-empty'));
         const SNAP_PX = 64;
         const startX = downEvent.clientX;
         const startY = downEvent.clientY;
@@ -173,8 +178,8 @@ extendClass(HomeStationUI, {
         let target = null;
         let moved = false;
 
-        // Grabbing already marks every compatible slot.
-        if (stage) {
+        // Grabbing already marks every compatible slot (skip for empty-frame reposition).
+        if (stage && !emptySlot) {
             stage.classList.add('is-part-dragging');
             stage.setAttribute('data-drag-kind', kind);
             const dragId = pull ? pull.id : cell.getAttribute('data-part-id');
@@ -254,8 +259,8 @@ extendClass(HomeStationUI, {
                     ghost.style.top = `${(y - o.top) / k}px`;
                 };
                 const itemBody = cell && cell.querySelector('.hs-item-body');
-                if (itemBody) {
-                    // Physical inventory item: lift the bare object, held where it was grabbed.
+                if (itemBody || emptySlot) {
+                    // Physical inventory item / empty hull slot: lift the tile, held where grabbed.
                     const r = cell.getBoundingClientRect();
                     const s = r.width / Math.max(1, cell.offsetWidth);
                     // The 0.88 factor is the "picked up" shrink — a held item reads a touch
@@ -271,13 +276,15 @@ extendClass(HomeStationUI, {
                     clone.classList.remove('is-dragging');
                     clone.style.width = '100%';
                     clone.style.height = '100%';
-                    // Only the object itself: no cell frame, background or labels.
-                    clone.className = 'hs-pick-cell';
-                    clone.style.border = '0';
-                    clone.style.background = 'none';
-                    clone.style.boxShadow = 'none';
-                    clone.style.outline = '0';
-                    clone.querySelectorAll('.hs-pick-size, .hs-pick-ico').forEach((n) => n.remove());
+                    if (!emptySlot) {
+                        // Only the object itself: no cell frame, background or labels.
+                        clone.className = 'hs-pick-cell';
+                        clone.style.border = '0';
+                        clone.style.background = 'none';
+                        clone.style.boxShadow = 'none';
+                        clone.style.outline = '0';
+                        clone.querySelectorAll('.hs-pick-size, .hs-pick-ico').forEach((n) => n.remove());
+                    }
                     wrap.appendChild(clone);
                     ghost.appendChild(wrap);
                     ghost.classList.add('is-item');
@@ -296,10 +303,11 @@ extendClass(HomeStationUI, {
                 if (typeof uiTooltip !== 'undefined' && uiTooltip && uiTooltip.hide) uiTooltip.hide();
             }
             // Nearest compatible slot within reach; the icon snaps onto it.
+            // Empty hull frames only rearrange on the grid — never snap onto ship pins.
             let best = null;
             let bestPt = null;
             let bestDist = SNAP_PX;
-            if (onStage(e.clientX, e.clientY)) {
+            if (!emptySlot && onStage(e.clientX, e.clientY)) {
                 slots().filter((el) => smallEls.indexOf(el) === -1).forEach((el) => {
                     const c = pinCenter(el, e.clientX, e.clientY);
                     if (!c) return;
@@ -359,6 +367,7 @@ extendClass(HomeStationUI, {
             // Inventory item dropped back into the grid: move it there.
             if (moved && !slotEl && ghost && ghost._grab && typeof physicalItem !== 'undefined' && physicalItem.dropInGrid
                 && physicalItem.dropInGrid(this, cell, e.clientX - ghost._grab.x, e.clientY - ghost._grab.y)) return;
+            if (!moved && cell.classList.contains('is-ship-slot')) return; // click on a slot frame: nothing
             if (!moved && cell.classList.contains('is-equipped')) {
                 this.toggleHangarPartDetails(cell); // plain click on an assigned part: expand the row
             } else if (!moved) {

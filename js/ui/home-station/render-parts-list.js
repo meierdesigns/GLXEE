@@ -51,6 +51,10 @@ extendClass(HomeStationUI, {
      *  kind/physId identify the underlying part for the physical-item casing (physical-item.js). */
     _storageItemMeta(bucket, id) {
         const defId = this._storageDefId(id);
+        const slotOf = (kind, physId, fallback) => (
+            (typeof physicalItem !== 'undefined' && physicalItem.slotColor)
+                ? (physicalItem.slotColor(kind, physId, fallback) || fallback) : fallback
+        );
         if (bucket === 'blueprints') {
             const name = (typeof profileManager !== 'undefined') ? profileManager.getBlueprintName(defId) : defId;
             const bp = (typeof profileManager !== 'undefined') ? profileManager.parseBlueprintKey(defId) : null;
@@ -58,22 +62,36 @@ extendClass(HomeStationUI, {
             // Color by what the blueprint actually crafts (weapon/defense/ability/energy), not a
             // flat ability-purple for every blueprint regardless of its real type.
             const colorBucket = kind === 'weapon' ? 'weapons' : kind === 'defense' ? 'defenses' : kind === 'energy' ? 'energy' : 'abilities';
-            return { icon: this.moduleIconHtml(kind, (bp && bp.id) || defId, 32, 'hs-pixel'), label: name, color: this._storageBucketColor(colorBucket), kind, physId: (bp && bp.id) || defId };
+            const physId = (bp && bp.id) || defId;
+            const fallback = this._storageBucketColor(colorBucket);
+            const color = (typeof physicalItem !== 'undefined' && physicalItem.partColor)
+                ? physicalItem.partColor(kind, physId, fallback) : fallback;
+            return { icon: this.moduleIconHtml(kind, physId, 32, 'hs-pixel'), label: name, color, slotColor: slotOf(kind, physId, fallback), kind, physId };
         }
         if (bucket === 'weapons') {
             const w = (typeof weaponConfigManager !== 'undefined') ? weaponConfigManager.getWeapon(defId) : null;
             const name = String((w && w.name) || defId).toUpperCase();
-            return { icon: this.iconHtml('statWeapon', 32, 'hs-pixel'), label: 'WPN ' + name, color: this._storageBucketColor(bucket), kind: 'weapon', physId: defId };
+            const fallback = this._storageBucketColor(bucket);
+            const color = (typeof physicalItem !== 'undefined' && physicalItem.partColor)
+                ? physicalItem.partColor('weapon', defId, fallback) : fallback;
+            return { icon: this.iconHtml('statWeapon', 32, 'hs-pixel'), label: name, color, slotColor: slotOf('weapon', defId, fallback), kind: 'weapon', physId: defId };
         }
         if (bucket === 'defenses') {
             const name = (typeof abilityConfigManager !== 'undefined')
                 ? String(abilityConfigManager.getDisplayName(defId) || defId).toUpperCase() : defId.toUpperCase();
-            return { icon: this.iconHtml('statArmor', 32, 'hs-pixel'), label: 'DEF ' + name, color: this._storageBucketColor(bucket), kind: 'defense', physId: defId };
+            const fallback = this._storageBucketColor(bucket);
+            const color = (typeof physicalItem !== 'undefined' && physicalItem.partColor)
+                ? physicalItem.partColor('defense', defId, fallback) : fallback;
+            return { icon: this.iconHtml('statArmor', 32, 'hs-pixel'), label: name, color, slotColor: slotOf('defense', defId, fallback), kind: 'defense', physId: defId };
         }
         // abilities / energy
         const name = (typeof abilityConfigManager !== 'undefined')
             ? String(abilityConfigManager.getDisplayName(defId) || defId).toUpperCase() : defId.toUpperCase();
-        return { icon: this.iconHtml('statAbilities', 32, 'hs-pixel'), label: (bucket === 'energy' ? 'PWR ' : 'ABL ') + name, color: this._storageBucketColor(bucket), kind: bucket === 'energy' ? 'energy' : 'ability', physId: defId };
+        const kind = bucket === 'energy' ? 'energy' : 'ability';
+        const fallback = this._storageBucketColor(bucket);
+        const color = (typeof physicalItem !== 'undefined' && physicalItem.partColor)
+            ? physicalItem.partColor(kind, defId, fallback) : fallback;
+        return { icon: this.iconHtml('statAbilities', 32, 'hs-pixel'), label: name, color, slotColor: slotOf(kind, defId, fallback), kind, physId: defId };
     },
 
     /** Cost + affordability lines for a blueprint, for its storage-tile tooltip. */
@@ -153,6 +171,21 @@ extendClass(HomeStationUI, {
         return cells.join('');
     },
 
+    /**
+     * Apply grid span + multi-cell BG classes. M/L footprints paint cell seams in the
+     * slot chrome so a tall/wide item still reads as split grid cells, not one block.
+     */
+    _applyStorageSpan(html, place, w, h) {
+        const ww = Math.max(1, w | 0);
+        const hh = Math.max(1, h | 0);
+        const cls = (ww > 1 ? ' is-span-w' : '') + (hh > 1 ? ' is-span-h' : '') + ((ww > 1 || hh > 1) ? ' is-span' : '');
+        let out = String(html || '').replace('__SPAN__', place + `--span-w:${ww};--span-h:${hh};`);
+        if (cls) {
+            out = out.replace(/class="([^"]*\bhs-storage-cell\b[^"]*)"/, `class="$1${cls}"`);
+        }
+        return out;
+    },
+
     /** Grid footprint [w, h] in slots for a bucket/id item, same sizing the hangar bay-inventory grid uses. */
     _storageItemSpan(bucket, id) {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
@@ -198,7 +231,7 @@ extendClass(HomeStationUI, {
         while (used > cols * rows) rows += 1;
         const cells = specs.map((c) => {
             const [w, h] = c.span;
-            return c.html.replace('__SPAN__', `grid-column: span ${w}; grid-row: span ${h};`);
+            return this._applyStorageSpan(c.html, `grid-column: span ${w}; grid-row: span ${h};`, w, h);
         });
         const pad = Math.max(0, cols * rows - used);
         for (let i = 0; i < pad; i++) {
@@ -373,12 +406,12 @@ extendClass(HomeStationUI, {
             const place = pinned
                 ? `grid-column: ${c.pos[0]} / span ${w}; grid-row: ${c.pos[1]} / span ${h};`
                 : `grid-column: span ${w}; grid-row: span ${h};`;
-            return c.html.replace('__SPAN__', place);
+            return this._applyStorageSpan(c.html, place, w, h);
         });
         const layout = this._storageLayoutPx();
         const cs = layout.cell;
         const gap = layout.gap;
-        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; grid-auto-flow: column dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
+        return `<div class="hs-storage-grid${extraClass ? ' ' + extraClass : ''}" ${targetAttrs || ''} data-inv-cols="${grid.cols}" data-inv-rows="${grid.rows}" style="--cs:${cs}px; --hs-gap:${gap}px; --inv-cols:${grid.cols}; --inv-rows:${grid.rows}; grid-auto-flow: column dense; grid-template-columns: repeat(${grid.cols}, ${cs}px); grid-template-rows: repeat(${grid.rows}, ${cs}px); width: calc(${grid.cols} * ${cs}px + ${grid.cols - 1} * ${gap}px); height: calc(${grid.rows} * ${cs}px + ${grid.rows - 1} * ${gap}px)">` +
             cells.join('') + this._emptyStorageCells(pad) + `</div>`;
     },
 
@@ -421,7 +454,7 @@ extendClass(HomeStationUI, {
             const span = compact ? [1, 1] : this._storageItemSpan(e.bucket, defId);
             const cs = this._storageLayoutPx().cell;
             const body = (typeof physicalItem !== 'undefined')
-                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '') : '';
+                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '', { plain: true }) : '';
             const stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
             if (e.bucket === 'weapons' && typeof shipLoadoutManager !== 'undefined' && activeShipId) {
                 const L2 = shipLoadoutManager.getLoadout(activeShipId);
@@ -454,7 +487,7 @@ extendClass(HomeStationUI, {
             // equippable part — can never register as a slot match and get equipped by accident.
             // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
             const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.slotColor || meta.color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +
@@ -557,7 +590,7 @@ extendClass(HomeStationUI, {
             const span = compact ? [1, 1] : this._storageItemSpan(e.bucket, defId);
             const cs = this._storageLayoutPx().cell;
             const body = (typeof physicalItem !== 'undefined')
-                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '') : '';
+                ? physicalItem.wrap(meta.kind, meta.physId, span[0] * cs - 6, span[1] * cs - 6, meta.color, '', { plain: true }) : '';
             let stats = String(this.hangarModuleTip(meta.kind, meta.physId) || '').split('\n').slice(1);
             if (!isBp && e.unit != null && typeof profileManager !== 'undefined' && profileManager._itemUpgradeEntry) {
                 const up = profileManager._itemUpgradeEntry(e.bucket, e.id, profile);
@@ -619,7 +652,7 @@ extendClass(HomeStationUI, {
             // since this is the function the hangar bay-inventory grid actually calls.
             // Compact shop bags drop pinned multi-cell poses — they fight 1×1 packing.
             const pinnedPos = compact ? null : (posMap[key] || (e.unit === 0 ? posMap[moveKey] : null));
-            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}${destFull ? ' is-dest-full' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.color}" ` +
+            const html = `<button type="button" class="hs-storage-cell${isBp ? ' is-blueprint' : ''}${selected ? ' is-selected' : ''}${equipped ? ' is-equipped' : ''}${destFull ? ' is-dest-full' : ''}" ${action} ${dragAttrs} data-part-kind="${isBp ? 'blueprint' : meta.kind}" data-part-id="${isBp ? defId : meta.physId}" style="__SPAN__--pk-c:${meta.slotColor || meta.color}" ` +
                 `data-ui-tip-compact data-ui-tip-head="${meta.label.replace(/"/g, '&quot;')}" ` +
                 `data-ui-tip="${tip}" aria-label="${ariaLabel}"${selected ? ' aria-pressed="true"' : ''}>` +
                 `${body}` +

@@ -116,6 +116,21 @@ extendClass(WeaponConfigManager, {
     },
 
     /**
+     * Faction that prefers this weapon (reverse of getFactionWeaponAffinity).
+     * Used by part art / shade ramps so a laser reads Terran even on a Pirate hull.
+     */
+    getWeaponPreferredFaction(weaponId) {
+        const id = String(weaponId || '').toLowerCase().replace(/[\s-]+/g, '_');
+        return ({
+            laser: 'terran', laser_twin: 'terran', railgun: 'terran',
+            plasma: 'kronax', claw_beam: 'kronax', spike_burst: 'kronax',
+            ion: 'voidborn', wave: 'voidborn', nova: 'voidborn',
+            spread: 'pirate', rapid: 'pirate', burst: 'pirate',
+            missile: 'machine', pierce: 'machine'
+        })[id] || null;
+    },
+
+    /**
      * UI / shot tint per weapon: shades of the faction colour that fights
      * best with it (getFactionWeaponAffinity), distinct within the family.
      */

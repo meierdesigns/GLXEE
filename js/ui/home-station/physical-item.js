@@ -13,23 +13,67 @@ const physicalItem = (() => {
     const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
     const css = (c, a) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a == null ? 1 : a})`;
 
+    /** Faction that prefers this part (weapons via affinity; abilities via config.faction). */
+    function preferredFaction(kind, id) {
+        const defId = String(id || '').replace(/#\d+$/, '').toLowerCase().replace(/[\s-]+/g, '_');
+        if (kind === 'weapon' && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponPreferredFaction) {
+            return weaponConfigManager.getWeaponPreferredFaction(defId);
+        }
+        if (typeof abilityConfigManager !== 'undefined') {
+            const a = (abilityConfigManager.getAbility && abilityConfigManager.getAbility(defId))
+                || (abilityConfigManager.configs && abilityConfigManager.configs[defId]);
+            if (a && a.faction) return String(a.faction).toLowerCase();
+        }
+        return null;
+    }
+
+    /** Accent / UI color for a part — weapon family tint or faction accent. */
+    function partColor(kind, id, fallback) {
+        const defId = String(id || '').replace(/#\d+$/, '');
+        if (kind === 'weapon' && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeaponUiColor) {
+            const c = weaponConfigManager.getWeaponUiColor(defId);
+            if (c) return c;
+        }
+        const fid = preferredFaction(kind, defId);
+        if (fid && typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+            const s = factionShipStyles.getFactionStyle(fid);
+            if (s && s.accent) return s.accent;
+        }
+        return fallback;
+    }
+
+    /** Slot chrome / BG color — weapons always category red; item art keeps partColor. */
+    function slotColor(kind, id, fallback) {
+        if (kind === 'weapon') {
+            const kc = (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor)
+                ? iconRenderer.getModuleKindColor('weapon') : null;
+            return kc || fallback || '#ff6a4a';
+        }
+        return partColor(kind, id, fallback) || fallback;
+    }
+
     function render(kind, id, w, h, color, opts) {
         const plain = !!(opts && opts.plain);
+        const defId = String(id || '').replace(/#\d+$/, '').toLowerCase().replace(/[\s-]+/g, '_');
+        const fid = preferredFaction(kind, defId);
         const cw = Math.max(8, Math.round(w / PX)), ch = Math.max(8, Math.round(h / PX));
         const cv = document.createElement('canvas');
         cv.width = cw; cv.height = ch;
         const g = cv.getContext('2d');
-        const rnd = rngOf(hash(kind + ':' + id));
+        const rnd = rngOf(hash(kind + ':' + defId));
         const kc = rgbOf(color), K = mix(kc, [255, 255, 255], 0.15);
         const OUT = [5, 6, 10];
         const dot = (x, y, c, a) => { x = Math.round(x); y = Math.round(y); if (x < 0 || y < 0 || x >= cw || y >= ch) return; g.fillStyle = css(c, a); g.fillRect(x, y, 1, 1); };
         const rect = (x, y, rw, rh, c, a) => { g.fillStyle = css(c, a); g.fillRect(Math.round(x), Math.round(y), Math.round(rw), Math.round(rh)); };
         const q = (v, n) => Math.round(v * n) / n;
-        // Material per kind, kept bright enough to read against the dark cell.
-        const base = { weapon: [128, 134, 148], defense: [104, 128, 160], energy: [150, 122, 96], ability: [112, 96, 150] }[kind] || [120, 124, 140];
-        const mat = mix(base, kc, 0.22 + rnd() * 0.12);
+        // Material biased toward the preferred faction's metal, then the part tint.
+        const factionBase = {
+            terran: [110, 128, 158], kronax: [148, 96, 78], voidborn: [120, 88, 140],
+            pirate: [138, 118, 72], machine: [78, 132, 112]
+        }[fid] || null;
+        const kindBase = { weapon: [128, 134, 148], defense: [104, 128, 160], energy: [150, 122, 96], ability: [112, 96, 150] }[kind] || [120, 124, 140];
+        const mat = mix(mix(kindBase, factionBase || kindBase, factionBase ? 0.55 : 0), kc, 0.28 + rnd() * 0.1);
         const shade = (m, v) => (v >= 0.5 ? mix(m, [255, 255, 255], (v - 0.5) * 0.9) : mix(m, [8, 9, 16], (0.5 - v) * 1.1));
-        // Filled shape with outline; fn(u,v) -> brightness 0..1 for pixel at relative coords.
         const solid = (x, y, rw, rh, m, fn, cut) => {
             for (let j = 0; j < rh; j++) for (let i = 0; i < rw; i++) {
                 if (cut && ((i < cut || i >= rw - cut) && (j < cut || j >= rh - cut)) && (i + j < cut || (rw - 1 - i) + j < cut || i + (rh - 1 - j) < cut || (rw - 1 - i) + (rh - 1 - j) < cut)) continue;
@@ -37,64 +81,246 @@ const physicalItem = (() => {
                 dot(x + i, y + j, edge ? OUT : shade(m, q(fn(i / (rw - 1 || 1), j / (rh - 1 || 1)), 5)));
             }
         };
-        const cylV = (u) => 1 - Math.abs(u - 0.32) * 1.5;      // vertical tube: lit left of centre
-        const cylH = (u, v) => 1 - Math.abs(v - 0.3) * 1.5;    // horizontal tube
-        const plane = (u, v) => 0.78 - (u * 0.4 + v * 0.45);   // flat plate, light top-left
-        const circle = (cx, cy, r, c) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + 0.5) dot(cx + x, cy + y, c); };
-        const glowCore = (cx, cy, r) => { circle(cx, cy, r + 1, OUT); circle(cx, cy, r, mix(kc, [0, 0, 0], 0.35)); circle(cx - 0, cy - 0, Math.max(1, r - 1), kc); circle(cx, cy, Math.max(0, r - 2), mix(kc, [255, 255, 255], 0.75)); };
+        const cylV = (u) => 1 - Math.abs(u - 0.32) * 1.5;
+        const plane = (u, v) => 0.78 - (u * 0.4 + v * 0.45);
+        const circle = (cx0, cy0, r, c) => { for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) if (x * x + y * y <= r * r + 0.5) dot(cx0 + x, cy0 + y, c); };
+        const glowCore = (cx0, cy0, r) => { circle(cx0, cy0, r + 1, OUT); circle(cx0, cy0, r, mix(kc, [0, 0, 0], 0.35)); circle(cx0, cy0, Math.max(1, r - 1), kc); circle(cx0, cy0, Math.max(0, r - 2), mix(kc, [255, 255, 255], 0.75)); };
         const rivet = (x, y) => { dot(x, y, shade(mat, 0.2)); dot(x - 1, y - 1, shade(mat, 0.95), 0.8); };
+        const muzzle = (x, y, ww) => { solid(x - 1, y, ww + 2, 3, shade(mat, 0.62), (u, v) => cylV(u) - v * 0.1); rect(x + 2, y + 1, Math.max(1, ww - 4), 1, [3, 3, 6]); };
 
-        // Cast shadow on the cell floor.
         const mx = 2, my = 2, bw = cw - mx * 2 - 1, bh = ch - my * 2 - 1;
         for (let x = mx + 2; x < mx + bw; x++) for (let y = my + bh - 2; y <= my + bh + 1; y++) dot(x, y, [0, 0, 0], 0.5);
-        const cx = Math.floor(cw / 2), tall = ch > cw * 1.3;
+        const cx = Math.floor(cw / 2);
 
         if (kind === 'weapon') {
-            const dual = rnd() < 0.3, bwid = Math.max(5, Math.round(bw * (dual ? 0.28 : 0.34 + rnd() * 0.1)));
-            const top = my + 1, brTop = my + Math.round(bh * 0.55);
-            const barrel = (x) => {
-                solid(x, top + 2, bwid, brTop - top, mat, (u) => cylV(u));
-                const ribs = 2 + Math.floor(rnd() * 3);
-                for (let r = 0; r < ribs; r++) rect(x + 1, top + 5 + r * Math.max(3, Math.round((brTop - top) / (ribs + 1))), bwid - 2, 1, OUT, 0.55);
-                solid(x - 1, top, bwid + 2, 3, shade(mat, 0.62), (u, v) => cylV(u) - v * 0.1); // muzzle ring
-                rect(x + 2, top + 1, bwid - 4, 1, [3, 3, 6]);
+            const top = my + 1, brTop = my + Math.round(bh * (fid === 'machine' ? 0.48 : 0.55));
+            const breech = () => {
+                const bx = mx + 1, bwd = bw - 2, bht = my + bh - brTop - 1;
+                if (fid === 'kronax') {
+                    solid(bx + 2, brTop, bwd - 4, bht, shade(mat, 0.42), plane, 1);
+                    // Forward claws on the breech.
+                    for (let i = 0; i < 3; i++) {
+                        rect(bx, brTop + 1 + i, 2, 1, shade(mat, 0.3));
+                        rect(bx + bwd - 2, brTop + 1 + i, 2, 1, shade(mat, 0.3));
+                    }
+                    rect(bx + 3, brTop + 2, bwd - 6, 1, K);
+                } else if (fid === 'pirate') {
+                    solid(bx, brTop, bwd - 1, bht, shade(mat, 0.4), plane, 1);
+                    solid(bx + Math.floor(bwd * 0.55), brTop + 1, Math.floor(bwd * 0.4), Math.max(2, bht - 3), shade(mat, 0.55), plane);
+                    rivet(bx + 1, brTop + 2); rivet(bx + bwd - 4, brTop + bht - 3);
+                    rect(bx + 2, brTop + 3, bwd - 7, 1, mix(kc, [40, 30, 10], 0.3));
+                } else if (fid === 'voidborn') {
+                    solid(bx + 1, brTop, bwd - 2, bht, mix(mat, kc, 0.2), plane, 2);
+                    const r = Math.max(2, Math.round(Math.min(bwd, bht) * 0.28));
+                    if (!plain) glowCore(cx, brTop + Math.floor(bht / 2), r);
+                    else circle(cx, brTop + Math.floor(bht / 2), r, mix(kc, [0, 0, 0], 0.25));
+                } else if (fid === 'machine') {
+                    solid(bx, brTop, bwd, bht, shade(mat, 0.48), plane, 0);
+                    for (let yy = brTop + 2; yy < brTop + bht - 2; yy += 2) rect(bx + 2, yy, bwd - 4, 1, K, 0.55);
+                    rect(bx + 1, brTop + 1, 1, bht - 2, OUT); rect(bx + bwd - 2, brTop + 1, 1, bht - 2, OUT);
+                } else {
+                    // Terran modular block.
+                    solid(bx, brTop, bwd, bht, shade(mat, 0.46), plane, 2);
+                    solid(bx + 2, brTop + 2, bwd - 4, Math.max(3, bht - 5), mat, (u, v) => plane(u, v) + 0.05);
+                    rect(bx + 3, brTop + 3, bwd - 6, 1, K);
+                    rivet(bx + 2, brTop + bht - 3); rivet(bx + bwd - 3, brTop + bht - 3);
+                }
             };
-            if (dual) { barrel(cx - bwid - 1); barrel(cx + 1); } else barrel(cx - Math.floor(bwid / 2));
-            const bx = mx + 1, bwd = bw - 2, bht = my + bh - brTop - 1;
-            solid(bx, brTop, bwd, bht, shade(mat, 0.46), plane, 2);
-            solid(bx + 2, brTop + 2, bwd - 4, Math.max(3, bht - 5), mat, (u, v) => plane(u, v) + 0.05);
-            rect(bx + 3, brTop + 3, bwd - 6, 1, K); rect(bx + 3, brTop + 3, bwd - 6, 1, [255, 255, 255], 0.25); // energy slit
-            rivet(bx + 2, brTop + bht - 3); rivet(bx + bwd - 3, brTop + bht - 3);
+            const drawBarrel = (x, bwid, lenTop) => {
+                solid(x, lenTop + 2, bwid, brTop - lenTop, mat, (u) => cylV(u));
+                muzzle(x, lenTop, bwid);
+            };
+            // Per-weapon silhouette (matches affinity family).
+            if (defId === 'laser_twin' || defId === 'rapid') {
+                const bwid = Math.max(3, Math.round(bw * 0.22));
+                drawBarrel(cx - bwid - 1, bwid, top);
+                drawBarrel(cx + 1, bwid, top);
+            } else if (defId === 'railgun' || defId === 'pierce') {
+                const bwid = Math.max(3, Math.round(bw * 0.18));
+                drawBarrel(cx - Math.floor(bwid / 2), bwid, top);
+                const finW = Math.max(5, Math.round(bw * 0.55));
+                for (let r = 0; r < 3; r++) rect(cx - Math.floor(finW / 2), top + 4 + r * Math.max(3, Math.round(bh * 0.12)), finW, 1, OUT, 0.5);
+            } else if (defId === 'spread' || defId === 'burst' || defId === 'spike_burst') {
+                const bwid = Math.max(3, Math.round(bw * 0.18));
+                drawBarrel(cx - Math.floor(bwid / 2), bwid, top + Math.round(bh * 0.08));
+                const flare = Math.round(bh * 0.28);
+                for (let r = 0; r < flare; r++) {
+                    const k = r / Math.max(1, flare - 1);
+                    const off = Math.round(1 + k * bw * 0.32);
+                    const tw = Math.max(1, Math.round(bw * 0.12));
+                    solid(cx - off - tw, top + r, tw, 1, mat, () => 0.7);
+                    solid(cx + off, top + r, tw, 1, mat, () => 0.7);
+                    if (r < 2) { rect(cx - off - tw, top + r, tw, 1, kc, 0.8); rect(cx + off, top + r, tw, 1, kc, 0.8); }
+                }
+            } else if (defId === 'claw_beam') {
+                const bwid = Math.max(3, Math.round(bw * 0.16));
+                const hgt = brTop - top;
+                for (let r = 0; r < hgt; r++) {
+                    const k = r / Math.max(1, hgt - 1);
+                    const off = Math.round(bw * (0.28 - Math.sin(k * Math.PI) * 0.08 - (1 - k) * 0.1));
+                    solid(cx - off - bwid, top + r, bwid, 1, mat, () => 0.75 - k * 0.15);
+                    solid(cx + off, top + r, bwid, 1, mat, () => 0.75 - k * 0.15);
+                }
+                rect(cx - 1, top + 2, 3, brTop - top - 2, kc, 0.7);
+            } else if (defId === 'plasma') {
+                const bwid = Math.max(5, Math.round(bw * 0.4));
+                solid(cx - Math.floor(bwid / 2), top + Math.round(bh * 0.18), bwid, brTop - top - Math.round(bh * 0.18), mat, (u) => cylV(u));
+                for (let r = 0; r < 3; r++) rect(cx - Math.floor(bwid / 2) + 1, top + Math.round(bh * 0.28) + r * 3, bwid - 2, 1, kc, 0.75);
+                if (!plain) glowCore(cx, top + Math.round(bh * 0.14), Math.max(2, Math.round(bw * 0.18)));
+                else circle(cx, top + Math.round(bh * 0.14), Math.max(2, Math.round(bw * 0.16)), kc);
+            } else if (defId === 'missile') {
+                const tubes = 3, tw = Math.max(2, Math.round(bw * 0.2));
+                const total = tubes * tw + (tubes - 1);
+                let x0 = cx - Math.floor(total / 2);
+                for (let i = 0; i < tubes; i++) {
+                    solid(x0, top + 2, tw, brTop - top - 2, mat, (u) => cylV(u));
+                    rect(x0, top, tw, 2, kc, 0.85);
+                    rect(x0, top + Math.round((brTop - top) * 0.45), tw, 1, OUT, 0.5);
+                    x0 += tw + 1;
+                }
+            } else if (defId === 'wave' || defId === 'nova') {
+                const flare = Math.round(bh * 0.22);
+                for (let r = 0; r < flare; r++) {
+                    const k = 1 - r / Math.max(1, flare - 1);
+                    const ww = Math.max(3, Math.round(bw * (0.2 + k * 0.7)));
+                    solid(cx - Math.floor(ww / 2), top + r, ww, 1, mix(mat, kc, 0.35), () => 0.6 + k * 0.3);
+                }
+                const bwid = Math.max(4, Math.round(bw * 0.28));
+                solid(cx - Math.floor(bwid / 2), top + flare, bwid, brTop - top - flare, mat, (u) => cylV(u));
+                if (defId === 'nova' && !plain) {
+                    const arm = Math.max(2, Math.round(bw * 0.22));
+                    rect(cx - arm, top + 2, arm * 2 + 1, 1, kc, 0.9);
+                    rect(cx, top, 1, arm + 1, kc, 0.9);
+                }
+            } else if (defId === 'ion') {
+                const bwid = Math.max(3, Math.round(bw * 0.2));
+                drawBarrel(cx - Math.floor(bwid / 2), bwid, top);
+                const ringW = Math.max(5, Math.round(bw * 0.55));
+                for (let r = 0; r < 3; r++) rect(cx - Math.floor(ringW / 2), top + 5 + r * Math.max(3, Math.round(bh * 0.1)), ringW, 1, kc, 0.7);
+            } else {
+                // laser default — long emitter + cooling fins
+                const bwid = Math.max(4, Math.round(bw * 0.3));
+                drawBarrel(cx - Math.floor(bwid / 2), bwid, top);
+                const finW = Math.max(5, Math.round(bw * 0.5));
+                for (let r = 0; r < 3; r++) rect(cx - Math.floor(finW / 2), top + Math.round(bh * 0.28) + r * 3, finW, 1, OUT, 0.45);
+            }
+            breech();
         } else if (kind === 'defense') {
-            solid(mx, my, bw, bh, shade(mat, 0.5), plane, Math.max(2, Math.round(Math.min(bw, bh) * 0.2)));
-            solid(mx + 2, my + 2, bw - 4, bh - 4, mat, (u, v) => plane(u, v) + 0.06, Math.max(1, Math.round(Math.min(bw, bh) * 0.16)));
-            const r = Math.max(2, Math.round(Math.min(bw, bh) * 0.2));
-            const chev = rnd() < 0.5;
-            if (chev) for (let i = 0; i < 3; i++) { rect(mx + 4, my + 4 + i * 2, bw - 8, 1, OUT, 0.35); }
-            if (!plain) glowCore(cx, my + Math.floor(bh / 2), r);
-            [[mx + 3, my + 3], [mx + bw - 4, my + 3], [mx + 3, my + bh - 4], [mx + bw - 4, my + bh - 4]].forEach(([x, y]) => rivet(x, y));
+            const isArmor = /armor|carapace|plating/.test(defId);
+            const isShield = /shield|shell|barrier/.test(defId);
+            if (fid === 'kronax' || /carapace|reflex|spike/.test(defId)) {
+                // Serrated plate / claw shell.
+                solid(mx + 1, my + 1, bw - 2, bh - 2, shade(mat, 0.48), plane, 1);
+                for (let i = 0; i < 4; i++) {
+                    const y = my + 2 + i * Math.max(2, Math.round(bh / 5));
+                    rect(mx, y, 2, 1, shade(mat, 0.25));
+                    rect(mx + bw - 2, y, 2, 1, shade(mat, 0.25));
+                }
+                if (!plain && isShield) glowCore(cx, my + Math.floor(bh / 2), Math.max(2, Math.round(Math.min(bw, bh) * 0.18)));
+            } else if (fid === 'voidborn') {
+                const r = Math.max(3, Math.round(Math.min(bw, bh) * 0.42));
+                for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
+                    const d = Math.hypot(x, y);
+                    if (d > r || d < r * 0.45) continue;
+                    dot(cx + x, my + Math.floor(bh / 2) + y, d > r - 1 ? OUT : shade(mix(mat, kc, 0.4), 0.55 + (1 - d / r) * 0.3));
+                }
+                if (!plain) glowCore(cx, my + Math.floor(bh / 2), Math.max(2, Math.round(r * 0.35)));
+            } else if (fid === 'machine') {
+                solid(mx, my, bw, bh, shade(mat, 0.5), plane, 0);
+                for (let y = my + 2; y < my + bh - 2; y += 2) rect(mx + 2, y, bw - 4, 1, K, 0.4);
+                rect(mx + 1, my + 1, bw - 2, 1, OUT); rect(mx + 1, my + bh - 2, bw - 2, 1, OUT);
+                if (!plain) glowCore(cx, my + Math.floor(bh / 2), Math.max(2, Math.round(Math.min(bw, bh) * 0.16)));
+            } else if (fid === 'pirate') {
+                solid(mx, my + 1, bw - 1, bh - 2, shade(mat, 0.45), plane, 1);
+                solid(mx + Math.floor(bw * 0.5), my, Math.ceil(bw * 0.5), Math.floor(bh * 0.55), shade(mat, 0.58), plane);
+                rivet(mx + 2, my + 2); rivet(mx + bw - 4, my + bh - 4); rivet(mx + 3, my + bh - 5);
+            } else if (isArmor) {
+                solid(mx, my, bw, bh, shade(mat, 0.5), plane, Math.max(2, Math.round(Math.min(bw, bh) * 0.15)));
+                solid(mx + 2, my + 2, bw - 4, bh - 4, mat, (u, v) => plane(u, v) + 0.06, 1);
+                for (let i = 0; i < 3; i++) rect(mx + 4, my + 4 + i * 2, bw - 8, 1, OUT, 0.35);
+                [[mx + 3, my + 3], [mx + bw - 4, my + 3], [mx + 3, my + bh - 4], [mx + bw - 4, my + bh - 4]].forEach(([x, y]) => rivet(x, y));
+            } else {
+                // Terran / generic energy shield hex.
+                solid(mx + 1, my + 1, bw - 2, bh - 2, shade(mat, 0.5), plane, Math.max(2, Math.round(Math.min(bw, bh) * 0.22)));
+                const r = Math.max(2, Math.round(Math.min(bw, bh) * 0.22));
+                if (!plain) glowCore(cx, my + Math.floor(bh / 2), r);
+                [[mx + 3, my + 3], [mx + bw - 4, my + 3], [mx + 3, my + bh - 4], [mx + bw - 4, my + bh - 4]].forEach(([x, y]) => rivet(x, y));
+            }
         } else if (kind === 'energy') {
-            const bwid = Math.max(6, Math.round(bw * 0.62)), x = cx - Math.floor(bwid / 2);
-            solid(cx - 2, my, 5, 3, shade(mat, 0.8), (u) => cylV(u));                      // top terminal
-            solid(x, my + 3, bwid, bh - 3, mat, (u) => cylV(u));                            // cell body
-            const bands = 1 + Math.floor(rnd() * 3), bandH = Math.max(2, Math.round(bh * 0.1));
-            for (let i = 0; i < bands; i++) {
-                const y = my + 5 + Math.round((i + 0.6) * (bh - 10) / (bands + 0.2));
-                for (let xx = x + 1; xx < x + bwid - 1; xx++) for (let yy = 0; yy < bandH; yy++) dot(xx, y + yy, yy === 0 ? mix(kc, [255, 255, 255], 0.7) : mix(kc, [0, 0, 0], yy * 0.15));
+            const bwid = Math.max(6, Math.round(bw * (fid === 'machine' ? 0.78 : 0.62)));
+            const x = cx - Math.floor(bwid / 2);
+            if (fid === 'voidborn') {
+                solid(cx - 2, my, 5, 2, shade(mat, 0.8), (u) => cylV(u));
+                const r = Math.max(3, Math.round(Math.min(bw, bh) * 0.38));
+                for (let y = -r; y <= r; y++) for (let xx = -r; xx <= r; xx++) {
+                    const d = Math.hypot(xx, y);
+                    if (d > r || d < r * 0.4) continue;
+                    dot(cx + xx, my + 3 + r + y, d > r - 1 ? OUT : shade(mix(mat, kc, 0.45), 0.5 + (1 - d / r) * 0.35));
+                }
+                if (!plain) glowCore(cx, my + 3 + r, Math.max(2, Math.round(r * 0.35)));
+            } else if (fid === 'kronax') {
+                solid(x, my + 2, bwid, bh - 3, mat, (u) => cylV(u));
+                for (let i = 0; i < 3; i++) {
+                    rect(x - 1, my + 5 + i * Math.max(3, Math.round(bh / 5)), 2, 2, shade(mat, 0.3));
+                    rect(x + bwid - 1, my + 5 + i * Math.max(3, Math.round(bh / 5)), 2, 2, shade(mat, 0.3));
+                }
+                rect(x + 1, my + Math.floor(bh * 0.4), bwid - 2, 2, kc, 0.85);
+            } else if (fid === 'machine') {
+                solid(x, my + 1, bwid, bh - 2, shade(mat, 0.5), plane, 0);
+                for (let yy = my + 3; yy < my + bh - 3; yy += 2) rect(x + 1, yy, bwid - 2, 1, kc, 0.55);
+                rect(x, my + bh - 3, bwid, 2, shade(mat, 0.25));
+            } else {
+                solid(cx - 2, my, 5, 3, shade(mat, 0.8), (u) => cylV(u));
+                solid(x, my + 3, bwid, bh - 3, mat, (u) => cylV(u));
+                const bands = fid === 'pirate' ? 3 : 2, bandH = Math.max(2, Math.round(bh * 0.1));
+                for (let i = 0; i < bands; i++) {
+                    const y = my + 5 + Math.round((i + 0.6) * (bh - 10) / (bands + 0.2));
+                    for (let xx = x + 1; xx < x + bwid - 1; xx++) for (let yy = 0; yy < bandH; yy++) {
+                        dot(xx, y + yy, yy === 0 ? mix(kc, [255, 255, 255], 0.7) : mix(kc, [0, 0, 0], yy * 0.15));
+                    }
+                }
+                rect(x + 1, my + bh - 3, bwid - 2, 2, shade(mat, 0.25));
             }
-            rect(x + 1, my + bh - 3, bwid - 2, 2, shade(mat, 0.25));                         // base ring
-        } else { // ability: circuit chip with a faceted gem
-            solid(mx, my, bw, bh, mix([54, 46, 88], kc, 0.25), plane, 1);
-            const traces = 5 + Math.floor(rnd() * 5);
-            for (let i = 0; i < traces; i++) {
-                let x = mx + 1 + Math.floor(rnd() * (bw - 2)), y = my + 1 + Math.floor(rnd() * (bh - 2));
-                const len = 3 + Math.floor(rnd() * 6), hz = rnd() < 0.5;
-                for (let k = 0; k < len; k++) { dot(x, y, K, 0.55); if (hz) x++; else y++; if (x >= mx + bw - 1 || y >= my + bh - 1) break; }
-                dot(x, y, K, 0.9);
+        } else { // ability
+            if (fid === 'kronax') {
+                solid(mx + 1, my + 1, bw - 2, bh - 2, mix([80, 40, 28], kc, 0.3), plane, 1);
+                for (let i = 0; i < 3; i++) {
+                    rect(mx, my + 3 + i * 3, 2, 2, shade(mat, 0.35));
+                    rect(mx + bw - 2, my + 3 + i * 3, 2, 2, shade(mat, 0.35));
+                }
+            } else if (fid === 'machine') {
+                solid(mx, my, bw, bh, mix([36, 64, 54], kc, 0.3), plane, 0);
+                for (let i = 0; i < 4; i++) {
+                    let x = mx + 1 + Math.floor(rnd() * (bw - 2)), y = my + 1 + Math.floor(rnd() * (bh - 2));
+                    const len = 3 + Math.floor(rnd() * 5);
+                    for (let k = 0; k < len; k++) { dot(x, y, K, 0.7); x++; if (x >= mx + bw - 1) break; }
+                }
+            } else if (fid === 'voidborn') {
+                solid(mx + 1, my + 1, bw - 2, bh - 2, mix([54, 32, 72], kc, 0.35), plane, 2);
+                const traces = 4;
+                for (let i = 0; i < traces; i++) {
+                    const ang = (i / traces) * Math.PI * 2;
+                    for (let t = 2; t < Math.min(bw, bh) / 2 - 1; t++) {
+                        dot(cx + Math.round(Math.cos(ang) * t), my + Math.floor(bh / 2) + Math.round(Math.sin(ang) * t), K, 0.6);
+                    }
+                }
+            } else if (fid === 'pirate') {
+                solid(mx, my, bw - 1, bh, mix([64, 52, 28], kc, 0.3), plane, 1);
+                solid(mx + Math.floor(bw * 0.4), my + 1, Math.ceil(bw * 0.55), Math.floor(bh * 0.45), shade(mat, 0.55), plane);
+                for (let i = 0; i < 3; i++) { rect(mx, my + 2 + i * 3, 1, 2, [210, 190, 90]); }
+            } else {
+                solid(mx, my, bw, bh, mix([54, 46, 88], kc, 0.25), plane, 1);
+                const traces = 5 + Math.floor(rnd() * 4);
+                for (let i = 0; i < traces; i++) {
+                    let x = mx + 1 + Math.floor(rnd() * (bw - 2)), y = my + 1 + Math.floor(rnd() * (bh - 2));
+                    const len = 3 + Math.floor(rnd() * 6), hz = rnd() < 0.5;
+                    for (let k = 0; k < len; k++) { dot(x, y, K, 0.55); if (hz) x++; else y++; if (x >= mx + bw - 1 || y >= my + bh - 1) break; }
+                    dot(x, y, K, 0.9);
+                }
+                for (let i = 0; i < 4; i++) { rect(mx, my + 2 + i * 3, 1, 2, [210, 190, 90]); rect(mx + bw - 1, my + 2 + i * 3, 1, 2, [210, 190, 90]); }
             }
-            for (let i = 0; i < 4; i++) { rect(mx, my + 2 + i * 3, 1, 2, [210, 190, 90]); rect(mx + bw - 1, my + 2 + i * 3, 1, 2, [210, 190, 90]); }
             if (!plain) {
-                const r = Math.max(3, Math.round(Math.min(bw, bh) * 0.28)), cy = my + Math.floor(bh / 2);
+                const r = Math.max(3, Math.round(Math.min(bw, bh) * 0.26)), cy = my + Math.floor(bh / 2);
                 for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++) {
                     const d = Math.abs(x) + Math.abs(y);
                     if (d > r) continue;
@@ -102,7 +328,6 @@ const physicalItem = (() => {
                 }
             }
         }
-        // Wear.
         const n = Math.round(cw * ch / 30);
         for (let i = 0; i < n; i++) dot(mx + 2 + Math.floor(rnd() * (bw - 4)), my + 2 + Math.floor(rnd() * (bh - 4)), rnd() < 0.5 ? [255, 255, 255] : [0, 0, 0], 0.12);
         return cv.toDataURL('image/png');
@@ -179,12 +404,16 @@ const physicalItem = (() => {
     }
 
     return {
+        partColor,
+        slotColor,
+        preferredFaction,
         /** Wrap `innerHtml` (the part icon) in its generated casing; w/h = footprint in screen px. */
         wrap(kind, id, w, h, color, innerHtml, opts) {
             const plain = !!(opts && opts.plain);
-            const key = kind + ':' + id + ':' + w + 'x' + h + ':' + color + (plain ? ':plain' : '');
+            const tint = partColor(kind, id, color) || color;
+            const key = kind + ':' + String(id || '').replace(/#\d+$/, '') + ':' + w + 'x' + h + ':' + tint + (plain ? ':plain' : '');
             let url = cache.get(key);
-            if (!url) { try { url = render(kind, id, w, h, color, opts); } catch (e) { url = ''; } cache.set(key, url); }
+            if (!url) { try { url = render(kind, id, w, h, tint, opts); } catch (e) { url = ''; } cache.set(key, url); }
             return url ? `<span class="hs-item-body" style="background-image:url(${url})" aria-hidden="true"></span>${innerHtml}` : innerHtml;
         },
         /** A resource storage silo casing with its fill level baked in (chunks piled to `pct`, 0-100).
@@ -217,13 +446,30 @@ physicalItem.invPositions = function (shipId) {
 };
 /** Grid target for an inventory item with its top-left at client (x, y): { grid, col, row, w, h, free, all, at } or null. */
 physicalItem.gridTarget = function (cell, x, y) {
-    const grid = cell && cell.closest('.hs-bay-inv .hs-storage-grid');
-    if (!grid) return null;
-    const gr = grid.getBoundingClientRect();
-    const k = gr.width / Math.max(1, grid.offsetWidth);
-    const cs = parseFloat(getComputedStyle(grid).getPropertyValue('--cs')) || 48;
-    const gap = parseFloat(getComputedStyle(grid).columnGap) || 2;
-    const step = (cs + gap) * k;
+    const origin = cell && cell.closest('.hs-bay-inv .hs-storage-grid');
+    if (!origin) return null;
+    const spanOf = (c, prop) => Number((c.style[prop].match(/span (\d+)/) || [0, 1])[1]);
+    const w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
+    const stepOf = (g) => {
+        const r = g.getBoundingClientRect();
+        const gcs = getComputedStyle(g);
+        const k = r.width / Math.max(1, g.offsetWidth);
+        const cs = parseFloat(gcs.getPropertyValue('--cs')) || 48;
+        const gap = parseFloat(gcs.columnGap) || 2;
+        return { rect: r, k, step: (cs + gap) * k };
+    };
+    // Cargo can cross between the SHIP and STATION groups in the bay inventory (two separate
+    // .hs-storage-grid elements stacked under one .hs-bay-inv): pick whichever grid the item's
+    // centre is actually over right now, not just the grid it started in, or any drag that
+    // crosses that boundary resolves against the wrong grid's rect and silently misses.
+    const scope = cell.closest('.hs-bay-inv');
+    const candidates = scope ? Array.from(scope.querySelectorAll('.hs-storage-grid')) : [origin];
+    const grid = candidates.find((g) => {
+        const { rect: r, step } = stepOf(g);
+        const cx = x + w * step / 2, cy = y + h * step / 2;
+        return cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom;
+    }) || origin;
+    const { rect: gr, k, step } = stepOf(grid);
     // Tile (1,1)'s own top-left, not the grid's outer border-box edge: the grid now also
     // carries the shared .hs-storage-grid border (same card framing as ship/station storage),
     // so content starts border-width (+ any padding) in from gr.left/top — origin must match
@@ -232,17 +478,15 @@ physicalItem.gridTarget = function (cell, x, y) {
     const originX = gr.left + ((parseFloat(gcs.borderLeftWidth) || 0) + (parseFloat(gcs.paddingLeft) || 0)) * k;
     const originY = gr.top + ((parseFloat(gcs.borderTopWidth) || 0) + (parseFloat(gcs.paddingTop) || 0)) * k;
     const cols = Number(grid.getAttribute('data-inv-cols')) || 8;
-    const spanOf = (c, prop) => Number((c.style[prop].match(/span (\d+)/) || [0, 1])[1]);
-    const w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
     // Over the grid at all (by the item's centre)?
     const cx = x + w * step / 2, cy = y + h * step / 2;
     if (cx < gr.left || cx > gr.right || cy < gr.top || cy > gr.bottom) return null;
     const col = Math.max(1, Math.min(cols - w + 1, Math.round((x - originX) / step) + 1));
     const rows = Number(grid.getAttribute('data-inv-rows')) || 99;
     const row = Math.max(1, Math.min(rows - h + 1, Math.round((y - originY) / step) + 1));
-    // Every other item keeps its current tile; the target must be free.
-    // (Empty placeholder cells just tile the unused grid area visually and don't occupy anything.)
-    const all = Array.from(grid.querySelectorAll('[data-part-id]'));
+    // Every storage cell with a drag-key occupies space — including empty ship-slot
+    // containers (no data-part-id) so cargo cannot land on top of them.
+    const all = Array.from(grid.querySelectorAll('.hs-storage-cell[data-drag-key]'));
     const at = (c) => {
         const r = c.getBoundingClientRect();
         return [Math.round((r.left - originX) / step) + 1, Math.round((r.top - originY) / step) + 1, spanOf(c, 'gridColumn'), spanOf(c, 'gridRow')];
@@ -292,23 +536,108 @@ physicalItem.dropInGrid = function (ui, cell, x, y) {
     if (typeof profileManager === 'undefined' || !profileManager.freezeStoragePositions) return false;
     const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
     if (!profile) return false;
-    const key = (c) => {
-        const kind = c.getAttribute('data-part-kind');
-        return (physicalItem.BUCKET_OF_KIND[kind] || kind) + ':' + c.getAttribute('data-part-id');
-    };
+    const isSlotSrc = cell.classList.contains('is-ship-slot') || cell.getAttribute('data-drag-source') === 'ship-slot';
+    const bucketOfKind = (k) => (k === 'weapon' ? 'weapons' : (k === 'defense' ? 'defenses' : (k === 'energy' ? 'energy' : 'abilities')));
+    const overlapsAt = t.all.filter((c) => {
+        if (c === cell) return false;
+        const [c0, r0, cw, ch] = t.at(c);
+        return t.col < c0 + cw && c0 < t.col + t.w && t.row < r0 + ch && r0 < t.row + t.h;
+    });
+    const hitSlot = overlapsAt.find((c) => c.classList.contains('is-ship-slot'));
+    const toast = (m) => { if (ui.showStatusToast) ui.showStatusToast(m); };
+    const shipId0 = ui.hangarShipId;
+    if (isSlotSrc) {
+        const kind = cell.getAttribute('data-part-kind');
+        const modId = cell.getAttribute('data-part-id');
+        const slotKey = cell.getAttribute('data-drag-key') || '';
+        const idx = Number((slotKey || '').split(':')[2]);
+        // Empty hull slot: only reposition the frame on the ship grid (never to station).
+        if (!modId) {
+            if ((t.grid.getAttribute('data-storage-target') || 'ship') === 'station') return false;
+            // Equipped frames stay put; empty frames may swap with each other.
+            if (hitSlot && hitSlot !== cell && !hitSlot.classList.contains('is-empty')) return false;
+            if (overlapsAt.some((c) => c.classList.contains('is-ship-slot') && c !== cell && !c.classList.contains('is-empty'))) {
+                return false;
+            }
+            const keyOf = (c) => c.getAttribute('data-drag-key') || (
+                (physicalItem.BUCKET_OF_KIND[c.getAttribute('data-part-kind')] || c.getAttribute('data-part-kind')) +
+                ':' + c.getAttribute('data-part-id')
+            );
+            const posByKey = {};
+            t.all.forEach((c) => { const [c0, r0] = t.at(c); posByKey[keyOf(c)] = [c0, r0]; });
+            const [oldCol, oldRow] = t.at(cell);
+            overlapsAt.forEach((c) => { posByKey[keyOf(c)] = [oldCol, oldRow]; });
+            if (slotKey) posByKey[slotKey] = [t.col, t.row];
+            profileManager.freezeStoragePositions(profile, 'ship', t.grid.getAttribute('data-ship') || shipId0, posByKey);
+            ui.createUI();
+            return true;
+        }
+        // Part dragged OUT of a hull slot.
+        if (!kind || !(idx >= 0)) return false;
+        const bucket = bucketOfKind(kind);
+        if (hitSlot) {
+            // Onto another slot of the same type: move the part there.
+            if (hitSlot === cell || hitSlot.getAttribute('data-part-kind') !== kind) { if (hitSlot !== cell) toast('WRONG SLOT TYPE'); return false; }
+            ui.applyHangarSlotChoice(kind, Number(hitSlot.getAttribute('data-slot-index')), modId, null);
+            return true;
+        }
+        if (overlapsAt.length) return false;
+        const toStation = (t.grid.getAttribute('data-storage-target') || 'ship') === 'station';
+        if (!toStation) {
+            profileManager.setStoragePos(profile, 'ship', t.grid.getAttribute('data-ship') || shipId0, bucket + ':' + modId, t.col, t.row);
+        }
+        ui.applyHangarSlotChoice(kind, idx, '', null); // files the part into ship cargo + re-renders
+        if (toStation) {
+            const res = ui._transferStorageItem(profile, 'ship', shipId0, 'station', null, bucket, modId);
+            if (res.ok) profileManager.setStoragePos(profile, 'station', null, res.instanceKey || (bucket + ':' + modId), t.col, t.row);
+            else toast(res.reason || 'CAN\'T MOVE TO STATION');
+            profileManager.save();
+            ui.createUI();
+        }
+        return true;
+    }
+    if (hitSlot) {
+        // Cargo dropped onto a hull slot: equip it there (type must match).
+        const kind = cell.getAttribute('data-part-kind');
+        const slotKind = hitSlot.getAttribute('data-part-kind');
+        if (kind !== slotKind) { toast('WRONG SLOT TYPE'); return false; }
+        const id = cell.getAttribute('data-part-id');
+        const scope = (cell.closest('.hs-storage-grid') || {}).getAttribute
+            ? cell.closest('.hs-storage-grid').getAttribute('data-storage-target') : 'ship';
+        if (scope === 'station') {
+            const k = cell.getAttribute('data-drag-key') || (bucketOfKind(kind) + ':' + id);
+            const res = ui._transferStorageItem(profile, 'station', null, 'ship', shipId0, bucketOfKind(kind), k.slice(k.indexOf(':') + 1));
+            if (!res.ok) { toast(res.reason || 'CAN\'T MOVE TO SHIP'); return false; }
+        }
+        ui.applyHangarSlotChoice(kind, Number(hitSlot.getAttribute('data-slot-index')), id, null);
+        return true;
+    }
+    const key = (c) => c.getAttribute('data-drag-key') || (
+        (physicalItem.BUCKET_OF_KIND[c.getAttribute('data-part-kind')] || c.getAttribute('data-part-kind')) +
+        ':' + c.getAttribute('data-part-id')
+    );
+    const overlaps = t.all.filter((c) => {
+        if (c === cell) return false;
+        const [c0, r0, cw, ch] = t.at(c);
+        return t.col < c0 + cw && c0 < t.col + t.w && t.row < r0 + ch && r0 < t.row + t.h;
+    });
+    // Ship-slot containers stay put — refuse drops that would land on them.
+    if (overlaps.some((c) => c.classList.contains('is-ship-slot') || c.getAttribute('data-drag-source') === 'ship-slot')) {
+        return false;
+    }
     const posByKey = {};
     // Pin every item to where it is now, so the others don't reflow around the moved one.
     t.all.forEach((c) => { const [c0, r0] = t.at(c); posByKey[key(c)] = [c0, r0]; });
     const [oldCol, oldRow] = t.at(cell);
-    // Whatever already sits on the dropped-on tile(s) swaps back into this item's old tile
-    // instead of just blocking the drop (free is false exactly when this list is non-empty).
-    t.all.filter((c) => {
-        if (c === cell) return false;
-        const [c0, r0, cw, ch] = t.at(c);
-        return t.col < c0 + cw && c0 < t.col + t.w && t.row < r0 + ch && r0 < t.row + t.h;
-    }).forEach((c) => { posByKey[key(c)] = [oldCol, oldRow]; });
+    // Whatever already sits on the dropped-on tile(s) swaps back into this item's old tile.
+    overlaps.forEach((c) => { posByKey[key(c)] = [oldCol, oldRow]; });
     posByKey[key(cell)] = [t.col, t.row];
-    profileManager.freezeStoragePositions(profile, 'ship', ui.hangarShipId, posByKey);
+    const target = t.grid.getAttribute('data-storage-target') || 'ship';
+    const scope = target === 'ship' ? 'ship' : 'station';
+    const scopeShip = target === 'ship'
+        ? (t.grid.getAttribute('data-ship') || ui.hangarShipId)
+        : null;
+    profileManager.freezeStoragePositions(profile, scope, scopeShip, posByKey);
     ui.createUI();
     return true;
 };
@@ -328,7 +657,10 @@ physicalItem.bayInventoryHtml = function (ui) {
     const colors = { weapon: g('weapon', '#ff6a4a'), defense: g('defense', '#4ac8ff'), energy: g('energy', '#ffd24a'), ability: g('ability', '#c08cff') };
     const filter = ui._bayInvFilter || 'all';
     const cs = (ui.STORAGE_CELL_PX | 0) || 56;
-    const gridHtml = ui.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
+    // SHIP grid = every hull slot (empty + filled) as containers, plus unequipped cargo.
+    const gridHtml = (ui.renderBayShipInventoryGrid
+        ? ui.renderBayShipInventoryGrid(profile, shipId)
+        : ui.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false }));
     // Station storage too — its cells already carry data-move-to-ship (render-parts-list.js),
     // so a click/drag here moves the part straight onto this ship without a tab switch.
     const stationGridHtml = ui.renderStationStorage(profile, { extraGridClass: 'hs-pick-grid' });
@@ -364,10 +696,14 @@ document.addEventListener('dragstart', (e) => {
     if (e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]')) e.preventDefault();
 }, true);
 // Drag an inventory part onto a slot (reuses the hangar part drag; a plain click does nothing).
+// Empty hull slots are also draggable so their grid position can be rearranged.
 document.addEventListener('pointerdown', (e) => {
-    const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
+    const cell = e.target.closest && e.target.closest(
+        '.hs-bay-inv [data-part-id], .hs-bay-inv .hs-storage-cell.is-ship-slot.is-empty[data-drag-key]'
+    );
     // Slot-picker modal (.hs-pick-inv) owns its own drag/click → install into THAT slot.
-    if (!cell || cell.closest('.hs-pick-inv') || e.button !== 0 || typeof homeStationUI === 'undefined') return;
+    if (!cell || cell.closest('.hs-pick-inv')
+        || e.button !== 0 || typeof homeStationUI === 'undefined') return;
     e.preventDefault();
     const sx = e.clientX, sy = e.clientY;
     const off = () => { window.removeEventListener('pointermove', mv, true); window.removeEventListener('pointerup', off, true); window.removeEventListener('pointercancel', off, true); };
@@ -386,15 +722,26 @@ function toggleHangarInventorySlot(cell) {
     ui.overlay.querySelectorAll(`.hs-hangar-slot[data-slot-kind="${kind}"]`).forEach((el) => { const i = Number(el.getAttribute('data-slot-index') || 0); if (idx.indexOf(i) === -1) idx.push(i); });
     idx.sort((a, b) => a - b);
     const at = idx.find((i) => ui.hangarSlotModuleId(kind, i) === id);
-    if (at != null) { ui.applyHangarSlotChoice(kind, at, '', null); return; } // installed: toggles it off
+    // Only the slotted copy toggles off; a loose cargo copy of the same part never does.
+    if (at != null && cell.classList.contains('is-ship-slot')) { ui.applyHangarSlotChoice(kind, at, '', null); return; }
     const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(ui.hangarShipId, kind, id, i).ok;
-    const target = idx.find((i) => !ui.hangarSlotModuleId(kind, i) && fits(i)) ?? idx.find((i) => fits(i));
-    if (target == null) { ui.playButtonResult(cell, false, idx.length ? 'NO SLOT BIG ENOUGH' : 'NO ' + kind.toUpperCase() + ' SLOT'); return; }
+    const target = idx.find((i) => !ui.hangarSlotModuleId(kind, i) && fits(i)); // free slots only, never swaps
+    if (target == null) { ui.playButtonResult(cell, false, idx.length ? 'NO FREE ' + kind.toUpperCase() + ' SLOT' : 'NO ' + kind.toUpperCase() + ' SLOT'); return; }
     ui.applyHangarSlotChoice(kind, target, id, null);
 }
 document.addEventListener('contextmenu', (e) => {
     const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
-    if (!cell || cell.closest('.hs-pick-inv')) return;
+    // Right-click a part sitting in a hull slot: take it out onto the next free non-slot tile.
+    if (cell && !cell.closest('.hs-pick-inv') && cell.classList.contains('is-ship-slot') && cell.classList.contains('is-equipped')
+        && typeof homeStationUI !== 'undefined') {
+        e.preventDefault();
+        const kind = cell.getAttribute('data-part-kind');
+        const idx = Number(cell.getAttribute('data-slot-index'));
+        if (kind && idx >= 0) homeStationUI.applyHangarSlotChoice(kind, idx, '', null);
+        return;
+    }
+    if (!cell || cell.closest('.hs-pick-inv') || cell.classList.contains('is-ship-slot')
+        || cell.getAttribute('data-drag-source') === 'ship-slot') return;
     e.preventDefault();
     toggleHangarInventorySlot(cell);
 }, true);
@@ -408,7 +755,8 @@ document.addEventListener('contextmenu', (e) => {
 document.addEventListener('click', (e) => {
     if (e.button !== 0) return;
     const cell = e.target.closest && e.target.closest('.hs-bay-inv [data-part-id]');
-    if (!cell || cell.closest('.hs-pick-inv')) return;
+    if (!cell || cell.closest('.hs-pick-inv') || cell.classList.contains('is-ship-slot')
+        || cell.getAttribute('data-drag-source') === 'ship-slot') return;
     e.preventDefault();
     e.stopPropagation();
     toggleHangarInventorySlot(cell);
@@ -426,6 +774,9 @@ document.addEventListener('click', (e) => {
     if (!panel.classList.contains('hs-pick-inv')) {
         homeStationUI._bayInvFilter = next;
         try { localStorage.setItem('vf_hs_bay_inv_filter', next); } catch (err) { /* ignore */ }
+        // Same chip also filters the PARTS slot list to the right of inventory.
+        const parts = homeStationUI.overlay && homeStationUI.overlay.querySelector('.hs-hangar-parts');
+        if (parts) parts.setAttribute('data-filter', next);
     }
     panel.setAttribute('data-filter', next);
     panel.querySelectorAll('[data-inv-filter]').forEach((x) => x.classList.toggle('is-active', x === b));

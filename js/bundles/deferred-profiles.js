@@ -2269,6 +2269,7 @@ extendClass(ProfileSelectionManager, {
     },
     hide() {
         this.isVisible = false;
+        if (typeof hangarTestArena !== 'undefined' && hangarTestArena._embedHost) hangarTestArena.hide();
         this._appliedLookFaction = null;
         if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-pf');
         if (typeof menuStateManager !== 'undefined') menuStateManager.save({ pmode: null, pstep: null, pstation: false });
@@ -2497,6 +2498,8 @@ extendClass(ProfileSelectionManager, {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         return !id || !slm || !slm.getPartSizeLevel || slm.getPartSizeLevel(kind, id) <= 1;
     },
+    /** Start kits never open more than nose + 2 wing rows (A / S / D). */
+    START_MAX_WEAPON_SLOTS: 3,
     /** Wing slot rows of the start ship: the kit's wing level (a pair per row), its bought slots, and room for the second weapon. */
     startWingRows(kit) {
         const k = kit || this.currentKit();
@@ -2505,14 +2508,19 @@ extendClass(ProfileSelectionManager, {
         const b = k.bonus || {};
         const lv = Math.min(2, Number((b.areas || {}).wing) || 0);
         const pairs = slm && slm.getAreaSlotBonus ? Math.ceil(slm.getAreaSlotBonus('wing', lv).filter((x) => x === 'weapons').length / 2) : 0;
-        return Math.max(pairs + (Number(b.slot) || 0), b.weapon2 ? 1 : 0);
+        const rows = Math.max(pairs + (Number(b.slot) || 0), b.weapon2 ? 1 : 0);
+        return Math.min(this.START_MAX_WEAPON_SLOTS - 1, rows);
     },
     /** Weapon slots of the start ship in slot order (nose / core gun, then the wing rows): part id or null when empty. */
     startWeaponSlots(gun) {
         const k = this.currentKit();
         const out = [gun, (k.bonus || {}).weapon2 || null];
-        out.length = 1 + this.startWingRows(k);
+        out.length = Math.min(this.START_MAX_WEAPON_SLOTS, 1 + this.startWingRows(k));
         return Array.from(out, (x) => x || null);
+    },
+    /** Every start weapon mount is M (nose base M; wing pairs get +1 so the ladder matches the badge). */
+    startWeaponSlotSizeLevel(index) {
+        return 1;
     },
     /** Once per page load, at idle: build every faction's kit icons and ship sprites so the first faction switch has nothing left to generate (no frame drops). */
     warmFactionAssets() {
@@ -2625,6 +2633,23 @@ extendClass(ProfileSelectionManager, {
         this.currentKit();
         const o = this._startOpts || {};
         return (o.ship && this.startShips().indexOf(o.ship) >= 0) ? o.ship : this.kitShipId(o.kit);
+    },
+    /** Model fields the start preview adds (faction colours, kit guns / disabled areas) — the test arena flies the same hull. */
+    arenaModelPatch() {
+        const kit = this.currentKit();
+        const dis = {};
+        (kit.off || []).forEach((a) => { dis[a] = true; });
+        const rows = this.startWingRows ? this.startWingRows() : null;
+        return {
+            faction: this.pendingFaction,
+            factionPreview: true,
+            previewDisabledAreas: dis,
+            previewCoreGun: kit.coreGun || null,
+            previewSingleGun: true,
+            previewWeapon2: (kit.bonus || {}).weapon2 || null,
+            previewWingRows: rows,
+            previewSig: [this.pendingFaction, kit.id, JSON.stringify(dis), kit.coreGun || '', (kit.bonus || {}).weapon2 || '', JSON.stringify(rows)].join('|')
+        };
     },
     /** Ship name + key stats under the preview (start step). */
     renderKitShipInfo() {
@@ -2762,16 +2787,20 @@ extendClass(ProfileSelectionManager, {
         if (slm && slm.baseWeaponMounts) caps.weapons = slm.baseWeaponMounts(caps);
         // Small start base: one slot of each type; the kit's area bonuses open more.
         caps.weapons = 1; caps.defenses = 1; caps.abilities = 1; caps.energy = 1;
-        // Areas only carry weapon slots: the nose gun, then the wing guns as mirrored pairs.
         const lvOf = (id) => Math.min(max, Number(base[id]) || 0);
-        list.forEach((a) => { (slm && slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((k) => { caps[k] = (caps[k] || 0) + 1; }); });
+        list.forEach((a) => {
+            if (a.id === 'wing') return; // weapon mounts come from startWeaponSlots (max 3)
+            (slm && slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((k) => { caps[k] = (caps[k] || 0) + 1; });
+        });
         // The kit's second weapon is equipped in slot 1 (the pilot gets that slot with the kit).
         const w2 = kitObj.bonus && kitObj.bonus.weapon2;
-        if (w2) caps.weapons = Math.max(caps.weapons, 2);
-        const wslots = { front: Math.min(1, caps.weapons), wing: Math.max(0, caps.weapons - 1), center: 0, back: 0 };
+        const startN = Math.min(this.START_MAX_WEAPON_SLOTS, this.startWeaponSlots(null).length);
+        caps.weapons = startN;
+        const wslots = { front: Math.min(1, startN), wing: Math.max(0, startN - 1), center: 0, back: 0 };
         // Core gun (nose-less hulls): slot 0 moves into the core, as one gun or a left / right pair.
         if (kitObj.coreGun && caps.weapons > 0) { wslots.front = 0; wslots.center = kitObj.coreGun === 'split' ? 2 : 1; }
-        const wLv = (area) => (area === 'wing' || (area === 'center' && kitObj.coreGun === 'split') ? 0 : 1);
+        // Start weapon mounts are all M (incl. wing / split-core).
+        const wLv = () => 1;
         const rows = list.map((a) => {
             if ((kitObj.off || []).indexOf(a.id) >= 0) {
                 return `<div class="pl-row is-off">${areaIco(a.id, a.label)}<span class="pl-slots"><em>OFF</em></span></div>`;
@@ -2806,10 +2835,10 @@ extendClass(ProfileSelectionManager, {
         const gunId = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
         const fam = this.startWeaponSlots(gunId);
         const keyOf = (i) => (fam.length > 1 ? ['A', 'S', 'D'][i] || 'SPACE' : 'SPACE');
-        // Slot size: the nose / core gun is a single M mount (a split core S), wing pairs S; the kit's gun gets a slot grown to fit it.
+        // Start weapon mounts are all M (max 3: A / S / D); part size still shown for fit.
         const partLv = (id) => (id && slm && slm.getPartSizeLevel ? slm.getPartSizeLevel('weapon', id) : 0);
-        const slotLv = (i, id) => Math.max(i === 0 ? (kitObj.coreGun === 'split' ? 0 : 1) : 0, partLv(id));
-        const sizeTip = (i, id) => 'SLOT SIZE: ' + size(slotLv(i, id)) + (id ? '&#10;PART SIZE: ' + size(partLv(id)) : '');
+        const slotLv = (i) => this.startWeaponSlotSizeLevel(i);
+        const sizeTip = (i, id) => 'SLOT SIZE: ' + size(slotLv(i)) + (id ? '&#10;PART SIZE: ' + size(partLv(id)) : '');
         const weapons = fam.map((wid, wi) => {
             if (!wid) {
                 return `<span class="pk-weapon is-empty" data-slot="${wi}" style="--pk-c:#8a84a8" data-ui-tip-instant data-ui-tip-head="EMPTY WEAPON SLOT" data-ui-tip="SLOT ${wi + 1} · KEY ${keyOf(wi)}&#10;${sizeTip(wi)}">` +
@@ -2842,17 +2871,16 @@ extendClass(ProfileSelectionManager, {
         let rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
         const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
         // Start profiles: small base (1 per kind); kit area / weapon2 bonuses open more.
-        // Do NOT use full class mounts — those unlock later via frame / hangar upgrades.
+        // Weapon mounts: nose + wing rows, hard-capped at START_MAX_WEAPON_SLOTS (all M).
         const caps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
         const lvOf = (id) => Math.min(2, Number(((kitObj.bonus || {}).areas || {})[id]) || 0);
         (slm && slm.getShipAreas ? slm.getShipAreas() : []).forEach((a) => {
+            if (a.id === 'wing') return; // weapon count comes from startWeaponSlots, not raw area caps
             (slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((key) => {
                 caps[key] = (caps[key] || 0) + 1;
             });
         });
-        if ((kitObj.bonus || {}).slot) caps.weapons += Number(kitObj.bonus.slot) || 0;
-        // Weapon mounts match the WEAPONS strip (nose + wing rows / weapon2).
-        caps.weapons = Math.max(caps.weapons, this.startWeaponSlots(null).length);
+        caps.weapons = Math.min(this.START_MAX_WEAPON_SLOTS, this.startWeaponSlots(null).length);
 
         // Parts queued per kind (start loadout), consumed into slots in order.
         const queue = { weapon: [], defense: [], energy: [], ability: [] };
@@ -2865,16 +2893,8 @@ extendClass(ProfileSelectionManager, {
         const cells = [];
         let used = 0;
         const pushSlot = (kind, index, id) => {
-            // Slot footprint is always the hull slot size — never shrink to a smaller equipped part.
-            // Split wing mounts use effective size (≥ M) so M start guns fit the bay cell.
-            let slotLv = 0;
-            if (slm && (slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel)) {
-                try {
-                    const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
-                    slotLv = sizeFn.call(slm, ship, kind, index) | 0;
-                } catch (e) { slotLv = 0; }
-            } else if (kind === 'weapon' && index === 0) slotLv = 1; // nose mount starts as M
-            else if (kind === 'weapon' && index > 0) slotLv = 1; // wing pair effective M
+            // Start weapon mounts are always M; other kinds stay S until hangar upgrades.
+            let slotLv = kind === 'weapon' ? this.startWeaponSlotSizeLevel(index) : 0;
             slotLv = Math.max(0, Math.min(2, slotLv));
             const span = spanOf(slotLv);
             const pk = kindColor[kind] || '#8a84a8';
@@ -2979,7 +2999,7 @@ extendClass(ProfileSelectionManager, {
         if (keys.indexOf(o.lookKey) < 0) o.lookKey = keys[0];
         const pick = () => `<div class="pp-picks" role="listbox" aria-label="Portrait">` + [13, 10, 0, 15, 5, 2, 8, 6, 7, 12, 11, 1, 14, 4, 3, 9].map((i) =>
             `<button type="button" class="pp-pick${i === o.look.v ? ' selected' : ''}" data-pp-pick="${i}" data-build="${typeof VXP !== 'undefined' ? VXP.preset(o.look.faction, i).build : 0}" tabindex="-1" aria-label="Portrait ${i + 1}" aria-selected="${i === o.look.v}">` +
-            (typeof voxelPortrait !== 'undefined' ? voxelPortrait.canvasHtml({ faction: o.look.faction, v: i, bgv: o.look.bgv, bga: o.look.bga }, this.pilotAccent(), { coarse: true }) : '') + '</button>').join('') + '</div>';
+            (typeof voxelPortrait !== 'undefined' ? voxelPortrait.canvasHtml({ faction: o.look.faction, v: i, bgv: o.look.bgv, bga: o.look.bga }, this.pilotAccent(), { coarse: true, nobg: true }) : '') + '</button>').join('') + '</div>';
         const ctlSlider = (k) => `<div class="pp-ctl${k === o.lookKey ? ' active' : ''}" data-pp-key="${k}">` +
             `<span class="pp-name">${this.pilotLookIconHtml(k)}<span>${heroPortrait.labelFor(k, o.look)}</span></span>` +
             `<input type="range" class="pp-slider" data-pp-slider min="0" max="${heroPortrait.OPTIONS[k] - 1}" step="1" value="${o.look[k]}" tabindex="-1" aria-label="${heroPortrait.labelFor(k, o.look)}">` +
@@ -3031,8 +3051,10 @@ extendClass(ProfileSelectionManager, {
         const tw = (host.clientWidth - gap * (cols - 1)) / cols;
         const th = (availH - gap * (rows - 1)) / rows;
         if (!(tw > 0) || !(th > 0)) return;
-        const tile = Math.max(28, Math.floor(Math.min(tw, th)));
+        // Portrait-shaped tiles (48:54) as wide as the column allows, as tall as the free height allows.
+        const tile = Math.max(28, Math.floor(Math.min(tw, th * 48 / 54)));
         picks.style.setProperty('--pp-tile', tile + 'px');
+        picks.style.setProperty('--pp-tile-h', Math.floor(tile * 54 / 48) + 'px');
         picks.style.setProperty('--pp-gap', gap + 'px');
     },
     /**
@@ -3451,7 +3473,7 @@ extendClass(ProfileSelectionManager, {
 
 // ProfileSelectionManager members, continued from core-part2.js: start galaxy card and preferred weapon.
 /** Map height (viewBox units, width is 560) of the wizard's start-galaxy card: the step has the whole content area to itself. */
-var GALAXY_MAP_H = 280;
+var GALAXY_MAP_H = 560;
 
 extendClass(ProfileSelectionManager, {
     /**
@@ -3517,7 +3539,13 @@ extendClass(ProfileSelectionManager, {
         const H = mapH || 220;   // the pilot wizard passes a taller map (GALAXY_MAP_H) so the step fills its screen
         const P = 20;
         const pos = {};
-        nodes.forEach((n) => { pos[n.planetId] = { x: P + n.x * (W - P * 2), y: P + n.y * (H - P * 2) }; });
+        // Stretch the planets over the whole map (the generator leaves wide empty margins around them).
+        const ext = (k) => { const v = nodes.map((n) => n[k]); const lo = Math.min.apply(null, v), hi = Math.max.apply(null, v); return hi - lo > 0.05 ? [lo, hi - lo] : [0, 1]; };
+        const [x0, xs] = nodes.length ? ext('x') : [0, 1];
+        const [y0, ys] = nodes.length ? ext('y') : [0, 1];
+        const margin = mapH ? 0.06 : 0;
+        const fit = (v, lo, span) => margin + ((v - lo) / span) * (1 - margin * 2);
+        nodes.forEach((n) => { pos[n.planetId] = mapH ? { x: P + fit(n.x, x0, xs) * (W - P * 2), y: P + fit(n.y, y0, ys) * (H - P * 2) } : { x: P + n.x * (W - P * 2), y: P + n.y * (H - P * 2) }; });
         const edges = (map.edges || []).map((e) => {
             const a = pos[e[0]];
             const b = pos[e[1]];
@@ -3602,7 +3630,7 @@ extendClass(ProfileSelectionManager, {
         return `
             ${mapH ? '' : '<button type="button" class="profile-start-galaxy-nav" data-galaxy-step="-1" tabindex="-1" aria-label="Previous galaxy">‹</button>'}
             ${mapH ? this.renderStartGalaxyListHtml(gid, home) : ''}
-            <svg class="profile-start-galaxy-map" viewBox="${mapH ? `-24 -24 ${W + 48 + Math.round(W * 0.28)} ${H + 48}` : `0 0 ${W} ${H}`}" preserveAspectRatio="${mapH ? 'xMinYMid meet' : 'xMidYMid slice'}" width="${W}" height="${H}" style="--galaxy-color:${color};aspect-ratio:${W} / ${H}" shape-rendering="crispEdges" aria-hidden="true">
+            <svg class="profile-start-galaxy-map" viewBox="${mapH ? `-24 -24 ${W + 48} ${H + 48}` : `0 0 ${W} ${H}`}" preserveAspectRatio="${mapH ? 'xMidYMid meet' : 'xMidYMid slice'}" width="${W}" height="${H}" style="--galaxy-color:${color};aspect-ratio:${W} / ${H}" shape-rendering="crispEdges" aria-hidden="true">
                 <g class="dust">${dust}</g><g class="stars">${stars}</g>
                 <g class="suns">${nodes.length && pcm.getGalaxySuns ? pcm.getGalaxySuns(gid).map((sun) => {
                     const sx = Math.round(P + sun.x * (W - P * 2));
@@ -3799,6 +3827,7 @@ extendClass(ProfileSelectionManager, {
                     <div class="profile-faction-ship-wrap">
                         <canvas class="profile-faction-ship" width="320" height="224" aria-label="Faction ship preview"></canvas>
                     </div>
+                    <button type="button" class="profile-test-btn" id="psTestShip" tabindex="-1" title="Fly the chosen hull in a small test arena">TEST SHIP</button>
                 </div>`
                     : `<div class="profile-faction-ship-wrap">
                     <canvas class="profile-faction-ship" width="200" height="140" aria-label="Faction ship preview"></canvas>
@@ -3868,6 +3897,7 @@ extendClass(ProfileSelectionManager, {
                     <div class="onboarding-homeworld-label"></div>
                 </aside>
             </div>` : '';
+        if (typeof hangarTestArena !== 'undefined' && hangarTestArena._embedHost) hangarTestArena.hide();
         setHtml(`
             ${stepperHtml}
             ${pickFaction ? factionHomeHtml : `
@@ -3941,6 +3971,25 @@ extendClass(ProfileSelectionManager, {
                 input.select();
             });
         }
+        const testBtn = this.overlay.querySelector('#psTestShip');
+        if (testBtn) {
+            testBtn.addEventListener('click', () => {
+                const stage = this.overlay.querySelector('.profile-setup-stage');
+                const open = () => {
+                    if (typeof hangarTestArena === 'undefined' || !stage) return;
+                    stage.classList.add('is-testing');
+                    hangarTestArena.show({
+                        shipId: this.startShipId(),
+                        ships: this.startShips(),
+                        host: stage,
+                        modelPatch: () => this.arenaModelPatch(),
+                        onClose: () => stage.classList.remove('is-testing')
+                    });
+                };
+                if (typeof hangarTestArena === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            });
+        }
         const saveBtn = this.overlay.querySelector('#psSave');
         const cancelBtn = this.overlay.querySelector('#psCancelMode');
         // Start galaxy card: arrows cycle through the galaxies in place.
@@ -4008,6 +4057,18 @@ extendClass(ProfileSelectionManager, {
             o.look = Object.assign({}, o.look, { v: Number(b.getAttribute('data-pp-pick')) });
             this.refreshPilotRow();
         }));
+        // Hover a head → the big portrait previews that face (with the current backdrop); leaving restores the chosen one.
+        const ppMain = () => this.overlay && this.overlay.querySelector('#psPortrait canvas.vx-portrait');
+        const ppPreview = (v) => {
+            const o = this._startOpts, main = ppMain();
+            if (!o || !o.look || !main || typeof voxelPortrait === 'undefined' || !voxelPortrait.setLook) return;
+            voxelPortrait.setLook(main, { faction: o.look.faction, v: v == null ? o.look.v : v, bgv: o.look.bgv, bga: o.look.bga });
+        };
+        this.overlay.querySelectorAll('[data-pp-pick]').forEach((b) => {
+            const v = Number(b.getAttribute('data-pp-pick'));
+            b.addEventListener('pointerenter', () => ppPreview(v));
+            b.addEventListener('pointerleave', () => ppPreview(null));
+        });
         // Start options (galaxy / kit): toggle in place so the
         // typed name is kept.
         this.overlay.querySelectorAll('[data-start-opt]').forEach((btn) => {
@@ -4041,6 +4102,9 @@ extendClass(ProfileSelectionManager, {
                     this._kitShipRaf = requestAnimationFrame(() => {
                         this._kitShipRaf = 0;
                         this.renderFactionShipPreview(fid);
+                        if (typeof hangarTestArena !== 'undefined' && hangarTestArena._embedHost && hangarTestArena.refreshShip) {
+                            hangarTestArena.refreshShip(this.startShipId());
+                        }
                         if (this.savePilotState) this.savePilotState();
                     });
                 }
@@ -5681,21 +5745,40 @@ extendClass(ProfileSelectionManager, {
         if (kit.off && kit.off.length && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.setAreaEnabled) {
             kit.off.forEach((a) => { try { shipLoadoutManager.setAreaEnabled(p.activeShipId, a, false); } catch (e) { /* cosmetic */ } });
         }
-        // A start profile begins with exactly one weapon (the others are bought later).
+        // Start profile: up to 3 weapon mounts (A/S/D), all size M; one defense / energy / ability.
         if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
             try {
-                const L = shipLoadoutManager.getLoadout(p.activeShipId);
+                const slm = shipLoadoutManager;
+                const ship = p.activeShipId;
+                const L = slm.getLoadout(ship);
                 const gun = (L.weaponSlots || []).find(Boolean) || (L.weapons && L.weapons[0]) || 'laser';
-                L.weaponSlots = [gun];
-                L.weapons = [gun];
-                // Small base set: one weapon, one defense, one energy core, one ability.
+                const startSlots = this.startWeaponSlots ? this.startWeaponSlots(gun) : [gun];
+                const n = Math.min(3, Math.max(1, startSlots.length));
+                L.weaponSlots = Array.from({ length: n }, (_, i) => startSlots[i] || null);
+                L.weapons = L.weaponSlots.filter(Boolean);
                 L.defenses = (L.defenses || []).slice(0, 1);
                 L.abilities = (L.abilities || []).slice(0, 1);
                 L.energy = (L.energy || []).slice(0, 1);
                 if (!p.shipUpgrades) p.shipUpgrades = {};
-                if (!p.shipUpgrades[p.activeShipId]) p.shipUpgrades[p.activeShipId] = { frameLevel: 0 };
-                p.shipUpgrades[p.activeShipId].baseSlotCaps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
-                shipLoadoutManager.setLoadout(p.activeShipId, L);
+                if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+                const up = p.shipUpgrades[ship];
+                up.baseSlotCaps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
+                // Buy only as many extra mounts as needed after area bonuses (never past n).
+                const mountCount = () => {
+                    const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship));
+                    return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons;
+                };
+                up.weaponSlotsBought = Number(up.weaponSlotsBought) || 0;
+                while (mountCount() < n) up.weaponSlotsBought += 1;
+                while (mountCount() > n && up.weaponSlotsBought > 0) up.weaponSlotsBought -= 1;
+                // All start weapon mounts are M: nose is base M; wing pairs need +1 on the ladder.
+                up.slotLevels = Object.assign({}, up.slotLevels);
+                for (let i = 0; i < n; i++) {
+                    const base = (i === 0 && kit.coreGun !== 'split') ? 1 : 0;
+                    const bump = Math.max(0, 1 - base);
+                    if (bump > 0) up.slotLevels['weapon:' + i] = Math.max(Number(up.slotLevels['weapon:' + i]) || 0, bump);
+                }
+                slm.setLoadout(ship, L);
             } catch (e) { /* cosmetic */ }
         }
         // Start profile with a core gun: slot 0 sits in the core (single on the axis or split left / right).
@@ -5709,7 +5792,7 @@ extendClass(ProfileSelectionManager, {
                 shipLoadoutManager.setLoadout(p.activeShipId, L);
             } catch (e) { /* cosmetic */ }
         }
-        // The kit's second weapon is equipped too: slot 1, opened and sized for it when the hull lacks one.
+        // The kit's second weapon is equipped in slot 1 (mount already opened above when needed).
         if (bonus.weapon2 && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
             try {
                 const slm = shipLoadoutManager;
@@ -5717,31 +5800,55 @@ extendClass(ProfileSelectionManager, {
                 if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
                 const e = p.shipUpgrades[ship];
                 const mounts = () => { const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship)); return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons; };
-                if (mounts() < 2) e.weaponSlotsBought = (Number(e.weaponSlotsBought) || 0) + 1;
-                const fit = slm.partFitsSlot ? slm.partFitsSlot(ship, 'weapon', bonus.weapon2, 1) : { ok: true };
-                if (!fit.ok) { e.slotLevels = Object.assign({}, e.slotLevels); e.slotLevels['weapon:1'] = (Number(e.slotLevels['weapon:1']) || 0) + (fit.need - fit.have); }
+                while (mounts() < 2) e.weaponSlotsBought = (Number(e.weaponSlotsBought) || 0) + 1;
+                e.slotLevels = Object.assign({}, e.slotLevels);
+                e.slotLevels['weapon:1'] = Math.max(Number(e.slotLevels['weapon:1']) || 0, 1); // wing mount M
                 const L = slm.getLoadout(ship);
                 const ws = (L.weaponSlots || []).slice();
+                while (ws.length < 2) ws.push(null);
                 ws[0] = ws[0] || (L.weapons && L.weapons[0]) || 'laser';
                 ws[1] = bonus.weapon2;
-                L.weaponSlots = ws;
-                L.weapons = ws.filter(Boolean);
+                L.weaponSlots = ws.slice(0, 3);
+                L.weapons = L.weaponSlots.filter(Boolean);
                 slm.setLoadout(ship, L);
             } catch (e) { /* stays in the inventory */ }
         }
-        // Several weapons: slot 1 / 2 / 3 fire on A / S / D (SPACE still fires all).
+        // Cap at 3 mounts (A/S/D), all M; empty slots still get fire keys.
         if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
             try {
-                const L = shipLoadoutManager.getLoadout(p.activeShipId);
                 const slm = shipLoadoutManager;
-                const caps = slm.getSlotCaps(p.activeShipId, slm.resolveModelClass(p.activeShipId));
-                const n = Math.max((L.weaponSlots || []).length, slm.weaponMountSlots ? slm.weaponMountSlots(caps.weapons) : caps.weapons);
-                // Empty slots get their key too, ready for the next gun.
+                const ship = p.activeShipId;
+                const L = slm.getLoadout(ship);
+                if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+                const up = p.shipUpgrades[ship];
+                const mountCount = () => {
+                    const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship));
+                    return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons;
+                };
+                const desired = Math.min(3, Math.max(1, (this.startWeaponSlots
+                    ? this.startWeaponSlots((L.weaponSlots || []).find(Boolean) || 'laser')
+                    : (L.weaponSlots || [null])).length));
+                up.weaponSlotsBought = Number(up.weaponSlotsBought) || 0;
+                while (mountCount() < desired) up.weaponSlotsBought += 1;
+                while (mountCount() > desired && up.weaponSlotsBought > 0) up.weaponSlotsBought -= 1;
+                const n = Math.min(3, Math.max(desired, mountCount()));
+                const ws = (L.weaponSlots || []).slice(0, n);
+                while (ws.length < n) ws.push(null);
+                L.weaponSlots = ws;
+                L.weapons = ws.filter(Boolean);
+                up.slotLevels = Object.assign({}, up.slotLevels);
+                for (let i = 0; i < n; i++) {
+                    const base = (i === 0 && kit.coreGun !== 'split') ? 1 : 0;
+                    const bump = Math.max(0, 1 - base);
+                    if (bump > 0) up.slotLevels['weapon:' + i] = Math.max(Number(up.slotLevels['weapon:' + i]) || 0, bump);
+                }
                 if (n > 1) {
                     L.weaponKeys = {}; L.weaponKeySets = {};
-                    ['a', 's', 'd'].forEach((k, i) => { if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; } });
-                    shipLoadoutManager.setLoadout(p.activeShipId, L);
+                    ['a', 's', 'd'].forEach((k, i) => {
+                        if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; }
+                    });
                 }
+                slm.setLoadout(ship, L);
             } catch (e) { /* keys stay on SPACE */ }
         }
         // Inventory grid: start size and growth per frame level, from the hull plus the kit's bonus.
@@ -5910,6 +6017,7 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
     /** SETUP step: focus defense on the chosen start-profile hull (interceptor, heavy, …). */
     setFocusShip(shipId) {
         const next = shipId ? String(shipId) : null;
+        if (next !== this._focusShipId) this._userZoom = 1;
         this._focusShipId = next;
         this._orbitFleet = null;
         this._orbitSpriteCache = null;
@@ -5950,12 +6058,33 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
             container.insertBefore(this.el, container.firstChild);
         }
         if (this._ro) this._ro.observe(container);
+        this._bindZoomWheel(container);
         // draw() (called by _startLoop()/below) always re-measures the
         // element's own box first — see draw() — so a stale mid-transition
         // size here self-corrects on the very next paint instead of only
         // resyncing when ResizeObserver happens to fire.
         if (!this._reduceMotion) this._startLoop();
         else this.draw();
+    }
+
+    /** SETUP: mouse wheel over the backdrop (not over a scrolling panel) zooms the camera in / out. */
+    _bindZoomWheel(container) {
+        if (this._wheelHost === container) return;
+        if (this._wheelHost && this._onWheel) this._wheelHost.removeEventListener('wheel', this._onWheel);
+        this._wheelHost = container;
+        this._onWheel = (e) => {
+            if (!this._focusShipId) return;
+            for (let n = e.target; n && n !== container; n = n.parentElement) {
+                if (n.scrollHeight > n.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) return;
+            }
+            // Only the left backdrop area: ignore wheel over the right-hand panels.
+            const r = this.el.getBoundingClientRect();
+            if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+            e.preventDefault();
+            const z = (this._userZoom || 1) * (e.deltaY < 0 ? 1.15 : 1 / 1.15);
+            this._userZoom = Math.max(0.6, Math.min(4, z));
+        };
+        container.addEventListener('wheel', this._onWheel, { passive: false });
     }
 
     unmount() {
@@ -6247,7 +6376,7 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
      */
     _applyFocusCamera(c, orbit, planetCx, planetCy) {
         const focus = (orbit || []).find((s) => s && s.ship && s.ship.isFocus);
-        const wantZ = 1.45;
+        const wantZ = 1.45 * (this._userZoom || 1);
         let tx = planetCx;
         let ty = planetCy;
         if (focus) {
@@ -7138,7 +7267,7 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
         // Stage defense: own fleet must read clearly against the dark grid.
         const scale = Math.max(0.85, Math.min(1.25, (r * 0.55) / 48));
         const n = fleet.ships.length || 1;
-        return fleet.ships.map((s, i) => {
+        const out = fleet.ships.map((s, i) => {
             // Smooth station-keeping: slow strafe + surge (ms → rad/s), no pixel snap.
             const lane = (i - (n - 1) / 2) / Math.max(1, n - 1);
             const baseX = cx + lane * r * (s.isFocus ? 0.12 : 0.85);
@@ -7174,6 +7303,24 @@ var HeroPlanetBackdrop = class HeroPlanetBackdrop {
                 alpha: 1
             };
         });
+        // SETUP: the other hulls keep their distance from the chosen one.
+        const foc = out.find((o) => o.ship.isFocus);
+        if (foc) {
+            const minD = Math.max(foc.w, foc.h) * 2.6 + r * 0.35;
+            out.forEach((o) => {
+                if (o === foc) return;
+                let dx = o.sx - foc.sx;
+                let dy = o.sy - foc.sy;
+                let d = Math.hypot(dx, dy);
+                if (d >= minD) return;
+                if (d < 1) { dx = 1; dy = -0.4; d = Math.hypot(dx, dy); }
+                o.sx = Math.round(foc.sx + dx / d * minD);
+                o.sy = Math.round(foc.sy + dy / d * minD);
+                o.ship._sx = o.sx;
+                o.ship._sy = o.sy;
+            });
+        }
+        return out;
     }
 
     _drawOrbitShips(c, orbit, front) {
@@ -7904,7 +8051,8 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         this._dialogIndex = 0;
         this._musicOwned = false;
         // Title → dialogue lines → act → exit. Dialogue advances on timer or input.
-        this.durations = { title: 1400, dialog: 3200, act: 1600, exit: 700 };
+        this.durations = { title: 2600, dialog: 0, act: 1600, exit: 700 };
+        this._typeMs = 32; // dialog: ms per character (typewriter); lines wait for ENTER / click
     }
 
     isActive() { return !!this.active; }
@@ -7961,6 +8109,7 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
     setPhase(phase) {
         this.phase = phase;
         this._phaseStartT = 0;
+        if (this.overlay) this.overlay.setAttribute('data-phase', phase);
     }
 
     skip() {
@@ -7972,6 +8121,12 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
     /** Advance one dialogue line, or finish dialogue → act. */
     advanceDialogue() {
         if (!this.active || this.phase !== 'dialog') return false;
+        // First press finishes the typewriter, the next one moves on.
+        if (this._typing && this._typing.shown < this._typing.text.length) {
+            this._typing.shown = this._typing.text.length;
+            this._applyTyping();
+            return true;
+        }
         if (this._dialogIndex < this._dialogue.length - 1) {
             this._dialogIndex += 1;
             this._phaseStartT = 0;
@@ -8070,6 +8225,7 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         // hull band covers the rim; CSS clamps us to --fr-open-*.
         document.body.appendChild(overlay);
         this.overlay = overlay;
+        overlay.setAttribute('data-phase', this.phase || 'title');
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.ctx.imageSmoothingEnabled = false;
@@ -8082,6 +8238,11 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
             if (this.phase === 'dialog') {
                 e.preventDefault();
                 this.advanceDialogue();
+            } else if (this.phase === 'title' && this._dialogue.length) {
+                e.preventDefault();
+                this._dialogIndex = 0;
+                this.setPhase('dialog');
+                this._renderDialogCard();
             }
         };
         overlay.addEventListener('click', this._clickHandler);
@@ -8096,7 +8257,11 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
                 e.preventDefault();
                 e.stopPropagation();
                 if (this.phase === 'dialog') this.advanceDialogue();
-                else if (this.phase === 'title' || this.phase === 'act' || this.phase === 'exit') this.skip();
+                else if (this.phase === 'title' && this._dialogue.length) {
+                    this._dialogIndex = 0;
+                    this.setPhase('dialog');
+                    this._renderDialogCard();
+                } else if (this.phase === 'title' || this.phase === 'act' || this.phase === 'exit') this.skip();
             }
         };
         setTimeout(() => {
@@ -8174,6 +8339,15 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
             `<div class="launch-cutscene-title-mini">${esc(this._titleText)} · ${esc(this._firstMissionHint())}</div>`;
     }
 
+    _applyTyping() {
+        const ty = this._typing;
+        const el = this._card && this._card.querySelector('.launch-cutscene-line');
+        if (!ty || !el) return;
+        el.textContent = ty.text.slice(0, ty.shown);
+        const done = ty.shown >= ty.text.length;
+        if (this._hint) this._hint.textContent = done ? 'ENTER / CLICK · NEXT ▼' : 'ENTER / CLICK · SKIP TEXT';
+    }
+
     _mountPortraits() {
         if (!this._card) return;
         if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) voxelPortrait.scan(this._card);
@@ -8192,6 +8366,8 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
             this._card.innerHTML = this._cardHtmlDialog(line, this._dialogIndex, this._dialogue.length);
             this._mountPortraits();
             if (this._hint) this._hint.style.opacity = '1';
+            this._typing = { text: String((line && line.text) || ''), shown: 0, t0: 0 };
+            this._applyTyping();
             return;
         }
         // Act / exit: keep last line dim, or fall back to synopsis.
@@ -8281,12 +8457,17 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         const elapsed = t - this._phaseStartT;
         const dur = this.durations[this.phase] || 0;
         const p = Math.min(1, dur ? elapsed / dur : 1);
+        if (this.phase === 'dialog' && this._typing && this._typing.shown < this._typing.text.length) {
+            if (!this._typing.t0) this._typing.t0 = t;
+            const n = Math.min(this._typing.text.length, Math.floor((t - this._typing.t0) / this._typeMs));
+            if (n !== this._typing.shown) { this._typing.shown = n; this._applyTyping(); }
+        }
         if (this._card) {
             let op = 0;
             if (this.phase === 'title') op = Math.min(1, p * 3);
             else if (this.phase === 'dialog') {
                 // Fresh line fade-in each beat.
-                op = Math.min(1, Math.max(0.35, p * 4));
+                op = 1;
             } else if (this.phase === 'act') op = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
             else op = Math.max(0, 1 - p * 2);
             this._card.style.opacity = String(op);
@@ -8294,6 +8475,7 @@ var LaunchCutsceneManager = class LaunchCutsceneManager {
         // During title/dialog the ship holds the idle pose (p≈0).
         const drawP = (this.phase === 'act' || this.phase === 'exit') ? p : 0;
         this._draw(drawP);
+        if (this.phase === 'dialog') return; // dialogue waits for ENTER / click, never auto-advances
         if (elapsed >= dur) {
             if (this.phase === 'title') {
                 if (this._dialogue.length) {

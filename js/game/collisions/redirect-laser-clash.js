@@ -147,7 +147,7 @@ extendClass(CollisionManager, {
 
     checkObstaclePlayerCollisions(gameState) {
         if (typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace()) {
             return;
         }
         const obstacles = obstacleManager.getObstacles();

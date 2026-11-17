@@ -228,15 +228,23 @@ extendClass(ProfileManager, {
         const equipped = bucket !== 'blueprints' ? this._equippedStorageCount(profile, shipId, bucket, defId) : 0;
         const move = Math.min(qty, onShip + equipped);
         if (move <= 0) return { ok: false, reason: 'NONE ON SHIP' };
-        // Starter-loadout parts with owned<=0 have no real backing count in profile.parts:
-        // getStationStorageQty always clamps to 0 for owned<=0 (it's owned minus filed minus
-        // equipped, and owned<=0 makes that expression <=0 no matter what), so station storage
-        // can never display them. Moving one there would unequip/unfile it on the ship with
-        // nowhere for it to land — filed+equipped both drop to 0 and it vanishes from every
-        // storage grid (see the fileUnequippedPart doc above for the same failure mode).
-        // Refuse instead of deleting it.
+        // Starter-loadout parts have owned<=0: no real backing count in profile.parts, and station
+        // storage can only show owned minus filed minus equipped. If this ship holds the ONLY
+        // copy(ies) of such a part, materialise them as owned so they can sit at the station
+        // (filed/equipped on the ship drop by the same amount → nothing is created or lost).
+        // If another ship also holds a starter copy, refuse (that would duplicate the part).
+        let materialize = false;
         if (bucket !== 'blueprints' && this._ownedStorageCount(profile, bucket, defId) <= 0) {
-            return { ok: false, reason: 'CANNOT STORE AT STATION' };
+            // Per ship the real copy count is max(filed, equipped) for owned<=0 parts (the two ledgers overlap).
+            let held = 0;
+            const shipIds = Object.keys(profile.shipStorage || {}).concat(profile.ownedShipIds || [])
+                .filter((v, i, a) => a.indexOf(v) === i);
+            shipIds.forEach((sid) => {
+                const e = (profile.shipStorage && profile.shipStorage[sid] && profile.shipStorage[sid][bucket]) || {};
+                held += Math.max(e[defId] || 0, this._equippedStorageCount(profile, sid, bucket, defId));
+            });
+            if (held - move > 0) return { ok: false, reason: 'CANNOT STORE AT STATION' };
+            materialize = true;
         }
         // Bay capacity is the station's storageSlots (from vault upgrades). A move that would
         // push occupied cells past the budget is refused — the item stays filed on the ship.
@@ -265,8 +273,14 @@ extendClass(ProfileManager, {
         });
         const add = spanOf(bucket, defId) * move;
         if (used + add > cap) return { ok: false, reason: 'BAY FULL' };
+        if (materialize) {
+            if (!profile.parts || typeof profile.parts !== 'object') profile.parts = {};
+            if (!profile.parts[bucket] || typeof profile.parts[bucket] !== 'object') profile.parts[bucket] = {};
+            profile.parts[bucket][defId] = (profile.parts[bucket][defId] || 0) + move;
+        }
         const fromFiled = Math.min(move, onShip);
-        const fromEquipped = move - fromFiled;
+        // owned<=0 parts: filed and equipped are the SAME copy (overlapping ledgers) — clear both.
+        const fromEquipped = materialize ? Math.min(equipped, move) : move - fromFiled;
         if (fromEquipped > 0) this._unequipFromLoadout(shipId, bucket, defId, fromEquipped);
         entry[bucket][defId] = onShip - fromFiled;
         if (entry[bucket][defId] <= 0) delete entry[bucket][defId];

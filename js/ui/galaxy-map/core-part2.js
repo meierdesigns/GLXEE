@@ -8,7 +8,7 @@ const enemyCardLayout = {
     LABELS: { title: 'TITLE', bar: 'BAR', face: 'FACE', ship: 'SHIP', planet: 'PLANET' },
     DEF_Z: { title: 6, bar: 5, face: 4, ship: 3, planet: 0 },
     /** Shipped defaults (x/y px, s %, z layer); anything missing falls back to neutral. Paste COPY output here. */
-    BAKED: {"title":{"x":0,"y":0,"s":100,"z":6},"bar":{"x":0,"y":0,"s":100,"z":5},"face":{"x":473,"y":-70,"s":140,"z":4},"ship":{"x":158,"y":-5,"s":105,"z":5},"planet":{"x":-167,"y":9,"s":180,"z":0}},
+    BAKED: {"title":{"x":0,"y":0,"s":100,"z":6},"bar":{"x":473,"y":-28,"s":100,"z":5},"face":{"x":473,"y":-70,"s":140,"z":4},"ship":{"x":190,"y":-5,"s":105,"z":5},"planet":{"x":-167,"y":9,"s":180,"z":0}},
     defaults() { const o = {}; this.ELS.forEach((k) => { const b = this.BAKED[k] || {}; o[k] = { x: b.x || 0, y: b.y || 0, s: b.s || 100, z: b.z !== undefined ? b.z : this.DEF_Z[k] }; }); return o; },
     load() {
         let v = {};

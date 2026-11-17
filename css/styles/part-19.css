@@ -143,9 +143,9 @@ html body .galaxy-map-embedded .galaxy-map-header .gm-ship-bar .gm-ship-card-sta
     /* Single glass-host zoom token (station / menus / fight). */
     --vf-glass-z: var(--gui-zoom-eff, var(--gui-zoom, 0.75));
     /* Pull glass inside the rim past faction tooth art. 4u (74P) sat under the
-       metal and cropped menus again; 16u bloated 9-slice corners. 10u clears
-       the opaque band without the old disconnected-block look. */
-    --vf-glass-inset: calc(10 * var(--bz-u));
+       metal and cropped menus again; 16u bloated 9-slice corners; 10u left a visible
+       dark gutter (rim art 45px vs opening 56u). 5u: ~7px gap, art never covers the glass. */
+    --vf-glass-inset: var(--fr-gap, calc(5 * var(--bz-u)));
 }
 
 /* One bezel-opening glass host. Body keeps stage-scale; this host is the only
@@ -451,6 +451,14 @@ html body .home-station-overlay .home-station-content .hs-wallet-card .hs-logout
 .vf-bezel-tools button[data-tool="fx"] {
     width: calc(52 * var(--bz-u));
     height: calc(68 * var(--bz-u));
+}
+.vf-bezel-tools button[data-tool="logout"] {
+    width: calc(52 * var(--bz-u));
+    height: calc(68 * var(--bz-u));
+}
+.vf-bezel-tools button[data-tool="logout"] > * {
+    width: calc(40 * var(--bz-u)) !important;
+    height: calc(40 * var(--bz-u)) !important;
 }
 .vf-bezel-tools button[data-tool="fx"] > * {
     width: calc(40 * var(--bz-u)) !important;
@@ -806,10 +814,11 @@ html body .game-container .game-left-cluster > .player-vitals-side {
    screen stays inside the opaque band. --fr-hud-inset clears Voidborn vine. */
 :root { --fr-hud-inset: 0px; --fr-vine-ov: 0; }
 html[data-faction="voidborn"] {
-    --fr-vine-ov: 16;
-    /* Glass clears the vine inner edge; +12u covers tendrils that hang past
-       the border-image inner stroke into the opening (side bleed into rim). */
-    --vf-glass-inset: calc((var(--fr-vine-ov) + 12) * var(--bz-u));
+    /* Was 16 (vine 70u thick, biting 12px into the glass, 24u inset): the rim read much heavier than the other
+       factions'. 4 makes the vine rim 58u = the metal rims' 45px, so every faction frames the screen alike. */
+    --fr-vine-ov: 4;
+    /* Same gap as every other faction (--fr-gap): the vine art now fills the whole rim (see screen-frame.css). */
+    --vf-glass-inset: var(--fr-gap, calc(5 * var(--bz-u)));
     /* Vine clearance already in glass-inset; don't stack a second fight inset. */
     --fr-hud-inset: 0px;
 }

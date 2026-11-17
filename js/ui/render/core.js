@@ -541,6 +541,7 @@ class RenderManager {
         if (typeof objectiveManager !== 'undefined' && objectiveManager.render) {
             objectiveManager.render(ctx);
         }
+        if (typeof defenseModeManager !== 'undefined') defenseModeManager.render(ctx);
 
         if (typeof pickupManager !== 'undefined' && pickupManager.render) {
             pickupManager.render(ctx);

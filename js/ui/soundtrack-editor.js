@@ -140,6 +140,7 @@ class SoundtrackEditorUI {
                 </header>
                 <div class="difficulty-editor-body">
                     <aside class="difficulty-editor-nav">
+                        <input type="search" id="steFilter" class="ste-filter" placeholder="Filter…" autocomplete="off">
                         <div class="de-section-title">SCREEN</div>
                         <div id="steScreenList"></div>
                         <div class="de-section-title">MEDIA OVERRIDE</div>
@@ -163,6 +164,13 @@ class SoundtrackEditorUI {
             </div>`;
         document.body.appendChild(overlay);
         const q = (s) => overlay.querySelector(s);
+        q('#steFilter').addEventListener('input', () => this.applyFilter());
+        q('.difficulty-editor-nav').addEventListener('click', (e) => {
+            const t = e.target.closest('.de-section-title');
+            if (!t) return;
+            t.classList.toggle('ste-collapsed');
+            this.applyFilter();
+        });
         q('#steClose').addEventListener('click', () => this.hide());
         q('#steBack').addEventListener('click', () => this.hide());
         q('#steCurrentSelection').addEventListener('click', () => {
@@ -297,6 +305,7 @@ class SoundtrackEditorUI {
         });
 
         this._updateCurrentSelectionLabel();
+        this.applyFilter();
 
         const host = document.getElementById('steControls');
         host.innerHTML = '';
@@ -310,6 +319,26 @@ class SoundtrackEditorUI {
         if (this.selectedKind === 'screen') this.renderScreenTracker(host, this.selectedId);
         else if (this.selectedKind === 'planet') this.renderPlanetTracker(host, this.selectedId);
         else this.renderOverrideEditor(host, this.selectedKind, this.selectedId);
+    }
+
+    /** Filters nav buttons by text; hides empty sections; honours collapsed state. */
+    applyFilter() {
+        const nav = document.querySelector('#soundtrackEditorOverlay .difficulty-editor-nav');
+        const input = document.getElementById('steFilter');
+        if (!nav || !input) return;
+        const needle = input.value.trim().toLowerCase();
+        nav.querySelectorAll('.de-section-title').forEach((title) => {
+            const list = title.nextElementSibling;
+            if (!list) return;
+            let visible = 0;
+            list.querySelectorAll('.de-profile-btn').forEach((b) => {
+                const match = !needle || b.textContent.toLowerCase().indexOf(needle) !== -1;
+                b.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            title.style.display = needle && !visible ? 'none' : '';
+            list.style.display = (!needle && title.classList.contains('ste-collapsed')) || (needle && !visible) ? 'none' : '';
+        });
     }
 
     /** Header button that always shows the currently selected nav entry. */
@@ -371,7 +400,7 @@ class SoundtrackEditorUI {
         host.appendChild(status);
 
         const btnRow = document.createElement('div');
-        btnRow.className = 'de-slider-row';
+        btnRow.className = 'de-slider-row ste-btn-row';
 
         const applyBtn = document.createElement('button');
         applyBtn.type = 'button';
@@ -651,7 +680,7 @@ class SoundtrackEditorUI {
         }
 
         const btnRow = document.createElement('div');
-        btnRow.className = 'de-slider-row';
+        btnRow.className = 'de-slider-row ste-btn-row';
         const previewBtn = document.createElement('button');
         previewBtn.type = 'button';
         previewBtn.className = 'pe-btn';

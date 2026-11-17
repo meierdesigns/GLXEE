@@ -389,8 +389,15 @@ extendClass(HomeStationUI, {
      *  with another pin (stale data after an item's footprint changed) is ignored for this
      *  render so the layout never overlaps — the item just falls back to auto-placement. */
     _storageGridHtml(cellSpecs, grid, targetAttrs, extraClass) {
+        const usedCells = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        // Never clip an item: a part that no longer fits the grid used to render outside the
+        // fixed-height box and looked deleted (e.g. a weapon right-click-unslotted into a full
+        // ship storage). Grow extra rows so every stored part stays visible and reachable.
+        if (usedCells > grid.cols * grid.rows) {
+            grid = { cols: grid.cols, rows: Math.ceil(usedCells / Math.max(1, grid.cols)) };
+        }
         const capacity = grid.cols * grid.rows;
-        const used = cellSpecs.reduce((n, c) => n + c.span[0] * c.span[1], 0);
+        const used = usedCells;
         const pad = Math.max(0, capacity - used);
         const claimed = new Set();
         const claim = (col, row, w, h) => {

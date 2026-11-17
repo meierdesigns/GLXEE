@@ -189,6 +189,8 @@ extendClass(CoreLevelManager, {
         if (typeof objectiveManager !== 'undefined') {
             objectiveManager.start(objective, enemies);
         }
+        // Own / allied planets: wall defense or escort mission (defense-modes.js).
+        if (typeof defenseModeManager !== 'undefined') defenseModeManager.begin(level);
 
         const champion = enemies.find(e => e.champion) || enemies[0];
         const shipType = (champion && champion.type) || level.enemyType;

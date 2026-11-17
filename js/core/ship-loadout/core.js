@@ -206,7 +206,23 @@ class ShipLoadoutManager {
         const energyFromSrc = uniq(src.energy).filter((id) => this.isEnergyId(id));
         const energyFromAbilities = uniq(src.abilities).filter((id) => this.isEnergyId(id));
         const energy = uniq(energyFromSrc.concat(energyFromAbilities));
+        const defensesList = uniq(src.defenses).filter((id) => !this.isEnergyId(id));
+        // Positional (hole-preserving) copies of the non-weapon lists: slot i keeps its part when
+        // another slot is emptied. Dropped (→ null) whenever it disagrees with the compact list.
+        const posList = (key, list) => {
+            const raw = src.slotLists && Array.isArray(src.slotLists[key]) ? src.slotLists[key] : null;
+            if (!raw) return null;
+            const out = raw.map((id) => (id && list.indexOf(String(id)) !== -1 ? String(id) : null));
+            const present = out.filter(Boolean);
+            if (present.length !== list.length || list.some((id) => present.indexOf(id) === -1)) return null;
+            return out;
+        };
         return {
+            slotLists: {
+                defenses: posList('defenses', defensesList),
+                abilities: posList('abilities', abilities),
+                energy: posList('energy', energy)
+            },
             weapons: compact(src.weapons),
             // Positional weapon slots (null = empty): slot 0 is the nose
             // mount, slot 1+ are wing pairs (one weapon mirrored on both
@@ -217,7 +233,7 @@ class ShipLoadoutManager {
             // wing the player dragged it onto.
             singleWeaponSide: src.singleWeaponSide === 'left' || src.singleWeaponSide === 'right'
                 ? src.singleWeaponSide : null,
-            defenses: uniq(src.defenses).filter((id) => !this.isEnergyId(id)),
+            defenses: defensesList,
             abilities: abilities,
             energy: energy,
             moduleOffsets: this.normalizeModuleOffsets(src.moduleOffsets),

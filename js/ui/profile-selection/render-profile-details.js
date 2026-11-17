@@ -445,21 +445,40 @@ extendClass(ProfileSelectionManager, {
         if (kit.off && kit.off.length && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.setAreaEnabled) {
             kit.off.forEach((a) => { try { shipLoadoutManager.setAreaEnabled(p.activeShipId, a, false); } catch (e) { /* cosmetic */ } });
         }
-        // A start profile begins with exactly one weapon (the others are bought later).
+        // Start profile: up to 3 weapon mounts (A/S/D), all size M; one defense / energy / ability.
         if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
             try {
-                const L = shipLoadoutManager.getLoadout(p.activeShipId);
+                const slm = shipLoadoutManager;
+                const ship = p.activeShipId;
+                const L = slm.getLoadout(ship);
                 const gun = (L.weaponSlots || []).find(Boolean) || (L.weapons && L.weapons[0]) || 'laser';
-                L.weaponSlots = [gun];
-                L.weapons = [gun];
-                // Small base set: one weapon, one defense, one energy core, one ability.
+                const startSlots = this.startWeaponSlots ? this.startWeaponSlots(gun) : [gun];
+                const n = Math.min(3, Math.max(1, startSlots.length));
+                L.weaponSlots = Array.from({ length: n }, (_, i) => startSlots[i] || null);
+                L.weapons = L.weaponSlots.filter(Boolean);
                 L.defenses = (L.defenses || []).slice(0, 1);
                 L.abilities = (L.abilities || []).slice(0, 1);
                 L.energy = (L.energy || []).slice(0, 1);
                 if (!p.shipUpgrades) p.shipUpgrades = {};
-                if (!p.shipUpgrades[p.activeShipId]) p.shipUpgrades[p.activeShipId] = { frameLevel: 0 };
-                p.shipUpgrades[p.activeShipId].baseSlotCaps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
-                shipLoadoutManager.setLoadout(p.activeShipId, L);
+                if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+                const up = p.shipUpgrades[ship];
+                up.baseSlotCaps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
+                // Buy only as many extra mounts as needed after area bonuses (never past n).
+                const mountCount = () => {
+                    const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship));
+                    return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons;
+                };
+                up.weaponSlotsBought = Number(up.weaponSlotsBought) || 0;
+                while (mountCount() < n) up.weaponSlotsBought += 1;
+                while (mountCount() > n && up.weaponSlotsBought > 0) up.weaponSlotsBought -= 1;
+                // All start weapon mounts are M: nose is base M; wing pairs need +1 on the ladder.
+                up.slotLevels = Object.assign({}, up.slotLevels);
+                for (let i = 0; i < n; i++) {
+                    const base = (i === 0 && kit.coreGun !== 'split') ? 1 : 0;
+                    const bump = Math.max(0, 1 - base);
+                    if (bump > 0) up.slotLevels['weapon:' + i] = Math.max(Number(up.slotLevels['weapon:' + i]) || 0, bump);
+                }
+                slm.setLoadout(ship, L);
             } catch (e) { /* cosmetic */ }
         }
         // Start profile with a core gun: slot 0 sits in the core (single on the axis or split left / right).
@@ -473,7 +492,7 @@ extendClass(ProfileSelectionManager, {
                 shipLoadoutManager.setLoadout(p.activeShipId, L);
             } catch (e) { /* cosmetic */ }
         }
-        // The kit's second weapon is equipped too: slot 1, opened and sized for it when the hull lacks one.
+        // The kit's second weapon is equipped in slot 1 (mount already opened above when needed).
         if (bonus.weapon2 && typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
             try {
                 const slm = shipLoadoutManager;
@@ -481,31 +500,55 @@ extendClass(ProfileSelectionManager, {
                 if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
                 const e = p.shipUpgrades[ship];
                 const mounts = () => { const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship)); return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons; };
-                if (mounts() < 2) e.weaponSlotsBought = (Number(e.weaponSlotsBought) || 0) + 1;
-                const fit = slm.partFitsSlot ? slm.partFitsSlot(ship, 'weapon', bonus.weapon2, 1) : { ok: true };
-                if (!fit.ok) { e.slotLevels = Object.assign({}, e.slotLevels); e.slotLevels['weapon:1'] = (Number(e.slotLevels['weapon:1']) || 0) + (fit.need - fit.have); }
+                while (mounts() < 2) e.weaponSlotsBought = (Number(e.weaponSlotsBought) || 0) + 1;
+                e.slotLevels = Object.assign({}, e.slotLevels);
+                e.slotLevels['weapon:1'] = Math.max(Number(e.slotLevels['weapon:1']) || 0, 1); // wing mount M
                 const L = slm.getLoadout(ship);
                 const ws = (L.weaponSlots || []).slice();
+                while (ws.length < 2) ws.push(null);
                 ws[0] = ws[0] || (L.weapons && L.weapons[0]) || 'laser';
                 ws[1] = bonus.weapon2;
-                L.weaponSlots = ws;
-                L.weapons = ws.filter(Boolean);
+                L.weaponSlots = ws.slice(0, 3);
+                L.weapons = L.weaponSlots.filter(Boolean);
                 slm.setLoadout(ship, L);
             } catch (e) { /* stays in the inventory */ }
         }
-        // Several weapons: slot 1 / 2 / 3 fire on A / S / D (SPACE still fires all).
+        // Cap at 3 mounts (A/S/D), all M; empty slots still get fire keys.
         if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout && shipLoadoutManager.setLoadout) {
             try {
-                const L = shipLoadoutManager.getLoadout(p.activeShipId);
                 const slm = shipLoadoutManager;
-                const caps = slm.getSlotCaps(p.activeShipId, slm.resolveModelClass(p.activeShipId));
-                const n = Math.max((L.weaponSlots || []).length, slm.weaponMountSlots ? slm.weaponMountSlots(caps.weapons) : caps.weapons);
-                // Empty slots get their key too, ready for the next gun.
+                const ship = p.activeShipId;
+                const L = slm.getLoadout(ship);
+                if (!p.shipUpgrades[ship]) p.shipUpgrades[ship] = { frameLevel: 0 };
+                const up = p.shipUpgrades[ship];
+                const mountCount = () => {
+                    const c = slm.getSlotCaps(ship, slm.resolveModelClass(ship));
+                    return slm.weaponMountSlots ? slm.weaponMountSlots(c.weapons) : c.weapons;
+                };
+                const desired = Math.min(3, Math.max(1, (this.startWeaponSlots
+                    ? this.startWeaponSlots((L.weaponSlots || []).find(Boolean) || 'laser')
+                    : (L.weaponSlots || [null])).length));
+                up.weaponSlotsBought = Number(up.weaponSlotsBought) || 0;
+                while (mountCount() < desired) up.weaponSlotsBought += 1;
+                while (mountCount() > desired && up.weaponSlotsBought > 0) up.weaponSlotsBought -= 1;
+                const n = Math.min(3, Math.max(desired, mountCount()));
+                const ws = (L.weaponSlots || []).slice(0, n);
+                while (ws.length < n) ws.push(null);
+                L.weaponSlots = ws;
+                L.weapons = ws.filter(Boolean);
+                up.slotLevels = Object.assign({}, up.slotLevels);
+                for (let i = 0; i < n; i++) {
+                    const base = (i === 0 && kit.coreGun !== 'split') ? 1 : 0;
+                    const bump = Math.max(0, 1 - base);
+                    if (bump > 0) up.slotLevels['weapon:' + i] = Math.max(Number(up.slotLevels['weapon:' + i]) || 0, bump);
+                }
                 if (n > 1) {
                     L.weaponKeys = {}; L.weaponKeySets = {};
-                    ['a', 's', 'd'].forEach((k, i) => { if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; } });
-                    shipLoadoutManager.setLoadout(p.activeShipId, L);
+                    ['a', 's', 'd'].forEach((k, i) => {
+                        if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; }
+                    });
                 }
+                slm.setLoadout(ship, L);
             } catch (e) { /* keys stay on SPACE */ }
         }
         // Inventory grid: start size and growth per frame level, from the hull plus the kit's bonus.

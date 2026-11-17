@@ -30,7 +30,7 @@ move galaxies, and jump again before the lane goes quiet.
 ```text
 ╭────────────────────────────── VOLTEX CHANNEL ──────────────────────────────╮
 │  SIGNAL          UGDF ARCHIVE · COMBAT SIMULATOR ONLINE                     │
-│  BUILD           1.14.17 · BEZEL VOL · HUB BGM · HANGAR · FIRE MODE           │
+│  BUILD           1.14.18 · GAME UPDATE                                       │
 │  PILOT STATUS    CLEARED FOR LAUNCH                                         │
 │  THEATER         MILKY WAY · MARS · CONTESTED                                │
 │  LOADOUT         NOSE  M   CORE  S   AFT  M   WINGS  S/S                    │
@@ -717,7 +717,7 @@ PERF    ── hot-path bake ── parallax plates ── remote FPS / LOOP / h
 MAP     ── one pixel unit ── stored nebula ── posterised steps ── lighter zoom
 ```
 
-Build **1.14.17** ships bezel volume STYLE/SPEED, hub/map BGM via boot-loaded
+Build **1.14.18** ships the latest game, UI and economy updates, plus bezel volume STYLE/SPEED, hub/map BGM via boot-loaded
 vftrack, hangar inventory drag, equipment fire-mode unlock, and victory/embassy
 polish — on top of the 1.14.16 hangar / loot work.
 
@@ -1107,6 +1107,7 @@ be reviewed or reverted independently.
 | 75M | Hub music boot | vftrack loads with boot for hub/map BGM; game-over music context clears |
 | 75N | Deferred bundle rebuild | Rebuild feature + CSS app packs for 75L–75M (tracker → boot) |
 | 75O | Release 1.14.17 | Deploy ZIP `.claude/GLXEE-V1.14.17.zip` — bezel vol, hub BGM, hangar, fire mode (75G–75N) |
+| 75P | Release 1.14.18 | Deploy ZIP `.claude/GLXEE-V1.14.18.zip` — game, UI and bundle updates (75L–75O) |
 
 The wave commit convention is:
 
@@ -1156,5 +1157,5 @@ the [GLXEE devlogs](docs/).
 
 - Play: [meierdesigns.itch.io/glxee](https://meierdesigns.itch.io/glxee)
 - License: MIT
-- Runtime: browser · no build step · version **1.14.17** · intergalactic stakes
+- Runtime: browser · no build step · version **1.14.18** · intergalactic stakes
 - Repository: [github.com/meierdesigns/GLXEE](https://github.com/meierdesigns/GLXEE)

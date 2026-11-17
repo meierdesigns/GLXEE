@@ -1658,3 +1658,18 @@ html body .home-station-overlay .home-station-content .hs-subnav-explore { overf
     padding: 2px 6px;
     white-space: nowrap;
 }
+
+/* Right-aligned nav cluster: WIKI · PROFILES · MENU sit at the right edge of the area row. */
+html body .home-station-overlay .home-station-content .hs-tabs > .hs-area-btn[data-area="explore"] {
+    margin-left: auto;
+}
+
+/* Inline profiles dialog: fill the whole terminal screen height (base overlay centers its child). */
+.profile-selection-overlay.is-inline {
+    align-items: stretch !important;
+    justify-content: stretch !important;
+}
+.profile-selection-overlay.is-inline .profile-selection-content {
+    align-self: stretch !important;
+    justify-content: flex-start;
+}

@@ -19685,7 +19685,7 @@ var HangarTestArena = class HangarTestArena {
         this.W = 240;
         this.H = 300;
         // Bottom HUD strip (bars + key caps); the ship stays above it.
-        this.HUD_H = 60;
+        this.HUD_H = 36;
         this.SHIP_DRAW_SCALE = 1;
         this.ENEMY_HIT_SCALE = 1;
         this.RESPAWN_MS = 2000;
@@ -19695,6 +19695,11 @@ var HangarTestArena = class HangarTestArena {
         const opts = options || {};
         this.shipId = opts.shipId || 'player_scrap';
         this.onClose = opts.onClose || null;
+        // Embedded mode (start screen): the arena fills `host` instead of opening an overlay.
+        this._embedHost = opts.host || null;
+        this._embedShips = Array.isArray(opts.ships) ? opts.ships.slice() : [];
+        // Embedded (start screen): extra model fields (faction, kit preview) so the arena flies what the preview shows.
+        this._modelPatch = typeof opts.modelPatch === 'function' ? opts.modelPatch : null;
         this.isVisible = true;
         this._stats = { damageDealt: 0, damageTaken: 0, kills: 0, shots: 0 };
         this._elapsed = 0;
@@ -19702,7 +19707,9 @@ var HangarTestArena = class HangarTestArena {
         this._enemyRespawns = {};
         this._selectedEnemies = {};
         const discovered = this.getDiscoveredEnemies();
-        if (discovered.length) {
+        if (this._embedHost) {
+            discovered.slice(0, 2).forEach((e) => { this._selectedEnemies[e.id] = true; });
+        } else if (discovered.length) {
             this._selectedEnemies[discovered[0].id] = true;
         }
         this.createUI();
@@ -19712,7 +19719,21 @@ var HangarTestArena = class HangarTestArena {
         this.startLoop();
     }
 
+    /** Embedded arena: switch hull / kit while open (start screen) and rebuild the sim from the current patch. */
+    refreshShip(shipId) {
+        if (!this.isVisible || !this._embedHost) return;
+        if (shipId) this.shipId = shipId;
+        this.resetSim();
+        this.syncEnemiesFromSelection();
+        if (this.overlay) {
+            const names = this._embedShips;
+            this.overlay.querySelectorAll('.hta-embed-ship').forEach((b, i) => b.classList.toggle('on', names[i] === this.shipId));
+        }
+    }
+
     hide() {
+        this._embedHost = null;
+        this._modelPatch = null;
         this.isVisible = false;
         this.stopLoop();
         this.unbindInput();
@@ -19733,9 +19754,11 @@ var HangarTestArena = class HangarTestArena {
 
     getDiscoveredEnemies() {
         let ids = [];
-        if (typeof profileManager !== 'undefined' && profileManager.getDiscovered) {
+        if (!this._embedHost && typeof profileManager !== 'undefined' && profileManager.getDiscovered) {
             ids = profileManager.getDiscovered('enemies') || [];
         }
+        // A new pilot has discovered nothing yet: the embedded start-screen test uses basic hulls.
+        if (this._embedHost && !ids.length) ids = ['enemyBasic', 'enemyFast'];
         return ids.map((id) => {
             const cfg = (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getConfig)
                 ? enemyConfigManager.getConfig(id)
@@ -19764,7 +19787,7 @@ var HangarTestArena = class HangarTestArena {
 
     getShipStats() {
         const shipId = this.shipId;
-        const model = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+        let model = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
             ? shipConfigManager.getMergedModel(shipId)
             : null;
         const cfg = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig)
@@ -19773,6 +19796,9 @@ var HangarTestArena = class HangarTestArena {
         const loadout = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout)
             ? shipLoadoutManager.getLoadout(shipId)
             : { weapons: [], defenses: [], abilities: [], energy: [], fireMode: 'auto' };
+        if (model && this._modelPatch) {
+            try { model = Object.assign({}, model, this._modelPatch(shipId) || {}); } catch (e) { /* ignore */ }
+        }
 
         const defenses = (loadout.defenses || []).concat(loadout.abilities || []);
         const defStats = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeDefenseStats)
@@ -19840,7 +19866,42 @@ var HangarTestArena = class HangarTestArena {
         };
     }
 
+    createEmbedUI() {
+        if (this.overlay) this.overlay.remove();
+        this.overlay = document.createElement('div');
+        this.overlay.className = 'hta-embed';
+        this.overlay.innerHTML = `
+            <canvas id="htaCanvas" class="hta-embed-canvas" width="${this.W}" height="${this.H}" aria-label="Ship test"></canvas>
+            <button type="button" class="hta-embed-exit" id="htaClose">EXIT TEST</button>
+            <div class="hta-embed-ships" role="tablist" aria-label="Ship"></div>
+            <p class="hta-embed-hint">ARROWS MOVE · SPACE / A S D FIRE · ESC EXIT</p>`;
+        this._embedHost.appendChild(this.overlay);
+        this.canvas = this.overlay.querySelector('#htaCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.overlay.querySelector('#htaClose').addEventListener('click', () => this.close());
+        const bar = this.overlay.querySelector('.hta-embed-ships');
+        const nameOf = (id) => {
+            const c = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig) ? shipConfigManager.getConfig(id) : null;
+            return String((c && c.name) || id).replace(/^player_/, '').toUpperCase();
+        };
+        this._embedShips.forEach((id) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'hta-embed-ship' + (id === this.shipId ? ' on' : '');
+            b.textContent = nameOf(id);
+            b.addEventListener('click', () => {
+                this.shipId = id;
+                this.resetSim();
+                this.syncEnemiesFromSelection();
+                bar.querySelectorAll('.hta-embed-ship').forEach((x) => x.classList.toggle('on', x === b));
+                b.blur();
+            });
+            bar.appendChild(b);
+        });
+    }
+
     createUI() {
+        if (this._embedHost) { this.createEmbedUI(); return; }
         if (this.overlay) this.overlay.remove();
         const enemies = this.getDiscoveredEnemies();
         const enemyList = enemies.length
@@ -20219,6 +20280,8 @@ extendClass(HangarTestArena, {
         this.unbindInput();
         this._keyDown = (e) => {
             if (!this.isVisible) return;
+            // Embedded in a menu: the menu's own key handling must not see the flight keys.
+            if (this._embedHost && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation();
             this._keys[e.key] = true;
             if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
                 this._keys['Shift'] = true;
@@ -20527,12 +20590,22 @@ extendClass(HangarTestArena, {
             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
                 shipLoadoutManager.applyLayoutToModel(m, this.shipId);
             }
+            // Start screen: the kit's guns sit on A / S / D (as the new pilot gets them), SPACE fires all.
+            if (m.factionPreview && m.loadout) {
+                const L = Object.assign({}, m.loadout);
+                const n = (L.weaponSlots || L.weapons || []).filter(Boolean).length;
+                L.weaponKeys = {}; L.weaponKeySets = {};
+                if (n > 1) ['a', 's', 'd'].forEach((k, i) => { if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; } });
+                L.allFireKey = 'space';
+                m.loadout = L;
+            }
             if (!m.weaponConfig && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip) {
                 m.weaponConfig = {};
                 (m.availableWeapons || []).forEach((id) => { m.weaponConfig[id] = weaponConfigManager.getDefaultsForShip(id); });
             }
             this._arenaFireModel = m;
             this._arenaFireModelBase = base;
+            if (this._arenaBm) { this._arenaBm._firePosCache = null; this._arenaBm.weaponCooldowns = {}; }
         }
         return this._arenaFireModel;
     },
@@ -20544,6 +20617,10 @@ extendClass(HangarTestArena, {
             if (!bm) return null;
             bm.bullets = [];
             bm.enemyBullets = [];
+            bm._bulletPool = [];
+            bm.shotType = 0;
+            bm.tempWeapon = null;
+            bm.fireMode = 'auto';
             bm.weaponCooldowns = {};
             bm.muzzleFlashes = {};
             bm.lastShotTime = 0;
@@ -20763,36 +20840,38 @@ extendClass(HangarTestArena, {
             ['SHLD', p.shieldMax > 0 ? p.shield / p.shieldMax : 0, accent, p.shieldMax > 0],
             ['ENRG', p.maxEnergy > 0 ? p.energy / p.maxEnergy : 0, '#ffd23d', p.maxEnergy > 0]
         ];
-        ctx.font = 'bold 7px monospace';
+        ctx.font = 'bold 6px monospace';
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
         const labelW = 24;
         bars.forEach(([label, ratio, color, has], i) => {
-            const y = top + 5 + i * 8;
+            const y = top + 3 + i * 6;
             ctx.globalAlpha = has ? 1 : 0.35;
             ctx.fillStyle = color;
-            ctx.fillText(label, pad, y + 2);
+            ctx.fillText(label, pad, y + 1.5);
             const bx = pad + labelW;
             const bw = W - bx - pad;
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(bx, y, bw, 4);
+            ctx.fillRect(bx, y, bw, 3);
             ctx.fillStyle = color;
-            ctx.fillRect(bx, y, Math.round(bw * Math.max(0, Math.min(1, ratio))), 4);
+            ctx.fillRect(bx, y, Math.round(bw * Math.max(0, Math.min(1, ratio))), 3);
         });
         ctx.globalAlpha = 1;
         // Keys: A S D on one row, SPACE on its own row; lit while held.
         const held = (k) => (k === 'space' ? (this.keyDown(' ') || this.keyDown('Space')) : this.keyDown(k));
-        const capH = 11;
+        const capH = 10;
         const gap = 4;
-        const keysTop = top + 30;
-        const unit = (W - pad * 2 - gap * 2) / 3;
+        const keysTop = top + 22;
+        // One row: A S D narrow, SPACE (ALL) twice as wide.
+        const gap1 = 3;
+        const unit = (W - pad * 2 - gap1 * 3) / 5;
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
         [['a', 'A'], ['s', 'S'], ['d', 'D'], ['space', 'SPACE']].forEach(([id, label], i) => {
             const isSpace = id === 'space';
-            const x = isSpace ? pad : Math.round(pad + i * (unit + gap));
-            const y = isSpace ? keysTop + capH + gap : keysTop;
-            const cw = Math.round(isSpace ? W - pad * 2 : unit);
+            const x = Math.round(pad + (i < 3 ? i * (unit + gap1) : 3 * (unit + gap1)));
+            const y = keysTop;
+            const cw = Math.round(isSpace ? unit * 2 : unit);
             const on = held(id);
             if (on) {
                 ctx.fillStyle = accent;
@@ -21091,6 +21170,7 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
                 </header>
                 <div class="difficulty-editor-body">
                     <aside class="difficulty-editor-nav">
+                        <input type="search" id="steFilter" class="ste-filter" placeholder="Filter…" autocomplete="off">
                         <div class="de-section-title">SCREEN</div>
                         <div id="steScreenList"></div>
                         <div class="de-section-title">MEDIA OVERRIDE</div>
@@ -21114,6 +21194,13 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
             </div>`;
         document.body.appendChild(overlay);
         const q = (s) => overlay.querySelector(s);
+        q('#steFilter').addEventListener('input', () => this.applyFilter());
+        q('.difficulty-editor-nav').addEventListener('click', (e) => {
+            const t = e.target.closest('.de-section-title');
+            if (!t) return;
+            t.classList.toggle('ste-collapsed');
+            this.applyFilter();
+        });
         q('#steClose').addEventListener('click', () => this.hide());
         q('#steBack').addEventListener('click', () => this.hide());
         q('#steCurrentSelection').addEventListener('click', () => {
@@ -21248,6 +21335,7 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         });
 
         this._updateCurrentSelectionLabel();
+        this.applyFilter();
 
         const host = document.getElementById('steControls');
         host.innerHTML = '';
@@ -21261,6 +21349,26 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         if (this.selectedKind === 'screen') this.renderScreenTracker(host, this.selectedId);
         else if (this.selectedKind === 'planet') this.renderPlanetTracker(host, this.selectedId);
         else this.renderOverrideEditor(host, this.selectedKind, this.selectedId);
+    }
+
+    /** Filters nav buttons by text; hides empty sections; honours collapsed state. */
+    applyFilter() {
+        const nav = document.querySelector('#soundtrackEditorOverlay .difficulty-editor-nav');
+        const input = document.getElementById('steFilter');
+        if (!nav || !input) return;
+        const needle = input.value.trim().toLowerCase();
+        nav.querySelectorAll('.de-section-title').forEach((title) => {
+            const list = title.nextElementSibling;
+            if (!list) return;
+            let visible = 0;
+            list.querySelectorAll('.de-profile-btn').forEach((b) => {
+                const match = !needle || b.textContent.toLowerCase().indexOf(needle) !== -1;
+                b.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            title.style.display = needle && !visible ? 'none' : '';
+            list.style.display = (!needle && title.classList.contains('ste-collapsed')) || (needle && !visible) ? 'none' : '';
+        });
     }
 
     /** Header button that always shows the currently selected nav entry. */
@@ -21322,7 +21430,7 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         host.appendChild(status);
 
         const btnRow = document.createElement('div');
-        btnRow.className = 'de-slider-row';
+        btnRow.className = 'de-slider-row ste-btn-row';
 
         const applyBtn = document.createElement('button');
         applyBtn.type = 'button';
@@ -21602,7 +21710,7 @@ var SoundtrackEditorUI = class SoundtrackEditorUI {
         }
 
         const btnRow = document.createElement('div');
-        btnRow.className = 'de-slider-row';
+        btnRow.className = 'de-slider-row ste-btn-row';
         const previewBtn = document.createElement('button');
         previewBtn.type = 'button';
         previewBtn.className = 'pe-btn';

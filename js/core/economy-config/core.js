@@ -105,7 +105,8 @@ class EconomyConfig {
             'compactor', 'docking_ring', 'fabricator', 'warp_drive', 'cooling',
             'refinery', 'drone_bay', 'sensors', 'nav_computer', 'foundry',
             'vault_omega', 'fleet_yard', 'quantum_array', 'stargate',
-            'embassy', 'trade_desk', 'war_room'
+            'embassy', 'trade_desk', 'war_room',
+            'armory', 'arm_plasma', 'arm_missile', 'arm_ion', 'arm_railgun', 'arm_pierce', 'arm_nova'
         ];
         /** Warp level required to travel to each galaxy (milky_way always free). */
         this.galaxyWarpRequirement = {

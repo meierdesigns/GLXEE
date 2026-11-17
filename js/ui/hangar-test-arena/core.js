@@ -28,7 +28,7 @@ class HangarTestArena {
         this.W = 240;
         this.H = 300;
         // Bottom HUD strip (bars + key caps); the ship stays above it.
-        this.HUD_H = 60;
+        this.HUD_H = 36;
         this.SHIP_DRAW_SCALE = 1;
         this.ENEMY_HIT_SCALE = 1;
         this.RESPAWN_MS = 2000;
@@ -38,6 +38,11 @@ class HangarTestArena {
         const opts = options || {};
         this.shipId = opts.shipId || 'player_scrap';
         this.onClose = opts.onClose || null;
+        // Embedded mode (start screen): the arena fills `host` instead of opening an overlay.
+        this._embedHost = opts.host || null;
+        this._embedShips = Array.isArray(opts.ships) ? opts.ships.slice() : [];
+        // Embedded (start screen): extra model fields (faction, kit preview) so the arena flies what the preview shows.
+        this._modelPatch = typeof opts.modelPatch === 'function' ? opts.modelPatch : null;
         this.isVisible = true;
         this._stats = { damageDealt: 0, damageTaken: 0, kills: 0, shots: 0 };
         this._elapsed = 0;
@@ -45,7 +50,9 @@ class HangarTestArena {
         this._enemyRespawns = {};
         this._selectedEnemies = {};
         const discovered = this.getDiscoveredEnemies();
-        if (discovered.length) {
+        if (this._embedHost) {
+            discovered.slice(0, 2).forEach((e) => { this._selectedEnemies[e.id] = true; });
+        } else if (discovered.length) {
             this._selectedEnemies[discovered[0].id] = true;
         }
         this.createUI();
@@ -55,7 +62,21 @@ class HangarTestArena {
         this.startLoop();
     }
 
+    /** Embedded arena: switch hull / kit while open (start screen) and rebuild the sim from the current patch. */
+    refreshShip(shipId) {
+        if (!this.isVisible || !this._embedHost) return;
+        if (shipId) this.shipId = shipId;
+        this.resetSim();
+        this.syncEnemiesFromSelection();
+        if (this.overlay) {
+            const names = this._embedShips;
+            this.overlay.querySelectorAll('.hta-embed-ship').forEach((b, i) => b.classList.toggle('on', names[i] === this.shipId));
+        }
+    }
+
     hide() {
+        this._embedHost = null;
+        this._modelPatch = null;
         this.isVisible = false;
         this.stopLoop();
         this.unbindInput();
@@ -76,9 +97,11 @@ class HangarTestArena {
 
     getDiscoveredEnemies() {
         let ids = [];
-        if (typeof profileManager !== 'undefined' && profileManager.getDiscovered) {
+        if (!this._embedHost && typeof profileManager !== 'undefined' && profileManager.getDiscovered) {
             ids = profileManager.getDiscovered('enemies') || [];
         }
+        // A new pilot has discovered nothing yet: the embedded start-screen test uses basic hulls.
+        if (this._embedHost && !ids.length) ids = ['enemyBasic', 'enemyFast'];
         return ids.map((id) => {
             const cfg = (typeof enemyConfigManager !== 'undefined' && enemyConfigManager.getConfig)
                 ? enemyConfigManager.getConfig(id)
@@ -107,7 +130,7 @@ class HangarTestArena {
 
     getShipStats() {
         const shipId = this.shipId;
-        const model = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
+        let model = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel)
             ? shipConfigManager.getMergedModel(shipId)
             : null;
         const cfg = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig)
@@ -116,6 +139,9 @@ class HangarTestArena {
         const loadout = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.getLoadout)
             ? shipLoadoutManager.getLoadout(shipId)
             : { weapons: [], defenses: [], abilities: [], energy: [], fireMode: 'auto' };
+        if (model && this._modelPatch) {
+            try { model = Object.assign({}, model, this._modelPatch(shipId) || {}); } catch (e) { /* ignore */ }
+        }
 
         const defenses = (loadout.defenses || []).concat(loadout.abilities || []);
         const defStats = (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.computeDefenseStats)
@@ -183,7 +209,42 @@ class HangarTestArena {
         };
     }
 
+    createEmbedUI() {
+        if (this.overlay) this.overlay.remove();
+        this.overlay = document.createElement('div');
+        this.overlay.className = 'hta-embed';
+        this.overlay.innerHTML = `
+            <canvas id="htaCanvas" class="hta-embed-canvas" width="${this.W}" height="${this.H}" aria-label="Ship test"></canvas>
+            <button type="button" class="hta-embed-exit" id="htaClose">EXIT TEST</button>
+            <div class="hta-embed-ships" role="tablist" aria-label="Ship"></div>
+            <p class="hta-embed-hint">ARROWS MOVE · SPACE / A S D FIRE · ESC EXIT</p>`;
+        this._embedHost.appendChild(this.overlay);
+        this.canvas = this.overlay.querySelector('#htaCanvas');
+        this.ctx = this.canvas.getContext('2d');
+        this.overlay.querySelector('#htaClose').addEventListener('click', () => this.close());
+        const bar = this.overlay.querySelector('.hta-embed-ships');
+        const nameOf = (id) => {
+            const c = (typeof shipConfigManager !== 'undefined' && shipConfigManager.getConfig) ? shipConfigManager.getConfig(id) : null;
+            return String((c && c.name) || id).replace(/^player_/, '').toUpperCase();
+        };
+        this._embedShips.forEach((id) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'hta-embed-ship' + (id === this.shipId ? ' on' : '');
+            b.textContent = nameOf(id);
+            b.addEventListener('click', () => {
+                this.shipId = id;
+                this.resetSim();
+                this.syncEnemiesFromSelection();
+                bar.querySelectorAll('.hta-embed-ship').forEach((x) => x.classList.toggle('on', x === b));
+                b.blur();
+            });
+            bar.appendChild(b);
+        });
+    }
+
     createUI() {
+        if (this._embedHost) { this.createEmbedUI(); return; }
         if (this.overlay) this.overlay.remove();
         const enemies = this.getDiscoveredEnemies();
         const enemyList = enemies.length

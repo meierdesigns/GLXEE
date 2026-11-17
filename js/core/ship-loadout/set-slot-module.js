@@ -6,6 +6,14 @@ extendClass(ShipLoadoutManager, {
      * Set or clear a specific hangar slot index. Passing empty/null clears it.
      * Weapons cannot be fully emptied (falls back to laser).
      */
+    /** Positional module list for a slot kind (nulls = empty slots); weapons use weaponSlots. */
+    getSlotList(L, kind) {
+        const key = this.kindToLoadoutKey(kind);
+        if (key === 'weapons') return (L && (L.weaponSlots || L.weapons)) || [];
+        const pos = L && L.slotLists && L.slotLists[key];
+        return Array.isArray(pos) ? pos : ((L && L[key]) || []);
+    },
+
     setSlotModule(shipId, kind, slotIndex, moduleId) {
         const key = this.kindToLoadoutKey(kind);
         const L = this.getLoadout(shipId);
@@ -19,7 +27,7 @@ extendClass(ShipLoadoutManager, {
         const nextId = moduleId == null || moduleId === '' || moduleId === 'empty'
             ? null
             : String(moduleId);
-        const list = (key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || [])).slice();
+        const list = (key === 'weapons' ? (L.weaponSlots || L.weapons || []) : this.getSlotList(L, kind)).slice();
 
         while (list.length < cap) list.push(null);
         const current = list[idx] || null;
@@ -50,9 +58,12 @@ extendClass(ShipLoadoutManager, {
                     return { ok: false, reason: check.reason || 'BLOCKED', need: check.need, have: check.have, loadout: L };
                 }
             }
-            // Move/replace: remove duplicates elsewhere in this category
-            for (let i = 0; i < list.length; i++) {
-                if (i !== idx && list[i] === nextId) list[i] = null;
+            // Move/replace: remove duplicates elsewhere in this category. Weapons are positional and
+            // may repeat (twin lasers) — installing into one slot must not wipe the other.
+            if (key !== 'weapons') {
+                for (let i = 0; i < list.length; i++) {
+                    if (i !== idx && list[i] === nextId) list[i] = null;
+                }
             }
             list[idx] = nextId;
             if (key === 'defenses') {
@@ -69,6 +80,10 @@ extendClass(ShipLoadoutManager, {
         }
 
         L[key] = list.filter(Boolean);
+        if (key !== 'weapons') {
+            L.slotLists = Object.assign({}, L.slotLists || {});
+            L.slotLists[key] = list.map((id) => id || null);
+        }
         if (key === 'weapons') {
             // Keep slot positions (nose / wing pairs); trim trailing empties.
             L.weaponSlots = list.map((id) => id || null);

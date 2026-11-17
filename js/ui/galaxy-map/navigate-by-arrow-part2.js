@@ -98,7 +98,7 @@ extendClass(GalaxyMapManager, {
                     : 'READY'))
             : 'LOCKED');
         set('gmEnemies', info.unlocked ? String(info.enemyCount) : '???');
-        set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED');
+        set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : (this.planetSituationStatus ? this.planetSituationStatus(info.id) : 'OPEN')) : 'LOCKED');
         const stepper = this.overlay.querySelector('#gmStageStepper');
         if (stepper) stepper.innerHTML = (info.unlocked && !this.selectedPostId && !this.selectedBorder) ? this.planetStagesHtml(info.id) : '';
         const unlockHint = this.overlay.querySelector('#gmUnlockHint');

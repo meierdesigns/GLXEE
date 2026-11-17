@@ -175,12 +175,22 @@ extendClass(HangarTestArena, {
             if (typeof shipLoadoutManager !== 'undefined' && shipLoadoutManager.applyLayoutToModel) {
                 shipLoadoutManager.applyLayoutToModel(m, this.shipId);
             }
+            // Start screen: the kit's guns sit on A / S / D (as the new pilot gets them), SPACE fires all.
+            if (m.factionPreview && m.loadout) {
+                const L = Object.assign({}, m.loadout);
+                const n = (L.weaponSlots || L.weapons || []).filter(Boolean).length;
+                L.weaponKeys = {}; L.weaponKeySets = {};
+                if (n > 1) ['a', 's', 'd'].forEach((k, i) => { if (i < n) { L.weaponKeys[i] = k; L.weaponKeySets[i] = ['space', k]; } });
+                L.allFireKey = 'space';
+                m.loadout = L;
+            }
             if (!m.weaponConfig && typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getDefaultsForShip) {
                 m.weaponConfig = {};
                 (m.availableWeapons || []).forEach((id) => { m.weaponConfig[id] = weaponConfigManager.getDefaultsForShip(id); });
             }
             this._arenaFireModel = m;
             this._arenaFireModelBase = base;
+            if (this._arenaBm) { this._arenaBm._firePosCache = null; this._arenaBm.weaponCooldowns = {}; }
         }
         return this._arenaFireModel;
     },
@@ -192,6 +202,10 @@ extendClass(HangarTestArena, {
             if (!bm) return null;
             bm.bullets = [];
             bm.enemyBullets = [];
+            bm._bulletPool = [];
+            bm.shotType = 0;
+            bm.tempWeapon = null;
+            bm.fireMode = 'auto';
             bm.weaponCooldowns = {};
             bm.muzzleFlashes = {};
             bm.lastShotTime = 0;

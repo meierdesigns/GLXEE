@@ -2,7 +2,7 @@
 
 // ProfileSelectionManager members, continued from core-part2.js: start galaxy card and preferred weapon.
 /** Map height (viewBox units, width is 560) of the wizard's start-galaxy card: the step has the whole content area to itself. */
-const GALAXY_MAP_H = 280;
+const GALAXY_MAP_H = 560;
 
 extendClass(ProfileSelectionManager, {
     /**
@@ -68,7 +68,13 @@ extendClass(ProfileSelectionManager, {
         const H = mapH || 220;   // the pilot wizard passes a taller map (GALAXY_MAP_H) so the step fills its screen
         const P = 20;
         const pos = {};
-        nodes.forEach((n) => { pos[n.planetId] = { x: P + n.x * (W - P * 2), y: P + n.y * (H - P * 2) }; });
+        // Stretch the planets over the whole map (the generator leaves wide empty margins around them).
+        const ext = (k) => { const v = nodes.map((n) => n[k]); const lo = Math.min.apply(null, v), hi = Math.max.apply(null, v); return hi - lo > 0.05 ? [lo, hi - lo] : [0, 1]; };
+        const [x0, xs] = nodes.length ? ext('x') : [0, 1];
+        const [y0, ys] = nodes.length ? ext('y') : [0, 1];
+        const margin = mapH ? 0.06 : 0;
+        const fit = (v, lo, span) => margin + ((v - lo) / span) * (1 - margin * 2);
+        nodes.forEach((n) => { pos[n.planetId] = mapH ? { x: P + fit(n.x, x0, xs) * (W - P * 2), y: P + fit(n.y, y0, ys) * (H - P * 2) } : { x: P + n.x * (W - P * 2), y: P + n.y * (H - P * 2) }; });
         const edges = (map.edges || []).map((e) => {
             const a = pos[e[0]];
             const b = pos[e[1]];
@@ -153,7 +159,7 @@ extendClass(ProfileSelectionManager, {
         return `
             ${mapH ? '' : '<button type="button" class="profile-start-galaxy-nav" data-galaxy-step="-1" tabindex="-1" aria-label="Previous galaxy">‹</button>'}
             ${mapH ? this.renderStartGalaxyListHtml(gid, home) : ''}
-            <svg class="profile-start-galaxy-map" viewBox="${mapH ? `-24 -24 ${W + 48 + Math.round(W * 0.28)} ${H + 48}` : `0 0 ${W} ${H}`}" preserveAspectRatio="${mapH ? 'xMinYMid meet' : 'xMidYMid slice'}" width="${W}" height="${H}" style="--galaxy-color:${color};aspect-ratio:${W} / ${H}" shape-rendering="crispEdges" aria-hidden="true">
+            <svg class="profile-start-galaxy-map" viewBox="${mapH ? `-24 -24 ${W + 48} ${H + 48}` : `0 0 ${W} ${H}`}" preserveAspectRatio="${mapH ? 'xMidYMid meet' : 'xMidYMid slice'}" width="${W}" height="${H}" style="--galaxy-color:${color};aspect-ratio:${W} / ${H}" shape-rendering="crispEdges" aria-hidden="true">
                 <g class="dust">${dust}</g><g class="stars">${stars}</g>
                 <g class="suns">${nodes.length && pcm.getGalaxySuns ? pcm.getGalaxySuns(gid).map((sun) => {
                     const sx = Math.round(P + sun.x * (W - P * 2));

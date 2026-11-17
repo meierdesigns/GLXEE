@@ -42,9 +42,9 @@ const physicalItem = (() => {
         return fallback;
     }
 
-    /** Slot chrome / BG color — weapons always category red; item art keeps partColor. */
+    /** Slot chrome / BG color — an EMPTY weapon slot is category red; a slotted part uses its own part color. */
     function slotColor(kind, id, fallback) {
-        if (kind === 'weapon') {
+        if (kind === 'weapon' && !id) {
             const kc = (typeof iconRenderer !== 'undefined' && iconRenderer.getModuleKindColor)
                 ? iconRenderer.getModuleKindColor('weapon') : null;
             return kc || fallback || '#ff6a4a';
@@ -449,7 +449,13 @@ physicalItem.gridTarget = function (cell, x, y) {
     const origin = cell && cell.closest('.hs-bay-inv .hs-storage-grid');
     if (!origin) return null;
     const spanOf = (c, prop) => Number((c.style[prop].match(/span (\d+)/) || [0, 1])[1]);
-    const w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
+    let w = spanOf(cell, 'gridColumn'), h = spanOf(cell, 'gridRow');
+    // An equipped part dragged out of its (possibly larger) hull slot lands as cargo with the
+    // PART's footprint, not the slot's — a 1x2 weapon slot holding a 1x1 gun needs one free tile.
+    if (cell.classList.contains('is-ship-slot') && cell.hasAttribute('data-part-id')) {
+        const pw = Number(cell.getAttribute('data-part-span-w')), ph = Number(cell.getAttribute('data-part-span-h'));
+        if (pw > 0 && ph > 0) { w = pw; h = ph; }
+    }
     const stepOf = (g) => {
         const r = g.getBoundingClientRect();
         const gcs = getComputedStyle(g);
@@ -503,28 +509,52 @@ physicalItem.previewInGrid = function (cell, x, y) {
     const old = document.querySelector('.hs-inv-drop-preview');
     const t = x == null ? null : physicalItem.gridTarget(cell, x, y);
     if (!t) { if (old) old.remove(); return; }
-    const isNew = !(old && old.parentNode === t.grid);
-    const el = isNew ? document.createElement('div') : old;
-    if (isNew && old) old.remove();
-    // Dropping on an occupied tile now swaps instead of being refused, so the preview reads
-    // "swap" rather than "blocked" there — never a dead-end red X for a drop that will work.
-    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-swap');
     const gcs = getComputedStyle(t.grid);
     const cs = parseFloat(gcs.getPropertyValue('--cs')) || 48;
     const gap = parseFloat(gcs.columnGap) || 2;
     const step = cs + gap;
+    // Dragging over a hull slot: show the item sitting INSIDE that slot (slot-sized frame, part
+    // centred at its own footprint), outlined green when it would be equipped, red for the wrong type.
+    const slotHit = t.all.find((c) => {
+        if (c === cell || !c.classList.contains('is-ship-slot')) return false;
+        const [c0, r0, cw, ch] = t.at(c);
+        return t.col < c0 + cw && c0 < t.col + t.w && t.row < r0 + ch && r0 < t.row + t.h;
+    }) || null;
+    let col = t.col, row = t.row, w = t.w, h = t.h, state = '';
+    if (slotHit) {
+        const [c0, r0, cw, ch] = t.at(slotHit);
+        col = c0; row = r0; w = cw; h = ch;
+        state = slotHit.getAttribute('data-part-kind') === (cell && cell.getAttribute('data-part-kind'))
+            ? ' is-slot-ok' : ' is-slot-wrong';
+    }
+    const key = slotHit ? slotHit.getAttribute('data-drag-key') : '';
+    const sig = col + ',' + row + ',' + w + ',' + h + ',' + state + ',' + key;
+    const isNew = !(old && old.parentNode === t.grid);
+    const el = isNew ? document.createElement('div') : old;
+    if (isNew && old) old.remove();
+    // Dropping on an occupied tile swaps instead of being refused, so the preview reads
+    // "swap" rather than "blocked" there — never a dead-end red X for a drop that will work.
+    el.className = 'hs-inv-drop-preview' + (t.free ? '' : ' is-swap') + (slotHit ? ' is-in-slot' : '') + state;
     // Absolute left/top are from the grid's padding edge; cells sit after padding — match that
     // or the preview paints in the padding gutter while Inspect still shows the cell elsewhere.
     const padL = parseFloat(gcs.paddingLeft) || 0;
     const padT = parseFloat(gcs.paddingTop) || 0;
-    el.style.left = `${padL + (t.col - 1) * step}px`;
-    el.style.top = `${padT + (t.row - 1) * step}px`;
-    el.style.width = `${t.w * step - gap}px`;
-    el.style.height = `${t.h * step - gap}px`;
-    // The dragged item's own casing sitting in the hovered tile, not a highlighted box.
-    if (isNew) {
-        const body = cell && cell.querySelector && cell.querySelector('.hs-item-body');
-        if (body) el.appendChild(body.cloneNode(true));
+    el.style.left = `${padL + (col - 1) * step}px`;
+    el.style.top = `${padT + (row - 1) * step}px`;
+    el.style.width = `${w * step - gap}px`;
+    el.style.height = `${h * step - gap}px`;
+    // The dragged item's own casing, centred at its own footprint inside the frame.
+    if (isNew || el._sig !== sig) {
+        el.textContent = '';
+        const body = cell && cell.querySelector && (cell.querySelector('.hs-storage-slot-part .hs-item-body') || cell.querySelector('.hs-item-body'));
+        if (body) {
+            const clone = body.cloneNode(true);
+            if (slotHit) {
+                clone.style.cssText += `;position:absolute;left:50%;top:50%;width:${t.w * step - gap}px;height:${t.h * step - gap}px;right:auto;bottom:auto;transform:translate(-50%,-50%);`;
+            }
+            el.appendChild(clone);
+        }
+        el._sig = sig;
     }
     if (!el.parentNode) t.grid.appendChild(el);
 };
@@ -610,6 +640,30 @@ physicalItem.dropInGrid = function (ui, cell, x, y) {
             if (!res.ok) { toast(res.reason || 'CAN\'T MOVE TO SHIP'); return false; }
         }
         ui.applyHangarSlotChoice(kind, Number(hitSlot.getAttribute('data-slot-index')), id, null);
+        return true;
+    }
+    // Cargo dragged across the SHIP / STATION boundary of the bay inventory: really transfer it
+    // (a plain re-pin would only move the tile inside its own grid).
+    const srcGridEl = cell.closest('.hs-storage-grid');
+    const srcScope = (srcGridEl && srcGridEl.getAttribute('data-storage-target')) || 'ship';
+    const dstScope = t.grid.getAttribute('data-storage-target') || 'ship';
+    if (srcScope !== dstScope && ui._transferStorageItem) {
+        const kind0 = cell.getAttribute('data-part-kind');
+        if (kind0 === 'blueprint') return false;
+        const key0 = cell.getAttribute('data-drag-key') || (bucketOfKind(kind0) + ':' + cell.getAttribute('data-part-id'));
+        const sep0 = key0.indexOf(':');
+        const bucket0 = sep0 === -1 ? bucketOfKind(kind0) : key0.slice(0, sep0);
+        const id0 = sep0 === -1 ? key0 : key0.slice(sep0 + 1);
+        const srcShip = srcGridEl ? (srcGridEl.getAttribute('data-ship') || shipId0) : shipId0;
+        const dstShip = t.grid.getAttribute('data-ship') || shipId0;
+        // Only land on empty tiles — no cross-grid swapping.
+        if (overlapsAt.length) { toast('TILE OCCUPIED'); return false; }
+        const res = ui._transferStorageItem(profile, srcScope, srcShip, dstScope, dstShip, bucket0, id0);
+        if (!res.ok) { toast(res.reason || (dstScope === 'station' ? 'CAN\'T MOVE TO STATION' : 'CAN\'T MOVE TO SHIP')); return false; }
+        profileManager.setStoragePos(profile, dstScope === 'ship' ? 'ship' : 'station', dstScope === 'ship' ? dstShip : null,
+            res.instanceKey || (bucket0 + ':' + id0), t.col, t.row);
+        profileManager.save();
+        ui.createUI();
         return true;
     }
     const key = (c) => c.getAttribute('data-drag-key') || (
@@ -721,9 +775,13 @@ function toggleHangarInventorySlot(cell) {
     const idx = [];
     ui.overlay.querySelectorAll(`.hs-hangar-slot[data-slot-kind="${kind}"]`).forEach((el) => { const i = Number(el.getAttribute('data-slot-index') || 0); if (idx.indexOf(i) === -1) idx.push(i); });
     idx.sort((a, b) => a - b);
-    const at = idx.find((i) => ui.hangarSlotModuleId(kind, i) === id);
-    // Only the slotted copy toggles off; a loose cargo copy of the same part never does.
-    if (at != null && cell.classList.contains('is-ship-slot')) { ui.applyHangarSlotChoice(kind, at, '', null); return; }
+    // Only the slotted copy toggles off — and exactly THIS slot (several copies of one part may
+    // sit in several slots); a loose cargo copy of the same part never does.
+    if (cell.classList.contains('is-ship-slot')) {
+        const own = Number(cell.getAttribute('data-slot-index'));
+        const at = Number.isFinite(own) && ui.hangarSlotModuleId(kind, own) === id ? own : idx.find((i) => ui.hangarSlotModuleId(kind, i) === id);
+        if (at != null) { ui.applyHangarSlotChoice(kind, at, '', null); return; }
+    }
     const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(ui.hangarShipId, kind, id, i).ok;
     const target = idx.find((i) => !ui.hangarSlotModuleId(kind, i) && fits(i)); // free slots only, never swaps
     if (target == null) { ui.playButtonResult(cell, false, idx.length ? 'NO FREE ' + kind.toUpperCase() + ' SLOT' : 'NO ' + kind.toUpperCase() + ' SLOT'); return; }

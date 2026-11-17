@@ -23,6 +23,18 @@ const VFTrackerDefaults = {
         ];
     },
 
+    /** 70s space-synth voices shared by the calm hub / map tracks. */
+    _spaceInstruments(tight) {
+        // `tight`: same voices with short attack/release for faster tracks (fanfare, victory, shop).
+        return [
+            { id: 1, name: 'sub-pad', wave: 'triangle', volume: 0.7, attack: tight ? 0.03 : 0.18, decay: 0.3, sustain: 0.85, release: tight ? 0.35 : 1.1, filter: 900 },
+            { id: 2, name: 'lead-saw', wave: 'sawtooth', volume: 0.3, attack: tight ? 0.02 : 0.12, decay: 0.3, sustain: 0.7, release: tight ? 0.4 : 1.1, filter: 1200 },
+            { id: 3, name: 'seq-saw', wave: 'sawtooth', volume: 0.2, attack: 0.04, decay: 0.25, sustain: 0.5, release: 0.6, filter: 2400 },
+            { id: 4, name: 'noise', wave: 'noise', volume: 0.28, attack: 0.001, decay: 0.025, sustain: 0.01, release: 0.02 },
+            { id: 5, name: 'kick', wave: 'triangle', volume: 0.74, attack: 0.001, decay: 0.07, sustain: 0.05, release: 0.04, filter: 400 }
+        ];
+    },
+
     _track(meta, bpm, patterns, order, loop) {
         return {
             format: 'vftrack',
@@ -251,31 +263,38 @@ const VFTrackerDefaults = {
      * Call C-E-G | answer A-G-E | home C. Bright dock motif, not a combat hook.
      */
     menu() {
-        return this._track(
-            { title: 'Start Screen', planet: 'menu', role: 'screen', notes: 'call C-E-G · answer A-G-E · home C' },
-            118,
+        // Calm hub: slow C-major pad + a few long melody notes, flanged shimmer
+        // behind (same space-synth voices as the map). No kit, no busy 16ths.
+        const tok = (n, i, v) => n + ':' + i + ':' + v;
+        const shimmer = (a, b, c) => [
+            tok(a, 3, 20), '.', tok(b, 3, 17), '.', tok(c, 3, 19), '.', tok(b, 3, 16), '.',
+            tok(a, 3, 20), '.', tok(c, 3, 17), '.', tok(b, 3, 19), '.', tok(a, 3, 15), '.'].join(' ');
+        const e = '. . . . . . . . . . . . . . . .';
+        const track = this._track(
+            { title: 'Start Screen', planet: 'menu', role: 'screen', space: true, notes: 'calm C-major hub · long melody · flanged shimmer' },
+            72,
             [
                 this._pat(0,
-                    'C-2:1:54 . C-2:1:38 . C-2:1:52 . G-1:1:42 . C-2:1:54 . C-2:1:36 . G-1:1:46 . G-1:1:34',
-                    'C-5:2:50 . E-5:2:38 . G-5:2:56 . E-5:2:44 . A-4:2:42 . G-4:2:36 . E-4:2:40 . C-5:2:48',
-                    'G-4:3:14 . . . C-5:3:12 . . . G-4:3:14 . . . E-4:3:10 . . .',
-                    'C-2:5:60 . A-4:4:12 . C-2:5:46 . A-4:4:08 C-2:5:58 . A-4:4:12 . C-2:5:42 A-4:4:06 . .'
-                ),
+                    tok('C-2', 1, 44) + ' . . . . . . . ' + tok('G-1', 1, 38) + ' . . . . . . .',
+                    tok('E-4', 2, 38) + ' . . . ' + tok('G-4', 2, 34) + ' . . . ' + tok('A-4', 2, 36) + ' . . . ' + tok('G-4', 2, 32) + ' . . .',
+                    shimmer('C-5', 'E-5', 'G-5'), e),
                 this._pat(1,
-                    'A-1:1:50 . A-1:1:34 . A-1:1:48 . E-1:1:40 . A-1:1:50 . A-1:1:34 . E-1:1:42 . E-1:1:32',
-                    'A-4:2:46 . C-5:2:34 . E-5:2:52 . C-5:2:40 . G-4:2:38 . E-4:2:32 . D-4:2:34 . A-4:2:44',
-                    'E-4:3:12 . . . A-4:3:10 . . . E-4:3:12 . . . C-4:3:08 . . .',
-                    'A-1:5:56 . A-4:4:10 . A-1:5:42 . A-4:4:06 A-1:5:54 . A-4:4:10 . A-1:5:38 A-4:4:05 . .'
-                ),
+                    tok('A-1', 1, 44) + ' . . . . . . . ' + tok('E-1', 1, 38) + ' . . . . . . .',
+                    tok('C-5', 2, 38) + ' . . . ' + tok('B-4', 2, 32) + ' . . . ' + tok('A-4', 2, 36) + ' . . . ' + tok('E-4', 2, 32) + ' . . .',
+                    shimmer('A-4', 'C-5', 'E-5'), e),
                 this._pat(2,
-                    'C-2:1:58 . C-2:1:40 . E-2:1:50 . G-1:1:46 . C-2:1:58 . C-2:1:38 . G-2:1:52 . E-2:1:36',
-                    'C-6:2:54 . E-6:2:42 . G-6:2:58 . A-5:2:46 . G-5:2:44 . E-5:2:38 . C-5:2:40 . C-5:2:50',
-                    'C-5:3:16 . G-4:3:10 . . C-5:3:14 . E-5:3:18 . G-4:3:10 . C-5:3:12 . G-4:3:08',
-                    'C-2:5:64 A-4:4:14 . A-4:4:08 C-2:5:50 . A-4:4:10 . C-2:5:60 A-4:4:12 . A-4:4:06 C-2:5:44 A-4:4:08 .'
-                )
+                    tok('F-1', 1, 44) + ' . . . . . . . ' + tok('G-1', 1, 40) + ' . . . . . . .',
+                    tok('A-4', 2, 38) + ' . . . ' + tok('G-4', 2, 34) + ' . . . ' + tok('E-4', 2, 36) + ' . . . ' + tok('D-4', 2, 32) + ' . . .',
+                    shimmer('F-4', 'A-4', 'C-5'), e),
+                this._pat(3,
+                    tok('C-2', 1, 42) + ' . . . . . . . . . . . . . . .',
+                    e,
+                    shimmer('C-5', 'G-4', 'E-5').split(' ').map((t, k) => (k % 2 ? '.' : t)).join(' '), e)
             ],
-            [0, 0, 1, 0, 2, 1, 0, 0]
+            [3, 0, 1, 0, 2, 1, 0, 3]
         );
+        track.instruments = this._spaceInstruments();
+        return track;
     },
 
     /**
@@ -283,8 +302,8 @@ const VFTrackerDefaults = {
      * slower and broader than the Start Screen hub loop (`menu`).
      */
     titleIntro() {
-        return this._track(
-            { title: 'Title Fanfare', planet: 'menu', role: 'screen', notes: 'cinematic swell · held call · resolve home' },
+        const track = this._track(
+            { title: 'Title Fanfare', planet: 'menu', role: 'screen', space: true, notes: 'cinematic swell · held call · resolve home' },
             108,
             [
                 this._pat(0,
@@ -309,6 +328,8 @@ const VFTrackerDefaults = {
             [0, 1, 2],
             false
         );
+        track.instruments = this._spaceInstruments(true);
+        return track;
     },
 
     /** Lead-motif pitch names from planet combat P0 (Hauptmelodie DNA). */
@@ -372,31 +393,78 @@ const VFTrackerDefaults = {
         let bpm;
         let order;
         if (role === 'map') {
-            // Ambient: held bass, lead only on bar anchors, almost no kit.
+            // Melody-led: singable lead phrase (call / answer) over a slow bass,
+            // arp voice = flowing shimmer (flanged in the player for map roles).
+            const up = (n) => this._shiftNote(n, 12) || n;
+            const flow = (n1, n2, n3, n4) => [
+                tok(n1, 3, 24), tok(n2, 3, 20), tok(n3, 3, 23), tok(n2, 3, 19),
+                tok(n4, 3, 24), tok(n3, 3, 20), tok(n2, 3, 23), tok(n3, 3, 19),
+                tok(n1, 3, 24), tok(n2, 3, 20), tok(n3, 3, 23), tok(n4, 3, 20),
+                tok(n3, 3, 23), tok(n2, 3, 19), tok(n1, 3, 22), tok(n2, 3, 18)].join(' ');
             patterns = [
                 this._pat(0,
-                    [tok(root, 1, 48), '.', '.', '.', tok(root, 1, 36), '.', '.', '.',
-                        tok(fifth, 1, 42), '.', '.', '.', tok(root, 1, 32), '.', '.', '.'].join(' '),
-                    [tok(a, 2, 36), '.', '.', '.', '.', '.', '.', '.',
-                        tok(c, 2, 30), '.', '.', '.', '.', '.', '.', '.'].join(' '),
-                    [tok(this._shiftNote(a, 12) || a, 3, 12), '.', '.', '.', '.', '.', '.', '.',
-                        tok(this._shiftNote(c, 12) || c, 3, 10), '.', '.', '.', '.', '.', '.', '.'].join(' '),
-                    ['.', '.', tok('A-4', 4, 8), '.', '.', '.', '.', '.',
-                        '.', '.', tok('A-4', 4, 6), '.', '.', '.', '.', '.'].join(' ')
+                    [tok(root, 1, 44), '.', '.', '.', '.', '.', '.', '.',
+                        tok(fifth, 1, 38), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(a, 2, 40), '.', '.', tok(b, 2, 32), tok(c, 2, 38), '.', '.', '.',
+                        tok(d, 2, 36), '.', tok(c, 2, 32), '.', tok(b, 2, 34), '.', '.', '.'].join(' '),
+                    flow(up(a), up(c), up(e), up(c)),
+                    this._emptyRow()
                 ),
                 this._pat(1,
-                    [tok(fifth, 1, 44), '.', '.', '.', tok(root, 1, 34), '.', '.', '.',
-                        tok(this._shiftNote(root, 5) || fifth, 1, 40), '.', '.', '.', tok(root, 1, 30), '.', '.', '.'].join(' '),
-                    [tok(e, 2, 32), '.', '.', '.', '.', '.', '.', '.',
-                        tok(g, 2, 28), '.', '.', '.', '.', '.', '.', '.'].join(' '),
-                    ['.', '.', '.', '.', tok(this._shiftNote(e, 12) || e, 3, 10), '.', '.', '.',
-                        '.', '.', '.', '.', tok(this._shiftNote(a, 12) || a, 3, 8), '.', '.', '.'].join(' '),
-                    ['.', '.', '.', '.', '.', '.', tok('A-4', 4, 6), '.',
-                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' ')
+                    [tok(this._shiftNote(root, 5) || fifth, 1, 42), '.', '.', '.', '.', '.', '.', '.',
+                        tok(root, 1, 38), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(e, 2, 40), '.', '.', tok(d, 2, 32), tok(c, 2, 38), '.', '.', '.',
+                        tok(b, 2, 34), '.', tok(c, 2, 32), '.', tok(a, 2, 38), '.', '.', '.'].join(' '),
+                    flow(up(e), up(g), up(c), up(g)),
+                    this._emptyRow()
+                ),
+                this._pat(2,
+                    [tok(root, 1, 44), '.', '.', '.', tok(fifth, 1, 36), '.', '.', '.',
+                        tok(root, 1, 40), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(e, 2, 42), '.', tok(f, 2, 34), '.', tok(g, 2, 40), '.', '.', tok(f, 2, 32),
+                        tok(e, 2, 36), '.', tok(d, 2, 32), '.', tok(a, 2, 42), '.', '.', '.'].join(' '),
+                    flow(up(a), up(e), up(c), up(e)),
+                    this._emptyRow()
+                ),
+                // 3 · INTRO — pad + soft shimmer only, no lead (loop seam / scene entry).
+                this._pat(3,
+                    [tok(root, 1, 40), '.', '.', '.', '.', '.', '.', '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    this._emptyRow(),
+                    flow(up(a), up(c), up(e), up(c)).split(' ').map((t, i) => (i % 2 ? '.' : t)).join(' '),
+                    this._emptyRow()
+                ),
+                // 4 · BRIDGE — sparse, long high lead notes over held fifth: tension, no motif.
+                this._pat(4,
+                    [tok(fifth, 1, 40), '.', '.', '.', '.', '.', '.', '.',
+                        tok(this._shiftNote(root, 5) || fifth, 1, 36), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(up(c), 2, 34), '.', '.', '.', '.', '.', '.', '.',
+                        tok(up(b), 2, 30), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    flow(up(c), up(e), up(g), up(e)).split(' ').map((t, i) => (i % 4 ? '.' : t)).join(' '),
+                    this._emptyRow()
+                ),
+                // 5 · CLIMAX — motif an octave up, fuller bass: the "theme returns" moment.
+                this._pat(5,
+                    [tok(root, 1, 52), '.', '.', '.', tok(fifth, 1, 44), '.', '.', '.',
+                        tok(root, 1, 50), '.', '.', '.', tok(fifth, 1, 42), '.', '.', '.'].join(' '),
+                    [tok(up(a), 2, 44), '.', '.', tok(up(b), 2, 36), tok(up(c), 2, 42), '.', '.', '.',
+                        tok(up(d), 2, 40), '.', tok(up(c), 2, 36), '.', tok(up(b), 2, 38), '.', '.', '.'].join(' '),
+                    flow(up(a), up(c), up(e), up(c)),
+                    this._emptyRow()
+                ),
+                // 6 · OUTRO — resolve to the tonic and thin out before the loop restarts at INTRO.
+                this._pat(6,
+                    [tok(root, 1, 44), '.', '.', '.', '.', '.', '.', '.',
+                        '.', '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    [tok(c, 2, 36), '.', '.', '.', tok(b, 2, 30), '.', '.', '.',
+                        tok(a, 2, 38), '.', '.', '.', '.', '.', '.', '.'].join(' '),
+                    this._emptyRow(),
+                    this._emptyRow()
                 )
             ];
-            bpm = 96;
-            order = [0, 0, 1, 0, 1, 0, 0, 1];
+            bpm = 72;
+            // Sections: INTRO · THEME A · DEVELOPMENT B · BRIDGE · CLIMAX · OUTRO.
+            order = [3, 3, 0, 1, 0, 1, 2, 2, 4, 4, 5, 5, 1, 6];
         } else if (role === 'victory') {
             // Fanfare: rising call / answer, dense kick, octave climax.
             const up = (n) => this._shiftNote(n, 12) || n;
@@ -495,7 +563,7 @@ const VFTrackerDefaults = {
             lose: 'lose role = descending fade from motif',
             shop: 'shop role = bazaar groove from motif'
         };
-        return this._track(
+        const built = this._track(
             {
                 title: titles[role] || (id + ' · ' + role),
                 planet: id,
@@ -506,6 +574,19 @@ const VFTrackerDefaults = {
             patterns,
             order
         );
+        if (role === 'map') {
+            // 70s space-synth voices: slow swell, sustained saws, long release.
+            built.instruments = this._spaceInstruments();
+            built.meta.space = true;
+        } else if (role === 'lose') {
+            // Slow + hollow: full pad voices and the same flanger / echo as the map.
+            built.instruments = this._spaceInstruments();
+            built.meta.space = true;
+        } else if (role === 'victory' || role === 'shop') {
+            // Same synth palette, tighter envelopes so the faster grooves stay readable.
+            built.instruments = this._spaceInstruments(true);
+        }
+        return built;
     },
 
     /** Galaxy map BGM — per-planet Hauptmelodie, soft arrangement. */
@@ -526,7 +607,7 @@ const VFTrackerDefaults = {
         const root = roots[faction] || 'A-1';
         const fifth = this._shiftNote(root, 7) || root;
         const tok = (note, inst, vol) => note + ':' + inst + ':' + vol;
-        return this._track(
+        const voidTrack = this._track(
             { title: 'Deep Space' + (faction ? ' · ' + faction : ''), planet: '', role: 'map-void',
                 notes: 'pure space drone, no planet motif' },
             84,
@@ -542,6 +623,8 @@ const VFTrackerDefaults = {
             ],
             [0, 0, 0, 0]
         );
+        voidTrack.instruments = this._spaceInstruments();
+        return voidTrack;
     },
 
     /** Victory screen — per-planet Hauptmelodie, lifted. */

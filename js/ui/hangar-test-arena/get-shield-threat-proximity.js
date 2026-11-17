@@ -63,36 +63,38 @@ extendClass(HangarTestArena, {
             ['SHLD', p.shieldMax > 0 ? p.shield / p.shieldMax : 0, accent, p.shieldMax > 0],
             ['ENRG', p.maxEnergy > 0 ? p.energy / p.maxEnergy : 0, '#ffd23d', p.maxEnergy > 0]
         ];
-        ctx.font = 'bold 7px monospace';
+        ctx.font = 'bold 6px monospace';
         ctx.textBaseline = 'middle';
         ctx.textAlign = 'left';
         const labelW = 24;
         bars.forEach(([label, ratio, color, has], i) => {
-            const y = top + 5 + i * 8;
+            const y = top + 3 + i * 6;
             ctx.globalAlpha = has ? 1 : 0.35;
             ctx.fillStyle = color;
-            ctx.fillText(label, pad, y + 2);
+            ctx.fillText(label, pad, y + 1.5);
             const bx = pad + labelW;
             const bw = W - bx - pad;
             ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(bx, y, bw, 4);
+            ctx.fillRect(bx, y, bw, 3);
             ctx.fillStyle = color;
-            ctx.fillRect(bx, y, Math.round(bw * Math.max(0, Math.min(1, ratio))), 4);
+            ctx.fillRect(bx, y, Math.round(bw * Math.max(0, Math.min(1, ratio))), 3);
         });
         ctx.globalAlpha = 1;
         // Keys: A S D on one row, SPACE on its own row; lit while held.
         const held = (k) => (k === 'space' ? (this.keyDown(' ') || this.keyDown('Space')) : this.keyDown(k));
-        const capH = 11;
+        const capH = 10;
         const gap = 4;
-        const keysTop = top + 30;
-        const unit = (W - pad * 2 - gap * 2) / 3;
+        const keysTop = top + 22;
+        // One row: A S D narrow, SPACE (ALL) twice as wide.
+        const gap1 = 3;
+        const unit = (W - pad * 2 - gap1 * 3) / 5;
         ctx.font = 'bold 8px monospace';
         ctx.textAlign = 'center';
         [['a', 'A'], ['s', 'S'], ['d', 'D'], ['space', 'SPACE']].forEach(([id, label], i) => {
             const isSpace = id === 'space';
-            const x = isSpace ? pad : Math.round(pad + i * (unit + gap));
-            const y = isSpace ? keysTop + capH + gap : keysTop;
-            const cw = Math.round(isSpace ? W - pad * 2 : unit);
+            const x = Math.round(pad + (i < 3 ? i * (unit + gap1) : 3 * (unit + gap1)));
+            const y = keysTop;
+            const cw = Math.round(isSpace ? unit * 2 : unit);
             const on = held(id);
             if (on) {
                 ctx.fillStyle = accent;

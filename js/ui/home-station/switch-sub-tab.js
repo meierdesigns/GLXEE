@@ -142,6 +142,7 @@ extendClass(HomeStationUI, {
 
     formatUpgradeEffect(node, level) {
         if (!node || typeof node.effect !== 'function' || level <= 0) return '—';
+        if (node.grantsWeapon) return 'WEAPON · ' + String(node.grantsWeapon).replace(/_/g, ' ').toUpperCase();
         const bonus = node.effect(level) || {};
         const parts = [];
         if (bonus.resourceCap) parts.push('+' + bonus.resourceCap + ' STORE');

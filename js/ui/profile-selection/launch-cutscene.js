@@ -27,7 +27,8 @@ class LaunchCutsceneManager {
         this._dialogIndex = 0;
         this._musicOwned = false;
         // Title → dialogue lines → act → exit. Dialogue advances on timer or input.
-        this.durations = { title: 1400, dialog: 3200, act: 1600, exit: 700 };
+        this.durations = { title: 2600, dialog: 0, act: 1600, exit: 700 };
+        this._typeMs = 32; // dialog: ms per character (typewriter); lines wait for ENTER / click
     }
 
     isActive() { return !!this.active; }
@@ -84,6 +85,7 @@ class LaunchCutsceneManager {
     setPhase(phase) {
         this.phase = phase;
         this._phaseStartT = 0;
+        if (this.overlay) this.overlay.setAttribute('data-phase', phase);
     }
 
     skip() {
@@ -95,6 +97,12 @@ class LaunchCutsceneManager {
     /** Advance one dialogue line, or finish dialogue → act. */
     advanceDialogue() {
         if (!this.active || this.phase !== 'dialog') return false;
+        // First press finishes the typewriter, the next one moves on.
+        if (this._typing && this._typing.shown < this._typing.text.length) {
+            this._typing.shown = this._typing.text.length;
+            this._applyTyping();
+            return true;
+        }
         if (this._dialogIndex < this._dialogue.length - 1) {
             this._dialogIndex += 1;
             this._phaseStartT = 0;
@@ -193,6 +201,7 @@ class LaunchCutsceneManager {
         // hull band covers the rim; CSS clamps us to --fr-open-*.
         document.body.appendChild(overlay);
         this.overlay = overlay;
+        overlay.setAttribute('data-phase', this.phase || 'title');
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.ctx.imageSmoothingEnabled = false;
@@ -205,6 +214,11 @@ class LaunchCutsceneManager {
             if (this.phase === 'dialog') {
                 e.preventDefault();
                 this.advanceDialogue();
+            } else if (this.phase === 'title' && this._dialogue.length) {
+                e.preventDefault();
+                this._dialogIndex = 0;
+                this.setPhase('dialog');
+                this._renderDialogCard();
             }
         };
         overlay.addEventListener('click', this._clickHandler);
@@ -219,7 +233,11 @@ class LaunchCutsceneManager {
                 e.preventDefault();
                 e.stopPropagation();
                 if (this.phase === 'dialog') this.advanceDialogue();
-                else if (this.phase === 'title' || this.phase === 'act' || this.phase === 'exit') this.skip();
+                else if (this.phase === 'title' && this._dialogue.length) {
+                    this._dialogIndex = 0;
+                    this.setPhase('dialog');
+                    this._renderDialogCard();
+                } else if (this.phase === 'title' || this.phase === 'act' || this.phase === 'exit') this.skip();
             }
         };
         setTimeout(() => {
@@ -297,6 +315,15 @@ class LaunchCutsceneManager {
             `<div class="launch-cutscene-title-mini">${esc(this._titleText)} · ${esc(this._firstMissionHint())}</div>`;
     }
 
+    _applyTyping() {
+        const ty = this._typing;
+        const el = this._card && this._card.querySelector('.launch-cutscene-line');
+        if (!ty || !el) return;
+        el.textContent = ty.text.slice(0, ty.shown);
+        const done = ty.shown >= ty.text.length;
+        if (this._hint) this._hint.textContent = done ? 'ENTER / CLICK · NEXT ▼' : 'ENTER / CLICK · SKIP TEXT';
+    }
+
     _mountPortraits() {
         if (!this._card) return;
         if (typeof voxelPortrait !== 'undefined' && voxelPortrait.scan) voxelPortrait.scan(this._card);
@@ -315,6 +342,8 @@ class LaunchCutsceneManager {
             this._card.innerHTML = this._cardHtmlDialog(line, this._dialogIndex, this._dialogue.length);
             this._mountPortraits();
             if (this._hint) this._hint.style.opacity = '1';
+            this._typing = { text: String((line && line.text) || ''), shown: 0, t0: 0 };
+            this._applyTyping();
             return;
         }
         // Act / exit: keep last line dim, or fall back to synopsis.
@@ -404,12 +433,17 @@ class LaunchCutsceneManager {
         const elapsed = t - this._phaseStartT;
         const dur = this.durations[this.phase] || 0;
         const p = Math.min(1, dur ? elapsed / dur : 1);
+        if (this.phase === 'dialog' && this._typing && this._typing.shown < this._typing.text.length) {
+            if (!this._typing.t0) this._typing.t0 = t;
+            const n = Math.min(this._typing.text.length, Math.floor((t - this._typing.t0) / this._typeMs));
+            if (n !== this._typing.shown) { this._typing.shown = n; this._applyTyping(); }
+        }
         if (this._card) {
             let op = 0;
             if (this.phase === 'title') op = Math.min(1, p * 3);
             else if (this.phase === 'dialog') {
                 // Fresh line fade-in each beat.
-                op = Math.min(1, Math.max(0.35, p * 4));
+                op = 1;
             } else if (this.phase === 'act') op = p < 0.7 ? 1 : 1 - (p - 0.7) / 0.3;
             else op = Math.max(0, 1 - p * 2);
             this._card.style.opacity = String(op);
@@ -417,6 +451,7 @@ class LaunchCutsceneManager {
         // During title/dialog the ship holds the idle pose (p≈0).
         const drawP = (this.phase === 'act' || this.phase === 'exit') ? p : 0;
         this._draw(drawP);
+        if (this.phase === 'dialog') return; // dialogue waits for ENTER / click, never auto-advances
         if (elapsed >= dur) {
             if (this.phase === 'title') {
                 if (this._dialogue.length) {

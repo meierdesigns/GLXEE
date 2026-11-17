@@ -420,8 +420,11 @@ extendClass(ObstacleManager, {
         // Each stage gets its own area order / walls / floors.
         const stage = level ? (level.isBoss ? 'boss' : String(level.stageIndex || 1)) : '1';
         const danger = this.stageDanger();
+        const env = this.getEnvironment();
+        const envKey = (env.planetId || '') + '|' + (env.faction || '') + '|' + (env.style || '')
+            + '|' + (env.defense ? '1' : '0') + '|' + (env.planetStyle || '') + '|' + (env.surface || '');
         if (this._terrainProfile && this._terrainProfile.pid === pid && this._terrainProfile.stage === stage
-            && this._terrainProfile.env === this.getEnvironment()) return this._terrainProfile;
+            && this._terrainProfile.envKey === envKey) return this._terrainProfile;
         let seed = 7;
         const seedKey = pid + '#' + stage;
         for (let i = 0; i < seedKey.length; i++) seed = (Math.imul(seed, 31) + seedKey.charCodeAt(i)) >>> 0;
@@ -430,7 +433,6 @@ extendClass(ObstacleManager, {
         let pseed = 7;
         for (let i = 0; i < pid.length; i++) pseed = (Math.imul(pseed, 31) + pid.charCodeAt(i)) >>> 0;
         const r = (k) => this.terrainHash(seed % 100003, k);
-        const env = this.getEnvironment();
         // Planet look: only its own areas appear.
         const zoneBias = env.zones || null;
         // Later stages lean gently towards harsh areas (within the planet's own set).
@@ -467,7 +469,7 @@ extendClass(ObstacleManager, {
         let acc = 0;
         const materials = mw.map((v) => (acc += v / tot));
         this._terrainProfile = {
-            pid, stage, danger, env, seed, zones, materials, zoneMats, zoneFloors,
+            pid, stage, danger, env, envKey, seed, zones, materials, zoneMats, zoneFloors,
             // ~14-20 s per area at the base scroll speed: long, coherent stretches.
             zoneRows: Math.round(200 + r(1) * 80),
             // Thicker walls on later stages (narrower passage, still flyable).

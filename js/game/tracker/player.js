@@ -222,6 +222,18 @@ class VFTrackerPlayer {
             const bus = buses[i];
             if (!bus) continue;
             try { bus.disconnect(); } catch (e) { /* ignore */ }
+            if (bus._flangerLfo) {
+                try { bus._flangerLfo.stop(); } catch (e2) { /* ignore */ }
+                bus._flangerLfo = null;
+            }
+            if (bus._wahLfo) {
+                try { bus._wahLfo.stop(); } catch (e4) { /* ignore */ }
+                bus._wahLfo = null;
+            }
+            if (bus._flangerNoise) {
+                try { bus._flangerNoise.stop(); } catch (e3) { /* ignore */ }
+                bus._flangerNoise = null;
+            }
         }
         this._channelBus = [];
     }
@@ -232,10 +244,130 @@ class VFTrackerPlayer {
         if (!this._channelBus[ch]) {
             const bus = this.ctx.createGain();
             bus.gain.value = this._busGain(ch);
-            bus.connect(this.masterGain);
+            const meta = (this.track && this.track.meta) || {};
+            const role = meta.space && meta.role !== 'map-void' ? 'map' : meta.role;
+            if (ch === 2 && (role === 'map' || role === 'map-void')) {
+                this._wireFlanger(bus);
+            } else if (ch === 1 && role === 'map') {
+                this._wireSpaceEcho(bus);
+            } else {
+                bus.connect(this.masterGain);
+            }
             this._channelBus[ch] = bus;
         }
         return this._channelBus[ch];
+    }
+
+    /** Tape-style dub echo (dark, regenerating) for the map lead — 70s space feel. */
+    _wireSpaceEcho(bus) {
+        const ctx = this.ctx;
+        const dry = ctx.createGain();
+        const echo = ctx.createDelay(2);
+        const fb = ctx.createGain();
+        const tone = ctx.createBiquadFilter();
+        const wet = ctx.createGain();
+        const spb = 60 / Math.max(30, Number(this.playbackBpm) || 72);
+        echo.delayTime.value = Math.min(1.8, spb * 0.75);
+        fb.gain.value = 0.45;
+        tone.type = 'lowpass';
+        tone.frequency.value = 1500;
+        wet.gain.value = 0.42;
+        bus.connect(dry);
+        dry.connect(this.masterGain);
+        bus.connect(echo);
+        echo.connect(tone);
+        tone.connect(fb);
+        fb.connect(echo);
+        tone.connect(wet);
+        wet.connect(this.masterGain);
+    }
+
+    /**
+     * Slow flanger for the map "background" voice: dry + short modulated
+     * delay with feedback. LFO nodes are owned by the bus so they die with it.
+     */
+    _wireFlanger(bus) {
+        const ctx = this.ctx;
+        const dry = ctx.createGain();
+        const wet = ctx.createGain();
+        const delay = ctx.createDelay(0.05);
+        const fb = ctx.createGain();
+        const lfo = ctx.createOscillator();
+        const depth = ctx.createGain();
+        delay.delayTime.value = 0.006;
+        fb.gain.value = 0.68;
+        wet.gain.value = 0.8;
+        dry.gain.value = 0.85;
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.25;
+        depth.gain.value = 0.0048;
+        lfo.connect(depth);
+        depth.connect(delay.delayTime);
+        // Grit: soft-clip the input hard and again inside the feedback loop,
+        // so the comb resonances overdrive instead of ringing clean.
+        const curve = new Float32Array(1024);
+        for (let i = 0; i < 1024; i++) {
+            const x = (i / 1023) * 2 - 1;
+            curve[i] = Math.tanh(x * 2) * 0.9;
+        }
+        const drive = ctx.createGain();
+        drive.gain.value = 1.15;
+        const shaper = ctx.createWaveShaper();
+        shaper.curve = curve;
+        shaper.oversample = '2x';
+        const fbShaper = ctx.createWaveShaper();
+        fbShaper.curve = curve;
+        const post = ctx.createGain();
+        post.gain.value = 0.55;
+        // Auto-wah: resonant lowpass swept by a slow LFO (the "wawa").
+        const wah = ctx.createBiquadFilter();
+        wah.type = 'lowpass';
+        wah.frequency.value = 1100;
+        wah.Q.value = 4.5;
+        const wahLfo = ctx.createOscillator();
+        wahLfo.type = 'sine';
+        wahLfo.frequency.value = 0.55;
+        const wahDepth = ctx.createGain();
+        wahDepth.gain.value = 800;
+        wahLfo.connect(wahDepth);
+        wahDepth.connect(wah.frequency);
+        wahLfo.start();
+        bus._wahLfo = wahLfo;
+        bus.connect(wah);
+        wah.connect(drive);
+        drive.connect(shaper);
+        shaper.connect(post);
+        post.connect(dry);
+        post.connect(delay);
+        delay.connect(fb);
+        fb.connect(fbShaper);
+        fbShaper.connect(delay);
+        delay.connect(wet);
+        dry.connect(this.masterGain);
+        wet.connect(this.masterGain);
+        // Continuous soft noise bed through the same comb: the sweep is audible
+        // even between the short arp plucks (classic jet flange).
+        const len = Math.max(1, Math.floor(ctx.sampleRate * 2));
+        const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+        const noise = ctx.createBufferSource();
+        noise.buffer = buf;
+        noise.loop = true;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 2200;
+        bp.Q.value = 0.6;
+        const ng = ctx.createGain();
+        ng.gain.value = 0.03;
+        noise.connect(bp);
+        bp.connect(ng);
+        ng.connect(delay);
+        ng.connect(dry);
+        noise.start();
+        lfo.start();
+        bus._flangerLfo = lfo;
+        bus._flangerNoise = noise;
     }
 
     /** Live per-channel volume fine-tune. ch: 0=bass,1=lead,2=arp,3=drums. v: 0-3 (300%). */

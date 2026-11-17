@@ -3,7 +3,7 @@
 // viewport-fit part 2 of 4: continues viewport-fit.js (shared scope: window.vfFitScope).
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
-    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
+    const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
     const onFxEsc = (...args) => NS.onFxEsc(...args); // defined in a later part
     const startSway = (...args) => NS.startSway(...args); // defined in a later part
     const fillFxPlate = (...args) => NS.fillFxPlate(...args); // defined in viewport-fit-plate.js
@@ -301,8 +301,23 @@
         if (!b || !ui) return;
         const d = b.dataset;
         if ('fxClose' in d) { setFxOpen(false); return; }
+        if (d.fxCat != null) {
+            // Category key: land on the last tab visited in that category, else its first.
+            const ci = Number(d.fxCat);
+            const vis = (id) => (NS.fxTabVisible ? NS.fxTabVisible(id) : true);
+            const ids = FX_CLUSTERS[ci] ? FX_CLUSTERS[ci][1].filter(vis) : null;
+            if (!ids || !ids.length) return;
+            vfs.fxCatTab = vfs.fxCatTab || {};
+            const keep = ids.indexOf(vfs.fxTab) !== -1 ? vfs.fxTab : (ids.indexOf(vfs.fxCatTab[ci]) !== -1 ? vfs.fxCatTab[ci] : ids[0]);
+            vfs.fxTab = keep;
+            try { localStorage.setItem(FXTAB_KEY, vfs.fxTab); } catch (err) { /* ignore */ }
+            fillFxPlate();
+            return;
+        }
         if (d.fxTab) {
             vfs.fxTab = d.fxTab;
+            vfs.fxCatTab = vfs.fxCatTab || {};
+            FX_CLUSTERS.forEach(function (c, ci) { if (c[1].indexOf(d.fxTab) !== -1) vfs.fxCatTab[ci] = d.fxTab; });
             try { localStorage.setItem(FXTAB_KEY, vfs.fxTab); } catch (err) { /* ignore */ }
             fillFxPlate();
             return;
@@ -410,6 +425,10 @@
                 else open();
             }
             else if (d.toolsAction === 'hudLayoutEditor' && typeof hudLayoutEditor !== 'undefined') hudLayoutEditor.toggleEdit();
+            else if (d.toolsAction === 'saveDevDefaults' && typeof vfDevDefaults !== 'undefined') {
+                const em = b.querySelector('em');
+                vfDevDefaults.save((ok, n, msg) => { if (em) { em.textContent = ok ? 'SAVED ' + n + ' SETTINGS' : String(msg).toUpperCase().slice(0, 40); setTimeout(() => { em.textContent = 'SAVE DEV DEFAULTS'; }, 3500); } });
+            }
         }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }
         else if (d.dfReset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.resetProfile(difficultyConfigManager.current); }

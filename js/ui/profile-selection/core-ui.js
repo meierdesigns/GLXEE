@@ -55,6 +55,7 @@ extendClass(ProfileSelectionManager, {
     },
     hide() {
         this.isVisible = false;
+        if (typeof hangarTestArena !== 'undefined' && hangarTestArena._embedHost) hangarTestArena.hide();
         this._appliedLookFaction = null;
         if (typeof document !== 'undefined') document.documentElement.removeAttribute('data-pf');
         if (typeof menuStateManager !== 'undefined') menuStateManager.save({ pmode: null, pstep: null, pstation: false });

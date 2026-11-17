@@ -4,6 +4,26 @@
 (function (NS) {
     const vfs = NS.vfs || (NS.vfs = {}); // shared mutable state (formerly closure lets)
     const { CTX_MENU_ICON, FRAME_EDIT_ICON, FS_OFF, FS_ON, FXOPEN_KEY, FX_ICON, HUD_ICON, LAYOUT_CANCEL_ICON, LAYOUT_ICON, MUSIC_ICON, MUTE_OFF, MUTE_ON, POWER, RESET_ICON, RES_ICON, ROOT, SAVE_ICON, applyFrameStyle, clamp, ensureVolPlate, getUi, perf, readCssNumber, reduceMotion, saveFrameStyles, setFxOpen } = NS; // from earlier parts
+    // Question-mark icon for the WIKI / README key (same 16px pixel-stroke style as the other bezel keys).
+    const WIKI_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M5 5.5C5 3.5 6.5 3 8 3s3 1 3 2.5S9.5 7.5 8 9v1"/><path d="M8 13h.01"/></svg>';
+    // Bezel key strip position: top (default) or bottom right, switched by the arrow key at its far right.
+    const TOOLS_POS_KEY = 'vf-bezel-tools-pos';
+    const DOCK_DOWN_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 3v9M4 8l4 4 4-4"/></svg>';
+    const DOCK_UP_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 13V4M4 8l4-4 4 4"/></svg>';
+    function loadToolsPos() {
+        try { return localStorage.getItem(TOOLS_POS_KEY) === 'bottom' ? 'bottom' : 'top'; } catch (e) { return 'top'; }
+    }
+    function applyToolsPos(pos, dockBtn) {
+        const root = document.documentElement;
+        if (pos === 'bottom') root.setAttribute('data-vf-tools-pos', 'bottom');
+        else root.removeAttribute('data-vf-tools-pos');
+        if (dockBtn) {
+            dockBtn.innerHTML = pos === 'bottom' ? DOCK_UP_ICON : DOCK_DOWN_ICON;
+            dockBtn.title = pos === 'bottom' ? 'Move keys to the top' : 'Move keys to the bottom';
+            dockBtn.setAttribute('aria-label', dockBtn.title);
+        }
+    }
+    applyToolsPos(loadToolsPos());
     const CTX_MENU_KEY = 'vf_dev_ctx_menu_v1';
     function loadCtxMenuPref() {
         try { return localStorage.getItem(CTX_MENU_KEY) === 'true'; } catch (e) { return false; }
@@ -137,6 +157,60 @@
         try { syncDevBadge(); } catch (e) { /* ignore */ }
     }, 2000);
 
+    // Dev key bar: drag by its grip; position cached as percent of the bezel.
+    const DEVBAR_POS_KEY = 'vf-bezel-devbar-pos';
+    function applyDevBarPos(frame, bar, pos) {
+        if (!pos) {
+            bar.style.left = ''; bar.style.top = ''; bar.style.right = ''; bar.style.bottom = '';
+            return;
+        }
+        bar.style.right = 'auto';
+        bar.style.bottom = 'auto';
+        bar.style.left = pos.l + '%';
+        bar.style.top = pos.t + '%';
+    }
+    function bindDevBarDrag(frame, bar) {
+        try {
+            const saved = JSON.parse(localStorage.getItem(DEVBAR_POS_KEY) || 'null');
+            if (saved && isFinite(saved.l) && isFinite(saved.t)) applyDevBarPos(frame, bar, saved);
+        } catch (e) { /* ignore */ }
+        const grip = bar.querySelector('.vf-devbar-grip');
+        grip.addEventListener('dblclick', function (e) {
+            e.stopPropagation();
+            try { localStorage.removeItem(DEVBAR_POS_KEY); } catch (err) { /* ignore */ }
+            applyDevBarPos(frame, bar, null);
+        });
+        grip.addEventListener('pointerdown', function (e) {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const fr = frame.getBoundingClientRect();
+            const br = bar.getBoundingClientRect();
+            const offX = e.clientX - br.left;
+            const offY = e.clientY - br.top;
+            const wPct = (br.width / fr.width) * 100;
+            const hPct = (br.height / fr.height) * 100;
+            let cur = null;
+            bar.classList.add('is-dragging');
+            try { grip.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+            const move = function (m) {
+                const l = Math.max(0, Math.min(100 - wPct, ((m.clientX - offX - fr.left) / fr.width) * 100));
+                const t = Math.max(0, Math.min(100 - hPct, ((m.clientY - offY - fr.top) / fr.height) * 100));
+                cur = { l: Math.round(l * 100) / 100, t: Math.round(t * 100) / 100 };
+                applyDevBarPos(frame, bar, cur);
+            };
+            const up = function () {
+                grip.removeEventListener('pointermove', move);
+                grip.removeEventListener('pointerup', up);
+                grip.removeEventListener('pointercancel', up);
+                bar.classList.remove('is-dragging');
+                if (cur) { try { localStorage.setItem(DEVBAR_POS_KEY, JSON.stringify(cur)); } catch (err) { /* ignore */ } }
+            };
+            grip.addEventListener('pointermove', move);
+            grip.addEventListener('pointerup', up);
+            grip.addEventListener('pointercancel', up);
+        });
+    }
     // Bezel tools (top strip): RES icon (opens the slider), fullscreen (every screen),
     // logout (station only). Fullscreen / logout mirror the real buttons.
     function syncBezelTools() {
@@ -165,6 +239,16 @@
             },
             soundtrack: function () {
                 if (typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+            },
+            dock: function (btn) {
+                const next = document.documentElement.getAttribute('data-vf-tools-pos') === 'bottom' ? 'top' : 'bottom';
+                try { localStorage.setItem(TOOLS_POS_KEY, next); } catch (e) { /* ignore */ }
+                applyToolsPos(next, btn);
+            },
+            wiki: function (btn) {
+                if (typeof readmeModal === 'undefined') return;
+                if (readmeModal.isVisible()) readmeModal.hide(); else readmeModal.show();
+                if (btn) { btn.classList.add('is-open'); setTimeout(function () { btn.classList.remove('is-open'); }, 300); }
             },
             fs: function () {
                 const src = document.querySelector('#vfFullscreenBtn') || document.querySelector('.home-station-overlay .hs-fullscreen-btn');
@@ -212,7 +296,7 @@
             hud: ['HUD remote', HUD_ICON], frameEdit: ['Frame edit', FRAME_EDIT_ICON],
             ctxMenu: ['Browser context menu', CTX_MENU_ICON],
             res: ['Resolution', RES_ICON], mute: ['Volume', MUTE_ON], soundtrack: ['Music settings', MUSIC_ICON],
-            fs: ['Fullscreen', FS_OFF], fx: ['Settings', FX_ICON], logout: ['Logout', POWER]
+            fs: ['Fullscreen', FS_OFF], wiki: ['Wiki / README', WIKI_ICON], fx: ['Settings', FX_ICON], logout: ['Logout', POWER], dock: ['Move keys to the bottom', DOCK_DOWN_ICON]
         };
         // The keys are static markup in index.html (painted with the first frame); this
         // only wires them. Built here as a fallback if the markup is missing.
@@ -231,8 +315,21 @@
             });
             frame.appendChild(tools);
         }
+        // Dev-mode key bar: its own overlay bar (never widens the main strip), draggable by its grip,
+        // position cached per machine (percent of the bezel, so it survives resizes / zoom).
+        let devBar = frame.querySelector('.vf-bezel-devbar');
+        if (!devBar) {
+            devBar = document.createElement('div');
+            devBar.className = 'vf-bezel-tools vf-bezel-devbar';
+            devBar.hidden = true;
+            devBar.style.pointerEvents = 'auto';
+            devBar.innerHTML = '<span class="vf-devbar-grip" title="Drag to move (double-click: reset)" aria-label="Move dev keys"><i></i><i></i><i></i></span>';
+            frame.appendChild(devBar);
+            bindDevBarDrag(frame, devBar);
+        }
+        const tq = function (sel) { return tools.querySelector(sel) || devBar.querySelector(sel); };
         // Older saves / markup without the HUD key: inject it after layout.
-        if (!tools.querySelector('[data-tool="hud"]') && meta.hud) {
+        if (!tq('[data-tool="hud"]') && meta.hud) {
             const hudBtn = document.createElement('button');
             hudBtn.type = 'button';
             hudBtn.dataset.tool = 'hud';
@@ -240,13 +337,13 @@
             hudBtn.setAttribute('aria-label', meta.hud[0]);
             hudBtn.innerHTML = meta.hud[1];
             hudBtn.hidden = true;
-            const after = tools.querySelector('[data-tool="layout"]');
-            if (after && after.nextSibling) tools.insertBefore(hudBtn, after.nextSibling);
-            else tools.appendChild(hudBtn);
+            const after = tq('[data-tool="layout"]');
+            if (after && after.nextSibling) after.parentNode.insertBefore(hudBtn, after.nextSibling);
+            else devBar.appendChild(hudBtn);
             tools.dataset.wired = '0'; // re-bind so the new key gets a click handler
         }
         // Older saves / markup without the frame-edit key: inject it after HUD.
-        if (!tools.querySelector('[data-tool="frameEdit"]') && meta.frameEdit) {
+        if (!tq('[data-tool="frameEdit"]') && meta.frameEdit) {
             const feBtn = document.createElement('button');
             feBtn.type = 'button';
             feBtn.dataset.tool = 'frameEdit';
@@ -254,13 +351,13 @@
             feBtn.setAttribute('aria-label', meta.frameEdit[0]);
             feBtn.innerHTML = meta.frameEdit[1];
             feBtn.hidden = true;
-            const after = tools.querySelector('[data-tool="hud"]');
-            if (after && after.nextSibling) tools.insertBefore(feBtn, after.nextSibling);
-            else tools.appendChild(feBtn);
+            const after = tq('[data-tool="hud"]');
+            if (after && after.nextSibling) after.parentNode.insertBefore(feBtn, after.nextSibling);
+            else devBar.appendChild(feBtn);
             tools.dataset.wired = '0';
         }
         // DevMode: browser context-menu toggle (Inspect / Reload) after frame-edit.
-        if (!tools.querySelector('[data-tool="ctxMenu"]') && meta.ctxMenu) {
+        if (!tq('[data-tool="ctxMenu"]') && meta.ctxMenu) {
             const ctxBtn = document.createElement('button');
             ctxBtn.type = 'button';
             ctxBtn.dataset.tool = 'ctxMenu';
@@ -268,29 +365,29 @@
             ctxBtn.setAttribute('aria-label', meta.ctxMenu[0]);
             ctxBtn.innerHTML = meta.ctxMenu[1];
             ctxBtn.hidden = true;
-            const after = tools.querySelector('[data-tool="frameEdit"]') || tools.querySelector('[data-tool="hud"]');
-            if (after && after.nextSibling) tools.insertBefore(ctxBtn, after.nextSibling);
-            else tools.appendChild(ctxBtn);
+            const after = tq('[data-tool="frameEdit"]') || tq('[data-tool="hud"]');
+            if (after && after.nextSibling) after.parentNode.insertBefore(ctxBtn, after.nextSibling);
+            else devBar.appendChild(ctxBtn);
             tools.dataset.wired = '0';
         }
         // Sound style (music theme) + game speed live in the mute/volume dropdown (#vf-vol).
         tools.querySelectorAll('[data-tool="style"]').forEach(function (n) { n.remove(); });
         tools.querySelectorAll('.vf-bezel-speed').forEach(function (n) { n.remove(); });
         // Older saves / markup without the mute key: inject it just before fullscreen.
-        if (!tools.querySelector('[data-tool="mute"]') && meta.mute) {
+        if (!tq('[data-tool="mute"]') && meta.mute) {
             const muteBtn = document.createElement('button');
             muteBtn.type = 'button';
             muteBtn.dataset.tool = 'mute';
             muteBtn.title = meta.mute[0];
             muteBtn.setAttribute('aria-label', meta.mute[0]);
             muteBtn.innerHTML = meta.mute[1];
-            const fsSlot = tools.querySelector('[data-tool="fs"]');
+            const fsSlot = tq('[data-tool="fs"]');
             if (fsSlot) tools.insertBefore(muteBtn, fsSlot);
             else tools.appendChild(muteBtn);
             tools.dataset.wired = '0';
         }
         // Older saves / markup without the soundtrack key: inject it just after mute.
-        if (!tools.querySelector('[data-tool="soundtrack"]') && meta.soundtrack) {
+        if (!tq('[data-tool="soundtrack"]') && meta.soundtrack) {
             const stBtn = document.createElement('button');
             stBtn.type = 'button';
             stBtn.dataset.tool = 'soundtrack';
@@ -298,16 +395,42 @@
             stBtn.setAttribute('aria-label', meta.soundtrack[0]);
             stBtn.innerHTML = meta.soundtrack[1];
             stBtn.hidden = true;
-            const muteSlot = tools.querySelector('[data-tool="mute"]');
+            const muteSlot = tq('[data-tool="mute"]');
             if (muteSlot && muteSlot.nextSibling) tools.insertBefore(stBtn, muteSlot.nextSibling);
             else tools.appendChild(stBtn);
             tools.dataset.wired = '0';
         }
-        // Settings remote sits to the right of fullscreen (mute → fs → fx → logout).
-        const fxSlot = tools.querySelector('[data-tool="fx"]');
-        const fsAfter = tools.querySelector('[data-tool="fs"]');
-        if (fxSlot && fsAfter && fsAfter.nextElementSibling !== fxSlot) {
-            tools.insertBefore(fxSlot, fsAfter.nextSibling);
+        // Wiki (README modal) key: between fullscreen and the settings remote (mute → fs → wiki → fx → logout).
+        if (!tq('[data-tool="wiki"]') && meta.wiki) {
+            const wikiBtn = document.createElement('button');
+            wikiBtn.type = 'button';
+            wikiBtn.dataset.tool = 'wiki';
+            wikiBtn.title = meta.wiki[0];
+            wikiBtn.setAttribute('aria-label', meta.wiki[0]);
+            wikiBtn.innerHTML = meta.wiki[1];
+            const fsKey = tq('[data-tool="fs"]');
+            if (fsKey && fsKey.nextSibling) tools.insertBefore(wikiBtn, fsKey.nextSibling);
+            else tools.appendChild(wikiBtn);
+            tools.dataset.wired = '0';
+        }
+        // Settings remote is the LAST (rightmost) key: mute → fs → wiki → logout → fx.
+        const fxSlot = tq('[data-tool="fx"]');
+        if (fxSlot && tools.lastElementChild !== fxSlot) {
+            tools.appendChild(fxSlot);
+        }
+        // Dock arrow: very last key (far right). Injected for older markup.
+        if (!tq('[data-tool="dock"]') && meta.dock) {
+            const dockNew = document.createElement('button');
+            dockNew.type = 'button';
+            dockNew.dataset.tool = 'dock';
+            dockNew.innerHTML = meta.dock[1];
+            tools.appendChild(dockNew);
+            tools.dataset.wired = '0';
+        }
+        const dockKey = tq('[data-tool="dock"]');
+        if (dockKey) {
+            if (tools.lastElementChild !== dockKey) tools.appendChild(dockKey);
+            applyToolsPos(loadToolsPos(), dockKey);
         }
         if (fxSlot && fxSlot.dataset.icon !== 'remote') {
             fxSlot.dataset.icon = 'remote';
@@ -316,7 +439,7 @@
             fxSlot.setAttribute('aria-label', meta.fx[0]);
         }
         // DevMode: Voxel Size dropdown at the left of the bezel tool strip.
-        let voxelLab = tools.querySelector('.vf-bezel-voxel');
+        let voxelLab = tq('.vf-bezel-voxel');
         if (!voxelLab) {
             voxelLab = document.createElement('label');
             voxelLab.className = 'vf-bezel-voxel';
@@ -335,20 +458,27 @@
                 voxelSel.addEventListener(t, function (e) { e.stopPropagation(); });
             });
         }
+        // Dev keys live in the overlay dev bar (voxel size, layout edit, HUD remote, frame edit, ctx menu, music editor).
+        ['.vf-bezel-voxel', '[data-tool="save"]', '[data-tool="reset"]', '[data-tool="layout"]', '[data-tool="hud"]',
+            '[data-tool="frameEdit"]', '[data-tool="ctxMenu"]', '[data-tool="soundtrack"]'].forEach(function (sel) {
+            const el = tools.querySelector(sel);
+            if (el) devBar.appendChild(el);
+        });
+        if (devBar.dataset.wired !== '1') devBar.dataset.wired = '0';
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
             tools.style.pointerEvents = 'auto';
             Object.keys(handlers).forEach(function (key) {
-                const btn = tools.querySelector('[data-tool="' + key + '"]');
+                const btn = tq('[data-tool="' + key + '"]');
                 if (!btn || btn.dataset.phBound === '1') return;
                 btn.dataset.phBound = '1';
                 btn.addEventListener('click', function (e) { e.stopPropagation(); handlers[key](btn); });
             });
-            const fxb = tools.querySelector('[data-tool="fx"]');
+            const fxb = tq('[data-tool="fx"]');
             if (fxb) fxb.setAttribute('data-fx-toggle', '');
             requestAnimationFrame(function () { placeResPlate(); placeFxPlate(); placeVolPlate(); });
         }
-        const q = function (k) { return tools.querySelector('[data-tool="' + k + '"]'); };
+        const q = function (k) { return tq('[data-tool="' + k + '"]'); };
         const setOff = function (btn, off) {
             btn.classList.toggle('is-off', off);
             btn.disabled = off;
@@ -416,6 +546,7 @@
         // Hide outright during a fight — a visible power/logout button over combat invites mis-taps.
         logoutBtn.hidden = document.documentElement.classList.contains('vf-game-shown');
         const devOn = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
+        devBar.hidden = !devOn;
         const nowEditing = devOn && typeof hudLayoutEditor !== 'undefined' && hudLayoutEditor.isEditing();
         const layoutBtn = q('layout');
         if (layoutBtn) {
@@ -434,6 +565,17 @@
         }
         const hudBtn = q('hud');
         if (hudBtn) {
+            // The second remote: make it obvious in dev mode (amber key + "HUD" caption + clearer tooltip).
+            if (!hudBtn.querySelector('.vf-tool-tag')) {
+                const tag = document.createElement('span');
+                tag.className = 'vf-tool-tag';
+                tag.textContent = 'HUD';
+                tag.setAttribute('aria-hidden', 'true');
+                hudBtn.appendChild(tag);
+            }
+            hudBtn.classList.add('is-dev-remote');
+            hudBtn.title = 'HUD remote (Dev Mode) — pilot plate, crest, outside screens';
+            hudBtn.setAttribute('aria-label', 'HUD remote (Dev Mode)');
             hudBtn.hidden = !devOn;
             hudBtn.classList.toggle('is-open', !!vfs.phOpen);
         }

@@ -363,8 +363,40 @@ extendClass(GalaxyMapManager, {
         const label = String((meta && meta.label) || id).toUpperCase().replace(/</g, '&lt;');
         return `<span class="gm-faction-chip" style="--chip:${color}"><span class="gm-faction-dot"></span>${label}</span>`;
     },
+    /**
+     * Who the planet belongs to and what the pilot does there:
+     *  invaded → an enemy is attacking a planet of the pilot's side (defend it),
+     *  defend  → the planet belongs to the pilot's own / allied faction (defend it),
+     *  attack  → hostile territory.
+     */
+    planetSituation(planetId) {
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        const inv = pm && pm.getInvasionForPlanet ? pm.getInvasionForPlanet(planetId) : null;
+        const own = pcm && pcm.getPlayerFaction ? pcm.getPlayerFaction() : '';
+        if (inv) return { kind: 'invaded', owner: String(inv.defender || own || '').toLowerCase(), attacker: String(inv.attacker || '').toLowerCase() };
+        let list = [];
+        try { list = pcm && pcm.getPlanetFactions ? pcm.getPlanetFactions(planetId) || [] : []; } catch (e) { list = []; }
+        const owner = String(list[0] || '').toLowerCase();
+        if (owner && pcm && pcm.isFriendlyFaction && pcm.isFriendlyFaction(owner)) return { kind: 'defend', owner: owner };
+        return { kind: 'attack', owner: owner };
+    },
+    /** Status-cell text for a planet ('' = keep the generic one). */
+    planetSituationStatus(planetId) {
+        const sit = this.planetSituation(planetId);
+        return sit.kind === 'invaded' ? 'UNDER ATTACK — DEFEND' : (sit.kind === 'defend' ? 'OWN PLANET — DEFEND' : 'ENEMY TERRITORY');
+    },
     /** Factions settling a planet (ruling first), for the sector card. */
     planetFactionsLabelHtml(planetId) {
+        const sit = this.planetSituation(planetId);
+        if (sit.owner) {
+            const tag = sit.kind === 'invaded'
+                ? `<span class="gm-sit-tag is-invaded">UNDER ATTACK BY ${this.factionLabelHtml(sit.attacker)}</span>`
+                : (sit.kind === 'defend'
+                    ? '<span class="gm-sit-tag is-defend">YOURS — DEFEND IT</span>'
+                    : '<span class="gm-sit-tag is-attack">ENEMY TERRITORY</span>');
+            return this.factionLabelHtml(sit.owner) + ' ' + tag;
+        }
         let list = [];
         try {
             list = typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetFactions

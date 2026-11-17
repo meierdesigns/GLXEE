@@ -307,7 +307,11 @@ extendClass(HomeStationUI, {
             let best = null;
             let bestPt = null;
             let bestDist = SNAP_PX;
-            if (!emptySlot && onStage(e.clientX, e.clientY)) {
+            // Over an inventory grid the drop means "place / transfer / equip into THAT hull tile" (dropInGrid),
+            // never "snap to the nearest ship pin" — and its drop preview must stay visible.
+            const hovered = document.elementFromPoint(e.clientX, e.clientY);
+            const overInv = !!(hovered && hovered.closest && hovered.closest('.hs-bay-inv .hs-storage-grid'));
+            if (!emptySlot && !overInv && onStage(e.clientX, e.clientY)) {
                 slots().filter((el) => smallEls.indexOf(el) === -1).forEach((el) => {
                     const c = pinCenter(el, e.clientX, e.clientY);
                     if (!c) return;
@@ -327,6 +331,8 @@ extendClass(HomeStationUI, {
             if (ghost._grab && typeof physicalItem !== 'undefined' && physicalItem.previewInGrid) {
                 if (best) physicalItem.previewInGrid(null);
                 else physicalItem.previewInGrid(cell, e.clientX - ghost._grab.x, e.clientY - ghost._grab.y);
+                // While the drop preview shows the item in its target tile, the item at the cursor hides.
+                ghost.style.visibility = document.querySelector('.hs-inv-drop-preview') ? 'hidden' : '';
             }
             if (pull) {
                 // Anywhere but another slot the part comes out; its slot stays put.

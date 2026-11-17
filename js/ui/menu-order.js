@@ -14,8 +14,8 @@
 const MENU_ORDER = {
     main: [
         'station',
-        'play',
         'travel',
+        'play',
         'explorations',
         '|',
         'upgrade',
@@ -43,13 +43,14 @@ const MENU_ORDER_DEFAULT_ESC = MENU_ORDER.esc.slice();
 // tabs of the active area show up next to it as small icon tabs.
 // The first tab of an area is where a click on the area lands first.
 const MENU_AREAS = [
-    { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station'], defaultTab: 'station' },
+    { id: 'station', label: 'STATION', icon: 'hsStation', tabs: ['station', 'travel'], defaultTab: 'station' },
     { id: 'upgrade', label: 'UPGRADE', icon: 'hsUpgrade', tabs: ['upgrade'], defaultTab: 'upgrade' },
     // defaultTab: where a click on the area lands (PLAY / the galaxy map is
     // only opened on purpose).
-    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'missions', 'craft', 'shop'], defaultTab: 'hangar' },
-    { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] },
-    { id: 'explore', label: 'WIKI', icon: 'hsExplore', tabs: ['travel', 'explorations'], defaultTab: 'explorations' }
+    { id: 'hangar', label: 'HANGAR', icon: 'hsHangar', tabs: ['hangar', 'craft', 'shop'], defaultTab: 'hangar' },
+    { id: 'missions', label: 'MISSIONS', icon: 'hsExplore', tabs: ['missions'], defaultTab: 'missions' },
+    { id: 'factions', label: 'FACTIONS', icon: 'menuPeoples', tabs: ['factions', 'ffleet', 'ftrade', 'fcontracts'] }
+    // WIKI left the navbar: it is a bezel key now (README modal, js/ui/readme-modal.js).
 ];
 
 const MENU_ORDER_STORAGE_KEY = 'vf.menuOrder';
@@ -113,6 +114,11 @@ function getAreaOrder() {
         // Older saves had no UPGRADE area — keep it next to HANGAR, not at the end.
         if (id === 'upgrade' && out.indexOf('hangar') !== -1) {
             out.splice(out.indexOf('hangar'), 0, 'upgrade');
+            return;
+        }
+        // MISSIONS is its own area now — keep it right after HANGAR on older saves.
+        if (id === 'missions' && out.indexOf('hangar') !== -1) {
+            out.splice(out.indexOf('hangar') + 1, 0, 'missions');
             return;
         }
         if (out.length && out[out.length - 1] !== '|') out.push('|');
@@ -200,6 +206,23 @@ function resetMenuAreas() {
             const defaultTab = entry.defaultTab === 'upgrade' ? (tabs[0] || null) : entry.defaultTab;
             return Object.assign({}, entry, { tabs: tabs, defaultTab: defaultTab });
         });
+        // MISSIONS became its own top-level area — pull it out of HANGAR.
+        next.forEach((entry, i) => {
+            if (!entry || !Array.isArray(entry.tabs) || entry.id === 'missions') return;
+            if (entry.tabs.indexOf('missions') === -1) return;
+            migrated = true;
+            const tabs = entry.tabs.filter((t) => t !== 'missions');
+            next[i] = Object.assign({}, entry, { tabs: tabs, defaultTab: entry.defaultTab === 'missions' ? (tabs[0] || null) : entry.defaultTab });
+        });
+        if (!next.some((e) => e && e.id === 'missions')) {
+            migrated = true;
+            const hIdx = next.findIndex((e) => e && e.id === 'hangar');
+            const ms = { id: 'missions', tabs: ['missions'], defaultTab: 'missions' };
+            if (hIdx !== -1) next.splice(hIdx + 1, 0, ms);
+            else next.push(ms);
+        } else {
+            next.forEach((e, i) => { if (e && e.id === 'missions' && !(e.tabs || []).length) next[i] = Object.assign({}, e, { tabs: ['missions'], defaultTab: 'missions' }); });
+        }
         if (!next.some((e) => e && e.id === 'upgrade')) {
             migrated = true;
             const hangarIdx = next.findIndex((e) => e && e.id === 'hangar');
@@ -252,4 +275,14 @@ function setMenuLabel(key, label) {
 function resetMenuLabels() {
     MENU_LABELS = {};
     try { localStorage.removeItem(MENU_LABELS_STORAGE_KEY); } catch (e) { /* ignore */ }
+}
+
+// ---- MENU button visibility (Main menu → Settings → "Station MENU Button") ----
+// The station nav's MENU button can be hidden; ESC and the main-menu Settings still reach everything.
+const MENU_BTN_HIDDEN_KEY = 'vf.menuBtnHidden';
+function isMenuButtonHidden() {
+    try { return localStorage.getItem(MENU_BTN_HIDDEN_KEY) === '1'; } catch (e) { return false; }
+}
+function setMenuButtonHidden(hidden) {
+    try { localStorage.setItem(MENU_BTN_HIDDEN_KEY, hidden ? '1' : '0'); } catch (e) { /* ignore */ }
 }

@@ -802,8 +802,12 @@ class VFTrackerManager {
         // new one — heard as the music "overlapping"/stumbling. Cut any player
         // already fading out immediately instead of letting it keep sounding.
         if (this._outgoing && this._outgoing.length) {
+            // Quick 0.3s fade instead of a hard cut — rapid tab hops stayed clickless.
             this._outgoing.forEach((p) => {
-                try { p.stop(true); } catch (e) { /* ignore */ }
+                try {
+                    if (p.fadeOut) p.fadeOut(0.3);
+                    setTimeout(() => { try { p.stop(true); } catch (e1) { /* ignore */ } }, 380);
+                } catch (e) { /* ignore */ }
             });
             this._outgoing = [];
         }
@@ -871,6 +875,13 @@ class VFTrackerManager {
             : this.crossfadeSeconds;
         // Audible scene handoff: role changes never sneak in under a tiny fade.
         if (roleChange) fade = Math.max(fade, Math.min(1.25, Math.max(0.85, this.crossfadeSeconds * 0.75)));
+        // Space-synth hub/map tracks have long pad releases: swell between them
+        // (and in/out of other scenes) over seconds instead of a quick dip.
+        const outMeta = (this.player && this.player.track && this.player.track.meta) || {};
+        const inMeta = (track && track.meta) || {};
+        if (wasPlaying && (inMeta.space || outMeta.space) && !(opts && opts.fade != null)) {
+            fade = Math.max(fade, 3.4);
+        }
         const hasOutgoing = !!(this._outgoing && this._outgoing.length);
         const doFade = fade > 0 && !(opts && opts.forceHard);
 

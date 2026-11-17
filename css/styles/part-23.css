@@ -396,7 +396,7 @@ html body .victory-screen .victory-content {
 html body .victory-screen .victory-content > * { margin-top: 0 !important; margin-bottom: 0 !important; }
 html body .victory-screen .outcome-progress {
     flex: 1 1 auto;
-    min-height: 220px;
+    min-height: 140px;
     padding-top: 0;
     gap: 10px;
     justify-content: center;
@@ -1949,17 +1949,25 @@ html body #vf-trading-post-shop.hs-tps.vf-iss {
     display: grid;
     place-items: center;
     flex: none;
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
+    max-width: 16px;
+    max-height: 16px;
+    overflow: hidden;
     padding: 1px;
+    box-sizing: border-box;
     background: color-mix(in srgb, #05060a 75%, var(--pk-c, #4ec99a) 25%);
     border: 1px solid color-mix(in srgb, var(--pk-c, #4ec99a) 50%, #2a3340);
     box-shadow: 1px 1px 0 #05060a;
 }
-#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico :is(img, canvas),
-.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico :is(img, canvas){
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico :is(img, canvas, .hs-pixel, .ui-icon-tip),
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico :is(img, canvas, .hs-pixel, .ui-icon-tip){
     width: 14px !important;
     height: 14px !important;
+    max-width: 14px !important;
+    max-height: 14px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
     image-rendering: pixelated;
     display: block;
 }
@@ -2683,3 +2691,830 @@ html body :is(.vf-iss-ship-inv, .hs-tps-ship-inv, .hs-row) .hs-storage-cell.is-e
 /* Type icons are not shown on hull slots (tooltip only). */
 .hs-storage-cell.is-ship-slot .hs-storage-slot-glyph,
 .hs-storage-cell.is-ship-slot .hs-slot-glyph { display: none !important; }
+
+/* Slot-type badges: icon bottom-left on every hull slot, only while hovering the inventory grid.
+   Clamp hard (!important + min-size 0): Firefox SVG-as-img intrinsic (300×150 without width/height)
+   and .hs-pixel's 32px default otherwise blow these past the cell. */
+.hs-storage-slot-kind {
+    position: absolute;
+    left: 3px;
+    bottom: 3px;
+    z-index: 3;
+    width: 22px;
+    height: 22px;
+    max-width: 22px;
+    max-height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    pointer-events: none;
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 -1px 0 #05060a);
+}
+.hs-storage-slot-kind :is(img, canvas, .hs-pixel, .ui-icon-tip) {
+    width: 22px !important;
+    height: 22px !important;
+    max-width: 22px !important;
+    max-height: 22px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    image-rendering: pixelated;
+    display: block;
+}
+.hs-storage-grid:hover .hs-storage-slot-kind,
+.hs-bay-inv:hover .hs-storage-slot-kind {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Drop preview inside a hull slot: item shown in the slot, outlined by validity. */
+.hs-inv-drop-preview.is-in-slot { opacity: 0.9; z-index: 6; }
+.hs-inv-drop-preview.is-in-slot.is-slot-ok { outline: 2px solid #5cff7a; outline-offset: -2px; background: color-mix(in srgb, #5cff7a 14%, transparent); }
+.hs-inv-drop-preview.is-in-slot.is-slot-wrong { outline: 2px solid #ff4a4a; outline-offset: -2px; background: color-mix(in srgb, #ff4a4a 14%, transparent); }
+
+/* Free ship slot placeholder on the station tab (OWNED SHIPS n/max). */
+.hs-ship-empty-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 72px;
+    margin: 6px 0;
+    border: 2px dashed color-mix(in srgb, var(--color-primary) 45%, transparent);
+    color: color-mix(in srgb, var(--color-primary) 70%, #05060a);
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    opacity: 0.8;
+}
+.hs-ship-empty-slot img { opacity: 0.6; }
+
+/* README modal (bezel WIKI key). */
+.vf-readme-overlay { z-index: 10080; }
+.vf-readme-panel { width: min(calc(980px * var(--zk)), calc(96 * var(--cw))); }
+.vf-readme-body {
+    min-height: 0;
+    flex: 1;
+    overflow: auto;
+    padding: 18px 28px 28px;
+    font-size: 0.86rem;
+    line-height: 1.55;
+    user-select: text;
+}
+.vf-readme-body h1, .vf-readme-body h2, .vf-readme-body h3, .vf-readme-body h4 {
+    color: var(--current-primary, #00ffcc);
+    letter-spacing: 0.08em;
+    margin: 1.4em 0 0.5em;
+    line-height: 1.25;
+}
+.vf-readme-body h1 { font-size: 1.3rem; margin-top: 0.4em; }
+.vf-readme-body h2 { font-size: 1.1rem; border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent); padding-bottom: 4px; }
+.vf-readme-body h3 { font-size: 0.95rem; }
+.vf-readme-body p, .vf-readme-body ul, .vf-readme-body ol, .vf-readme-body blockquote { margin: 0.6em 0; }
+.vf-readme-body a { color: var(--current-primary, #00ffcc); }
+.vf-readme-body code { background: rgba(255,255,255,.08); padding: 0 4px; font-size: 0.92em; }
+.vf-readme-body pre { background: #05060a; border: 1px solid rgba(255,255,255,.15); padding: 10px 12px; overflow: auto; }
+.vf-readme-body pre code { background: none; padding: 0; white-space: pre; }
+.vf-readme-body blockquote { border-left: 3px solid var(--current-primary, #00ffcc); padding-left: 12px; opacity: 0.9; }
+.vf-readme-table { overflow: auto; margin: 0.6em 0; }
+.vf-readme-table table { border-collapse: collapse; min-width: 60%; }
+.vf-readme-table th, .vf-readme-table td { border: 1px solid rgba(255,255,255,.18); padding: 4px 8px; text-align: left; vertical-align: top; }
+.vf-readme-table th { color: var(--current-primary, #00ffcc); }
+.vf-readme-status { opacity: 0.7; }
+
+/* Remote navigation: four category keys (main row) + sub-tabs of the active category. */
+.vf-bezel-fx .vf-fx-tabs.vf-fx-nav { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 6px; padding: 2px 0 4px; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats,
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs { display: flex; gap: 6px; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button { flex: 1 1 0; min-width: 0; min-height: 52px; flex-direction: column; gap: 3px; --cl: #4fd8ff; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button:nth-child(2) { --cl: #6dff7a; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button:nth-child(3) { --cl: #ff5a3c; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button:nth-child(4) { --cl: #ffd23c; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button svg { width: 26px; height: 26px; color: var(--cl); }
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button span {
+    display: block; font-size: 8px; letter-spacing: 0.16em; line-height: 1; color: var(--cl);
+}
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button.on {
+    box-shadow: inset 0 4px 6px rgba(0, 0, 0, 0.7), inset 3px 0 0 var(--rc-dark), inset -3px 0 0 var(--rc-lit), inset 0 -2px 0 var(--cl), inset 0 0 12px color-mix(in srgb, var(--cl) 40%, transparent);
+    background-color: color-mix(in srgb, var(--cl) 14%, var(--rc-hull));
+}
+.vf-bezel-fx .vf-fx-nav .vf-fx-cats button.on svg { color: #fff; filter: drop-shadow(0 0 3px var(--cl)); }
+/* Sub-tabs: smaller, icon + label. */
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs { padding: 2px 0 0; border-top: 2px solid var(--rc-dark); }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button { flex: 1 1 0; min-width: 0; min-height: 34px; flex-direction: column; gap: 2px; padding: 4px 0 3px; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button svg { width: 18px; height: 18px; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button span { display: block; font-size: 7px; letter-spacing: 0.1em; line-height: 1; }
+
+/* Sub-tab row takes the colour of the active category (DISPLAY cyan / LAYOUT green / GAME red / SYSTEM yellow). */
+.vf-bezel-fx .vf-fx-nav { --cat: #4fd8ff; }
+.vf-bezel-fx .vf-fx-nav[data-fx-cat-active="1"] { --cat: #6dff7a; }
+.vf-bezel-fx .vf-fx-nav[data-fx-cat-active="2"] { --cat: #ff5a3c; }
+.vf-bezel-fx .vf-fx-nav[data-fx-cat-active="3"] { --cat: #ffd23c; }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs { border-top-color: var(--cat); }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button { color: var(--cat); }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button svg,
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button span { color: var(--cat); text-shadow: 0 0 4px color-mix(in srgb, var(--cat) 50%, transparent); }
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button.on {
+    box-shadow: inset 0 4px 6px rgba(0, 0, 0, 0.7), inset 3px 0 0 var(--rc-dark), inset -3px 0 0 var(--rc-lit), inset 0 -2px 0 var(--cat), inset 0 0 12px color-mix(in srgb, var(--cat) 40%, transparent);
+    background-color: color-mix(in srgb, var(--cat) 14%, var(--rc-hull));
+}
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button.on svg,
+.vf-bezel-fx .vf-fx-nav .vf-fx-subs button.on span { color: #fff; filter: drop-shadow(0 0 3px var(--cat)); }
+
+/* The whole remote (settings included) follows the active category colour. */
+.vf-bezel-fx[data-fx-cat="0"] { --rc-acc: #4fd8ff; --color-primary: #4fd8ff; }
+.vf-bezel-fx[data-fx-cat="1"] { --rc-acc: #6dff7a; --color-primary: #6dff7a; }
+.vf-bezel-fx[data-fx-cat="2"] { --rc-acc: #ff5a3c; --color-primary: #ff5a3c; }
+.vf-bezel-fx[data-fx-cat="3"] { --rc-acc: #ffd23c; --color-primary: #ffd23c; }
+.vf-bezel-fx[data-fx-cat] input[type="range"] { accent-color: var(--rc-acc); }
+
+/* Second remote (HUD, dev mode): amber key with a caption so it is not mistaken for the other dev keys. */
+.vf-bezel .vf-bezel-tools button.is-dev-remote { color: #ffb23c; }
+.vf-bezel .vf-bezel-tools button.is-dev-remote > svg { filter: drop-shadow(0 calc(1 * var(--bz-u)) 0 #000) drop-shadow(0 0 3px rgba(255, 178, 60, 0.55)); }
+.vf-bezel .vf-bezel-tools button.is-dev-remote::after { background: #ffb23c; box-shadow: 0 0 calc(5 * var(--bz-u)) #ffb23c; animation: vf-dev-remote-led 1.6s ease-in-out infinite; }
+.vf-bezel .vf-bezel-tools button.is-dev-remote .vf-tool-tag {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(2 * var(--bz-u));
+    text-align: center;
+    font-size: calc(7 * var(--bz-u));
+    letter-spacing: 0.14em;
+    line-height: 1;
+    color: #ffb23c;
+    text-shadow: 0 1px 0 #000;
+    pointer-events: none;
+}
+@keyframes vf-dev-remote-led { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .vf-bezel .vf-bezel-tools button.is-dev-remote::after { animation: none; } }
+
+/* Bezel keys: every key the size of the handset keys (settings remote / logout), grouped in clusters. */
+.vf-bezel .vf-bezel-tools button,
+.vf-bezel-tools button {
+    width: calc(52 * var(--bz-u));
+    height: calc(68 * var(--bz-u));
+    border-radius: calc(10 * var(--bz-u));
+}
+.vf-bezel .vf-bezel-tools button > svg,
+.vf-bezel-tools button > svg {
+    width: calc(40 * var(--bz-u)) !important;
+    height: calc(40 * var(--bz-u)) !important;
+}
+.vf-bezel .vf-bezel-tools button::after {
+    top: calc(5 * var(--bz-u));
+    width: calc(8 * var(--bz-u));
+    height: calc(3 * var(--bz-u));
+    border-radius: calc(1 * var(--bz-u));
+}
+/* Clusters: [dev keys] · [mute · fullscreen · wiki] · [logout · remote]. */
+.vf-bezel .vf-bezel-tools button[data-tool="logout"] { margin-left: calc(10 * var(--bz-u)); }
+/* Gap before the audio/view cluster only while dev keys sit in front of it. */
+.vf-bezel .vf-bezel-tools button[data-tool="layout"]:not([hidden]) ~ button[data-tool="mute"] { margin-left: calc(10 * var(--bz-u)); }
+
+/* Key strip docked bottom right (arrow key at its far right toggles it). */
+html[data-vf-tools-pos="bottom"] .vf-bezel .vf-bezel-tools:not(.vf-bezel-devbar),
+html[data-vf-tools-pos="bottom"] .vf-bezel-tools:not(.vf-bezel-devbar) {
+    top: auto;
+    bottom: calc(13 * var(--bz-u));
+}
+.vf-bezel .vf-bezel-tools button[data-tool="dock"] { margin-left: calc(10 * var(--bz-u)); }
+
+/* Dev-mode key bar: overlays the screen, own position (draggable by the grip, cached in localStorage). */
+.vf-bezel .vf-bezel-tools.vf-bezel-devbar {
+    right: calc(130 * var(--bz-u));
+    top: calc(90 * var(--bz-u));
+    bottom: auto;
+    height: auto;
+    z-index: 9996;
+    width: max-content;
+    box-shadow: 0 calc(6 * var(--bz-u)) calc(18 * var(--bz-u)) rgba(0, 0, 0, 0.55),
+        inset calc(2 * var(--bz-u)) calc(2 * var(--bz-u)) 0 rgba(0, 0, 0, 0.85),
+        inset calc(-2 * var(--bz-u)) calc(-2 * var(--bz-u)) 0 var(--hull-lit, #2a3a52);
+}
+.vf-bezel .vf-bezel-tools.vf-bezel-devbar[hidden] { display: none; }
+.vf-bezel-devbar.is-dragging { opacity: 0.9; cursor: grabbing; }
+.vf-bezel-devbar .vf-devbar-grip {
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: calc(4 * var(--bz-u));
+    width: calc(14 * var(--bz-u));
+    padding: 0 calc(2 * var(--bz-u));
+    cursor: grab;
+    touch-action: none;
+}
+.vf-bezel-devbar .vf-devbar-grip i { display: block; height: calc(3 * var(--bz-u)); background: #ffb23c; opacity: 0.7; }
+.vf-bezel-devbar .vf-devbar-grip:hover i { opacity: 1; }
+html[data-vf-tools-pos="bottom"] .vf-bezel .vf-bezel-tools:not(.vf-bezel-devbar) { top: auto; bottom: calc(13 * var(--bz-u)); }
+
+/* Dev hover readout / highlight overlay on top of the key strips (it used to be partly hidden behind them). */
+.vf-bezel .vf-hover-screen { z-index: 9999; }
+
+/* Galaxy-map nebula: light the dark map like glowing gas instead of laying a pale veil over it. */
+.galaxy-map-svg .gm-nebula { mix-blend-mode: screen; }
+
+/* Station: the navbar starts right under the glass edge — the pilot / wallet plates live in the bezel rim
+   above it, so the old 40px top pad (meant to clear rim art) only left a dead strip. */
+html body .home-station-overlay .home-station-content {
+    padding-top: calc(8px / var(--hs-z)) !important;
+}
+
+/* Status toast laid over the pilot name plate (top left). */
+.hs-toast.is-on-pilot {
+    z-index: 100002;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    max-width: min(560px, 60vw);
+    background: color-mix(in srgb, var(--color-surface, #0b0b10) 97%, transparent);
+}
+
+/* Expanded part card: the row and its details form one card (the card grows, contents sit inside it). */
+html body .hs-hangar-slot-pair.is-open {
+    gap: 0;
+    border: 2px solid color-mix(in srgb, var(--pk-c, var(--color-primary)) 75%, transparent);
+    background: color-mix(in srgb, var(--pk-c, var(--color-primary)) 7%, #05060a);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pk-c, var(--color-primary)) 18%, transparent);
+}
+html body .hs-hangar-slot-pair.is-open > .hs-hangar-part.is-merged {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+html body .hs-hangar-slot-pair.is-open > .hs-hangar-part-details {
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-top: 2px dashed color-mix(in srgb, var(--pk-c, var(--color-primary)) 40%, transparent);
+    padding: 8px 10px 10px;
+}
+
+/* Slot picker actions: readable buttons (text was clipped inside the thin metal pill). Back/close left, action right. */
+.hs-pick-dialog .hs-res-buy-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 12px;
+    padding-top: 10px;
+}
+.hs-pick-dialog .hs-res-buy-actions .action-button {
+    clip-path: none;
+    height: auto;
+    min-height: 34px;
+    min-width: 110px;
+    padding: 8px 18px;
+    font-size: var(--font-text, 12px);
+    line-height: 1.1;
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+    overflow: visible;
+    text-align: center;
+    color: var(--color-text, #f0f4ff);
+    background: color-mix(in srgb, var(--color-primary) 10%, #05060a);
+    border: var(--ui-border-width, 2px) solid var(--color-primary);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 25%, transparent);
+    text-shadow: 0 1px 0 #000;
+}
+.hs-pick-dialog .hs-res-buy-actions .action-button:hover,
+.hs-pick-dialog .hs-res-buy-actions .action-button:focus-visible {
+    background: color-mix(in srgb, var(--color-primary) 30%, #05060a);
+    color: #fff;
+}
+
+/* ===== Station upgrade tree: retro-space terminal look, tinted by the pilot's faction ===== */
+.hs-upg-faction-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 8px;
+    font-size: var(--font-text);
+    letter-spacing: 0.3em;
+    color: var(--upg-branch, var(--color-primary));
+    text-shadow: 0 0 6px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 55%, transparent), 0 2px 0 #000;
+}
+.hs-upg-faction-title > i {
+    flex: 1 1 auto;
+    height: 4px;
+    background: repeating-linear-gradient(90deg, var(--upg-branch, var(--color-primary)) 0 6px, transparent 6px 10px);
+    opacity: 0.55;
+}
+/* Backdrop: faint blueprint grid + scanlines under the nodes. */
+html body .hs-upg-tree {
+    background-image:
+        linear-gradient(color-mix(in srgb, var(--color-primary) 7%, transparent) 1px, transparent 1px),
+        linear-gradient(90deg, color-mix(in srgb, var(--color-primary) 7%, transparent) 1px, transparent 1px),
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 1px, transparent 1px 3px);
+    background-size: 32px 32px, 32px 32px, 100% 3px;
+}
+/* Branch headers as terminal brackets. */
+html body .hs-upg-col-label {
+    top: 2px;
+    padding: 2px 8px;
+    font-size: var(--font-text);
+    letter-spacing: 0.22em;
+    background: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 12%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--upg-branch, var(--color-primary)) 65%, transparent);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 30%, transparent);
+    text-shadow: 0 0 5px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 60%, transparent);
+}
+html body .hs-upg-col-label::before { content: "▸ "; }
+html body .hs-upg-branch-chip > i { box-shadow: 0 0 6px var(--upg-branch); }
+/* Links: pixel dashes; lit lines glow. */
+html body .hs-upg-link {
+    stroke-width: 3;
+    stroke-dasharray: 6 4;
+    opacity: 0.7;
+}
+html body .hs-upg-link.lit {
+    stroke-dasharray: none;
+    opacity: 1;
+    filter: drop-shadow(0 0 4px var(--upg-branch, var(--color-primary)));
+}
+/* Node: chamfered pixel frame, scanlined dark panel, branch-coloured inner glow. */
+html body .hs-upg-face {
+    --cut: 10px;
+    border-width: 3px;
+    clip-path: polygon(var(--cut) 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, var(--cut) 100%, 0 calc(100% - var(--cut)), 0 var(--cut));
+    background:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px),
+        radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--upg-branch, var(--color-primary)) 22%, #0a0c12) 0, #05060a 78%);
+    box-shadow: inset 0 0 14px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 30%, transparent), inset 2px 2px 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 45%, #fff), inset -2px -2px 0 0 #020308;
+}
+html body .hs-upg-node.available .hs-upg-face {
+    box-shadow: inset 0 0 18px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 48%, transparent), inset 2px 2px 0 0 color-mix(in srgb, var(--upg-branch, var(--color-primary)) 70%, #fff), inset -2px -2px 0 0 #020308;
+}
+html body .hs-upg-node.maxed .hs-upg-face {
+    border-color: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 60%, #fff);
+    box-shadow: inset 0 0 20px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 55%, transparent), inset 2px 2px 0 0 #fff, inset -2px -2px 0 0 #020308;
+}
+html body .hs-upg-node.selected .hs-upg-face,
+html body button.hs-upg-node.nav-focused .hs-upg-face {
+    border-color: #fff;
+    box-shadow: inset 0 0 18px color-mix(in srgb, var(--upg-branch, var(--color-primary)) 55%, transparent), inset 2px 2px 0 0 #fff, inset -2px -2px 0 0 #020308;
+}
+html body .hs-upg-icon {
+    background: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 10%, #020308);
+    border-color: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 60%, #222);
+}
+/* Legible dock / tooltip text on the dark terminal panel. */
+html body .hs-upg-dock { border-color: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 60%, transparent); }
+
+/* Shortcut dropdown at the right of a weapon / executable-ability row. */
+html body .hs-hangar-slot-pair { position: relative; }
+html body .hs-hangar-slot-pair.has-key > .hs-hangar-part.is-merged { padding-right: 84px; }
+.hs-hangar-key {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    z-index: 2;
+    display: inline-flex;
+}
+.hs-hangar-key select {
+    appearance: none;
+    min-width: 62px;
+    padding: 6px 22px 6px 9px;
+    font: inherit;
+    font-size: var(--font-small, 11px);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text, #f0f4ff);
+    background:
+        linear-gradient(45deg, transparent 50%, var(--color-primary) 50%) calc(100% - 12px) 50% / 5px 5px no-repeat,
+        linear-gradient(135deg, var(--color-primary) 50%, transparent 50%) calc(100% - 7px) 50% / 5px 5px no-repeat,
+        color-mix(in srgb, var(--color-primary) 10%, #05060a);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+    cursor: pointer;
+}
+.hs-hangar-key select:hover,
+.hs-hangar-key select:focus-visible { border-color: var(--color-primary); outline: none; }
+.hs-hangar-key select option { background: #05060a; color: #f0f4ff; }
+
+/* Shop stock cells on hover: the type icon + price row must fit the cell (price was clipped). */
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-hover-badges,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-hover-badges {
+    flex-wrap: wrap;
+    row-gap: 2px;
+    left: 1px;
+    right: 1px;
+    bottom: 1px;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-cost,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-cost {
+    min-width: 0;
+    max-width: 100%;
+    font-size: 10px;
+    padding: 1px 3px;
+    white-space: nowrap;
+}
+#vf-in-stage-shop .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico,
+.hs-tps .vf-iss-stock-grid .vf-iss-stock-cell .vf-iss-stock-type-ico {
+    width: 16px !important;
+    height: 16px !important;
+    max-width: 16px !important;
+    max-height: 16px !important;
+    overflow: hidden;
+}
+
+/* Storage grids that carry .hs-pick-grid but live OUTSIDE the slot-picker modal (shop bags, station / victory ship rows):
+   the picker's own grid rule (8×64px tracks, min-height, 4px padding, auto-scroll, line backdrop) must not apply —
+   it stretched them into phantom rows and made them scroll on hover. They size themselves via inline tracks. */
+html body :is(#vf-in-stage-shop, .hs-tps, .victory-loadout, .hs-ship-storage-row, .vf-iss-ship-inv, .vf-iss-station-inv, .hs-tps-ship-inv) .hs-storage-grid.hs-pick-grid {
+    min-height: 0;
+    max-height: none;
+    padding: 0;
+    overflow: hidden;
+    scrollbar-gutter: auto;
+    grid-auto-rows: auto;
+    background-image: none;
+    background-color: var(--hs-line, #1a2a40);
+    border: var(--hs-gap, 2px) solid var(--hs-line, #1a2a40);
+}
+
+/* Launch cutscene dialogue: an RPG-style box at the bottom (typewriter text, waits for ENTER / click). */
+.launch-cutscene[data-phase="dialog"] .launch-cutscene-card {
+    top: auto;
+    bottom: 12%;
+    width: min(760px, 92%);
+    min-height: 150px;
+    text-align: left;
+    text-transform: none;
+    padding: 16px 22px 18px;
+    background: rgba(2, 4, 10, 0.9);
+    border: 2px solid var(--color-primary, #e8c56a);
+}
+.launch-cutscene[data-phase="dialog"] .launch-cutscene-line {
+    min-height: 3.2em;
+    font-size: 1.05rem;
+    line-height: 1.55;
+}
+.launch-cutscene[data-phase="dialog"] .launch-cutscene-hint { animation: lc-hint-blink 1.1s steps(2, end) infinite; }
+@keyframes lc-hint-blink { 50% { opacity: 0.35; } }
+
+/* Main quest guide on the galaxy map: hint banner + bouncing arrow over the target planet. */
+#gmMapArea .gm-main-hint {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    max-width: min(560px, 80%);
+    padding: 6px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: center;
+    pointer-events: none;
+    background: rgba(2, 4, 10, 0.85);
+    border: 2px solid var(--color-primary);
+    box-shadow: 0 0 10px color-mix(in srgb, var(--color-primary) 35%, transparent);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+}
+#gmMapArea .gm-main-hint b { color: var(--color-primary); letter-spacing: 0.2em; }
+#gmMapArea .gm-main-hint[hidden], #gmMapArea .gm-main-pointer[hidden] { display: none; }
+#gmMapArea .gm-main-pointer {
+    position: absolute;
+    z-index: 6;
+    width: 0;
+    height: 0;
+    margin: -46px 0 0 -12px;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-top: 18px solid var(--color-primary);
+    filter: drop-shadow(1px 0 0 #05060a) drop-shadow(-1px 0 0 #05060a) drop-shadow(0 1px 0 #05060a) drop-shadow(0 0 6px var(--color-primary));
+    pointer-events: none;
+    animation: gm-main-bounce 0.9s ease-in-out infinite;
+}
+@keyframes gm-main-bounce { 50% { transform: translateY(8px); } }
+
+/* ===== Upgrade tree, simpler: one colour, the SHAPE names the tree; thicker contours; smaller nodes; legend = button group ===== */
+.hs-upg-node { --bw: 5px; --edge: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 80%, #fff); }
+.hs-upg-node.available { --edge: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 100%, #fff 20%); }
+.hs-upg-node.maxed, .hs-upg-node.selected, button.hs-upg-node.nav-focused { --edge: #fff; }
+.hs-upg-node.locked, .hs-upg-node.blocked { --edge: color-mix(in srgb, var(--upg-branch, var(--color-primary)) 55%, #202028); }
+html body .hs-upg-node[data-branch="core"] .hs-upg-face { clip-path: polygon(calc(12px + 0px * .42) 0px, calc(100% - 12px - 0px * .42) 0px, calc(100% - 0px) calc(12px + 0px * .42), calc(100% - 0px) calc(100% - 12px - 0px * .42), calc(100% - 12px - 0px * .42) calc(100% - 0px), calc(12px + 0px * .42) calc(100% - 0px), 0px calc(100% - 12px - 0px * .42), 0px calc(12px + 0px * .42)); }
+html body .hs-upg-node[data-branch="core"] .hs-upg-face::before { clip-path: polygon(calc(12px + var(--bw) * .42) var(--bw), calc(100% - 12px - var(--bw) * .42) var(--bw), calc(100% - var(--bw)) calc(12px + var(--bw) * .42), calc(100% - var(--bw)) calc(100% - 12px - var(--bw) * .42), calc(100% - 12px - var(--bw) * .42) calc(100% - var(--bw)), calc(12px + var(--bw) * .42) calc(100% - var(--bw)), var(--bw) calc(100% - 12px - var(--bw) * .42), var(--bw) calc(12px + var(--bw) * .42)); }
+.hs-upg-shape[data-branch="core"] { clip-path: polygon(calc(12px + 0px * .42) 0px, calc(100% - 12px - 0px * .42) 0px, calc(100% - 0px) calc(12px + 0px * .42), calc(100% - 0px) calc(100% - 12px - 0px * .42), calc(100% - 12px - 0px * .42) calc(100% - 0px), calc(12px + 0px * .42) calc(100% - 0px), 0px calc(100% - 12px - 0px * .42), 0px calc(12px + 0px * .42)); }
+html body .hs-upg-node[data-branch="vault"] .hs-upg-face { clip-path: polygon(0px 0px, calc(100% - 0px) 0px, calc(100% - 0px) calc(100% - 0px), 0px calc(100% - 0px)); }
+html body .hs-upg-node[data-branch="vault"] .hs-upg-face::before { clip-path: polygon(var(--bw) var(--bw), calc(100% - var(--bw)) var(--bw), calc(100% - var(--bw)) calc(100% - var(--bw)), var(--bw) calc(100% - var(--bw))); }
+.hs-upg-shape[data-branch="vault"] { clip-path: polygon(0px 0px, calc(100% - 0px) 0px, calc(100% - 0px) calc(100% - 0px), 0px calc(100% - 0px)); }
+html body .hs-upg-node[data-branch="fleet"] .hs-upg-face { clip-path: polygon(50% 0px, calc(100% - 0px) 28%, calc(100% - 0px) calc(100% - 0px), 0px calc(100% - 0px), 0px 28%); }
+html body .hs-upg-node[data-branch="fleet"] .hs-upg-face::before { clip-path: polygon(50% var(--bw), calc(100% - var(--bw)) 28%, calc(100% - var(--bw)) calc(100% - var(--bw)), var(--bw) calc(100% - var(--bw)), var(--bw) 28%); }
+.hs-upg-shape[data-branch="fleet"] { clip-path: polygon(50% 0px, calc(100% - 0px) 28%, calc(100% - 0px) calc(100% - 0px), 0px calc(100% - 0px), 0px 28%); }
+html body .hs-upg-node[data-branch="cargo"] .hs-upg-face { clip-path: polygon(calc(20% + 0px * .3) 0px, calc(80% - 0px * .3) 0px, calc(100% - 0px) 50%, calc(80% - 0px * .3) calc(100% - 0px), calc(20% + 0px * .3) calc(100% - 0px), 0px 50%); }
+html body .hs-upg-node[data-branch="cargo"] .hs-upg-face::before { clip-path: polygon(calc(20% + var(--bw) * .3) var(--bw), calc(80% - var(--bw) * .3) var(--bw), calc(100% - var(--bw)) 50%, calc(80% - var(--bw) * .3) calc(100% - var(--bw)), calc(20% + var(--bw) * .3) calc(100% - var(--bw)), var(--bw) 50%); }
+.hs-upg-shape[data-branch="cargo"] { clip-path: polygon(calc(20% + 0px * .3) 0px, calc(80% - 0px * .3) 0px, calc(100% - 0px) 50%, calc(80% - 0px * .3) calc(100% - 0px), calc(20% + 0px * .3) calc(100% - 0px), 0px 50%); }
+html body .hs-upg-node[data-branch="drive"] .hs-upg-face { clip-path: polygon(calc(22% + 0px * .5) 0px, calc(100% - 0px) 0px, calc(78% - 0px * .5) calc(100% - 0px), 0px calc(100% - 0px)); }
+html body .hs-upg-node[data-branch="drive"] .hs-upg-face::before { clip-path: polygon(calc(22% + var(--bw) * .5) var(--bw), calc(100% - var(--bw)) var(--bw), calc(78% - var(--bw) * .5) calc(100% - var(--bw)), var(--bw) calc(100% - var(--bw))); }
+.hs-upg-shape[data-branch="drive"] { clip-path: polygon(calc(22% + 0px * .5) 0px, calc(100% - 0px) 0px, calc(78% - 0px * .5) calc(100% - 0px), 0px calc(100% - 0px)); }
+html body .hs-upg-node[data-branch="power"] .hs-upg-face { clip-path: polygon(0px 0px, calc(100% - 22px - 0px * .42) 0px, calc(100% - 0px) calc(22px + 0px * .42), calc(100% - 0px) calc(100% - 0px), calc(22px + 0px * .42) calc(100% - 0px), 0px calc(100% - 22px - 0px * .42)); }
+html body .hs-upg-node[data-branch="power"] .hs-upg-face::before { clip-path: polygon(var(--bw) var(--bw), calc(100% - 22px - var(--bw) * .42) var(--bw), calc(100% - var(--bw)) calc(22px + var(--bw) * .42), calc(100% - var(--bw)) calc(100% - var(--bw)), calc(22px + var(--bw) * .42) calc(100% - var(--bw)), var(--bw) calc(100% - 22px - var(--bw) * .42)); }
+.hs-upg-shape[data-branch="power"] { clip-path: polygon(0px 0px, calc(100% - 22px - 0px * .42) 0px, calc(100% - 0px) calc(22px + 0px * .42), calc(100% - 0px) calc(100% - 0px), calc(22px + 0px * .42) calc(100% - 0px), 0px calc(100% - 22px - 0px * .42)); }
+html body .hs-upg-node[data-branch="diplo"] .hs-upg-face { clip-path: polygon(0px 0px, calc(100% - 0px) 0px, calc(100% - 0px) 60%, 50% calc(100% - 0px), 0px 60%); }
+html body .hs-upg-node[data-branch="diplo"] .hs-upg-face::before { clip-path: polygon(var(--bw) var(--bw), calc(100% - var(--bw)) var(--bw), calc(100% - var(--bw)) 60%, 50% calc(100% - var(--bw)), var(--bw) 60%); }
+.hs-upg-shape[data-branch="diplo"] { clip-path: polygon(0px 0px, calc(100% - 0px) 0px, calc(100% - 0px) 60%, 50% calc(100% - 0px), 0px 60%); }
+
+/* Face: the outer shape is the contour (thick), the ::before is the dark fill inset by the contour width. */
+html body .hs-upg-face {
+    border: 0;
+    background: var(--edge);
+    box-shadow: none;
+}
+html body .hs-upg-node.available .hs-upg-face,
+html body .hs-upg-node.maxed .hs-upg-face,
+html body .hs-upg-node.selected .hs-upg-face,
+html body button.hs-upg-node.nav-focused .hs-upg-face { box-shadow: none; border: 0; background: var(--edge); }
+html body .hs-upg-face::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.28) 0 1px, transparent 1px 3px),
+        radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--upg-branch, var(--color-primary)) 20%, #0a0c12) 0, #05060a 78%);
+}
+
+/* Smaller node art. */
+html body .hs-upg-node .hs-upg-icon .hs-pixel { width: 80px !important; height: 80px !important; image-rendering: pixelated; }
+html body .hs-upg-node .hs-upg-icon { height: 80px; }
+html body .hs-upg-node { padding-top: 6px; }
+html body .hs-upg-node .hs-upg-slots { left: 12px; right: 12px; bottom: 8px; height: 12px; }
+
+/* Focus from the legend: the other trees step back. */
+.hs-upg-tree[data-focus] .hs-upg-node:not([data-branch="focus-none"]) { transition: opacity 0.15s; }
+.hs-upg-tree[data-focus="core"] .hs-upg-node:not([data-branch="core"]),
+.hs-upg-tree[data-focus="vault"] .hs-upg-node:not([data-branch="vault"]),
+.hs-upg-tree[data-focus="fleet"] .hs-upg-node:not([data-branch="fleet"]),
+.hs-upg-tree[data-focus="cargo"] .hs-upg-node:not([data-branch="cargo"]),
+.hs-upg-tree[data-focus="drive"] .hs-upg-node:not([data-branch="drive"]),
+.hs-upg-tree[data-focus="power"] .hs-upg-node:not([data-branch="power"]),
+.hs-upg-tree[data-focus="diplo"] .hs-upg-node:not([data-branch="diplo"]) { opacity: 0.3; }
+
+/* Legend as a button group: one joined strip, each key shows its tree's shape. */
+html body .hs-upg-branch-legend {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0 0 10px;
+    border: 3px solid var(--color-primary);
+    background: #05060a;
+}
+html body .hs-upg-branch-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    margin: 0;
+    font: inherit;
+    font-size: var(--font-text);
+    letter-spacing: 0.12em;
+    color: var(--color-text, #e8ecf4);
+    background: transparent;
+    border: 0;
+    border-right: 3px solid var(--color-primary);
+    cursor: pointer;
+    text-shadow: 0 1px 0 #000;
+}
+html body .hs-upg-branch-chip:last-child { border-right: 0; }
+html body .hs-upg-branch-chip:hover { background: color-mix(in srgb, var(--color-primary) 18%, #05060a); }
+html body .hs-upg-branch-chip.on { background: var(--color-primary); color: #05060a; text-shadow: none; }
+.hs-upg-shape {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    background: currentColor;
+    box-shadow: none;
+    border: 0;
+}
+html body .hs-upg-branch-chip > i.hs-upg-shape { width: 16px; height: 16px; border: 0; box-shadow: none; }
+
+/* Legend button group: full width, every key the same size. */
+html body .hs-upg-branch-legend { display: flex; flex-wrap: nowrap; width: 100%; box-sizing: border-box; }
+html body .hs-upg-branch-chip { flex: 1 1 0; min-width: 0; justify-content: center; white-space: nowrap; }
+/* Equal columns, one row (grid: every key exactly the same width regardless of its label). */
+html body .hs-upgrade-root .hs-upg-branch-legend {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    width: 100%;
+    box-sizing: border-box;
+}
+html body .hs-upgrade-root .hs-upg-branch-legend > .hs-upg-branch-chip {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding-left: 6px;
+    padding-right: 6px;
+    justify-content: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Upgrade tree: no faction title bar (the legend already names the trees). */
+html body .hs-upg-faction-title { display: none; }
+
+/* Weapon branch shape: arrow pointing right. */
+html body .hs-upg-node[data-branch="armory"] .hs-upg-face { clip-path: polygon(0px 0px, 74% 0px, calc(100% - 0px) 50%, 74% calc(100% - 0px), 0px calc(100% - 0px)); }
+html body .hs-upg-node[data-branch="armory"] .hs-upg-face::before { clip-path: polygon(var(--bw) var(--bw), 74% var(--bw), calc(100% - var(--bw)) 50%, 74% calc(100% - var(--bw)), var(--bw) calc(100% - var(--bw))); }
+.hs-upg-shape[data-branch="armory"] { clip-path: polygon(0px 0px, 74% 0px, calc(100% - 0px) 50%, 74% calc(100% - 0px), 0px calc(100% - 0px)); }
+
+/* Victory: bigger planet readout, SELL label, and buttons (everything was tiny next to the stat row). */
+html body .victory-screen .outcome-progress > :is(.outcome-planet, .outcome-stepper, .outcome-status) { zoom: 1.7; }
+html body .victory-screen .outcome-progress > .outcome-planet-icon { width: min(520px, 56vh); height: min(520px, 56vh); }
+html body .victory-screen .victory-loot-sell { min-width: 96px; }
+html body .victory-screen .victory-loot-sell-label { font-size: var(--font-h3, 14px); }
+html body .victory-screen .victory-loot-sell-value { font-size: calc(var(--font-h2, 20px) * 1.4); }
+html body .victory-screen .victory-loot-title,
+html body .victory-screen .victory-loadout-col-title { font-size: var(--font-h3, 14px); letter-spacing: 3px; }
+html body .victory-screen .victory-button { min-height: 68px; padding: 14px 20px; }
+html body .victory-screen .victory-button .button-text { font-size: calc(var(--font-h2, 20px) * 1.2); letter-spacing: 3px; }
+html body .victory-screen .victory-button .button-icon { width: 36px; height: 36px; flex: none; }
+html body .victory-screen .victory-button .button-icon :is(img, canvas, svg) { width: 100%; height: 100%; }
+
+/* Victory panels never scroll: the slot size is fitted (fitVictoryGrids) so the grids and buttons fit the screen. */
+html body .victory-screen .victory-panels { overflow: visible !important; flex: 0 0 auto !important; max-height: none !important; }
+html body .victory-screen :is(.victory-loadout-bags, .victory-loot-row-wrap, .victory-loot-list) { overflow: visible !important; }
+
+/* Victory: large planet cropped by its area (top/bottom cut off), stats row compact and centred right below it. */
+html body .victory-screen .outcome-progress { position: relative; overflow: hidden !important; }
+/* The planet sprite is a fixed 620px (see stage-stepper.js) that carries its own pixel-art atmosphere ring, so the
+   whole icon is enlarged with `scale` (crisp, pixelated) instead of resizing the box; the smooth CSS haze circle
+   would be a second, non-pixel atmosphere around it and is switched off. */
+html body .victory-screen .outcome-progress > .outcome-planet-icon {
+    width: 620px;
+    height: 620px;
+    scale: 1.35;
+    max-width: none;
+}
+html body :is(.victory-screen, .game-over) .outcome-planet-icon.has-atmo::before { display: none !important; }
+html body .victory-screen .outcome-planet-icon .gm-planet-img { image-rendering: pixelated !important; }
+html body .victory-screen .victory-content { gap: 6px; }
+html body .victory-screen .victory-stats {
+    width: min(100%, 880px) !important;
+    align-self: center;
+    gap: 6px !important;
+    padding: 8px !important;
+}
+html body .victory-screen .victory-stats .stat-item { padding: 8px 12px !important; gap: 10px !important; }
+
+/* Victory buttons: compact row (not full width), taller, bigger label and icon. */
+html body .victory-screen .victory-buttons {
+    width: min(100%, 1020px) !important;
+    align-self: center;
+    justify-content: center !important;
+    gap: 14px !important;
+}
+html body .victory-screen .victory-buttons .victory-button {
+    flex: 0 1 320px !important;
+    min-height: 88px !important;
+    padding: 18px 24px !important;
+    gap: 16px !important;
+}
+html body .victory-screen .victory-buttons .victory-button .button-text {
+    font-size: calc(var(--font-h2, 20px) * 1.7) !important;
+    letter-spacing: 3px;
+    line-height: 1.1;
+}
+html body .victory-screen .victory-buttons .victory-button .button-icon { width: 52px !important; height: 52px !important; flex: none; }
+html body .victory-screen .victory-buttons .victory-button .button-icon :is(img, canvas, svg) { width: 100% !important; height: 100% !important; }
+
+/* Victory buttons: animated focus change — stepped colour fade, lift on the focused button, and a one-shot light sweep. */
+html body .victory-screen .victory-buttons .victory-button {
+    position: relative;
+    overflow: hidden;
+    transition: background-color .22s steps(5, end), color .22s steps(5, end), border-color .22s steps(5, end),
+        transform .22s steps(4, end), box-shadow .22s steps(4, end);
+}
+html body .victory-screen .victory-buttons .victory-button:is(.selected, :hover, :focus-visible) {
+    transform: translateY(-5px) scale(1.04);
+}
+html body .victory-screen .victory-buttons .victory-button:active { transform: translateY(0) scale(0.98); }
+html body .victory-screen .victory-buttons .victory-button .button-text { white-space: nowrap !important; }
+html body .victory-screen .victory-buttons .victory-button .button-icon .ui-icon-tip { width: 100% !important; height: 100% !important; display: flex; }
+html body #victoryOverlay.victory-screen .victory-buttons .victory-button::after {
+    content: '' !important;
+    display: block !important;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -45%;
+    width: 28%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .55), transparent);
+    transform: skewX(-20deg);
+    opacity: 0;
+    pointer-events: none;
+}
+html body #victoryOverlay.victory-screen .victory-buttons .victory-button:is(.selected, :hover)::after {
+    animation: victory-btn-sweep .5s steps(8, end) 1;
+}
+@keyframes victory-btn-sweep {
+    0% { left: -45%; opacity: 1; }
+    100% { left: 120%; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+    html body .victory-screen .victory-buttons .victory-button { transition: none; }
+    html body .victory-screen .victory-buttons .victory-button:is(.selected, :hover, :focus-visible) { transform: none; }
+    html body #victoryOverlay.victory-screen .victory-buttons .victory-button::after { animation: none !important; }
+}
+
+/* End-of-fight screens sit directly under the bezel (9993), over the fight screen (9992, earlier in the DOM): the bezel
+   rim and the pilot portrait are drawn whole over the glass opening instead of being covered or cut out. */
+html body :is(.victory-screen, .game-over) { z-index: 9992 !important; clip-path: none; -webkit-mask-image: none; mask-image: none; }
+
+/* Victory: ship and station bags stacked (12 slot columns instead of 16) so the slots can grow to fill the screen. */
+html body .victory-screen .victory-loadout-bags {
+    flex-direction: column !important;
+    align-items: flex-start;
+    gap: 10px;
+    overflow: visible !important;
+}
+
+/* Victory inventory: the loot panel is not height-capped (it cut off the last slot row), and the slot-type badges scale
+   with the slot size (they were a fixed 16px on much larger slots). */
+html body .victory-screen .victory-loot { max-height: none !important; height: auto !important; }
+html body .victory-screen .hs-storage-cell .hs-storage-slot-kind {
+    width: calc(var(--cs, 56px) * 0.34) !important;
+    height: calc(var(--cs, 56px) * 0.34) !important;
+    left: calc(var(--cs, 56px) * 0.06) !important;
+    bottom: calc(var(--cs, 56px) * 0.06) !important;
+}
+html body .victory-screen .hs-storage-cell .hs-storage-slot-kind :is(img, canvas, svg) {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Pilot face grid: portrait-shaped tiles (48:54), grid centred in the free pane. */
+html body .profile-selection-name-mode.is-pilot-step .pp-picks {
+    width: calc(6 * var(--pp-tile) + 5 * var(--pp-gap)) !important;
+    height: calc(3 * var(--pp-tile-h, var(--pp-tile)) + 2 * var(--pp-gap)) !important;
+    grid-template-rows: repeat(3, var(--pp-tile-h, var(--pp-tile))) !important;
+    margin: auto !important;
+    justify-content: center !important;
+    align-content: center !important;
+}
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick {
+    height: var(--pp-tile-h, var(--pp-tile)) !important;
+    aspect-ratio: 48 / 54;
+}
+
+/* Pilot step BACKDROP / ANIMATION: under the face grid, same width, bigger icons + sliders. */
+html body .profile-selection-name-mode.is-pilot-step .pp-motion {
+    max-width: none;
+    margin: auto 0 0;
+    gap: 10px;
+    padding: 12px 14px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl {
+    grid-template-columns: minmax(150px, 34%) minmax(0, 1fr) minmax(76px, auto) !important;
+    gap: 6px 16px;
+    padding: 10px 12px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-name,
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-val {
+    font-size: calc(var(--font-text, 14px) * 1.2) !important;
+    gap: 12px;
+}
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-val { text-align: right; padding-right: 2px; }
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-name .pp-ico { width: 34px !important; height: 34px !important; }
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-slider { height: 36px; }
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-slider::-webkit-slider-runnable-track { height: 12px; }
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-slider::-moz-range-track { height: 12px; }
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-slider::-webkit-slider-thumb { width: 22px; height: 32px; margin-top: -11px; }
+html body .profile-selection-name-mode.is-pilot-step .pp-motion .pp-ctl .pp-slider::-moz-range-thumb { width: 18px; height: 28px; }
+
+/* Pilot face grid: the chosen head stands out (bright frame + glow + lifted), the others step back. */
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick { opacity: 0.62; transition: opacity 0.12s, transform 0.12s; }
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick:hover { opacity: 0.9; }
+html body .profile-selection-content.profile-selection-name-mode.is-pilot-step .pp-picks > .pp-pick.selected {
+    opacity: 1;
+    z-index: 2;
+    transform: scale(1.08);
+    border-color: #fff !important;
+    background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 30%, #05060a);
+    box-shadow: inset 0 0 0 2px #05060a, inset 0 0 0 5px var(--faction-accent, var(--color-primary)),
+        0 0 0 2px #05060a, 0 0 14px 3px color-mix(in srgb, var(--faction-accent, var(--color-primary)) 80%, transparent);
+}
+
+/* Galaxy step: options → row → card all grow into the free height of the wizard frame (title above, bar below). */
+html body .profile-selection-name-mode.is-name-step .profile-start-options:has(.profile-start-galaxy.has-side) { flex: 1 1 auto; min-height: 0; }
+html body .profile-selection-name-mode.is-name-step .profile-start-options:has(.profile-start-galaxy.has-side) > .profile-start-row { flex: 1 1 auto; min-height: 0; }
+html body .profile-selection-name-mode.is-name-step .profile-start-row:has(> .profile-start-galaxy.has-side) { flex: 1 1 auto; min-height: 0; }
+html body .profile-selection-name-mode.is-name-step .profile-start-row > .profile-start-galaxy.has-side { flex: 1 1 auto; min-height: 0; align-self: stretch; grid-template-rows: minmax(0, 1fr); }
+html body .profile-selection-name-mode.is-name-step .profile-start-galaxy.has-side > .profile-start-galaxy-map { min-height: 0; max-height: 100% !important; }
+
+/* Galaxy step: the info card lives in the left column under the list, so the map stays completely free. */
+html body .profile-selection-name-mode .profile-start-galaxy.has-side {
+    grid-template-areas: "side map" "info map" "nav map" !important;
+    grid-template-rows: minmax(0, 1fr) auto auto !important;
+    grid-template-columns: minmax(280px, 0.8fr) minmax(0, 2.4fr) !important;
+    row-gap: 8px;
+}
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-info {
+    grid-area: info !important; align-self: stretch !important; justify-self: stretch !important;
+    margin: 0 !important; max-width: none !important; width: auto !important; backdrop-filter: none;
+    box-shadow: none; background: color-mix(in srgb, var(--faction-accent, var(--color-primary)) 8%, #05060a);
+}
+html body .profile-selection-name-mode .profile-start-galaxy.has-side > .profile-start-galaxy-side { min-height: 0; }

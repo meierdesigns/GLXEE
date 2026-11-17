@@ -73,6 +73,8 @@ extendClass(ProfileSelectionManager, {
         const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
         return !id || !slm || !slm.getPartSizeLevel || slm.getPartSizeLevel(kind, id) <= 1;
     },
+    /** Start kits never open more than nose + 2 wing rows (A / S / D). */
+    START_MAX_WEAPON_SLOTS: 3,
     /** Wing slot rows of the start ship: the kit's wing level (a pair per row), its bought slots, and room for the second weapon. */
     startWingRows(kit) {
         const k = kit || this.currentKit();
@@ -81,14 +83,19 @@ extendClass(ProfileSelectionManager, {
         const b = k.bonus || {};
         const lv = Math.min(2, Number((b.areas || {}).wing) || 0);
         const pairs = slm && slm.getAreaSlotBonus ? Math.ceil(slm.getAreaSlotBonus('wing', lv).filter((x) => x === 'weapons').length / 2) : 0;
-        return Math.max(pairs + (Number(b.slot) || 0), b.weapon2 ? 1 : 0);
+        const rows = Math.max(pairs + (Number(b.slot) || 0), b.weapon2 ? 1 : 0);
+        return Math.min(this.START_MAX_WEAPON_SLOTS - 1, rows);
     },
     /** Weapon slots of the start ship in slot order (nose / core gun, then the wing rows): part id or null when empty. */
     startWeaponSlots(gun) {
         const k = this.currentKit();
         const out = [gun, (k.bonus || {}).weapon2 || null];
-        out.length = 1 + this.startWingRows(k);
+        out.length = Math.min(this.START_MAX_WEAPON_SLOTS, 1 + this.startWingRows(k));
         return Array.from(out, (x) => x || null);
+    },
+    /** Every start weapon mount is M (nose base M; wing pairs get +1 so the ladder matches the badge). */
+    startWeaponSlotSizeLevel(index) {
+        return 1;
     },
     /** Once per page load, at idle: build every faction's kit icons and ship sprites so the first faction switch has nothing left to generate (no frame drops). */
     warmFactionAssets() {
@@ -201,6 +208,23 @@ extendClass(ProfileSelectionManager, {
         this.currentKit();
         const o = this._startOpts || {};
         return (o.ship && this.startShips().indexOf(o.ship) >= 0) ? o.ship : this.kitShipId(o.kit);
+    },
+    /** Model fields the start preview adds (faction colours, kit guns / disabled areas) — the test arena flies the same hull. */
+    arenaModelPatch() {
+        const kit = this.currentKit();
+        const dis = {};
+        (kit.off || []).forEach((a) => { dis[a] = true; });
+        const rows = this.startWingRows ? this.startWingRows() : null;
+        return {
+            faction: this.pendingFaction,
+            factionPreview: true,
+            previewDisabledAreas: dis,
+            previewCoreGun: kit.coreGun || null,
+            previewSingleGun: true,
+            previewWeapon2: (kit.bonus || {}).weapon2 || null,
+            previewWingRows: rows,
+            previewSig: [this.pendingFaction, kit.id, JSON.stringify(dis), kit.coreGun || '', (kit.bonus || {}).weapon2 || '', JSON.stringify(rows)].join('|')
+        };
     },
     /** Ship name + key stats under the preview (start step). */
     renderKitShipInfo() {
@@ -338,16 +362,20 @@ extendClass(ProfileSelectionManager, {
         if (slm && slm.baseWeaponMounts) caps.weapons = slm.baseWeaponMounts(caps);
         // Small start base: one slot of each type; the kit's area bonuses open more.
         caps.weapons = 1; caps.defenses = 1; caps.abilities = 1; caps.energy = 1;
-        // Areas only carry weapon slots: the nose gun, then the wing guns as mirrored pairs.
         const lvOf = (id) => Math.min(max, Number(base[id]) || 0);
-        list.forEach((a) => { (slm && slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((k) => { caps[k] = (caps[k] || 0) + 1; }); });
+        list.forEach((a) => {
+            if (a.id === 'wing') return; // weapon mounts come from startWeaponSlots (max 3)
+            (slm && slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((k) => { caps[k] = (caps[k] || 0) + 1; });
+        });
         // The kit's second weapon is equipped in slot 1 (the pilot gets that slot with the kit).
         const w2 = kitObj.bonus && kitObj.bonus.weapon2;
-        if (w2) caps.weapons = Math.max(caps.weapons, 2);
-        const wslots = { front: Math.min(1, caps.weapons), wing: Math.max(0, caps.weapons - 1), center: 0, back: 0 };
+        const startN = Math.min(this.START_MAX_WEAPON_SLOTS, this.startWeaponSlots(null).length);
+        caps.weapons = startN;
+        const wslots = { front: Math.min(1, startN), wing: Math.max(0, startN - 1), center: 0, back: 0 };
         // Core gun (nose-less hulls): slot 0 moves into the core, as one gun or a left / right pair.
         if (kitObj.coreGun && caps.weapons > 0) { wslots.front = 0; wslots.center = kitObj.coreGun === 'split' ? 2 : 1; }
-        const wLv = (area) => (area === 'wing' || (area === 'center' && kitObj.coreGun === 'split') ? 0 : 1);
+        // Start weapon mounts are all M (incl. wing / split-core).
+        const wLv = () => 1;
         const rows = list.map((a) => {
             if ((kitObj.off || []).indexOf(a.id) >= 0) {
                 return `<div class="pl-row is-off">${areaIco(a.id, a.label)}<span class="pl-slots"><em>OFF</em></span></div>`;
@@ -382,10 +410,10 @@ extendClass(ProfileSelectionManager, {
         const gunId = (dl.weaponSlots || []).find(Boolean) || (dl.weapons && dl.weapons[0]) || startWeaponId;
         const fam = this.startWeaponSlots(gunId);
         const keyOf = (i) => (fam.length > 1 ? ['A', 'S', 'D'][i] || 'SPACE' : 'SPACE');
-        // Slot size: the nose / core gun is a single M mount (a split core S), wing pairs S; the kit's gun gets a slot grown to fit it.
+        // Start weapon mounts are all M (max 3: A / S / D); part size still shown for fit.
         const partLv = (id) => (id && slm && slm.getPartSizeLevel ? slm.getPartSizeLevel('weapon', id) : 0);
-        const slotLv = (i, id) => Math.max(i === 0 ? (kitObj.coreGun === 'split' ? 0 : 1) : 0, partLv(id));
-        const sizeTip = (i, id) => 'SLOT SIZE: ' + size(slotLv(i, id)) + (id ? '&#10;PART SIZE: ' + size(partLv(id)) : '');
+        const slotLv = (i) => this.startWeaponSlotSizeLevel(i);
+        const sizeTip = (i, id) => 'SLOT SIZE: ' + size(slotLv(i)) + (id ? '&#10;PART SIZE: ' + size(partLv(id)) : '');
         const weapons = fam.map((wid, wi) => {
             if (!wid) {
                 return `<span class="pk-weapon is-empty" data-slot="${wi}" style="--pk-c:#8a84a8" data-ui-tip-instant data-ui-tip-head="EMPTY WEAPON SLOT" data-ui-tip="SLOT ${wi + 1} · KEY ${keyOf(wi)}&#10;${sizeTip(wi)}">` +
@@ -418,17 +446,16 @@ extendClass(ProfileSelectionManager, {
         let rows = Math.max(1, st[1] + (Number((kitObj.bonus || {}).invRows) || 0));
         const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
         // Start profiles: small base (1 per kind); kit area / weapon2 bonuses open more.
-        // Do NOT use full class mounts — those unlock later via frame / hangar upgrades.
+        // Weapon mounts: nose + wing rows, hard-capped at START_MAX_WEAPON_SLOTS (all M).
         const caps = { weapons: 1, defenses: 1, abilities: 1, energy: 1 };
         const lvOf = (id) => Math.min(2, Number(((kitObj.bonus || {}).areas || {})[id]) || 0);
         (slm && slm.getShipAreas ? slm.getShipAreas() : []).forEach((a) => {
+            if (a.id === 'wing') return; // weapon count comes from startWeaponSlots, not raw area caps
             (slm.getAreaSlotBonus ? slm.getAreaSlotBonus(a.id, lvOf(a.id)) : []).forEach((key) => {
                 caps[key] = (caps[key] || 0) + 1;
             });
         });
-        if ((kitObj.bonus || {}).slot) caps.weapons += Number(kitObj.bonus.slot) || 0;
-        // Weapon mounts match the WEAPONS strip (nose + wing rows / weapon2).
-        caps.weapons = Math.max(caps.weapons, this.startWeaponSlots(null).length);
+        caps.weapons = Math.min(this.START_MAX_WEAPON_SLOTS, this.startWeaponSlots(null).length);
 
         // Parts queued per kind (start loadout), consumed into slots in order.
         const queue = { weapon: [], defense: [], energy: [], ability: [] };
@@ -441,16 +468,8 @@ extendClass(ProfileSelectionManager, {
         const cells = [];
         let used = 0;
         const pushSlot = (kind, index, id) => {
-            // Slot footprint is always the hull slot size — never shrink to a smaller equipped part.
-            // Split wing mounts use effective size (≥ M) so M start guns fit the bay cell.
-            let slotLv = 0;
-            if (slm && (slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel)) {
-                try {
-                    const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
-                    slotLv = sizeFn.call(slm, ship, kind, index) | 0;
-                } catch (e) { slotLv = 0; }
-            } else if (kind === 'weapon' && index === 0) slotLv = 1; // nose mount starts as M
-            else if (kind === 'weapon' && index > 0) slotLv = 1; // wing pair effective M
+            // Start weapon mounts are always M; other kinds stay S until hangar upgrades.
+            let slotLv = kind === 'weapon' ? this.startWeaponSlotSizeLevel(index) : 0;
             slotLv = Math.max(0, Math.min(2, slotLv));
             const span = spanOf(slotLv);
             const pk = kindColor[kind] || '#8a84a8';

@@ -386,12 +386,16 @@ extendClass(GalaxyMapManager, {
                         const dens = 1 - Math.exp(-A / 0.5);
                         const edge = Math.min(1, Math.max(0, (dens - 0.12 - (1 - billow) * 0.6) * 3.5));
                         const rim = edge * (1 - edge) * 4;
-                        let cov = edge * (0.12 + 0.16 * dens) + 0.1 * rid * rid * rid * dens;
-                        cov = Math.min(0.32, cov + 0.1 * lane * edge);
+                        // Clearly visible gas: stronger coverage, saturated colour (no pale veil), only a hint of white in the core.
+                        let cov = edge * (0.3 + 0.32 * dens) + 0.18 * rid * rid * rid * dens;
+                        cov = Math.min(0.66, cov + 0.12 * lane * edge);
                         let cr = R / A, cg = G / A, cb = B / A;
-                        const lift = (1 + 0.85 * rim) * (1 - 0.65 * lane);
-                        const hot = 0.38 * dens * dens * (1 - lane);
+                        const lift = (1 + 0.7 * rim) * (1 - 0.6 * lane);
+                        const hot = 0.1 * dens * dens * (1 - lane);
                         cr = (cr + (255 - cr) * hot) * lift; cg = (cg + (255 - cg) * hot) * lift; cb = (cb + (255 - cb) * hot) * lift;
+                        const grey = (cr + cg + cb) / 3;
+                        cr = grey + (cr - grey) * 1.45; cg = grey + (cg - grey) * 1.45; cb = grey + (cb - grey) * 1.45;
+                        cr = Math.max(0, cr); cg = Math.max(0, cg); cb = Math.max(0, cb);
                         R = cr * cov; G = cg * cov; B = cb * cov; A = cov;
                     }
                     const o = (r * cols + c) * 4;

@@ -5,7 +5,7 @@
     const vfs = NS.vfs || (NS.vfs = {});
     const { FACTIONS, FR_LIGHT, FR_SAT, FXTAB_KEY, FX_CLUSTERS, FX_TABS, FX_TAB_ICONS, FX_AUDIO_SPLIT_MIN_W, applyFrameStyle, endPreviewFaction, frameAdjust, frameDefaults, getUi, hexToHsl, perf, saveFrameStyles, setPerf, setPreviewFaction } = NS; // from earlier parts
     const { restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps } = NS; // from viewport-fit-part2.js (hoisted functions)
-    Object.assign(NS, { fillFxPlate, mountFxMusicEditor, fxDevModeOn, fxWantAudioMusicSplit, fxWantMusicEditor }); // function (hoisted)
+    Object.assign(NS, { fillFxPlate, mountFxMusicEditor, fxDevModeOn, fxTabVisible, fxWantAudioMusicSplit, fxWantMusicEditor }); // function (hoisted)
 
     function fxDevModeOn() {
         return typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
@@ -231,6 +231,46 @@
         }).join('') + '<div class="vf-fx-row vf-fx-actions"><button type="button" class="vf-fx-reset" data-fc-cancel="' + cur + '"' + (dirty ? '' : ' disabled') +
             '>CANCEL</button><button type="button" class="vf-fx-reset" data-fc-save="' + cur + '"' + (dirty ? '' : ' disabled') + '>SAVE</button></div>';
     }
+    // Remote navigation: four category keys (DISPLAY / LAYOUT / GAME / SYSTEM) as the main row,
+    // the tabs of the active category as sub-tabs underneath.
+    const FX_CAT_ICON = { DISPLAY: 'look', LAYOUT: 'sizes', GAME: 'difficulty', SYSTEM: 'perf' };
+    function fxCatOf(tabId) {
+        for (let i = 0; i < FX_CLUSTERS.length; i++) if (FX_CLUSTERS[i][1].indexOf(tabId) !== -1) return i;
+        return 0;
+    }
+    const FX_CAT_COLOR = ['#4fd8ff', '#6dff7a', '#ff5a3c', '#ffd23c'];
+    // Dev-mode only tabs: SIZES + TEXT (LAYOUT category), DEBUG + TOOLS (SYSTEM).
+    const FX_DEV_TABS = ['sizes', 'text', 'debug', 'tools'];
+    function fxTabVisible(id) {
+        return FX_DEV_TABS.indexOf(id) === -1 || fxDevModeOn();
+    }
+    // A category shows while at least one of its tabs is visible.
+    function fxCatVisible(ci) {
+        return !!FX_CLUSTERS[ci] && FX_CLUSTERS[ci][1].some(fxTabVisible);
+    }
+    function fxClampTab() {
+        if (fxTabVisible(vfs.fxTab)) return;
+        const first = FX_CLUSTERS.findIndex(function (c, ci) { return fxCatVisible(ci); });
+        if (first === -1) return;
+        const cat = fxCatOf(vfs.fxTab);
+        const ids = (fxCatVisible(cat) ? FX_CLUSTERS[cat] : FX_CLUSTERS[first])[1];
+        vfs.fxTab = ids.filter(fxTabVisible)[0];
+    }
+    function fxNavHtml() {
+        // Saved tab inside a hidden category (dev mode off): fall back to the first visible category.
+        fxClampTab();
+        const cur = fxCatOf(vfs.fxTab);
+        const cats = FX_CLUSTERS.map(function (c, ci) {
+            if (!fxCatVisible(ci)) return '';
+            const icon = FX_TAB_ICONS[FX_CAT_ICON[c[0]]] || '';
+            return '<button type="button" data-fx-cat="' + ci + '" title="' + c[0] + '" aria-label="' + c[0] + '" class="' + (ci === cur ? 'on' : '') + '" style="--cl:' + FX_CAT_COLOR[ci] + '">' + icon + '<span>' + c[0] + '</span></button>';
+        }).join('');
+        const subs = FX_CLUSTERS[cur][1].filter(fxTabVisible).map(function (id) {
+            const t = FX_TABS.filter(function (x) { return x[0] === id; })[0];
+            return '<button type="button" data-fx-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
+        }).join('');
+        return '<div class="vf-fx-tabs vf-fx-nav" data-fx-cat-active="' + cur + '"><div class="vf-fx-cats">' + cats + '</div><div class="vf-fx-subs">' + subs + '</div></div>';
+    }
     function fillFxPlate() {
         const ui = getUi();
         const plate = buildFxPlate();
@@ -241,17 +281,11 @@
         vfs.fxScrollLock = true;
         const devOn = fxDevModeOn();
         if (vfs.fxTab === 'music') vfs.fxTab = 'audio'; // stale saved tab → AUDIO
+        fxClampTab(); // saved tab in a dev-only category while dev mode is off
+        // Whole remote (head, rows, sliders, buttons) takes the colour of the active category.
+        if (plate) plate.setAttribute('data-fx-cat', String(fxCatOf(vfs.fxTab)));
         let h = '<div class="vf-fx-head"><span>' + (FX_TABS.filter(function (t) { return t[0] === vfs.fxTab; })[0] || ['', ''])[1] + '</span><button type="button" data-fx-close aria-label="Close">X</button></div>' +
-            '<div class="vf-fx-tabs">' + FX_CLUSTERS.map(function (c, ci) {
-                const ids = c[1];
-                if (!ids.length) return '';
-                const keys = ids.map(function (id) {
-                    const t = FX_TABS.filter(function (x) { return x[0] === id; })[0];
-                    const html = '<button type="button" data-fx-tab="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '" class="' + (vfs.fxTab === t[0] ? 'on' : '') + '" style="font-size:11px!important;line-height:1!important;letter-spacing:.05em!important;">' + (FX_TAB_ICONS[t[0]] || '') + '<span>' + t[1] + '</span></button>';
-                    return html;
-                }).join('');
-                return (ci === 2 ? '<i class="vf-fx-tabs-break"></i>' : '') + '<div class="vf-fx-cluster" style="flex-grow:' + ids.length + '"><span class="vf-fx-cluster-cap">' + c[0] + '</span><div class="vf-fx-cluster-keys">' + keys + '</div></div>';
-            }).join('') + '</div>';
+            fxNavHtml();
         const wantEditor = fxWantMusicEditor();
         const wantSplit = wantEditor && fxWantAudioMusicSplit();
         vfs.fxAudioWide = wantSplit;
@@ -588,6 +622,7 @@
                 '<button type="button" class="vf-fx-launch" data-tools-action="abilityEditor"><em>ABILITY EDITOR</em><i aria-hidden="true">›</i></button>' +
                 '<button type="button" class="vf-fx-launch" data-tools-action="hangarTestArena"><em>HANGAR TEST ARENA</em><i aria-hidden="true">›</i></button>' +
                 '<button type="button" class="vf-fx-launch" data-tools-action="hudLayoutEditor"><em>HUD LAYOUT EDITOR</em><i aria-hidden="true">›</i></button>' +
+                '<button type="button" class="vf-fx-launch" data-tools-action="saveDevDefaults" data-ui-tip="WRITE ALL DEV SETTINGS INTO THE BUILD (SHIPPED IN THE DEPLOY ZIP)"><em>SAVE DEV DEFAULTS</em><i aria-hidden="true">›</i></button>' +
                 '</div></section>' : '');
             if (fxDevModeOn()) {
                 let ppBgv = 0, ppBga = 2;
@@ -656,4 +691,19 @@
             vfs._fxFilling = false;
         }
     }
+    // DevMode flips (Shift+C → vf-bezel-tools-sync) while the remote is open: redraw it right away so the
+    // dev-only categories / tabs appear or disappear without a page refresh.
+    // Direct hook too (startScreenManager.toggleDevMode calls it right after flipping the flag), so a
+    // later exception in the rest of the toggle can never leave the open remote stale.
+    NS.refreshFxRemote = function () {
+        lastFxDev = fxDevModeOn();
+        if (vfs.fxOpen && document.getElementById('vf-fx')) fillFxPlate();
+    };
+    let lastFxDev = fxDevModeOn();
+    window.addEventListener('vf-bezel-tools-sync', function () {
+        const dev = fxDevModeOn();
+        if (dev === lastFxDev) return;
+        lastFxDev = dev;
+        if (vfs.fxOpen && document.getElementById('vf-fx')) fillFxPlate();
+    });
 })(window.vfFitScope || (window.vfFitScope = {}));

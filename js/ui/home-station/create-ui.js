@@ -121,7 +121,6 @@ extendClass(HomeStationUI, {
                             </div>
                         </div>
                     </div>
-                    ${this.renderMissionButton()}
                     <!-- Planet-map progress (filled by the embedded galaxy map): own card left of the wallet. -->
                     <div class="hs-progress-card" id="hsMapProgress" hidden></div>
                     <!-- Wallet card right of both navbars: resources + logout. -->
@@ -338,7 +337,12 @@ extendClass(HomeStationUI, {
             : { shipSlots: 2 };
         const owned = profile.ownedShipIds || [];
         // Each owned ship is one card: ship info left, Ship Storage grid right (stacks when narrow).
-        const ownedHtml = owned.length
+        const emptyShipSlots = Math.max(0, (Number(stats.shipSlots) || 0) - owned.length);
+        const emptyShipCards = Array.from({ length: emptyShipSlots }, () =>
+            `<tbody class="hs-ship-card is-empty-slot"><tr class="hs-ship-empty-row"><td colspan="4">` +
+            `<div class="hs-ship-empty-slot" data-ui-tip="FREE SHIP SLOT — BUY A SHIP IN THE SHOP">` +
+            `${this.iconHtml('hsShip', 24, 'hs-pixel', false)}<span>EMPTY SHIP SLOT</span></div></td></tr></tbody>`).join('');
+        const ownedHtml = (owned.length || emptyShipSlots)
             ? `<table class="hs-ship-table">${owned.map((id) => {
                 const row = this.renderShipTableRow(id, 'hs-ship-thumb-owned', '',
                     `<button type="button" class="hs-ship-icon-btn hs-ship-hangar-badge" data-open-hangar="${id}" data-nav-item data-ui-tip="EDIT ANATOMY" aria-label="Edit ship anatomy">` +
@@ -347,7 +351,7 @@ extendClass(HomeStationUI, {
                     `<div class="hs-row">${this.renderBayShipInventoryGrid ? this.renderBayShipInventoryGrid(profile, id) : this.renderShipStorage(profile, id)}</div>` +
                     `</td></tr>`;
                 return `<tbody class="hs-ship-card">${row}${storageRow}</tbody>`;
-            }).join('')}</table>`
+            }).join('')}${emptyShipCards}</table>`
             : this.emptyHtml('hsShip', 'NO SHIPS OWNED');
         const slotsLabel = `${owned.length}/${stats.shipSlots}`;
 
@@ -701,7 +705,6 @@ extendClass(HomeStationUI, {
                     this.launchPlay();
                 });
             }
-            this.bindMissionButton();
             this.bindControlsToggle();
             this.bindStationColumnResize();
             this.bindStationPanelToggles();
@@ -857,11 +860,14 @@ extendClass(HomeStationUI, {
             soundManager.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars', { immediate: true });
             return;
         }
+        // Station / ship / any other tab = calm hub track. Leave shop and map
+        // motifs behind, otherwise they bleed into the other tabs.
         const ck = (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.currentKey)
             ? String(vfTrackerManager.currentKey)
             : '';
-        if (ck === 'shop' || ck.indexOf('shop:') === 0) {
-            if (soundManager.startMenuMusic) soundManager.startMenuMusic();
+        if (ck === 'shop' || ck.indexOf('shop:') === 0
+            || ck === 'map' || ck.indexOf('map:') === 0 || ck.indexOf('map-void') === 0) {
+            if (soundManager.startMenuMusic) soundManager.startMenuMusic({ hub: true });
         }
     },
 

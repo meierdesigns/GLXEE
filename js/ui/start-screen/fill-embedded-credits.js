@@ -442,7 +442,7 @@ extendClass(StartScreenManager, {
             item.action === 'soundtrackEditor';
         addSection(right, 'sound', 'SOUND', isSoundItem);
         addSection(right, 'game', 'GAME', (item) =>
-            item.name === 'Difficulty' || item.action === 'difficultyEditor'
+            item.name === 'Difficulty' || item.name === 'Station MENU Button' || item.action === 'difficultyEditor'
                 || item.action === 'factionCommand'
         );
         addSection(right, 'enemies', 'ENEMIES', (item) =>

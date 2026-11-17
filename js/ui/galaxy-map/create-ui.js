@@ -392,7 +392,7 @@ extendClass(GalaxyMapManager, {
                     : 'READY'));
         const diff = info.unlocked ? (info.difficulty || '—') : '???';
         const enemies = info.unlocked ? String(info.enemyCount) : '???';
-        const status = info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED';
+        const status = info.unlocked ? (info.cleared ? 'CLEARED' : (this.planetSituationStatus ? this.planetSituationStatus(info.id) : 'OPEN')) : 'LOCKED';
         const unlockFrom = !info.unlocked
             ? (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
                 .find((pid) => pid && this.isUnlocked(pid))

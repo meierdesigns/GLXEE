@@ -152,6 +152,7 @@ class GraphicsManager {
             const dh = Math.max(1, Math.ceil(mh * drawScale));
             const key = String(model.id || model.name || 'player')
                 + '|' + this.getShieldLayoutSignature(model)
+                + '|' + String(model.previewSig || '') + '|' + String(model.faction || '')
                 + '|' + cell + '|' + dw + 'x' + dh
                 + '|' + String(colorOverlay || '') + '|' + String(overlayIntensity || 0);
             this._voxelShipBake = this._voxelShipBake || Object.create(null);

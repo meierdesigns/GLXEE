@@ -8,7 +8,7 @@ const GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-const NEB_VERSION = 32;
+const NEB_VERSION = 33;
 const NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 const NEB_PIXEL_BUDGET = 160000;

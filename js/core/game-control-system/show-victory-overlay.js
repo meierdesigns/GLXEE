@@ -425,7 +425,7 @@ extendClass(GameControlSystem, {
         // Fixed 6x4 slots at the exact same px size as the SHIP grid (homeStationUI.STORAGE_CELL_PX)
         // — no stretching, no adding rows/cols to fill the panel, so the two grids always read
         // as one consistent slot size no matter how tall/wide the surrounding panel ends up.
-        const cs = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_CELL_PX) || 56;
+        const cs = this.victoryCellPx();
         const gap = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_GAP_PX) || 2;
         const cols = 6;
         const rows = 4;
@@ -584,9 +584,74 @@ extendClass(GameControlSystem, {
         this.updateVictoryStats();
     },
 
+    /** Slot size for the victory grids: the fitted size (see fitVictoryGrids) or the hangar default. */
+    victoryCellPx() {
+        const base = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_CELL_PX) || 56;
+        return this._victoryCell || base;
+    },
+
+    /**
+     * Sizes the loot / ship / station slots to the screen: as large as the width (16 columns side by side) and the free
+     * height (5 rows) allow — smaller than the hangar size when the screen would otherwise overflow and cut the buttons.
+     * Re-renders the grids at the new size (at most twice).
+     */
+    fitVictoryGrids(pass) {
+        const n = pass || 0;
+        const run = () => {
+            const content = document.querySelector('#victoryOverlay .victory-content');
+            const planet = content && content.querySelector('.outcome-progress');
+            if (!content || !planet || !content.clientWidth || !planet.offsetHeight) return;
+            const cur = this.victoryCellPx();
+            const panels = content.querySelector('.victory-panels');
+            // Nothing may scroll: any overflow (sideways in the panel row, or the screen cutting off the buttons) shrinks the slots.
+            const rc = content.getBoundingClientRect();
+            const rp = panels ? panels.getBoundingClientRect() : null;
+            const bodyEl = content.querySelector('.victory-body');
+            const rb = bodyEl ? bodyEl.getBoundingClientRect() : null;
+            const reach = (el) => { const r = el.getBoundingClientRect(); return [r.right, r.bottom]; };
+            const wide = panels ? Array.from(panels.children).some((el) => reach(el)[0] > rc.right - 8) : false;
+            const overflows = wide || (rb && rb.bottom > rc.bottom - 2)
+                || (panels && (panels.scrollWidth > panels.clientWidth + 1 || panels.scrollHeight > panels.clientHeight + 1))
+                || content.scrollHeight > content.clientHeight + 1 || content.scrollWidth > content.clientWidth + 1;
+            let next;
+            if (overflows) {
+                this._victoryNoGrow = true;
+                next = Math.max(40, cur - 6);
+            } else if (this._victoryNoGrow) {
+                return;
+            } else {
+                // Growth in steps until the screen is full (an overflow shrinks it back): limited by the measured panel width
+                // (loot 6 + ship / station stacked 6 = 12 slot columns).
+                const kids = panels ? Array.from(panels.children) : [];
+                const natural = kids.reduce((n, el) => n + el.offsetWidth, 0) + 16 * Math.max(0, kids.length - 1);
+                const chrome = kids.length ? natural - 12 * cur : 290;
+                const csW = (content.clientWidth - 70 - chrome) / 12;
+                next = Math.floor(Math.min(csW, cur + 8, 76));
+                if (!Number.isFinite(next) || next - cur < 2) return;
+            }
+            if (n >= 14) return;
+            this._victoryCell = next;
+            const lootList = document.getElementById('victoryLootList');
+            if (lootList) lootList.innerHTML = this.renderVictoryLootHtml();
+            const loadoutList = document.getElementById('victoryLoadoutList');
+            if (loadoutList && this.renderVictoryLoadoutHtml) loadoutList.innerHTML = this.renderVictoryLoadoutHtml();
+            const ov = document.getElementById('victoryOverlay');
+            if (ov && this.bindVictoryCargoDrag) this.bindVictoryCargoDrag(ov);
+            if (ov && this.bindVictoryShipGridDrag) this.bindVictoryShipGridDrag(ov);
+            this.fitVictoryGrids(n + 1);
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run); else run();
+    },
+
     /** Ship bag (parts) + station bay (blueprints / filed parts) — kept loot must stay visible. */
     renderVictoryLoadoutHtml() {
         if (typeof profileManager === 'undefined' || typeof homeStationUI === 'undefined') return '';
+        const prevCell = homeStationUI.STORAGE_CELL_PX;
+        homeStationUI.STORAGE_CELL_PX = this.victoryCellPx();
+        try { return this.renderVictoryLoadoutInner(); } finally { homeStationUI.STORAGE_CELL_PX = prevCell; }
+    },
+
+    renderVictoryLoadoutInner() {
         const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
         const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
         if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';

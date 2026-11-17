@@ -19,6 +19,16 @@ extendClass(StartScreenManager, {
             colorPaletteSystem.setGlobalLook(lookPatch);
         }
 
+        const menuBtnSetting = this.settingsItems.find(item => item.name === 'Station MENU Button');
+        if (menuBtnSetting && typeof setMenuButtonHidden === 'function') {
+            const hide = menuBtnSetting.value === 'HIDE';
+            const changed = hide !== (typeof isMenuButtonHidden === 'function' && isMenuButtonHidden());
+            setMenuButtonHidden(hide);
+            if (changed && typeof homeStationUI !== 'undefined' && homeStationUI.isVisible && homeStationUI.createUI) {
+                try { homeStationUI.createUI(); } catch (e) { /* ignore */ }
+            }
+        }
+
         const soundSetting = this.settingsItems.find(item => item.name === 'Sound');
         if (soundSetting) {
             const on = soundSetting.value === 'ON';

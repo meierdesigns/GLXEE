@@ -63,7 +63,7 @@ extendClass(HomeStationUI, {
         if (this.upgradeSubTab === 'hangar') this.upgradeSubTab = 'ships';
         let inner = '';
         let title = 'STATION UPGRADE TREE';
-        let hint = 'Station systems, hangar bays, drives — pick a node, then UPGRADE.';
+        let hint = ''; // station tree: no hint line
         let showHead = true;
         if (this.upgradeSubTab === 'equipment') {
             showHead = false;
@@ -85,7 +85,8 @@ extendClass(HomeStationUI, {
             hint = 'Embassy, Trade Desk, War Room — levels and live bonuses.';
             inner = this.renderTreeFactionUpgrades(profile);
         } else {
-            // TREE: graphical station nodes only.
+            // TREE: graphical station nodes only — no title bar, no hint.
+            showHead = false;
             inner = this.renderStationUpgradeTree(profile);
         }
 
@@ -93,7 +94,7 @@ extendClass(HomeStationUI, {
             `<div class="hs-shop-cats">${this.renderUpgradeSubTabs()}</div>` +
             (showHead
                 ? `${this.panelTitle('hsUpgrade', title)}` +
-                  `<p class="hs-muted hs-hint">${hint}</p>`
+                  (hint ? `<p class="hs-muted hs-hint">${hint}</p>` : '')
                 : '') +
             `<div class="hs-tab-fill">${inner}</div>` +
             `</div>`;
@@ -642,9 +643,9 @@ extendClass(HomeStationUI, {
                     return `<div class="hs-ship-meta-col" data-stat-col="${key}">${statHtml}${dotsHtml}</div>`;
                 };
                 return `<div class="hs-ship-meta">` +
+                    col('damage', stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip, 'damage'), weaponDots) +
                     col('health', stat('statHealth', 'Health', merged.maxHealth, '#5cff7a', null, 'health'), []) +
                     col('armor', stat('statArmor', 'Armor', liveArmor, '#5ce1ff', null, 'armor'), defenseDots) +
-                    col('damage', stat('statDamage', 'Damage', liveDamage, '#ff5a3c', damageTip, 'damage'), weaponDots) +
                     col('speed', stat('statSpeed', 'Speed', merged.speed, '#c58bff', null, 'speed'), abilityDots) +
                     col('energy', stat('statEnergy', 'Energy', merged.maxEnergy, '#ffd24a', null, 'energy'), energyDots) +
                     (note ? `<span class="hs-ship-meta-note">${note}</span>` : '') +

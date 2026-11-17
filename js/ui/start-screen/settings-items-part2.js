@@ -116,6 +116,11 @@ extendClass(StartScreenManager, {
                 type: 'uiFx',
                 fxKey: 'fxArea'
             },
+            {
+                name: 'Station MENU Button',
+                value: (typeof isMenuButtonHidden === 'function' && isMenuButtonHidden()) ? 'HIDE' : 'SHOW',
+                options: ['SHOW', 'HIDE']
+            },
             { name: 'Volume', type: 'volume' },
             {
                 name: 'Sound',

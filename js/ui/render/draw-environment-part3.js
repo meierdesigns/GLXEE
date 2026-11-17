@@ -7,39 +7,21 @@ extendClass(RenderManager, {
      * rivets, claw scores or scrap welds — never a full replacement pattern.
      */
     terrainFactionTint(env, pal, cx, wr, col, n) {
-        // 16-cell patches so doctrine marks read as distinct organic/mechanical
-        // zones on the floor instead of flickering style per pixel.
-        const style = this.resolveMixedStyle(env, Math.floor(cx / 16), Math.floor(wr / 16));
+        // Defense-only, and only at 16-cell block corners — keeps RLE runs intact.
+        if ((cx & 15) !== 0 || (wr & 15) !== 0) return col;
+        const style = this.resolveMixedStyle(env, cx >> 4, wr >> 4);
         const g = pal.ground;
         switch (style) {
-            case 'organic': { // Voidborn: glowing pores and soft tissue blotches
-                const h = this.envHash(cx * 3 + 11, wr * 3 + 7);
-                if (h < 0.04) return pal.accent;
-                if (h < 0.09 && n > 0.55) return g[0];
-                return col;
-            }
-            case 'tech': { // Machine: sparse rivets / scuffs — no cable grid
-                const h = this.envHash(cx, wr + 19);
-                if (h < 0.022) return pal.accent;
-                if (h < 0.045 && n > 0.6) return g[1];
-                return col;
-            }
-            case 'spike': { // Kronax: short claw nicks, not diagonal rails
-                const h = this.envHash(cx, wr + 41);
-                if (h < 0.028) return pal.craterPit;
-                if (h < 0.05) return g[0];
-                return col;
-            }
-            case 'scrap': { // Pirate: irregular weld patches
-                const h = this.envHash(cx, wr + 7);
-                if (h < 0.04) return pal.accent;
-                if (h > 0.94) return g[3];
-                return col;
-            }
-            default: { // Terran / rock: sparse survey stakes
-                if (this.envHash(cx, wr + 53) < 0.012) return pal.accent;
-                return col;
-            }
+            case 'organic':
+                return this.envHash(cx * 3 + 11, wr * 3 + 7) < 0.55 ? pal.accent : g[0];
+            case 'tech':
+                return this.envHash(cx, wr + 19) < 0.5 ? pal.accent : g[1];
+            case 'spike':
+                return this.envHash(cx, wr + 41) < 0.5 ? pal.craterPit : g[0];
+            case 'scrap':
+                return this.envHash(cx, wr + 7) < 0.5 ? pal.accent : g[3];
+            default:
+                return pal.accent;
         }
     },
     drawAnimatedFog(ctx, o) {

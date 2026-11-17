@@ -88,6 +88,24 @@ extendClass(HomeStationUI, {
             sel.addEventListener('click', (e) => e.stopPropagation());
         });
 
+        // Shortcut dropdowns on weapon / executable-ability rows.
+        this.overlay.querySelectorAll('select[data-hangar-key]').forEach((sel) => {
+            ['click', 'pointerdown', 'mousedown', 'keydown', 'keyup'].forEach((t) => {
+                sel.addEventListener(t, (e) => e.stopPropagation());
+            });
+            sel.addEventListener('change', () => {
+                const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+                if (!slm) return;
+                const kind = sel.getAttribute('data-hangar-key');
+                if (kind === 'weapon' && slm.setWeaponFireKey) {
+                    slm.setWeaponFireKey(this.hangarShipId, Number(sel.getAttribute('data-slot-index')) || 0, sel.value);
+                } else if (kind === 'ability' && slm.setAbilityKey) {
+                    slm.setAbilityKey(this.hangarShipId, sel.getAttribute('data-part-id'), sel.value);
+                }
+                this.createUI();
+            });
+        });
+
         this.overlay.querySelectorAll('[data-hangar-slot-skin-set]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.preventDefault();

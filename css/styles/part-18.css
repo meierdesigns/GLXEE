@@ -1736,3 +1736,20 @@ html body .hs-body .hs-mission { padding-block: 10px; }
     height: 16px;
     left: calc(100% - 22px);
 }
+
+/* Profile details: fill each row edge to edge (no ragged right side / empty grid slot). */
+.pd-res { grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); }
+.pd-res-item { justify-content: center; }
+.pd-ship { flex: 1 1 200px; justify-content: center; }
+.pd-galaxies > .pd-galaxy:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+/* LAUNCH: centre the rocket on the card's own axis (same axis as the label), not via left:50% + translateX. */
+html body .home-station-overlay .home-station-content .hs-play-launch .hs-play-launch-icon {
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    /* The 32x32 rocket mask (part-22) is drawn at x=4..24, i.e. centred on 14 not 16:
+       shift by 2/32 = 6.25% of the icon width so the artwork sits on the card axis. */
+    transform: translate(6.25%, -50%);
+}

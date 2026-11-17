@@ -70,6 +70,7 @@ extendClass(ProfileSelectionManager, {
                     <div class="profile-faction-ship-wrap">
                         <canvas class="profile-faction-ship" width="320" height="224" aria-label="Faction ship preview"></canvas>
                     </div>
+                    <button type="button" class="profile-test-btn" id="psTestShip" tabindex="-1" title="Fly the chosen hull in a small test arena">TEST SHIP</button>
                 </div>`
                     : `<div class="profile-faction-ship-wrap">
                     <canvas class="profile-faction-ship" width="200" height="140" aria-label="Faction ship preview"></canvas>
@@ -139,6 +140,7 @@ extendClass(ProfileSelectionManager, {
                     <div class="onboarding-homeworld-label"></div>
                 </aside>
             </div>` : '';
+        if (typeof hangarTestArena !== 'undefined' && hangarTestArena._embedHost) hangarTestArena.hide();
         setHtml(`
             ${stepperHtml}
             ${pickFaction ? factionHomeHtml : `
@@ -212,6 +214,25 @@ extendClass(ProfileSelectionManager, {
                 input.select();
             });
         }
+        const testBtn = this.overlay.querySelector('#psTestShip');
+        if (testBtn) {
+            testBtn.addEventListener('click', () => {
+                const stage = this.overlay.querySelector('.profile-setup-stage');
+                const open = () => {
+                    if (typeof hangarTestArena === 'undefined' || !stage) return;
+                    stage.classList.add('is-testing');
+                    hangarTestArena.show({
+                        shipId: this.startShipId(),
+                        ships: this.startShips(),
+                        host: stage,
+                        modelPatch: () => this.arenaModelPatch(),
+                        onClose: () => stage.classList.remove('is-testing')
+                    });
+                };
+                if (typeof hangarTestArena === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+                else open();
+            });
+        }
         const saveBtn = this.overlay.querySelector('#psSave');
         const cancelBtn = this.overlay.querySelector('#psCancelMode');
         // Start galaxy card: arrows cycle through the galaxies in place.
@@ -279,6 +300,18 @@ extendClass(ProfileSelectionManager, {
             o.look = Object.assign({}, o.look, { v: Number(b.getAttribute('data-pp-pick')) });
             this.refreshPilotRow();
         }));
+        // Hover a head → the big portrait previews that face (with the current backdrop); leaving restores the chosen one.
+        const ppMain = () => this.overlay && this.overlay.querySelector('#psPortrait canvas.vx-portrait');
+        const ppPreview = (v) => {
+            const o = this._startOpts, main = ppMain();
+            if (!o || !o.look || !main || typeof voxelPortrait === 'undefined' || !voxelPortrait.setLook) return;
+            voxelPortrait.setLook(main, { faction: o.look.faction, v: v == null ? o.look.v : v, bgv: o.look.bgv, bga: o.look.bga });
+        };
+        this.overlay.querySelectorAll('[data-pp-pick]').forEach((b) => {
+            const v = Number(b.getAttribute('data-pp-pick'));
+            b.addEventListener('pointerenter', () => ppPreview(v));
+            b.addEventListener('pointerleave', () => ppPreview(null));
+        });
         // Start options (galaxy / kit): toggle in place so the
         // typed name is kept.
         this.overlay.querySelectorAll('[data-start-opt]').forEach((btn) => {
@@ -312,6 +345,9 @@ extendClass(ProfileSelectionManager, {
                     this._kitShipRaf = requestAnimationFrame(() => {
                         this._kitShipRaf = 0;
                         this.renderFactionShipPreview(fid);
+                        if (typeof hangarTestArena !== 'undefined' && hangarTestArena._embedHost && hangarTestArena.refreshShip) {
+                            hangarTestArena.refreshShip(this.startShipId());
+                        }
                         if (this.savePilotState) this.savePilotState();
                     });
                 }

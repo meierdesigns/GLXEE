@@ -70,6 +70,29 @@ extendClass(HomeStationUI, {
         const kindAttr = kindFilter ? ` data-slot-kind="${kindFilter}"` : '';
         return `<div class="hs-slotview"${kindAttr}><div class="hs-slotview-row"><span class="hs-slotview-slots">${cells || '<em>NO SLOT</em>'}</span></div></div>`;
     },
+    /** Shortcut dropdown at the right of a weapon / executable-ability row ('' = none). */
+    hangarKeySelectHtml(kind, sl) {
+        const slm = typeof shipLoadoutManager !== 'undefined' ? shipLoadoutManager : null;
+        if (!slm || !sl || !sl.id) return '';
+        const L = slm.getLoadout(this.hangarShipId);
+        const opt = (v, label, cur, dis) => `<option value="${v}"${v === cur ? ' selected' : ''}${dis ? ' disabled' : ''}>${label}</option>`;
+        if (kind === 'weapon') {
+            const set = slm.getWeaponKeySet(L, sl.index);
+            const all = slm.getAllFireKey ? slm.getAllFireKey(L) : 'space';
+            const cur = set.length === 1 ? set[0] : 'multi';
+            const opts = ['space', 'a', 's', 'd'].map((k) => opt(k, k === 'space' ? 'SPACE' : k.toUpperCase(), cur, k === all && k !== 'space')).join('')
+                + (cur === 'multi' ? opt('multi', 'MULTI', cur, true) : '');
+            return `<label class="hs-hangar-key" data-ui-tip="SHORTCUT — KEY THAT FIRES THIS WEAPON"><select data-hangar-key="weapon" data-slot-index="${sl.index}" aria-label="Weapon shortcut">${opts}</select></label>`;
+        }
+        if (kind === 'ability') {
+            const a = typeof abilityConfigManager !== 'undefined' ? abilityConfigManager.getAbility(sl.id) : null;
+            if (!a || a.type !== 'active') return '';
+            const cur = slm.getAbilityKey ? slm.getAbilityKey(L, sl.id) : '';
+            const opts = opt('', '—', cur) + (slm.ABILITY_KEYS || []).map((k) => opt(k, k.toUpperCase(), cur)).join('');
+            return `<label class="hs-hangar-key" data-ui-tip="SHORTCUT — KEY THAT TRIGGERS THIS ABILITY"><select data-hangar-key="ability" data-slot-index="${sl.index}" data-part-id="${sl.id}" aria-label="Ability shortcut">${opts}</select></label>`;
+        }
+        return '';
+    },
     /**
      * Slot box for the merged row: real S/M/L footprint, part graphic inside (weapon mount
      * when available), slot-size letter on the corner.
@@ -157,7 +180,7 @@ extendClass(HomeStationUI, {
         const shipId = this.hangarShipId;
         const poolKey = { weapon: 'weapons', defense: 'defenses', ability: 'abilities', energy: 'energy' }[kind];
         const L = slm.getLoadout(shipId);
-        const curList = (kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : L[poolKey]) || [];
+        const curList = (kind === 'weapon' && Array.isArray(L.weaponSlots) && L.weaponSlots.length ? L.weaponSlots : slm.getSlotList(L, kind)) || [];
         const current = curList[index] || '';
         const sizeFn = slm.getSlotEffectiveSizeLevel || slm.getSlotSizeLevel;
         const pickSlotLv = Math.max(0, Math.min(2, sizeFn.call(slm, shipId, kind, index) | 0));
@@ -179,7 +202,9 @@ extendClass(HomeStationUI, {
         const fb = [['all', 'ALL', 'hsCraft', '#ffffff'], ['weapon', 'WEAPONS', 'statWeapon', kindColors.weapon], ['defense', 'DEFENSE', 'statArmor', kindColors.defense], ['ability', 'ABILITIES', 'statAbilities', kindColors.ability], ['energy', 'ENERGY', 'statEnergy', kindColors.energy]]
             .map(([k, l, key, col]) => `<button type="button" class="hs-bay-inv-filter${k === filter ? ' is-active' : ''}" style="--fc:${col}" data-inv-filter="${k}" data-ui-tip="${l}" aria-label="${l}"><span class="is-off">${ico(key, col)}</span><span class="is-on">${ico(key, '#05060a')}</span></button>`).join('');
         // Exact same ship-storage markup as bay inventory / station SHIP STORAGE — one grid, one footprint layout.
-        const gridHtml = this.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
+        const gridHtml = this.renderBayShipInventoryGrid
+            ? this.renderBayShipInventoryGrid(profile, shipId)
+            : this.renderShipStorage(profile, shipId, { extraGridClass: 'hs-pick-grid', tipAction: false });
         const modal = document.createElement('div');
         modal.className = 'hs-res-buy-modal hs-slot-picker';
         modal.setAttribute('role', 'dialog');
@@ -191,7 +216,7 @@ extendClass(HomeStationUI, {
             `<div class="hs-slot-picker hs-bay-inv hs-pick-inv" data-filter="${filter}" style="--cs:${cs}px"><div class="hs-bay-inv-bar"><div class="hs-bay-inv-filters">${fb}</div></div>${gridHtml}</div>` +
             (kind === 'weapon' ? `<div class="hs-pick-keys" role="group" aria-label="Shortcut"></div>` : '') +
             `</div>` +
-            `<div class="hs-res-buy-actions">${current ? '<button type="button" class="action-button" data-pick-set="">EMPTY SLOT</button>' : ''}<button type="button" class="action-button hs-res-buy-close" data-pick-close>CLOSE</button></div></div>`;
+            `<div class="hs-res-buy-actions"><button type="button" class="action-button hs-res-buy-close" data-pick-close>CLOSE</button>${current ? '<button type="button" class="action-button" data-pick-set="">EMPTY SLOT</button>' : ''}</div></div>`;
         const inv = modal.querySelector('.hs-pick-inv');
         const grid = modal.querySelector('.hs-storage-grid.hs-pick-grid');
         const keysBar = modal.querySelector('.hs-pick-keys');
@@ -201,6 +226,8 @@ extendClass(HomeStationUI, {
                 const partKind = cell.getAttribute('data-part-kind');
                 const id = cell.getAttribute('data-part-id');
                 if (!id || partKind === 'blueprint') return;
+                // Hull-slot tiles (equipped mounts) are shown for orientation only; pick from cargo.
+                if (cell.classList.contains('is-ship-slot')) return;
                 const blocked = blockedOf(partKind, id);
                 cell.setAttribute('data-pick-set', id);
                 cell.classList.toggle('is-current', partKind === kind && id === current);
@@ -649,6 +676,12 @@ extendClass(HomeStationUI, {
         })();
         const kindIcon = { weapon: 'statWeapon', defense: 'statArmor', energy: 'statEnergy', ability: 'statAbilities' };
         const ir = typeof iconRenderer !== 'undefined' && iconRenderer.imgHtml ? iconRenderer : null;
+        // Slot-type badge (bottom-left, shown while hovering the inventory — CSS .hs-storage-slot-kind).
+        const kindBadge = (kind) => {
+            const ico = ir ? String(ir.imgHtml(kindIcon[kind] || 'statWeapon', 16, 'hs-pixel hs-pixel-16', color[kind] || '#fff', false) || '')
+                .replace(/\s(?:data-ui-tip|title)="[^"]*"/g, '') : '';
+            return `<span class="hs-storage-slot-kind" data-slot-kind="${kind}" aria-hidden="true">${ico}</span>`;
+        };
         const layoutPx = this._storageLayoutPx ? this._storageLayoutPx() : { cell: 56, gap: 2 };
         const cs = layoutPx.cell;
         const spanOf = (lv) => [[1, 1], [1, 2], [2, 2]][Math.max(0, Math.min(2, lv | 0))];
@@ -657,6 +690,7 @@ extendClass(HomeStationUI, {
         const cellSpecs = [];
         const movePinUsed = {};
         const equippedKeys = {};
+        const overlapLeft = {};
         // Explicit pins only — never leave pos null (dense auto-flow would reshuffle on re-render).
         let baseGrid = this._storageGrid ? this._storageGrid(shipId) : { cols: 6, rows: 2 };
         const cols = Math.max(baseGrid.cols || 4, 4);
@@ -690,7 +724,8 @@ extendClass(HomeStationUI, {
         };
         const resolvePos = (pinned, w, h) => {
             if (pinned && pinned[0] > 0 && pinned[1] > 0) {
-                while (pinned[1] + h - 1 > rows) rows += 1;
+                // A stale pin below the grid must NOT grow it (phantom empty rows): only honour pins that
+                // fit the current rows; everything else re-packs into the first free cell.
                 if (fits(pinned[0], pinned[1], w, h)) {
                     mark(pinned[0], pinned[1], w, h);
                     return [pinned[0], pinned[1]];
@@ -717,7 +752,7 @@ extendClass(HomeStationUI, {
                 const bucket = sl.kind === 'weapon' ? 'weapons'
                     : (sl.kind === 'defense' ? 'defenses'
                         : (sl.kind === 'energy' ? 'energy' : 'abilities'));
-                equippedKeys[bucket + ':' + sl.id] = true;
+                equippedKeys[bucket + ':' + sl.id] = (equippedKeys[bucket + ':' + sl.id] || 0) + 1;
                 const label = this.hangarModuleLabel ? this.hangarModuleLabel(sl.id) : String(sl.id).toUpperCase();
                 let key = kindIcon[sl.kind];
                 if (slm.resolveModuleIcon) {
@@ -742,7 +777,7 @@ extendClass(HomeStationUI, {
                     span: span,
                     pos: pos,
                     html: `<button type="button" class="hs-storage-cell is-ship-slot is-equipped" data-slot-pick="${sl.kind}" data-slot-index="${sl.index}" data-part-kind="${sl.kind}" data-part-id="${sl.id}" data-part-span-w="${partSpan[0]}" data-part-span-h="${partSpan[1]}" data-drag-key="${slotKey}" data-drag-source="ship-slot" data-drag-ship="${shipId}" draggable="false" style="__SPAN__--pk-c:${slotC}" data-ui-tip-compact data-ui-tip-head="${label.replace(/"/g, '&quot;')}" data-ui-tip="${tip}" aria-label="${label} — equipped">` +
-                        `${partBox}<span class="hs-storage-slot-size">${sz}</span></button>`
+                        `${partBox}${kindBadge(sl.kind)}<span class="hs-storage-slot-size">${sz}</span></button>`
                 });
                 return;
             }
@@ -769,16 +804,24 @@ extendClass(HomeStationUI, {
             buckets.forEach((bucket) => {
                 Object.keys(entry[bucket] || {}).forEach((id) => {
                     if ((entry[bucket][id] || 0) <= 0) return;
-                    if (bucket !== 'blueprints' && equippedKeys[bucket + ':' + id]) return;
                     const defId = this._storageDefId ? this._storageDefId(id) : id;
-                    if (bucket !== 'blueprints' && equippedKeys[bucket + ':' + defId]) return;
                     const units = (bucket !== 'blueprints' && this._expandPartUnits)
                         ? this._expandPartUnits(bucket, defId, entry[bucket][id] || 1)
                         : [{ bucket: bucket, id: id, defId: defId }];
                     units.forEach((u) => {
                         const unitKey = bucket + ':' + u.id;
                         const moveKey = bucket + ':' + (u.defId || defId);
-                        if (equippedKeys[unitKey] || equippedKeys[moveKey]) return;
+                        // Filed copies EXCLUDE equipped ones (equip consumes filed), so several copies of one
+                        // part in several slots must not hide the loose copies. Only starter parts with no
+                        // owned count (filed overlaps equipped) hide one filed unit per equipped copy.
+                        if (bucket !== 'blueprints') {
+                            if (!(moveKey in overlapLeft)) {
+                                const owned = profileManager._ownedStorageCount
+                                    ? profileManager._ownedStorageCount(profile, bucket, u.defId || defId) : 1;
+                                overlapLeft[moveKey] = owned > 0 ? 0 : (equippedKeys[moveKey] || 0);
+                            }
+                            if (overlapLeft[moveKey] > 0) { overlapLeft[moveKey] -= 1; return; }
+                        }
                         const meta = this._storageItemMeta(bucket, u.defId || defId);
                         const span = this._storageItemSpan ? this._storageItemSpan(bucket, u.defId || defId) : [1, 1];
                         const body = (typeof physicalItem !== 'undefined')
@@ -825,9 +868,12 @@ extendClass(HomeStationUI, {
             const kindSlots = (slots || []).filter((sl) => sl && sl.kind === sec.kind);
             const pairs = kindSlots.map((sl) => {
                 const row = this.hangarMergedSlotRowHtml(sec, sl, single);
+                const keySel = sl.id ? this.hangarKeySelectHtml(sec.kind, sl) : '';
                 const detailsOpen = sl.id && this._hangarExpandedPart === sec.kind + ':' + sl.id;
-                return `<div class="hs-hangar-slot-pair${sl.id ? ' is-filled' : ''}" data-slot-kind="${sec.kind}" data-slot-index="${sl.index}">` +
-                    row +
+                // Expanded part: ONE card (row + details inside it), framed in the part's own colour.
+                return `<div class="hs-hangar-slot-pair${sl.id ? ' is-filled' : ''}${detailsOpen ? ' is-open' : ''}${keySel ? ' has-key' : ''}" data-slot-kind="${sec.kind}" data-slot-index="${sl.index}"` +
+                    (detailsOpen ? ` style="--pk-c:${this.hangarSlotColor(sec.kind, sl.id)}"` : '') + `>` +
+                    row + keySel +
                     (detailsOpen ? this.hangarPartDetailsHtml(sec.kind, sl.id) : '') +
                     `</div>`;
             }).join('');
@@ -1044,9 +1090,7 @@ extendClass(HomeStationUI, {
      */
     hangarSlotModuleId(kind, index) {
         const L = shipLoadoutManager.getLoadout(this.hangarShipId);
-        const list = kind === 'weapon' && Array.isArray(L.weaponSlots)
-            ? L.weaponSlots
-            : (L[shipLoadoutManager.kindToLoadoutKey(kind)] || []);
+        const list = shipLoadoutManager.getSlotList(L, kind);
         return list[Number(index) || 0] || null;
     },
     /** Drag out of a section header's filled slot box (sidebar list), same pull as dragging off the ship itself. */

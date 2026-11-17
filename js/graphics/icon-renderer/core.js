@@ -381,7 +381,9 @@ class IconRenderer {
                 rects += `<rect x="${c}" y="${r}" width="1" height="1" fill="${color}"/>`;
             }
         }
-        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cols} ${rows}" shape-rendering="crispEdges">${rects}</svg>`;
+        // Explicit width/height: Firefox otherwise treats SVG-as-<img> as 300×150
+        // intrinsic, so small badges (slot-kind / stock-type) blow up in flex cells.
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${cols}" height="${rows}" viewBox="0 0 ${cols} ${rows}" shape-rendering="crispEdges">${rects}</svg>`;
         return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
     }
 

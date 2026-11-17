@@ -240,6 +240,96 @@ extendClass(HomeStationUI, {
         this.createUI();
     },
     /**
+     * Temporary toast over the pilot name plate (top left; falls back under the logout button), station UI style.
+     * Lives on <body> so overlay re-renders don't cut it short; fades out on its own.
+     */
+    showStatusToast(msg) {
+        const text = String(msg || '').trim();
+        if (!text) return;
+        let el = document.getElementById('hsStatusToast');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'hsStatusToast';
+            el.className = 'hs-toast';
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            document.body.appendChild(el);
+        }
+        el.textContent = text;
+        el.classList.remove('is-visible', 'hs-status-ok', 'hs-status-fail');
+        // Toast sits ON the pilot name plate (top left) — the name is in the bezel rim, so measure it.
+        // body carries the stage scale transform, so position in percent of body's own box (see
+        // syncDevBadge in viewport-fit-part3.js), not raw viewport px.
+        el.style.left = ''; el.style.top = ''; el.style.right = ''; el.style.minWidth = ''; el.style.minHeight = '';
+        try {
+            const nameEl = document.querySelector('.vf-pilot-name');
+            const plate = nameEl && (nameEl.closest('.vf-pilot-screen') || nameEl);
+            const rect = plate ? plate.getBoundingClientRect() : null;
+            const body = document.body.getBoundingClientRect();
+            if (rect && rect.width && body.width && body.height) {
+                el.classList.add('is-on-pilot');
+                el.style.right = 'auto';
+                el.style.left = (((rect.left - body.left) / body.width) * 100) + '%';
+                el.style.top = (((rect.top - body.top) / body.height) * 100) + '%';
+                el.style.minWidth = ((rect.width / body.width) * 100) + '%';
+                el.style.minHeight = ((rect.height / body.height) * 100) + '%';
+            } else {
+                el.classList.remove('is-on-pilot');
+                const logout = document.getElementById('hsLogout');
+                if (logout) {
+                    const lr = logout.getBoundingClientRect();
+                    if (lr.bottom > 0) el.style.top = Math.round(lr.bottom + 8) + 'px';
+                }
+            }
+        } catch (e) { /* ignore */ }
+        void el.offsetWidth;
+        el.classList.add(ok ? 'hs-fx-ok' : 'hs-fx-fail');
+        const status = document.getElementById('hsStatusToast');
+        if (status) {
+            status.classList.remove('hs-status-ok', 'hs-status-fail');
+            void status.offsetWidth;
+            status.classList.add(ok ? 'hs-status-ok' : 'hs-status-fail');
+        }
+        if (this._fxClearTimer) clearTimeout(this._fxClearTimer);
+        this._fxClearTimer = setTimeout(() => {
+            el.classList.remove('hs-fx-ok', 'hs-fx-fail');
+            if (status) status.classList.remove('hs-status-ok', 'hs-status-fail');
+            this._fxClearTimer = null;
+        }, 520);
+    },
+    applyPendingFlash() {
+        const p = this._pendingFlash;
+        this._pendingFlash = null;
+        if (!p || !this.overlay) return;
+        let el = null;
+        if (p.attr === 'id') {
+            el = this.overlay.querySelector('#' + (window.CSS && CSS.escape ? CSS.escape(p.value) : p.value));
+        } else {
+            const nodes = this.overlay.querySelectorAll('[' + p.attr + ']');
+            for (let i = 0; i < nodes.length; i++) {
+                const n = nodes[i];
+                if (n.getAttribute(p.attr) !== p.value) continue;
+                if (p.attr === 'data-toggle-mod' && p.modId && n.getAttribute('data-mod-id') !== p.modId) continue;
+                if (p.attr === 'data-hangar-slot-set') {
+                    if (p.modId != null && n.getAttribute('data-mod-id') !== p.modId) continue;
+                    if (p.slotIndex != null && n.getAttribute('data-slot-index') !== String(p.slotIndex)) continue;
+                }
+                el = n;
+                break;
+            }
+        }
+        if (el) this.flashResult(el, !!p.ok);
+    },
+    setStatus(msg, opts) {
+        this.statusMsg = String(msg || '');
+        if (opts && opts.refresh === false) {
+            if (this.statusMsg) this.showStatusToast(this.statusMsg);
+            this.statusMsg = '';
+            return;
+        }
+        this.createUI();
+    },
+    /**
      * Temporary toast top-right, under the logout button, in the station UI style.
      * Lives on <body> so overlay re-renders don't cut it short; fades out on its own.
      */

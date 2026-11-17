@@ -562,7 +562,7 @@ extendClass(SoundManager, {
         return !!ok;
     },
 
-    startMenuMusic() {
+    startMenuMusic(opts) {
         // Global title fanfare — once per session, before the Planet Select
         // hub loop takes over. Re-entrant: the onEnded callback below calls
         // startMenuMusic() again, which skips this block (flag already set)
@@ -577,7 +577,7 @@ extendClass(SoundManager, {
         }
         // Embedded / open galaxy map owns the hub bus — don't yank it back to menu.
         if (typeof galaxyMapManager !== 'undefined' && galaxyMapManager.isVisible
-            && this.startMapMusic) {
+            && this.startMapMusic && !(opts && opts.hub)) {
             this.startMapMusic(galaxyMapManager.selectedPlanetId || 'mars');
             return;
         }
@@ -599,7 +599,8 @@ extendClass(SoundManager, {
         if (typeof vfTrackerManager !== 'undefined' && vfTrackerManager.isPlaying
             && vfTrackerManager.isPlaying()) {
             const ck = String(vfTrackerManager.currentKey || '');
-            if (ck === 'menu' || ck === 'station' || ck === 'hub' || ck.indexOf('map:') === 0) {
+            if (ck === 'menu' || ck === 'station' || ck === 'hub'
+                || (ck.indexOf('map:') === 0 && !(opts && opts.hub))) {
                 if (this.pushMusicBusVolume) this.pushMusicBusVolume();
                 this.clearPendingMusic();
                 return;

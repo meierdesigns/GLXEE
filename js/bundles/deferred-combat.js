@@ -1615,7 +1615,7 @@ extendClass(GameControlSystem, {
         // Fixed 6x4 slots at the exact same px size as the SHIP grid (homeStationUI.STORAGE_CELL_PX)
         // — no stretching, no adding rows/cols to fill the panel, so the two grids always read
         // as one consistent slot size no matter how tall/wide the surrounding panel ends up.
-        const cs = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_CELL_PX) || 56;
+        const cs = this.victoryCellPx();
         const gap = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_GAP_PX) || 2;
         const cols = 6;
         const rows = 4;
@@ -1774,9 +1774,74 @@ extendClass(GameControlSystem, {
         this.updateVictoryStats();
     },
 
+    /** Slot size for the victory grids: the fitted size (see fitVictoryGrids) or the hangar default. */
+    victoryCellPx() {
+        const base = (typeof homeStationUI !== 'undefined' && homeStationUI.STORAGE_CELL_PX) || 56;
+        return this._victoryCell || base;
+    },
+
+    /**
+     * Sizes the loot / ship / station slots to the screen: as large as the width (16 columns side by side) and the free
+     * height (5 rows) allow — smaller than the hangar size when the screen would otherwise overflow and cut the buttons.
+     * Re-renders the grids at the new size (at most twice).
+     */
+    fitVictoryGrids(pass) {
+        const n = pass || 0;
+        const run = () => {
+            const content = document.querySelector('#victoryOverlay .victory-content');
+            const planet = content && content.querySelector('.outcome-progress');
+            if (!content || !planet || !content.clientWidth || !planet.offsetHeight) return;
+            const cur = this.victoryCellPx();
+            const panels = content.querySelector('.victory-panels');
+            // Nothing may scroll: any overflow (sideways in the panel row, or the screen cutting off the buttons) shrinks the slots.
+            const rc = content.getBoundingClientRect();
+            const rp = panels ? panels.getBoundingClientRect() : null;
+            const bodyEl = content.querySelector('.victory-body');
+            const rb = bodyEl ? bodyEl.getBoundingClientRect() : null;
+            const reach = (el) => { const r = el.getBoundingClientRect(); return [r.right, r.bottom]; };
+            const wide = panels ? Array.from(panels.children).some((el) => reach(el)[0] > rc.right - 8) : false;
+            const overflows = wide || (rb && rb.bottom > rc.bottom - 2)
+                || (panels && (panels.scrollWidth > panels.clientWidth + 1 || panels.scrollHeight > panels.clientHeight + 1))
+                || content.scrollHeight > content.clientHeight + 1 || content.scrollWidth > content.clientWidth + 1;
+            let next;
+            if (overflows) {
+                this._victoryNoGrow = true;
+                next = Math.max(40, cur - 6);
+            } else if (this._victoryNoGrow) {
+                return;
+            } else {
+                // Growth in steps until the screen is full (an overflow shrinks it back): limited by the measured panel width
+                // (loot 6 + ship / station stacked 6 = 12 slot columns).
+                const kids = panels ? Array.from(panels.children) : [];
+                const natural = kids.reduce((n, el) => n + el.offsetWidth, 0) + 16 * Math.max(0, kids.length - 1);
+                const chrome = kids.length ? natural - 12 * cur : 290;
+                const csW = (content.clientWidth - 70 - chrome) / 12;
+                next = Math.floor(Math.min(csW, cur + 8, 76));
+                if (!Number.isFinite(next) || next - cur < 2) return;
+            }
+            if (n >= 14) return;
+            this._victoryCell = next;
+            const lootList = document.getElementById('victoryLootList');
+            if (lootList) lootList.innerHTML = this.renderVictoryLootHtml();
+            const loadoutList = document.getElementById('victoryLoadoutList');
+            if (loadoutList && this.renderVictoryLoadoutHtml) loadoutList.innerHTML = this.renderVictoryLoadoutHtml();
+            const ov = document.getElementById('victoryOverlay');
+            if (ov && this.bindVictoryCargoDrag) this.bindVictoryCargoDrag(ov);
+            if (ov && this.bindVictoryShipGridDrag) this.bindVictoryShipGridDrag(ov);
+            this.fitVictoryGrids(n + 1);
+        };
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run); else run();
+    },
+
     /** Ship bag (parts) + station bay (blueprints / filed parts) — kept loot must stay visible. */
     renderVictoryLoadoutHtml() {
         if (typeof profileManager === 'undefined' || typeof homeStationUI === 'undefined') return '';
+        const prevCell = homeStationUI.STORAGE_CELL_PX;
+        homeStationUI.STORAGE_CELL_PX = this.victoryCellPx();
+        try { return this.renderVictoryLoadoutInner(); } finally { homeStationUI.STORAGE_CELL_PX = prevCell; }
+    },
+
+    renderVictoryLoadoutInner() {
         const profile = profileManager.getActiveProfile ? profileManager.getActiveProfile() : null;
         const shipId = profileManager.getActiveShipId ? profileManager.getActiveShipId() : null;
         if (!profile || !shipId) return '<div class="victory-loot-empty">NO SHIP</div>';
@@ -9440,10 +9505,20 @@ var ObstacleManager = class ObstacleManager {
         this.environment = env || null;
         this.terrainDamage = new Map(); // fresh, undamaged walls per planet
         this.terrainCut = new Map(); // crater cuts (absolute wall width per row)
+        this._terrainProfile = null;
+        this._wallSilCache = null;
+        this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
     }
 
     getEnvironment() {
-        return this.environment || { base: '#7a7f88', accent: '#8B6914', style: 'asteroid', faction: null };
+        // Stable default — a fresh literal every call breaks terrainProfile / layer cache identity.
+        if (!this.environment) {
+            if (!ObstacleManager._DEFAULT_ENV) {
+                ObstacleManager._DEFAULT_ENV = { base: '#7a7f88', accent: '#8B6914', style: 'asteroid', faction: null };
+            }
+            return ObstacleManager._DEFAULT_ENV;
+        }
+        return this.environment;
     }
 
     getObstacleDefs() {
@@ -10538,8 +10613,11 @@ extendClass(ObstacleManager, {
         // Each stage gets its own area order / walls / floors.
         const stage = level ? (level.isBoss ? 'boss' : String(level.stageIndex || 1)) : '1';
         const danger = this.stageDanger();
+        const env = this.getEnvironment();
+        const envKey = (env.planetId || '') + '|' + (env.faction || '') + '|' + (env.style || '')
+            + '|' + (env.defense ? '1' : '0') + '|' + (env.planetStyle || '') + '|' + (env.surface || '');
         if (this._terrainProfile && this._terrainProfile.pid === pid && this._terrainProfile.stage === stage
-            && this._terrainProfile.env === this.getEnvironment()) return this._terrainProfile;
+            && this._terrainProfile.envKey === envKey) return this._terrainProfile;
         let seed = 7;
         const seedKey = pid + '#' + stage;
         for (let i = 0; i < seedKey.length; i++) seed = (Math.imul(seed, 31) + seedKey.charCodeAt(i)) >>> 0;
@@ -10548,7 +10626,6 @@ extendClass(ObstacleManager, {
         let pseed = 7;
         for (let i = 0; i < pid.length; i++) pseed = (Math.imul(pseed, 31) + pid.charCodeAt(i)) >>> 0;
         const r = (k) => this.terrainHash(seed % 100003, k);
-        const env = this.getEnvironment();
         // Planet look: only its own areas appear.
         const zoneBias = env.zones || null;
         // Later stages lean gently towards harsh areas (within the planet's own set).
@@ -10585,7 +10662,7 @@ extendClass(ObstacleManager, {
         let acc = 0;
         const materials = mw.map((v) => (acc += v / tot));
         this._terrainProfile = {
-            pid, stage, danger, env, seed, zones, materials, zoneMats, zoneFloors,
+            pid, stage, danger, env, envKey, seed, zones, materials, zoneMats, zoneFloors,
             // ~14-20 s per area at the base scroll speed: long, coherent stretches.
             zoneRows: Math.round(200 + r(1) * 80),
             // Thicker walls on later stages (narrower passage, still flyable).
@@ -10828,9 +10905,10 @@ extendClass(ObstacleManager, {
         // Undamaged silhouette is pure (wr, W, style, profile) — cache it and only
         // re-apply crater cuts below. Collision + draw hit this many times per frame.
         let silCache = this._wallSilCache;
+        const profId = (prof.pid || '') + '#' + (prof.stage || '') + '#' + (prof.seed || 0);
         if (!silCache || silCache.W !== W || silCache.cell !== cell
-            || silCache.style !== style || silCache.prof !== prof) {
-            silCache = this._wallSilCache = { W, cell, style, prof, rows: new Map() };
+            || silCache.style !== style || silCache.profId !== profId) {
+            silCache = this._wallSilCache = { W, cell, style, profId, rows: new Map() };
         }
         let fullOf = silCache.rows.get(wr);
         if (!fullOf) {
@@ -10870,18 +10948,21 @@ extendClass(ObstacleManager, {
             };
             const structure = (side) => {
                 const slot = Math.floor(wr / 36);
-                if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
+                const defense = !!(this.getEnvironment() && this.getEnvironment().defense);
+                // Keep non-defense spacing; defense fills both rims with chunkier props.
+                if ((slot + side) % 2 && style !== 'tech' && style !== 'organic' && !defense) return 0;
                 const t = (wr - slot * 36 - 10) / 14;
                 if (t < 0 || t > 1) return 0;
+                const boost = defense ? 1.35 : 1;
                 let v;
                 switch (style) {
-                    case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;
-                    case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break;
-                    case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;
-                    case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;
-                    default: v = 0.045 * Math.sin(t * Math.PI);
+                    case 'tech': v = (defense ? 0.1 : 0.07) * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;
+                    case 'organic': v = (defense ? 0.11 : 0.08) * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break;
+                    case 'spike': v = (defense ? 0.14 : 0.11) * (1 - Math.abs(t - 0.5) * 2); break;
+                    case 'scrap': v = t < 0.2 || t > 0.75 ? (defense ? 0.12 : 0.09) : (defense ? 0.05 : 0.035); break;
+                    default: v = (defense ? 0.07 : 0.045) * Math.sin(t * Math.PI);
                 }
-                return Math.round((W * v) / cell);
+                return Math.round((W * v * boost) / cell);
             };
             const zi = this.terrainZoneIndex(wr, prof);
             const local = wr - zi * prof.zoneRows;
@@ -10980,13 +11061,14 @@ extendClass(ObstacleManager, {
         const below = hatch.t >= hatch.len / 2;
         const k = below ? hatch.len - 1 - hatch.t : hatch.t; // 0 = outer row of the frame
         const near = k + 1; // grows towards the slot
+        const bump = (this.getEnvironment() && this.getEnvironment().defense) ? 1 : 0;
         switch (style) {
-            case 'tech': return 3;
-            case 'spike': return 1 + near * 2;
-            case 'organic': return 2 + Math.round(Math.sin(near / (hatch.frame + 1) * Math.PI * 0.5) * 2);
+            case 'tech': return 3 + bump;
+            case 'spike': return 1 + near * 2 + bump;
+            case 'organic': return 2 + bump + Math.round(Math.sin(near / (hatch.frame + 1) * Math.PI * 0.5) * 2);
             // One width per hatch (seeded by its first row), not re-rolled per row.
-            case 'scrap': return 2 + Math.floor(this.terrainHash(row - hatch.t, 71) * 3);
-            default: return 1 + Math.floor(this.terrainHash(row - hatch.t, 59) * 2);
+            case 'scrap': return 2 + bump + Math.floor(this.terrainHash(row - hatch.t, 71) * 3);
+            default: return 1 + bump + Math.floor(this.terrainHash(row - hatch.t, 59) * 2);
         }
     },
     /** World row of the wall layer at screen y. */
@@ -13443,11 +13525,11 @@ var CollisionManager = class CollisionManager {
             || 240;
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
         const gateEnter = typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace();
         // Exit sluice / warp on screen: lips and frame stay solid, but must not scrape the ship.
         const atExitGate = typeof objectiveManager !== 'undefined' && !!objectiveManager.goal;
         const player = playerManager.getPosition();
-        // During sluice enter the ship is pulled into the tube — wall scrapes must not kill it.
+        // Sluice enter AND the arrival hatch fly-out: the ship is script-driven through the tube — no wall scrape, no damage flash.
         if (player && !gateEnter) {
             const walls = obstacleManager.terrainWallsOver(player.y + 2, player.y + player.height - 2, W);
             if (walls) {
@@ -13566,7 +13648,7 @@ var CollisionManager = class CollisionManager {
         if (!enemyManager.getSideEnemies || !playerManager.getPosition) return;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) return;
         if (typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace()) {
             return;
         }
         const player = playerManager.getPosition();
@@ -13826,7 +13908,7 @@ var CollisionManager = class CollisionManager {
 
     checkEnemyBulletPlayerCollisions(gameState) {
         if (typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace()) {
             return;
         }
         const enemyBullets = bulletManager.getEnemyBullets();
@@ -14098,7 +14180,7 @@ extendClass(CollisionManager, {
 
     checkObstaclePlayerCollisions(gameState) {
         if (typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace()) {
             return;
         }
         const obstacles = obstacleManager.getObstacles();
@@ -15540,6 +15622,7 @@ var RenderManager = class RenderManager {
         if (typeof objectiveManager !== 'undefined' && objectiveManager.render) {
             objectiveManager.render(ctx);
         }
+        if (typeof defenseModeManager !== 'undefined') defenseModeManager.render(ctx);
 
         if (typeof pickupManager !== 'undefined' && pickupManager.render) {
             pickupManager.render(ctx);
@@ -16520,8 +16603,11 @@ extendClass(RenderManager, {
         const gBase = Math.floor(gOffC / cell);
         const lc = this._terrainLayerKey || (this._terrainLayerKey = {});
         const dmgEpoch = obstacleManager._terrainDamageEpoch || 0;
+        // Compare profile by stable ids — object identity thrashing forced full rebuilds every frame.
+        const prof = obstacleManager._terrainProfile || (obstacleManager.terrainProfile && obstacleManager.terrainProfile());
+        const profId = prof ? (prof.pid + '#' + prof.stage + '#' + (prof.seed || 0)) : '';
         const sharedOk = lc.cols === cols && lc.rowsN === rowsN && lc.cell === cell && lc.W === W
-            && lc.key === this._terrainKey && lc.prof === obstacleManager._terrainProfile && lc.pal === pal;
+            && lc.key === this._terrainKey && lc.profId === profId && lc.pal === pal;
         const groundSame = sharedOk && lc.gBase === gBase && !!this._terrainBuf;
         const wallSame = sharedOk && lc.baseRow === baseRow && lc.dmg === dmgEpoch
             && !!this._terrainWallBuf && !!this._terrainOverlayBuf;
@@ -16624,8 +16710,8 @@ extendClass(RenderManager, {
                             if (c) col = c.inRim ? (c.lit ? pal.craterLit : pal.ground[3]) : (c.pit ? pal.craterPit : pal.ground[3]);
                         }
                     }
-                    // Faction doctrine speckles the planet crust (organic / mechanical).
-                    col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
+                    // Doctrine speckles only on defense theaters — per-cell tint shatters RLE and lags.
+                    if (env.defense) col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
                     rowCols[cx] = col;
                 }
                 flushRow(rowCols, y);
@@ -16741,7 +16827,7 @@ extendClass(RenderManager, {
         lc.cell = cell;
         lc.W = W;
         lc.key = this._terrainKey;
-        lc.prof = obstacleManager._terrainProfile;
+        lc.profId = profId;
         lc.pal = pal;
         if (lc.gBase == null) lc.gBase = gBase;
         if (lc.baseRow == null) lc.baseRow = baseRow;
@@ -16793,14 +16879,16 @@ extendClass(RenderManager, {
      * One cell of a faction structure on the canyon rim, as a solid outlined
      * block (bunker, pod, fang, junk pile) instead of colour noise.
      * `edge` 1..band-1 from the corridor, `t` = row inside the 14-row block.
+     * Kept deliberately chunky so each faction reads at a glance.
      */
     structureCell(style, pal, mp, edge, band, t, wr) {
         if (t <= 0 || t >= 13 || edge === band - 1) return '#05060a';
         const top = t === 1;
         switch (style) {
-            case 'tech': // bunker: lit roof strip, dark hull, a column of accent windows
+            case 'tech': // bunker: lit roof strip, dark hull, accent windows
                 if (top) return mp.lit[0];
-                return edge % 3 === 1 && t % 3 === 0 ? pal.accent : pal.wall[2];
+                if (edge % 3 === 1 && t % 3 === 0) return pal.accent;
+                return pal.wall[2];
             case 'organic': // pod: glowing core in a fleshy shell
                 if (top || edge === 1) return mp.lit[0];
                 return Math.abs(t - 6.5) < 3 && edge > 2 && edge < band - 2 ? pal.accent : pal.wall[1];
@@ -16811,8 +16899,10 @@ extendClass(RenderManager, {
                 if (top) return mp.lit[1];
                 if (t === 7) return mp.crack || pal.accent;
                 return (edge + t) % 5 === 0 ? pal.accent : pal.wall[1];
-            default: // boulder ridge
-                return top ? pal.wall[0] : (this.envHash(edge, wr) < 0.15 ? pal.wall[2] : pal.wall[1]);
+            default: // terran fort ridge
+                if (top) return pal.wall[0];
+                if ((edge + t) % 6 === 0) return pal.accent;
+                return this.envHash(edge, wr) < 0.15 ? pal.wall[2] : pal.wall[1];
         }
     },
 
@@ -17117,39 +17207,21 @@ extendClass(RenderManager, {
      * rivets, claw scores or scrap welds — never a full replacement pattern.
      */
     terrainFactionTint(env, pal, cx, wr, col, n) {
-        // 16-cell patches so doctrine marks read as distinct organic/mechanical
-        // zones on the floor instead of flickering style per pixel.
-        const style = this.resolveMixedStyle(env, Math.floor(cx / 16), Math.floor(wr / 16));
+        // Defense-only, and only at 16-cell block corners — keeps RLE runs intact.
+        if ((cx & 15) !== 0 || (wr & 15) !== 0) return col;
+        const style = this.resolveMixedStyle(env, cx >> 4, wr >> 4);
         const g = pal.ground;
         switch (style) {
-            case 'organic': { // Voidborn: glowing pores and soft tissue blotches
-                const h = this.envHash(cx * 3 + 11, wr * 3 + 7);
-                if (h < 0.04) return pal.accent;
-                if (h < 0.09 && n > 0.55) return g[0];
-                return col;
-            }
-            case 'tech': { // Machine: sparse rivets / scuffs — no cable grid
-                const h = this.envHash(cx, wr + 19);
-                if (h < 0.022) return pal.accent;
-                if (h < 0.045 && n > 0.6) return g[1];
-                return col;
-            }
-            case 'spike': { // Kronax: short claw nicks, not diagonal rails
-                const h = this.envHash(cx, wr + 41);
-                if (h < 0.028) return pal.craterPit;
-                if (h < 0.05) return g[0];
-                return col;
-            }
-            case 'scrap': { // Pirate: irregular weld patches
-                const h = this.envHash(cx, wr + 7);
-                if (h < 0.04) return pal.accent;
-                if (h > 0.94) return g[3];
-                return col;
-            }
-            default: { // Terran / rock: sparse survey stakes
-                if (this.envHash(cx, wr + 53) < 0.012) return pal.accent;
-                return col;
-            }
+            case 'organic':
+                return this.envHash(cx * 3 + 11, wr * 3 + 7) < 0.55 ? pal.accent : g[0];
+            case 'tech':
+                return this.envHash(cx, wr + 19) < 0.5 ? pal.accent : g[1];
+            case 'spike':
+                return this.envHash(cx, wr + 41) < 0.5 ? pal.craterPit : g[0];
+            case 'scrap':
+                return this.envHash(cx, wr + 7) < 0.5 ? pal.accent : g[3];
+            default:
+                return pal.accent;
         }
     },
     drawAnimatedFog(ctx, o) {

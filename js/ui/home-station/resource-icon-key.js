@@ -119,6 +119,11 @@ extendClass(HomeStationUI, {
                 return;
             }
             if (entry === 'profiles' || entry === 'menu') {
+                // PROFILES is a dev-mode area; outside dev mode it is hidden (unless its page is open — no dead end).
+                if (entry === 'profiles' && !onProfiles
+                    && !(typeof startScreenManager !== 'undefined' && startScreenManager.devMode)) return;
+                // MENU can be hidden in Settings; never while a menu page is open (no dead end).
+                if (entry === 'menu' && typeof isMenuButtonHidden === 'function' && isMenuButtonHidden() && !this.isMenuRowTab()) return;
                 visible.push(entry);
                 return;
             }
@@ -215,6 +220,7 @@ extendClass(HomeStationUI, {
             station: ['hsStation', 'hsShop', res('ore'), res('crystal')],
             upgrade: ['hsUpgrade', 'hsShip', 'statWeapon', 'statArmor'],
             hangar: ['hsShip', 'hsCraft', 'statWeapon', 'statArmor'],
+            missions: ['hsExplore', 'hsBlueprint', 'statWeapon', 'hsShip'],
             factions: ['menuPeoples', 'hsShip', 'statAbilities', 'statWeapon'],
             explore: ['hsExplore', 'hsBlueprint', 'statEnergy', res('voltex')],
             profiles: ['menuProfiles', 'menuLoad', 'menuNewPilot', 'hsShip'],

@@ -256,6 +256,7 @@ class GameLoop {
         if (typeof obstacleManager !== 'undefined') obstacleManager.update(deltaTime, this.gameState);
         if (typeof pickupManager !== 'undefined') pickupManager.update(deltaTime);
         if (typeof collisionManager !== 'undefined') collisionManager.checkCollisions(this.gameState);
+        if (typeof defenseModeManager !== 'undefined') defenseModeManager.update(deltaTime);
         if (typeof parallaxManager !== 'undefined') parallaxManager.update(deltaTime);
         if (typeof graphicsManager !== 'undefined') graphicsManager.updateParticles();
         if (typeof explosionSystem !== 'undefined') explosionSystem.update(deltaTime || 16);

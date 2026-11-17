@@ -464,7 +464,8 @@
 /* Logout key: fully invisible until a pilot is logged in, but still occupies its slot
    (visibility, not display, so the fullscreen key to its left never shifts into its place). */
 html:not([data-vf-logged]) .vf-bezel .vf-bezel-tools button[data-tool="logout"] {
-    visibility: hidden;
+    /* Out of the strip entirely (the remote key sits to its right and now follows the wiki key). */
+    display: none;
     pointer-events: none;
 }
 

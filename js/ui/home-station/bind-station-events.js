@@ -223,6 +223,7 @@ extendClass(HomeStationUI, {
                 if (e.button !== 2) return;
                 e.preventDefault();
                 e.stopPropagation();
+                this._ctxPt = [e.clientX, e.clientY];
                 this._equipFromStorageCell(cell);
             });
         });
@@ -234,6 +235,7 @@ extendClass(HomeStationUI, {
                 if (e.button !== 2) return;
                 e.preventDefault();
                 e.stopPropagation();
+                this._ctxPt = [e.clientX, e.clientY];
                 const shipId = cell.getAttribute('data-drag-ship') || (cell.closest('.hs-storage-grid') || {}).getAttribute('data-ship');
                 this._applyStorageSlotChoice(shipId, cell.getAttribute('data-part-kind'),
                     Number(cell.getAttribute('data-slot-index')), '', cell, cell.getAttribute('data-part-id'));
@@ -252,8 +254,10 @@ extendClass(HomeStationUI, {
         const caps = slm.getSlotCaps(shipId, slm.resolveModelClass(shipId));
         const cap = key === 'weapons' ? slm.weaponMountSlots(caps.weapons) : Math.max(0, Number(caps[key]) || 0);
         const L = slm.getLoadout(shipId);
-        const list = key === 'weapons' ? (L.weaponSlots || L.weapons || []) : (L[key] || []);
-        const at = list.indexOf(id);
+        const list = slm.getSlotList(L, kind);
+        // Prefer the clicked tile's own slot (several copies of one part may sit in several slots).
+        const own = cell.hasAttribute('data-slot-index') ? Number(cell.getAttribute('data-slot-index')) : -1;
+        const at = (own >= 0 && list[own] === id) ? own : list.indexOf(id);
         // Only the slotted copy itself unequips; a loose cargo copy of the same part never does.
         if (at !== -1 && cell.classList.contains('is-equipped')) { this._applyStorageSlotChoice(shipId, kind, at, '', cell, id); return; }
         const fits = (i) => !slm.partFitsSlot || slm.partFitsSlot(shipId, kind, id, i).ok;
@@ -264,10 +268,64 @@ extendClass(HomeStationUI, {
         this._applyStorageSlotChoice(shipId, kind, target, id, cell);
     },
 
+    /** Small "denied" marker next to the cursor (right-click unslot refused). */
+    _showDeniedAtCursor() {
+        const pt = this._ctxPt || [0, 0];
+        const el = document.createElement('div');
+        el.className = 'hs-cursor-denied';
+        el.setAttribute('aria-hidden', 'true');
+        el.style.left = pt[0] + 'px';
+        el.style.top = pt[1] + 'px';
+        document.body.appendChild(el);
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 700);
+    },
+
+    /** Free cells left in the ship's base storage grid (DOM-measured; null = unknown). */
+    _shipGridFreeCells(shipId, sourceEl) {
+        const grid = sourceEl && sourceEl.closest ? sourceEl.closest('.hs-storage-grid[data-storage-target="ship"]') : null;
+        if (!grid) return null;
+        const base = this._storageGrid ? this._storageGrid(shipId) : null;
+        if (!base) return null;
+        const cs = parseFloat(grid.style.getPropertyValue('--cs')) || 0;
+        const gap = parseFloat(grid.style.getPropertyValue('--hs-gap')) || 0;
+        if (!cs) return null;
+        let used = 0;
+        // Padding tiles (.hs-storage-cell-empty) ARE the free cells — never count them as used.
+        grid.querySelectorAll('.hs-storage-cell:not(.hs-storage-cell-empty)').forEach((c) => {
+            const w = Math.max(1, Math.round((c.offsetWidth + gap) / (cs + gap)));
+            const h = Math.max(1, Math.round((c.offsetHeight + gap) / (cs + gap)));
+            used += w * h;
+        });
+        // The bay grid can be taller than the base grid (hull-slot tiles add rows): trust the
+        // rendered dimensions, never the smaller base size.
+        const dc = Number(grid.getAttribute('data-inv-cols')) || 0;
+        const dr = Number(grid.getAttribute('data-inv-rows')) || 0;
+        const cols = Math.max(base.cols || 4, 4, dc);
+        const rows = Math.max(base.rows || 2, 2, dr);
+        return cols * rows - used;
+    },
+
     _applyStorageSlotChoice(shipId, kind, slotIndex, moduleId, sourceEl, clearedId) {
+        let sendToStation = false;
+        if (!moduleId && clearedId && typeof profileManager !== 'undefined') {
+            const profile0 = this.getProfile ? this.getProfile() : null;
+            const bucket0 = shipLoadoutManager.kindToLoadoutKey(kind);
+            const free = this._shipGridFreeCells(shipId, sourceEl);
+            const span = this._storageItemSpan ? this._storageItemSpan(bucket0, clearedId) : [1, 1];
+            if (profile0 && free !== null && free < (span[0] || 1) * (span[1] || 1)) {
+                const owned = profileManager._ownedStorageCount ? profileManager._ownedStorageCount(profile0, bucket0, clearedId) : 0;
+                const stationOk = owned > 0 && !(this._stationRejectsItem && this._stationRejectsItem(profile0, bucket0, clearedId));
+                if (!stationOk) {
+                    this.playButtonResult(sourceEl, false, 'NO ROOM TO UNSLOT');
+                    this._showDeniedAtCursor();
+                    return;
+                }
+                sendToStation = true;
+            }
+        }
         const L = shipLoadoutManager.getLoadout(shipId);
         const key = shipLoadoutManager.kindToLoadoutKey(kind);
-        const list = key === 'weapons' ? ((L && (L.weaponSlots || L.weapons)) || []) : ((L && L[key]) || []);
+        const list = shipLoadoutManager.getSlotList(L, kind);
         const prevId = list[slotIndex] || null;
         const replacedId = (moduleId && prevId && prevId !== moduleId) ? prevId : null;
         const res = shipLoadoutManager.setSlotModule(shipId, kind, slotIndex, moduleId);
@@ -301,6 +359,14 @@ extendClass(HomeStationUI, {
         // Never let an unequipped part vanish: it must be visible in this ship's storage afterwards.
         if (profile && !moduleId && clearedId && profileManager.getShipStorageQty(profile, shipId, shipLoadoutManager.kindToLoadoutKey(kind), clearedId) <= 0) {
             profileManager.fileUnequippedPart(profile, shipId, shipLoadoutManager.kindToLoadoutKey(kind), clearedId);
+        }
+        if (sendToStation && profile) {
+            const mv = profileManager.moveToStationStorage(profile, shipId, shipLoadoutManager.kindToLoadoutKey(kind), clearedId, 1);
+            if (mv && mv.ok) {
+                this.playButtonResult(sourceEl, true, 'MOVED TO STATION STORAGE');
+                this.createUI();
+                return;
+            }
         }
         const label = moduleId ? (this.hangarModuleLabel(moduleId) + ' EQUIPPED') : 'SLOT CLEARED';
         this.playButtonResult(sourceEl, true, label);
@@ -370,6 +436,10 @@ extendClass(HomeStationUI, {
         // correctly without any manual zoom/transform math — the station is rendered inside a
         // scaled stage (body carries transform: scale(--stage-scale)), and a fixed-position
         // element's offsetLeft/top don't line up 1:1 with that scaled coordinate space.
+        const syncGhostVisibility = () => {
+            // While the drop preview shows the item in its target tile, the item at the cursor hides.
+            if (ghost) ghost.style.visibility = (previewBox && previewBox.style.display === 'block') ? 'hidden' : '';
+        };
         const markDropCell = (x, y) => {
             const el = document.elementFromPoint(x, y);
             // Any storage cell, including the dashed empty placeholders — hovering empty
@@ -496,6 +566,7 @@ extendClass(HomeStationUI, {
                 }
                 markDropCell(ev.clientX, ev.clientY);
             } else clearCellMark();
+            syncGhostVisibility();
         };
         const onMove = (ev) => {
             lastMove = ev;

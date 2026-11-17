@@ -176,9 +176,10 @@ extendClass(ObstacleManager, {
         // Undamaged silhouette is pure (wr, W, style, profile) — cache it and only
         // re-apply crater cuts below. Collision + draw hit this many times per frame.
         let silCache = this._wallSilCache;
+        const profId = (prof.pid || '') + '#' + (prof.stage || '') + '#' + (prof.seed || 0);
         if (!silCache || silCache.W !== W || silCache.cell !== cell
-            || silCache.style !== style || silCache.prof !== prof) {
-            silCache = this._wallSilCache = { W, cell, style, prof, rows: new Map() };
+            || silCache.style !== style || silCache.profId !== profId) {
+            silCache = this._wallSilCache = { W, cell, style, profId, rows: new Map() };
         }
         let fullOf = silCache.rows.get(wr);
         if (!fullOf) {
@@ -218,18 +219,21 @@ extendClass(ObstacleManager, {
             };
             const structure = (side) => {
                 const slot = Math.floor(wr / 36);
-                if ((slot + side) % 2 && style !== 'tech' && style !== 'organic') return 0;
+                const defense = !!(this.getEnvironment() && this.getEnvironment().defense);
+                // Keep non-defense spacing; defense fills both rims with chunkier props.
+                if ((slot + side) % 2 && style !== 'tech' && style !== 'organic' && !defense) return 0;
                 const t = (wr - slot * 36 - 10) / 14;
                 if (t < 0 || t > 1) return 0;
+                const boost = defense ? 1.35 : 1;
                 let v;
                 switch (style) {
-                    case 'tech': v = 0.07 * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;
-                    case 'organic': v = 0.08 * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break;
-                    case 'spike': v = 0.11 * (1 - Math.abs(t - 0.5) * 2); break;
-                    case 'scrap': v = t < 0.2 || t > 0.75 ? 0.09 : 0.035; break;
-                    default: v = 0.045 * Math.sin(t * Math.PI);
+                    case 'tech': v = (defense ? 0.1 : 0.07) * (t < 0.2 || t > 0.8 ? 0.55 : 1); break;
+                    case 'organic': v = (defense ? 0.11 : 0.08) * Math.sin(t * Math.PI) * (0.7 + 0.3 * Math.sin(t * 6)); break;
+                    case 'spike': v = (defense ? 0.14 : 0.11) * (1 - Math.abs(t - 0.5) * 2); break;
+                    case 'scrap': v = t < 0.2 || t > 0.75 ? (defense ? 0.12 : 0.09) : (defense ? 0.05 : 0.035); break;
+                    default: v = (defense ? 0.07 : 0.045) * Math.sin(t * Math.PI);
                 }
-                return Math.round((W * v) / cell);
+                return Math.round((W * v * boost) / cell);
             };
             const zi = this.terrainZoneIndex(wr, prof);
             const local = wr - zi * prof.zoneRows;
@@ -328,13 +332,14 @@ extendClass(ObstacleManager, {
         const below = hatch.t >= hatch.len / 2;
         const k = below ? hatch.len - 1 - hatch.t : hatch.t; // 0 = outer row of the frame
         const near = k + 1; // grows towards the slot
+        const bump = (this.getEnvironment() && this.getEnvironment().defense) ? 1 : 0;
         switch (style) {
-            case 'tech': return 3;
-            case 'spike': return 1 + near * 2;
-            case 'organic': return 2 + Math.round(Math.sin(near / (hatch.frame + 1) * Math.PI * 0.5) * 2);
+            case 'tech': return 3 + bump;
+            case 'spike': return 1 + near * 2 + bump;
+            case 'organic': return 2 + bump + Math.round(Math.sin(near / (hatch.frame + 1) * Math.PI * 0.5) * 2);
             // One width per hatch (seeded by its first row), not re-rolled per row.
-            case 'scrap': return 2 + Math.floor(this.terrainHash(row - hatch.t, 71) * 3);
-            default: return 1 + Math.floor(this.terrainHash(row - hatch.t, 59) * 2);
+            case 'scrap': return 2 + bump + Math.floor(this.terrainHash(row - hatch.t, 71) * 3);
+            default: return 1 + bump + Math.floor(this.terrainHash(row - hatch.t, 59) * 2);
         }
     },
     /** World row of the wall layer at screen y. */

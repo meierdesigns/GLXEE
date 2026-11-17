@@ -39,10 +39,20 @@ class ObstacleManager {
         this.environment = env || null;
         this.terrainDamage = new Map(); // fresh, undamaged walls per planet
         this.terrainCut = new Map(); // crater cuts (absolute wall width per row)
+        this._terrainProfile = null;
+        this._wallSilCache = null;
+        this._terrainDamageEpoch = (this._terrainDamageEpoch || 0) + 1;
     }
 
     getEnvironment() {
-        return this.environment || { base: '#7a7f88', accent: '#8B6914', style: 'asteroid', faction: null };
+        // Stable default — a fresh literal every call breaks terrainProfile / layer cache identity.
+        if (!this.environment) {
+            if (!ObstacleManager._DEFAULT_ENV) {
+                ObstacleManager._DEFAULT_ENV = { base: '#7a7f88', accent: '#8B6914', style: 'asteroid', faction: null };
+            }
+            return ObstacleManager._DEFAULT_ENV;
+        }
+        return this.environment;
     }
 
     getObstacleDefs() {

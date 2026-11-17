@@ -37,7 +37,7 @@ extendClass(ProfileSelectionManager, {
         if (keys.indexOf(o.lookKey) < 0) o.lookKey = keys[0];
         const pick = () => `<div class="pp-picks" role="listbox" aria-label="Portrait">` + [13, 10, 0, 15, 5, 2, 8, 6, 7, 12, 11, 1, 14, 4, 3, 9].map((i) =>
             `<button type="button" class="pp-pick${i === o.look.v ? ' selected' : ''}" data-pp-pick="${i}" data-build="${typeof VXP !== 'undefined' ? VXP.preset(o.look.faction, i).build : 0}" tabindex="-1" aria-label="Portrait ${i + 1}" aria-selected="${i === o.look.v}">` +
-            (typeof voxelPortrait !== 'undefined' ? voxelPortrait.canvasHtml({ faction: o.look.faction, v: i, bgv: o.look.bgv, bga: o.look.bga }, this.pilotAccent(), { coarse: true }) : '') + '</button>').join('') + '</div>';
+            (typeof voxelPortrait !== 'undefined' ? voxelPortrait.canvasHtml({ faction: o.look.faction, v: i, bgv: o.look.bgv, bga: o.look.bga }, this.pilotAccent(), { coarse: true, nobg: true }) : '') + '</button>').join('') + '</div>';
         const ctlSlider = (k) => `<div class="pp-ctl${k === o.lookKey ? ' active' : ''}" data-pp-key="${k}">` +
             `<span class="pp-name">${this.pilotLookIconHtml(k)}<span>${heroPortrait.labelFor(k, o.look)}</span></span>` +
             `<input type="range" class="pp-slider" data-pp-slider min="0" max="${heroPortrait.OPTIONS[k] - 1}" step="1" value="${o.look[k]}" tabindex="-1" aria-label="${heroPortrait.labelFor(k, o.look)}">` +
@@ -89,8 +89,10 @@ extendClass(ProfileSelectionManager, {
         const tw = (host.clientWidth - gap * (cols - 1)) / cols;
         const th = (availH - gap * (rows - 1)) / rows;
         if (!(tw > 0) || !(th > 0)) return;
-        const tile = Math.max(28, Math.floor(Math.min(tw, th)));
+        // Portrait-shaped tiles (48:54) as wide as the column allows, as tall as the free height allows.
+        const tile = Math.max(28, Math.floor(Math.min(tw, th * 48 / 54)));
         picks.style.setProperty('--pp-tile', tile + 'px');
+        picks.style.setProperty('--pp-tile-h', Math.floor(tile * 54 / 48) + 'px');
         picks.style.setProperty('--pp-gap', gap + 'px');
     },
     /**

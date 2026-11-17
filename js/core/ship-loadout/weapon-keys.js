@@ -37,9 +37,36 @@
         return out;
     };
 
+    // Executable (active) abilities: abilityKeys[abilityId] = 'q' | 'e' | 'r' | 'f'. No entry = unbound.
+    const ABILITY_KEYS = ['q', 'e', 'r', 'f'];
+    proto.ABILITY_KEYS = ABILITY_KEYS;
+    proto.normalizeAbilityKeys = function (raw) {
+        const out = {};
+        if (!raw || typeof raw !== 'object') return out;
+        Object.keys(raw).forEach((id) => {
+            const v = String(raw[id] || '').toLowerCase();
+            if (ABILITY_KEYS.indexOf(v) !== -1) out[id] = v;
+        });
+        return out;
+    };
+    proto.getAbilityKey = function (L, abilityId) {
+        return (L && L.abilityKeys && L.abilityKeys[abilityId]) || '';
+    };
+    /** Bind (or clear with '') the key of an executable ability. A key belongs to one ability: the previous owner loses it. */
+    proto.setAbilityKey = function (shipId, abilityId, key) {
+        const L = this.getLoadout(shipId);
+        const k = String(key || '').toLowerCase();
+        L.abilityKeys = this.normalizeAbilityKeys(L.abilityKeys);
+        Object.keys(L.abilityKeys).forEach((id) => { if (k && L.abilityKeys[id] === k) delete L.abilityKeys[id]; });
+        if (ABILITY_KEYS.indexOf(k) !== -1) L.abilityKeys[abilityId] = k; else delete L.abilityKeys[abilityId];
+        this.setLoadout(shipId, L);
+        return this.getAbilityKey(L, abilityId);
+    };
+
     const baseNormalize = proto.normalizeLoadout;
     proto.normalizeLoadout = function (src) {
         const L = baseNormalize.call(this, src);
+        L.abilityKeys = this.normalizeAbilityKeys(src && src.abilityKeys);
         L.weaponKeys = this.normalizeWeaponKeys(src && src.weaponKeys);
         L.weaponKeySets = this.normalizeWeaponKeySets(src && src.weaponKeySets);
         const all = String((src && src.allFireKey) || 'space').toLowerCase();

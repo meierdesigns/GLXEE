@@ -642,7 +642,7 @@ var enemyCardLayout = {
     LABELS: { title: 'TITLE', bar: 'BAR', face: 'FACE', ship: 'SHIP', planet: 'PLANET' },
     DEF_Z: { title: 6, bar: 5, face: 4, ship: 3, planet: 0 },
     /** Shipped defaults (x/y px, s %, z layer); anything missing falls back to neutral. Paste COPY output here. */
-    BAKED: {"title":{"x":0,"y":0,"s":100,"z":6},"bar":{"x":0,"y":0,"s":100,"z":5},"face":{"x":473,"y":-70,"s":140,"z":4},"ship":{"x":158,"y":-5,"s":105,"z":5},"planet":{"x":-167,"y":9,"s":180,"z":0}},
+    BAKED: {"title":{"x":0,"y":0,"s":100,"z":6},"bar":{"x":473,"y":-28,"s":100,"z":5},"face":{"x":473,"y":-70,"s":140,"z":4},"ship":{"x":190,"y":-5,"s":105,"z":5},"planet":{"x":-167,"y":9,"s":180,"z":0}},
     defaults() { const o = {}; this.ELS.forEach((k) => { const b = this.BAKED[k] || {}; o[k] = { x: b.x || 0, y: b.y || 0, s: b.s || 100, z: b.z !== undefined ? b.z : this.DEF_Z[k] }; }); return o; },
     load() {
         let v = {};
@@ -1652,7 +1652,7 @@ extendClass(GalaxyMapManager, {
                     : 'READY'));
         const diff = info.unlocked ? (info.difficulty || '—') : '???';
         const enemies = info.unlocked ? String(info.enemyCount) : '???';
-        const status = info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED';
+        const status = info.unlocked ? (info.cleared ? 'CLEARED' : (this.planetSituationStatus ? this.planetSituationStatus(info.id) : 'OPEN')) : 'LOCKED';
         const unlockFrom = !info.unlocked
             ? (this.map.edges || []).map((edge) => edge[0] === info.id ? edge[1] : (edge[1] === info.id ? edge[0] : null))
                 .find((pid) => pid && this.isUnlocked(pid))
@@ -1771,7 +1771,7 @@ var GM_PIXEL_U0 = 32 / 18;
 // Galaxy-map nebula feature scale (noise frequency per map unit): higher =
 // smaller clouds, finer wisps and filaments.
 // Bump when the nebula look changes: invalidates the copies stored across reloads.
-var NEB_VERSION = 32;
+var NEB_VERSION = 33;
 var NEB_SCALE = 0.0038;
 // Max pixels computed for the nebula patch over the view (performance cap).
 var NEB_PIXEL_BUDGET = 160000;
@@ -2760,12 +2760,16 @@ extendClass(GalaxyMapManager, {
                         const dens = 1 - Math.exp(-A / 0.5);
                         const edge = Math.min(1, Math.max(0, (dens - 0.12 - (1 - billow) * 0.6) * 3.5));
                         const rim = edge * (1 - edge) * 4;
-                        let cov = edge * (0.12 + 0.16 * dens) + 0.1 * rid * rid * rid * dens;
-                        cov = Math.min(0.32, cov + 0.1 * lane * edge);
+                        // Clearly visible gas: stronger coverage, saturated colour (no pale veil), only a hint of white in the core.
+                        let cov = edge * (0.3 + 0.32 * dens) + 0.18 * rid * rid * rid * dens;
+                        cov = Math.min(0.66, cov + 0.12 * lane * edge);
                         let cr = R / A, cg = G / A, cb = B / A;
-                        const lift = (1 + 0.85 * rim) * (1 - 0.65 * lane);
-                        const hot = 0.38 * dens * dens * (1 - lane);
+                        const lift = (1 + 0.7 * rim) * (1 - 0.6 * lane);
+                        const hot = 0.1 * dens * dens * (1 - lane);
                         cr = (cr + (255 - cr) * hot) * lift; cg = (cg + (255 - cg) * hot) * lift; cb = (cb + (255 - cb) * hot) * lift;
+                        const grey = (cr + cg + cb) / 3;
+                        cr = grey + (cr - grey) * 1.45; cg = grey + (cg - grey) * 1.45; cb = grey + (cb - grey) * 1.45;
+                        cr = Math.max(0, cr); cg = Math.max(0, cg); cb = Math.max(0, cb);
                         R = cr * cov; G = cg * cov; B = cb * cov; A = cov;
                     }
                     const o = (r * cols + c) * 4;
@@ -4623,6 +4627,64 @@ extendClass(GalaxyMapManager, {
 
         this.syncShipEdgeMarker(show);
         this.syncMissionEdgeMarker();
+        this.syncMainQuestGuide();
+    },
+
+    /**
+     * Main quest: a text hint at the top of the map plus a bouncing arrow over the target planet
+     * (when it is on screen; off screen the edge marker already points the way).
+     */
+    syncMainQuestGuide() {
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!area || !svg) return;
+        const prof = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null;
+        const m = prof && prof.activeMission;
+        const pt = (m && m.main && !this._flight) ? this.getActiveMissionPoint() : null;
+        let hint = area.querySelector('.gm-main-hint');
+        let ptr = area.querySelector('.gm-main-pointer');
+        if (!pt) {
+            if (hint) hint.hidden = true;
+            if (ptr) ptr.hidden = true;
+            return;
+        }
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'gm-main-hint';
+            area.appendChild(hint);
+        }
+        const esc = (v) => String(v || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        const where = m.planetName ? ' → ' + m.planetName : '';
+        const text = (m.objective || m.hint || m.name || 'MAIN QUEST');
+        const key = text + '|' + where + '|' + (m.name || '');
+        if (hint._key !== key) {
+            hint._key = key;
+            hint.innerHTML = '<b>MAIN QUEST · ' + esc(String(m.name || '').toUpperCase()) + '</b><span>' + esc(text) + esc(where) + '</span>';
+        }
+        hint.hidden = false;
+        if (!ptr) {
+            ptr = document.createElement('div');
+            ptr.className = 'gm-main-pointer';
+            ptr.setAttribute('aria-hidden', 'true');
+            area.appendChild(ptr);
+        }
+        if (!this.isActiveMissionOnScreen()) { ptr.hidden = true; return; }
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        const ar = area.getBoundingClientRect();
+        if (!vb || !vb.width || !r.width || !ar.width) { ptr.hidden = true; return; }
+        const sc = Math.min(r.width / vb.width, r.height / vb.height);
+        const left = vb.x + (vb.width - r.width / sc) / 2;
+        const top = vb.y + (vb.height - r.height / sc) / 2;
+        const z = area.offsetWidth ? ar.width / area.offsetWidth : 1;
+        const x = Math.round((r.left + (pt.x - left) * sc - ar.left) / z);
+        const y = Math.round((r.top + (pt.y - top) * sc - ar.top) / z);
+        ptr.hidden = false;
+        if (ptr._k !== x + '|' + y) {
+            ptr._k = x + '|' + y;
+            ptr.style.left = x + 'px';
+            ptr.style.top = y + 'px';
+        }
     },
 
     /** Active-mission planet point in map coords, or null when none / other galaxy. */
@@ -6898,8 +6960,40 @@ extendClass(GalaxyMapManager, {
         const label = String((meta && meta.label) || id).toUpperCase().replace(/</g, '&lt;');
         return `<span class="gm-faction-chip" style="--chip:${color}"><span class="gm-faction-dot"></span>${label}</span>`;
     },
+    /**
+     * Who the planet belongs to and what the pilot does there:
+     *  invaded → an enemy is attacking a planet of the pilot's side (defend it),
+     *  defend  → the planet belongs to the pilot's own / allied faction (defend it),
+     *  attack  → hostile territory.
+     */
+    planetSituation(planetId) {
+        const pm = typeof profileManager !== 'undefined' ? profileManager : null;
+        const pcm = typeof planetConfigManager !== 'undefined' ? planetConfigManager : null;
+        const inv = pm && pm.getInvasionForPlanet ? pm.getInvasionForPlanet(planetId) : null;
+        const own = pcm && pcm.getPlayerFaction ? pcm.getPlayerFaction() : '';
+        if (inv) return { kind: 'invaded', owner: String(inv.defender || own || '').toLowerCase(), attacker: String(inv.attacker || '').toLowerCase() };
+        let list = [];
+        try { list = pcm && pcm.getPlanetFactions ? pcm.getPlanetFactions(planetId) || [] : []; } catch (e) { list = []; }
+        const owner = String(list[0] || '').toLowerCase();
+        if (owner && pcm && pcm.isFriendlyFaction && pcm.isFriendlyFaction(owner)) return { kind: 'defend', owner: owner };
+        return { kind: 'attack', owner: owner };
+    },
+    /** Status-cell text for a planet ('' = keep the generic one). */
+    planetSituationStatus(planetId) {
+        const sit = this.planetSituation(planetId);
+        return sit.kind === 'invaded' ? 'UNDER ATTACK — DEFEND' : (sit.kind === 'defend' ? 'OWN PLANET — DEFEND' : 'ENEMY TERRITORY');
+    },
     /** Factions settling a planet (ruling first), for the sector card. */
     planetFactionsLabelHtml(planetId) {
+        const sit = this.planetSituation(planetId);
+        if (sit.owner) {
+            const tag = sit.kind === 'invaded'
+                ? `<span class="gm-sit-tag is-invaded">UNDER ATTACK BY ${this.factionLabelHtml(sit.attacker)}</span>`
+                : (sit.kind === 'defend'
+                    ? '<span class="gm-sit-tag is-defend">YOURS — DEFEND IT</span>'
+                    : '<span class="gm-sit-tag is-attack">ENEMY TERRITORY</span>');
+            return this.factionLabelHtml(sit.owner) + ' ' + tag;
+        }
         let list = [];
         try {
             list = typeof planetConfigManager !== 'undefined' && planetConfigManager.getPlanetFactions
@@ -7056,7 +7150,7 @@ extendClass(GalaxyMapManager, {
                     : 'READY'))
             : 'LOCKED');
         set('gmEnemies', info.unlocked ? String(info.enemyCount) : '???');
-        set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : 'OPEN') : 'LOCKED');
+        set('gmStatus', info.unlocked ? (info.cleared ? 'CLEARED' : (this.planetSituationStatus ? this.planetSituationStatus(info.id) : 'OPEN')) : 'LOCKED');
         const stepper = this.overlay.querySelector('#gmStageStepper');
         if (stepper) stepper.innerHTML = (info.unlocked && !this.selectedPostId && !this.selectedBorder) ? this.planetStagesHtml(info.id) : '';
         const unlockHint = this.overlay.querySelector('#gmUnlockHint');

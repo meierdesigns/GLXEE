@@ -163,8 +163,17 @@
         // Layout math uses the bezel screen opening (CSS --fr-open-*) plus the
         // 16px fight inset so the playfield scales into the remaining glass.
         const u = Math.min(real.vw / 1640, real.vh / 1110);
-        const openL = 56 * u;          // keep in sync with --fr-open-side (part-19)
-        const openR = 56 * u;
+        // The opening differs per faction (rim art thickness, screen-frame.css): read the live CSS values.
+        let probe = vfs._openProbe;
+        if (!probe || !probe.isConnected) {
+            probe = vfs._openProbe = document.createElement('div');
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;width:var(--fr-open-side);height:var(--fr-open-bottom)';
+            ROOT.appendChild(probe);
+        }
+        const probeW = probe.offsetWidth, probeH = probe.offsetHeight;
+        const openL = probeW > 0 ? probeW : 56 * u;
+        const openR = openL;
         // Prefer live CSS --bz-extra so fight layout tracks part-19 (was hard-coded 50).
         let bzExtra = 24;
         try {
@@ -173,7 +182,7 @@
             if (Number.isFinite(n) && n >= 0) bzExtra = n;
         } catch (e) { /* default */ }
         const openT = (44 + bzExtra) * u; // keep in sync with --fr-open-top (part-19)
-        const openB = 56 * u;          // keep in sync with --fr-open-bottom (part-19)
+        const openB = probeH > 0 ? probeH : 56 * u;
         const inset = inFight ? FIGHT_INSET : 0;
         const vw = (real.vw - openL - openR - 2 * inset) / zoom;
         const vh = (real.vh - openT - openB - 2 * inset) / zoom;

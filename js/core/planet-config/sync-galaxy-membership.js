@@ -12,18 +12,18 @@ const THEME_ZONES = {
     retro: { pipes: 2, ruins: 2, canyon: 1 }
 };
 const FACTION_ZONES = {
-    pirate: { ruins: 2, pipes: 2, terraces: 1 },
-    terran: { terraces: 2, pipes: 2, ruins: 1 },
-    kronax: { bulges: 2, gorge: 2, winding: 1 },
-    machine: { pipes: 3, terraces: 2, ruins: 1 },
-    voidborn: { reef: 3, winding: 2, open: 1 }
+    pirate: { ruins: 3, pipes: 2, terraces: 1 },
+    terran: { terraces: 3, pipes: 2, ruins: 1 },
+    kronax: { bulges: 3, gorge: 2, winding: 1 },
+    machine: { pipes: 4, terraces: 2, ruins: 1 },
+    voidborn: { reef: 4, winding: 2, open: 1 }
 };
 // Holding faction paints the playfield: organic growth vs welded plating.
 const FACTION_FLOORS = {
     pirate: ['scrapyard', 'rubble', 'cracks', 'plates'],
     terran: ['plating', 'rubble', 'cracks', 'plates'],
-    kronax: ['rubble', 'cracks', 'spines', 'ridges'],
-    machine: ['rubble', 'plating', 'conduits', 'cracks'],
+    kronax: ['spines', 'rubble', 'cracks', 'ridges'],
+    machine: ['conduits', 'plating', 'rubble', 'cracks'],
     voidborn: ['biomass', 'tendrils', 'veins', 'rubble']
 };
 const FACTION_MATS = {
@@ -271,28 +271,45 @@ extendClass(PlanetConfigManager, {
      * Look of a planet's combat environment: obstacles take the planet's
      * colour, while the faction that holds it decides their shape, the side
      * terrain's structures and the accent lights.
+     *
+     * opts.faction  — force which faction paints styles / floors / mats
+     * opts.homeBias — defense theaters: that faction dominates, coarse props
      */
-    getPlanetEnvironment(planetId, cfg) {
+    getPlanetEnvironment(planetId, cfg, opts) {
         const c = cfg || this.getConfig(planetId) || {};
+        const o = opts || {};
         const hostile = (this.getHostileFactions ? this.getHostileFactions(planetId) : []) || [];
         const all = (c.factions || []).map((f) => String(f).toLowerCase());
-        const faction = String(hostile[0] || all[0] || 'pirate').toLowerCase();
-        const second = String(hostile[1] || all.find((f) => f !== faction) || '').toLowerCase();
+        const homeFaction = String(all[0] || hostile[0] || 'pirate').toLowerCase();
+        const override = o.faction ? String(o.faction).toLowerCase() : '';
+        const homeBias = !!o.homeBias;
+        const faction = String(override || hostile[0] || all[0] || 'pirate').toLowerCase();
+        const second = String(
+            (homeBias ? (hostile[0] && hostile[0] !== faction ? hostile[0] : all.find((f) => f !== faction))
+                : (hostile[1] || all.find((f) => f !== faction))) || ''
+        ).toLowerCase();
         const theme = this.getFactionPlanetTheme ? this.getFactionPlanetTheme(faction) : {};
         const galaxy = c.galaxyId && this.getGalaxy ? this.getGalaxy(c.galaxyId) : null;
         const styleOf = { terran: 'asteroid', pirate: 'scrap', kronax: 'spike', machine: 'tech', voidborn: 'organic' };
         const style = styleOf[faction] || 'asteroid';
         // Shape mix: mostly the holding faction, some of its rival, the rest
         // plain planet rock — so a level never shows one repeated obstacle.
+        // Defense (homeBias): home doctrine floods the theater; rival is a thin accent.
         const styles = [];
         const addStyle = (id, weight) => {
             const hit = styles.find((e) => e.id === id);
             if (hit) hit.weight += weight;
             else styles.push({ id: id, weight: weight });
         };
-        addStyle(style, 5);
-        addStyle('asteroid', 3);
-        if (second && styleOf[second]) addStyle(styleOf[second], 2);
+        if (homeBias) {
+            addStyle(style, 10);
+            addStyle('asteroid', 1);
+            if (second && styleOf[second]) addStyle(styleOf[second], 1);
+        } else {
+            addStyle(style, 5);
+            addStyle('asteroid', 3);
+            if (second && styleOf[second]) addStyle(styleOf[second], 2);
+        }
         // Material inclusions follow what the planet yields.
         const resources = (c.resources || []).map((r) => ({ id: String(r.id || 'scrap'), weight: Math.max(1, r.weight || 1) }));
         // Surface treatment from the planet theme (explored planets inherit
@@ -303,17 +320,29 @@ extendClass(PlanetConfigManager, {
         // the ground: surface treatment, floor patterns and wall materials.
         const look = this.getPlanetLook(planetId || c.id);
         const lookEnv = PLANET_LOOK_ENV[look.style] || null;
+        // Defense: faction floors/mats lead so the arena reads as THEIR ground.
+        const floors = homeBias
+            ? this.mergeIdLists(FACTION_FLOORS[faction], lookEnv && lookEnv.floors)
+            : this.mergeIdLists(lookEnv && lookEnv.floors, FACTION_FLOORS[faction]);
+        const materials = homeBias
+            ? this.mergeIdLists(FACTION_MATS[faction], lookEnv && lookEnv.mats)
+            : this.mergeIdLists(lookEnv && lookEnv.mats, FACTION_MATS[faction]);
+        const zones = homeBias
+            ? this.mergeZoneWeights(FACTION_ZONES[faction], lookEnv && lookEnv.zones,
+                THEME_ZONES[String(c.theme || theme.theme || '').toLowerCase()])
+            : this.mergeZoneWeights(lookEnv && lookEnv.zones,
+                THEME_ZONES[String(c.theme || theme.theme || '').toLowerCase()], FACTION_ZONES[faction]);
         return {
             planetId: String(planetId || c.id || ''),
             faction: faction,
             // Who built the planet (configured owner) — styles its own structures like the sluice gate.
-            homeFaction: String(all[0] || faction).toLowerCase(),
+            homeFaction: homeFaction,
             planetStyle: look.style,
+            defense: homeBias,
             // Planet look first, then faction doctrine floors/mats so each theater reads as both.
-            floors: this.mergeIdLists(lookEnv && lookEnv.floors, FACTION_FLOORS[faction]),
-            materials: this.mergeIdLists(lookEnv && lookEnv.mats, FACTION_MATS[faction]),
-            zones: this.mergeZoneWeights(lookEnv && lookEnv.zones,
-                THEME_ZONES[String(c.theme || theme.theme || '').toLowerCase()], FACTION_ZONES[faction]),
+            floors: floors,
+            materials: materials,
+            zones: zones,
             width: lookEnv ? lookEnv.width : null,
             base: look.baseColor || c.baseColor || (galaxy && galaxy.baseColor) || theme.baseColor || '#7a7f88',
             accent: theme.baseColor || '#8B6914',

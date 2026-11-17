@@ -51,6 +51,7 @@ class HeroPlanetBackdrop {
     /** SETUP step: focus defense on the chosen start-profile hull (interceptor, heavy, …). */
     setFocusShip(shipId) {
         const next = shipId ? String(shipId) : null;
+        if (next !== this._focusShipId) this._userZoom = 1;
         this._focusShipId = next;
         this._orbitFleet = null;
         this._orbitSpriteCache = null;
@@ -91,12 +92,33 @@ class HeroPlanetBackdrop {
             container.insertBefore(this.el, container.firstChild);
         }
         if (this._ro) this._ro.observe(container);
+        this._bindZoomWheel(container);
         // draw() (called by _startLoop()/below) always re-measures the
         // element's own box first — see draw() — so a stale mid-transition
         // size here self-corrects on the very next paint instead of only
         // resyncing when ResizeObserver happens to fire.
         if (!this._reduceMotion) this._startLoop();
         else this.draw();
+    }
+
+    /** SETUP: mouse wheel over the backdrop (not over a scrolling panel) zooms the camera in / out. */
+    _bindZoomWheel(container) {
+        if (this._wheelHost === container) return;
+        if (this._wheelHost && this._onWheel) this._wheelHost.removeEventListener('wheel', this._onWheel);
+        this._wheelHost = container;
+        this._onWheel = (e) => {
+            if (!this._focusShipId) return;
+            for (let n = e.target; n && n !== container; n = n.parentElement) {
+                if (n.scrollHeight > n.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(n).overflowY)) return;
+            }
+            // Only the left backdrop area: ignore wheel over the right-hand panels.
+            const r = this.el.getBoundingClientRect();
+            if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+            e.preventDefault();
+            const z = (this._userZoom || 1) * (e.deltaY < 0 ? 1.15 : 1 / 1.15);
+            this._userZoom = Math.max(0.6, Math.min(4, z));
+        };
+        container.addEventListener('wheel', this._onWheel, { passive: false });
     }
 
     unmount() {
@@ -388,7 +410,7 @@ class HeroPlanetBackdrop {
      */
     _applyFocusCamera(c, orbit, planetCx, planetCy) {
         const focus = (orbit || []).find((s) => s && s.ship && s.ship.isFocus);
-        const wantZ = 1.45;
+        const wantZ = 1.45 * (this._userZoom || 1);
         let tx = planetCx;
         let ty = planetCy;
         if (focus) {
@@ -1279,7 +1301,7 @@ class HeroPlanetBackdrop {
         // Stage defense: own fleet must read clearly against the dark grid.
         const scale = Math.max(0.85, Math.min(1.25, (r * 0.55) / 48));
         const n = fleet.ships.length || 1;
-        return fleet.ships.map((s, i) => {
+        const out = fleet.ships.map((s, i) => {
             // Smooth station-keeping: slow strafe + surge (ms → rad/s), no pixel snap.
             const lane = (i - (n - 1) / 2) / Math.max(1, n - 1);
             const baseX = cx + lane * r * (s.isFocus ? 0.12 : 0.85);
@@ -1315,6 +1337,24 @@ class HeroPlanetBackdrop {
                 alpha: 1
             };
         });
+        // SETUP: the other hulls keep their distance from the chosen one.
+        const foc = out.find((o) => o.ship.isFocus);
+        if (foc) {
+            const minD = Math.max(foc.w, foc.h) * 2.6 + r * 0.35;
+            out.forEach((o) => {
+                if (o === foc) return;
+                let dx = o.sx - foc.sx;
+                let dy = o.sy - foc.sy;
+                let d = Math.hypot(dx, dy);
+                if (d >= minD) return;
+                if (d < 1) { dx = 1; dy = -0.4; d = Math.hypot(dx, dy); }
+                o.sx = Math.round(foc.sx + dx / d * minD);
+                o.sy = Math.round(foc.sy + dy / d * minD);
+                o.ship._sx = o.sx;
+                o.ship._sy = o.sy;
+            });
+        }
+        return out;
     }
 
     _drawOrbitShips(c, orbit, front) {

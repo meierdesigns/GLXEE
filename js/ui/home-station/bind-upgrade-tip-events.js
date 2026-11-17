@@ -1,5 +1,74 @@
 "use strict";
 
+// Station upgrade tree: per-faction naming (display only — costs / effects stay in economy-config).
+const UPG_FLAVOR = {
+    terran: {
+        title: 'UGDF STATION GRID',
+        trees: { core: 'COMMAND', vault: 'SUPPLY', fleet: 'FLEET', cargo: 'LOGISTICS', drive: 'DRIVE', power: 'POWER', diplo: 'DIPLO' },
+        nodes: { core: 'COMMAND DECK', storage: 'SUPPLY DEPOT', hangar: 'FLIGHT DECK', cargo: 'LOGISTICS BAY', impulse_drive: 'IMPULSE ENGINES', reactor: 'FUSION REACTOR',
+            compactor: 'SCRAP PRESS', docking_ring: 'DOCKING RING', fabricator: 'FIELD FABRICATOR', warp_drive: 'WARP CORE', cooling: 'COOLANT GRID', refinery: 'ORE REFINERY',
+            drone_bay: 'DRONE BAY', sensors: 'RADAR ARRAY', nav_computer: 'NAV COMPUTER', foundry: 'NANO FOUNDRY', quantum_array: 'QUANTUM ARRAY', stargate: 'STARGATE LINK',
+            vault_omega: 'OMEGA DEPOT', fleet_yard: 'FLEET YARD', embassy: 'EMBASSY', trade_desk: 'TRADE DESK', war_room: 'WAR ROOM' }
+    },
+    kronax: {
+        title: 'KRONAX WAR NEST',
+        trees: { core: 'NEST', vault: 'HOARD', fleet: 'WARFLEET', cargo: 'SPOILS', drive: 'STRIKE', power: 'FORGE', diplo: 'TRUCE' },
+        nodes: { core: 'WAR NEST', storage: 'TROPHY VAULT', hangar: 'CLAW HANGAR', cargo: 'SPOILS HOLD', impulse_drive: 'STRIKE DRIVE', reactor: 'FORGE REACTOR',
+            compactor: 'SLAG PRESS', docking_ring: 'RAID BERTHS', fabricator: 'WAR FORGE', warp_drive: 'JUMP FORGE', cooling: 'QUENCH GRID', refinery: 'SMELTER',
+            drone_bay: 'HUNTER BAY', sensors: 'SCENT ARRAY', nav_computer: 'HUNT CHART', foundry: 'NANO FORGE', quantum_array: 'SHARD ARRAY', stargate: 'RAID GATE',
+            vault_omega: 'OMEGA HOARD', fleet_yard: 'WARFLEET YARD', embassy: 'TRUCE HALL', trade_desk: 'TRIBUTE DESK', war_room: 'WAR COUNCIL' }
+    },
+    voidborn: {
+        title: 'VOIDBORN RING SANCTUM',
+        trees: { core: 'HEART', vault: 'ECHO', fleet: 'RINGS', cargo: 'PHASE', drive: 'DRIFT', power: 'VOID', diplo: 'CONCLAVE' },
+        nodes: { core: 'VOID HEART', storage: 'ECHO VAULT', hangar: 'RING DOCK', cargo: 'PHASE HOLD', impulse_drive: 'DRIFT DRIVE', reactor: 'VOID REACTOR',
+            compactor: 'ENTROPY PRESS', docking_ring: 'ORBIT RING', fabricator: 'SHAPING LOOM', warp_drive: 'RIFT ENGINE', cooling: 'STILL GRID', refinery: 'SHADE REFINERY',
+            drone_bay: 'WISP BAY', sensors: 'WHISPER ARRAY', nav_computer: 'STAR LOOM', foundry: 'DREAM FOUNDRY', quantum_array: 'ECLIPSE ARRAY', stargate: 'RIFT GATE',
+            vault_omega: 'OMEGA ABYSS', fleet_yard: 'HOLLOW YARD', embassy: 'CONCLAVE', trade_desk: 'OFFERING DESK', war_room: 'OMEN ROOM' }
+    },
+    pirate: {
+        title: 'PIRATE SCRAP HAVEN',
+        trees: { core: 'HQ', vault: 'STASH', fleet: 'DOCKS', cargo: 'LOOT', drive: 'RUN', power: 'JUNK', diplo: 'DEALS' },
+        nodes: { core: 'SCRAP HQ', storage: 'STASH', hangar: 'SCRAP DOCKS', cargo: 'SMUGGLER HOLD', impulse_drive: 'JURY-RIG DRIVE', reactor: 'BOOTLEG REACTOR',
+            compactor: 'JUNK CRUSHER', docking_ring: 'RAFT BERTHS', fabricator: 'CHOP SHOP', warp_drive: 'SKIP DRIVE', cooling: 'DUCT-TAPE COOLING', refinery: 'STILL & SMELTER',
+            drone_bay: 'SCAV DRONES', sensors: 'SCANNER RIG', nav_computer: 'PIRATE CHARTS', foundry: 'BACK-ALLEY FOUNDRY', quantum_array: 'WILD ARRAY', stargate: 'SMUGGLER GATE',
+            vault_omega: 'BLACK VAULT', fleet_yard: 'ARMADA YARD', embassy: 'PARLEY DECK', trade_desk: 'FENCE DESK', war_room: 'RAID ROOM' }
+    },
+    machine: {
+        title: 'MACHINE CORE LATTICE',
+        trees: { core: 'NODE', vault: 'ARCHIVE', fleet: 'ASSEMBLY', cargo: 'FREIGHT', drive: 'THRUST', power: 'FLUX', diplo: 'PROTOCOL' },
+        nodes: { core: 'CORE NODE', storage: 'DATA VAULT', hangar: 'ASSEMBLY BAY', cargo: 'FREIGHT GRID', impulse_drive: 'THRUST ARRAY', reactor: 'FLUX REACTOR',
+            compactor: 'COMPRESSOR UNIT', docking_ring: 'DOCK LATTICE', fabricator: 'AUTO-FABRICATOR', warp_drive: 'WARP MATRIX', cooling: 'THERMAL LATTICE', refinery: 'REFINING UNIT',
+            drone_bay: 'SWARM BAY', sensors: 'SENSOR GRID', nav_computer: 'NAV PROCESSOR', foundry: 'NANO ASSEMBLER', quantum_array: 'QUANTUM LATTICE', stargate: 'GATE PROTOCOL',
+            vault_omega: 'OMEGA ARCHIVE', fleet_yard: 'FLEET MATRIX', embassy: 'PROTOCOL HUB', trade_desk: 'EXCHANGE NODE', war_room: 'TACTICS CORE' }
+    }
+};
+
+/** Branch colours as one family around the faction accent (hue steps), not a rainbow. */
+function upgFactionPalette(factionId) {
+    let accent = '#4ec4ff';
+    try {
+        if (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle) {
+            const st = factionShipStyles.getFactionStyle(factionId);
+            if (st && /^#[0-9a-f]{6}$/i.test(st.accent || '')) accent = st.accent;
+        }
+    } catch (e) { /* default accent */ }
+    const n = parseInt(accent.slice(1), 16);
+    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    let h = 0; const l = (mx + mn) / 2; const d = mx - mn;
+    const sat = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+    if (d) {
+        if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+        h *= 60; if (h < 0) h += 360;
+    }
+    const steps = [0, 22, -22, 44, -44, 66, -66]; // core, vault, fleet, cargo, drive, power, diplo
+    const light = [62, 58, 66, 60, 68, 56, 64];
+    return steps.map(function (dh, i) {
+        return 'hsl(' + Math.round((h + dh + 360) % 360) + ' ' + Math.round(Math.max(45, Math.min(95, sat * 100 + 10))) + '% ' + light[i] + '%)';
+    });
+}
+
 // HomeStationUI methods, split from home-station.js.
 extendClass(HomeStationUI, {
     bindUpgradeTipEvents() {
@@ -15,6 +84,26 @@ extendClass(HomeStationUI, {
             });
         });
         const scroll = this.overlay.querySelector('.hs-upg-tree-scroll');
+        // Legend button group: click = scroll to that tree and dim the others; click again = clear.
+        this.overlay.querySelectorAll('.hs-upg-branch-chip').forEach((chip) => {
+            chip.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tree = this.overlay.querySelector('.hs-upg-tree');
+                if (!tree) return;
+                const id = chip.getAttribute('data-upg-branch');
+                const on = tree.getAttribute('data-focus') !== id;
+                if (on) tree.setAttribute('data-focus', id); else tree.removeAttribute('data-focus');
+                this.overlay.querySelectorAll('.hs-upg-branch-chip').forEach((c) => {
+                    const sel = on && c === chip;
+                    c.classList.toggle('on', sel);
+                    c.setAttribute('aria-pressed', sel ? 'true' : 'false');
+                });
+                if (on && scroll) {
+                    const x = Number(chip.getAttribute('data-x')) || 0;
+                    scroll.scrollTo({ left: Math.max(0, x - scroll.clientWidth / 2), behavior: 'smooth' });
+                }
+            });
+        });
         if (scroll) {
             scroll.addEventListener('scroll', () => {
                 if (!this._upgTipBtn) return;
@@ -89,23 +178,31 @@ extendClass(HomeStationUI, {
         const order = economyConfig.stationUpgradeOrder || [];
         const nodes = [];
         const byId = {};
+        const facId = (UPG_FLAVOR[profile.faction] ? profile.faction : 'terran');
+        const flavor = UPG_FLAVOR[facId];
+        const pal = upgFactionPalette(facId);
         order.forEach((id) => {
-            const node = economyConfig.getStationUpgradeNode(id);
-            if (!node) return;
+            const base = economyConfig.getStationUpgradeNode(id);
+            if (!base) return;
+            // Faction-flavoured copy (name only; effect / cost callbacks are shared).
+            const node = flavor.nodes[id] ? Object.assign({}, base, { label: flavor.nodes[id] }) : base;
             nodes.push(node);
             byId[node.id] = node;
         });
 
         // Independent color-coded trees side-by-side (NOT one hub from CORE).
         const TREES = [
-            { id: 'core', root: 'core', color: 'var(--color-primary, #3dff6a)', label: 'CORE' },
-            { id: 'vault', root: 'storage', color: '#e8b84a', label: 'VAULT' },
-            { id: 'fleet', root: 'hangar', color: '#4ec4ff', label: 'FLEET' },
-            { id: 'cargo', root: 'cargo', color: '#d46cff', label: 'CARGO' },
-            { id: 'drive', root: 'impulse_drive', color: '#5dff8a', label: 'DRIVE' },
-            { id: 'power', root: 'reactor', color: '#ff7a45', label: 'POWER' },
-            { id: 'diplo', root: 'embassy', color: '#ff5cab', label: 'DIPLO' }
+            { id: 'core', root: 'core', color: pal[0], label: flavor.trees.core },
+            { id: 'vault', root: 'storage', color: pal[1], label: flavor.trees.vault },
+            { id: 'fleet', root: 'hangar', color: pal[2], label: flavor.trees.fleet },
+            { id: 'cargo', root: 'cargo', color: pal[3], label: flavor.trees.cargo },
+            { id: 'drive', root: 'impulse_drive', color: pal[4], label: flavor.trees.drive },
+            { id: 'power', root: 'reactor', color: pal[5], label: flavor.trees.power },
+            { id: 'diplo', root: 'embassy', color: pal[6], label: flavor.trees.diplo },
+            { id: 'armory', root: 'armory', color: pal[0], label: flavor.trees.armory || 'ARMORY' }
         ].filter((t) => byId[t.root]);
+        // One colour for every tree: the node SHAPE tells the tree apart (see part-23.css, data-branch).
+        TREES.forEach((t) => { t.color = pal[0]; });
 
         const kidsByParent = {};
         nodes.forEach((n) => {
@@ -130,14 +227,14 @@ extendClass(HomeStationUI, {
         });
 
         // Pixel layout: each tree fans out in local space, then packed side-by-side.
-        const nodeSize = 104;
+        const nodeSize = 96;
         const half = nodeSize / 2;
         const padX = 56;
-        const padY = 48;
-        const rowH = 188;
-        const sibGap = 168;
-        const treeGap = 96;
-        const topY = padY + half + 36;
+        const padY = 32;
+        const rowH = 150;
+        const sibGap = 128;
+        const treeGap = 64;
+        const topY = padY + half;
         const iconPx = 80;
 
         const posPx = {}; // id -> { x, y } centre
@@ -224,9 +321,11 @@ extendClass(HomeStationUI, {
             });
         });
 
-        const legend = TREES.map((t) =>
-            `<span class="hs-upg-branch-chip" style="--upg-branch:${t.color}">` +
-            `<i style="background:${t.color}"></i>${t.label}</span>`
+        // Legend = button group: the shape glyph matches the node shape of that tree; click jumps to / focuses it.
+        const legend = TREES.map((t, ti) =>
+            `<button type="button" class="hs-upg-branch-chip" data-upg-branch="${t.id}" data-x="${Math.round(treeCenters[ti] || 0)}"` +
+            ` style="--upg-branch:${t.color}" aria-pressed="false" title="${t.label}">` +
+            `<i class="hs-upg-shape" data-branch="${t.id}"></i>${t.label}</button>`
         ).join('');
 
         const selectedId = this.selectedUpgradeNode && byId[this.selectedUpgradeNode]
@@ -263,7 +362,9 @@ extendClass(HomeStationUI, {
                 (canBuy ? ` data-upgrade="${node.id}"` : '') +
                 ` aria-label="${node.label} ${level}/${node.maxLevel}">` +
                 `<span class="hs-upg-face" aria-hidden="true"></span>` +
-                `<span class="hs-upg-icon">${this.iconHtml((node.icon || 'hsUpgrade') + '@d', iconPx, 'hs-pixel')}</span>` +
+                `<span class="hs-upg-icon">${(node.grantsWeapon && typeof iconRenderer !== 'undefined' && iconRenderer.weaponImgHtml)
+                    ? iconRenderer.weaponImgHtml(node.grantsWeapon, iconPx, 'hs-pixel', false)
+                    : this.iconHtml(node.icon || 'hsUpgrade', iconPx, 'hs-pixel')}</span>` +
                 this.buildUpgradeSlotBadges(level, node.maxLevel) +
                 tip +
                 `</button>`;
@@ -309,10 +410,10 @@ extendClass(HomeStationUI, {
             `</div>`;
 
         return summary +
-            `<div class="hs-upg-branch-legend">${legend}</div>` +
+            `<div class="hs-upg-faction-title" style="--upg-branch:${pal[0]}"><i></i>${flavor.title}<i></i></div>` +
+            `<div class="hs-upg-branch-legend" role="group" aria-label="Upgrade trees">${legend}</div>` +
             `<div class="hs-upg-tree-scroll">` +
             `<div class="hs-upg-tree" style="width:${treeW}px;min-width:100%;height:${treeH}px">` +
-            colLabels +
             `<svg class="hs-upg-links" width="${treeW}" height="${treeH}" viewBox="0 0 ${treeW} ${treeH}" preserveAspectRatio="xMidYMin meet" shape-rendering="crispEdges" aria-hidden="true">${linkParts.join('')}</svg>` +
             nodeButtons +
             `</div></div>` +

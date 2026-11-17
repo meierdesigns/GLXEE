@@ -103,6 +103,11 @@ extendClass(StartScreenManager, {
 
         this.devMode = !this.devMode;
         this.saveDevMode();
+        // Open settings remote: dev-only categories / tabs appear or vanish immediately.
+        try {
+            const fit = window.vfFitScope;
+            if (fit && fit.refreshFxRemote) fit.refreshFxRemote();
+        } catch (e) { /* ignore */ }
         const finishToggle = () => {
             this.rebuildVisibleMenu();
             if (this.selectedIndex >= this.menuItems.length) {

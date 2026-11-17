@@ -1363,11 +1363,13 @@ html body :is(.hs-bay-inv, .hs-ship-storage-row, .vf-iss-ship-inv, .hs-tps-ship-
         drop-shadow(0 0 3px color-mix(in srgb, var(--pk-c) 55%, transparent));
 }
 .hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-type-bg .hs-storage-slot-type,
-.hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-type-bg img {
+.hs-storage-cell.is-ship-slot.is-empty .hs-storage-slot-type-bg :is(img, canvas, .hs-pixel, .ui-icon-tip) {
     width: 70% !important;
     height: 70% !important;
-    max-width: 44px;
-    max-height: 44px;
+    max-width: 28px !important;
+    max-height: 28px !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
     object-fit: contain;
     image-rendering: pixelated;
     pointer-events: none;
@@ -2362,3 +2364,120 @@ html body .gm-node .gm-node-icon-wrap.has-atmo {
 .vf-bezel-fx .vf-fx-tools-sliders .vf-fx-row {
     min-width: 0;
 }
+
+/* SETUP: TEST SHIP button + embedded test arena (smaller in-game view replacing the planet). */
+html body .profile-start-main .profile-setup-stage .profile-test-btn {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 3;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 0.8em;
+    letter-spacing: 2px;
+    color: var(--color-primary);
+    background: rgba(5, 6, 10, 0.78);
+    border: 2px solid var(--color-primary);
+    cursor: pointer;
+}
+html body .profile-start-main .profile-setup-stage .profile-test-btn:hover {
+    background: color-mix(in srgb, var(--color-primary) 28%, #05060a);
+}
+html body .profile-start-main .profile-setup-stage.is-testing .profile-test-btn,
+html body .profile-start-main .profile-setup-stage.is-testing .hero-planet-canvas { display: none; }
+html body .profile-setup-stage .hta-embed {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 10px 22px;
+    background: #02040a;
+}
+html body .profile-setup-stage .hta-embed-canvas {
+    display: block;
+    height: 100%;
+    max-width: 100%;
+    aspect-ratio: 0.8;
+    object-fit: contain;
+    border: 2px solid color-mix(in srgb, var(--color-primary) 55%, #05060a);
+    background: #050508;
+    image-rendering: pixelated;
+}
+html body .profile-setup-stage .hta-embed-exit {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 0.8em;
+    letter-spacing: 2px;
+    color: var(--color-primary);
+    background: rgba(5, 6, 10, 0.78);
+    border: 2px solid var(--color-primary);
+    cursor: pointer;
+}
+html body .profile-setup-stage .hta-embed-hint {
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    margin: 0;
+    text-align: center;
+    font-size: 0.65em;
+    letter-spacing: 1px;
+    opacity: 0.6;
+}
+html body .profile-setup-stage .hta-embed-ships {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+html body .profile-setup-stage .hta-embed-ship {
+    padding: 5px 10px;
+    font: inherit;
+    font-size: 0.7em;
+    letter-spacing: 1px;
+    text-align: left;
+    color: var(--color-primary);
+    background: rgba(5, 6, 10, 0.78);
+    border: 2px solid color-mix(in srgb, var(--color-primary) 40%, #05060a);
+    cursor: pointer;
+}
+html body .profile-setup-stage .hta-embed-ship.on {
+    background: color-mix(in srgb, var(--color-primary) 30%, #05060a);
+    border-color: var(--color-primary);
+}
+
+/* Planet card: ownership / situation tag next to the owner faction. */
+.gm-sit-tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    font-size: 0.8em;
+    letter-spacing: 1px;
+    border: 1px solid currentColor;
+    background: rgba(5, 6, 10, 0.55);
+}
+.gm-sit-tag.is-invaded { color: #ff5a4a; }
+.gm-sit-tag.is-defend { color: #5aff9a; }
+.gm-sit-tag.is-attack { color: #ffb84a; }
+.gm-sit-tag .gm-faction-chip { margin-left: 4px; }
+
+/* Enemy tag (ENEMY · NAME) sits under the enemy portrait instead of under the planet title:
+   same centre as the (1.4× scaled) face, bottom-anchored; --ec-bar-x/-y still nudge it. */
+html body .gm-enemy-text {
+    top: auto;
+    bottom: 6px;
+    left: 12px;
+    right: auto;
+    margin-left: calc(min(38%, 190px) * -0.2);
+    width: calc(min(38%, 190px) * 1.4);
+    justify-content: center;
+    transform-origin: 50% 50%;
+}
+html body .gm-enemy-text .gm-enemy-place { display: none; }

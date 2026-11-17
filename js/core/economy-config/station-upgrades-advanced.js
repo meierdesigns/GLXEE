@@ -253,6 +253,111 @@ function createAdvancedStationUpgradeNodes() {
                 { scrap: 330, ore: 140, crystal: 120, voltex: 50 },
                 { scrap: 470, ore: 200, crystal: 170, voltex: 85 }
             ]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        armory: {
+            id: 'armory',
+            label: 'ARMORY',
+            icon: 'hsComponents',
+            grantsWeapon: 'rapid',
+            maxLevel: 1,
+            requires: 'core',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Opens the armoury: a rapid-fire cannon for the stash. Unlocks the weapon branch.',
+            effect: () => ({}),
+            costs: [{ scrap: 60, ore: 20 }]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        arm_plasma: {
+            id: 'arm_plasma',
+            label: 'PLASMA FOUNDRY',
+            icon: 'hsComponents',
+            grantsWeapon: 'plasma',
+            maxLevel: 1,
+            requires: 'armory',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Builds a plasma cannon into the station stash.',
+            effect: () => ({}),
+            costs: [{ scrap: 110, ore: 45, crystal: 25 }]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        arm_missile: {
+            id: 'arm_missile',
+            label: 'MISSILE RACK',
+            icon: 'hsComponents',
+            grantsWeapon: 'missile',
+            maxLevel: 1,
+            requires: 'armory',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Builds a missile launcher into the station stash.',
+            effect: () => ({}),
+            costs: [{ scrap: 120, ore: 50, crystal: 20 }]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        arm_ion: {
+            id: 'arm_ion',
+            label: 'ION LAB',
+            icon: 'hsComponents',
+            grantsWeapon: 'ion',
+            maxLevel: 1,
+            requires: 'armory',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Builds an ion emitter into the station stash.',
+            effect: () => ({}),
+            costs: [{ scrap: 100, ore: 40, crystal: 45 }]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        arm_railgun: {
+            id: 'arm_railgun',
+            label: 'RAILGUN BAY',
+            icon: 'hsComponents',
+            grantsWeapon: 'railgun',
+            maxLevel: 1,
+            requires: 'arm_plasma',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Builds a railgun into the station stash.',
+            effect: () => ({}),
+            costs: [{ scrap: 200, ore: 90, crystal: 70, voltex: 20 }]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        arm_pierce: {
+            id: 'arm_pierce',
+            label: 'LANCE FORGE',
+            icon: 'hsComponents',
+            grantsWeapon: 'pierce',
+            maxLevel: 1,
+            requires: 'arm_missile',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Builds a piercing lance into the station stash.',
+            effect: () => ({}),
+            costs: [{ scrap: 190, ore: 85, crystal: 60, voltex: 15 }]
+        },
+        // WEAPONS branch — each node builds one new weapon into the station stash (once).
+        arm_nova: {
+            id: 'arm_nova',
+            label: 'NOVA CORE',
+            icon: 'hsComponents',
+            grantsWeapon: 'nova',
+            maxLevel: 1,
+            requires: 'arm_ion',
+            requireLevel: 1,
+            treeX: 50,
+            treeY: 60,
+            desc: 'Builds a nova projector into the station stash.',
+            effect: () => ({}),
+            costs: [{ scrap: 210, ore: 80, crystal: 85, voltex: 30 }]
         }
     };
 }

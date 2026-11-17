@@ -86,11 +86,11 @@ class CollisionManager {
             || 240;
         const cell = (obstacleManager.terrainCell && obstacleManager.terrainCell()) || 1;
         const gateEnter = typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter();
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace();
         // Exit sluice / warp on screen: lips and frame stay solid, but must not scrape the ship.
         const atExitGate = typeof objectiveManager !== 'undefined' && !!objectiveManager.goal;
         const player = playerManager.getPosition();
-        // During sluice enter the ship is pulled into the tube — wall scrapes must not kill it.
+        // Sluice enter AND the arrival hatch fly-out: the ship is script-driven through the tube — no wall scrape, no damage flash.
         if (player && !gateEnter) {
             const walls = obstacleManager.terrainWallsOver(player.y + 2, player.y + player.height - 2, W);
             if (walls) {
@@ -209,7 +209,7 @@ class CollisionManager {
         if (!enemyManager.getSideEnemies || !playerManager.getPosition) return;
         if (typeof game !== 'undefined' && game.cheatSystem && game.cheatSystem.cheats && game.cheatSystem.cheats.godMode) return;
         if (typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace()) {
             return;
         }
         const player = playerManager.getPosition();
@@ -469,7 +469,7 @@ class CollisionManager {
 
     checkEnemyBulletPlayerCollisions(gameState) {
         if (typeof objectiveManager !== 'undefined'
-            && objectiveManager.isGateEnter && objectiveManager.isGateEnter()) {
+            && objectiveManager.isCombatGrace && objectiveManager.isCombatGrace()) {
             return;
         }
         const enemyBullets = bulletManager.getEnemyBullets();

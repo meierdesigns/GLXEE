@@ -80,8 +80,11 @@ extendClass(RenderManager, {
         const gBase = Math.floor(gOffC / cell);
         const lc = this._terrainLayerKey || (this._terrainLayerKey = {});
         const dmgEpoch = obstacleManager._terrainDamageEpoch || 0;
+        // Compare profile by stable ids — object identity thrashing forced full rebuilds every frame.
+        const prof = obstacleManager._terrainProfile || (obstacleManager.terrainProfile && obstacleManager.terrainProfile());
+        const profId = prof ? (prof.pid + '#' + prof.stage + '#' + (prof.seed || 0)) : '';
         const sharedOk = lc.cols === cols && lc.rowsN === rowsN && lc.cell === cell && lc.W === W
-            && lc.key === this._terrainKey && lc.prof === obstacleManager._terrainProfile && lc.pal === pal;
+            && lc.key === this._terrainKey && lc.profId === profId && lc.pal === pal;
         const groundSame = sharedOk && lc.gBase === gBase && !!this._terrainBuf;
         const wallSame = sharedOk && lc.baseRow === baseRow && lc.dmg === dmgEpoch
             && !!this._terrainWallBuf && !!this._terrainOverlayBuf;
@@ -184,8 +187,8 @@ extendClass(RenderManager, {
                             if (c) col = c.inRim ? (c.lit ? pal.craterLit : pal.ground[3]) : (c.pit ? pal.craterPit : pal.ground[3]);
                         }
                     }
-                    // Faction doctrine speckles the planet crust (organic / mechanical).
-                    col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
+                    // Doctrine speckles only on defense theaters — per-cell tint shatters RLE and lags.
+                    if (env.defense) col = this.terrainFactionTint(env, pal, cx, wr, col, n) || col;
                     rowCols[cx] = col;
                 }
                 flushRow(rowCols, y);
@@ -301,7 +304,7 @@ extendClass(RenderManager, {
         lc.cell = cell;
         lc.W = W;
         lc.key = this._terrainKey;
-        lc.prof = obstacleManager._terrainProfile;
+        lc.profId = profId;
         lc.pal = pal;
         if (lc.gBase == null) lc.gBase = gBase;
         if (lc.baseRow == null) lc.baseRow = baseRow;
@@ -353,14 +356,16 @@ extendClass(RenderManager, {
      * One cell of a faction structure on the canyon rim, as a solid outlined
      * block (bunker, pod, fang, junk pile) instead of colour noise.
      * `edge` 1..band-1 from the corridor, `t` = row inside the 14-row block.
+     * Kept deliberately chunky so each faction reads at a glance.
      */
     structureCell(style, pal, mp, edge, band, t, wr) {
         if (t <= 0 || t >= 13 || edge === band - 1) return '#05060a';
         const top = t === 1;
         switch (style) {
-            case 'tech': // bunker: lit roof strip, dark hull, a column of accent windows
+            case 'tech': // bunker: lit roof strip, dark hull, accent windows
                 if (top) return mp.lit[0];
-                return edge % 3 === 1 && t % 3 === 0 ? pal.accent : pal.wall[2];
+                if (edge % 3 === 1 && t % 3 === 0) return pal.accent;
+                return pal.wall[2];
             case 'organic': // pod: glowing core in a fleshy shell
                 if (top || edge === 1) return mp.lit[0];
                 return Math.abs(t - 6.5) < 3 && edge > 2 && edge < band - 2 ? pal.accent : pal.wall[1];
@@ -371,8 +376,10 @@ extendClass(RenderManager, {
                 if (top) return mp.lit[1];
                 if (t === 7) return mp.crack || pal.accent;
                 return (edge + t) % 5 === 0 ? pal.accent : pal.wall[1];
-            default: // boulder ridge
-                return top ? pal.wall[0] : (this.envHash(edge, wr) < 0.15 ? pal.wall[2] : pal.wall[1]);
+            default: // terran fort ridge
+                if (top) return pal.wall[0];
+                if ((edge + t) % 6 === 0) return pal.accent;
+                return this.envHash(edge, wr) < 0.15 ? pal.wall[2] : pal.wall[1];
         }
     },
 

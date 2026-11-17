@@ -216,7 +216,7 @@ extendClass(ShipLoadoutManager, {
             // the compact `weapons` list would shift wing weapons onto the
             // wrong slot when the nose is empty.
             const equipped = (kind === 'weapon' && Array.isArray(loadout.weaponSlots)
-                ? loadout.weaponSlots : loadout[key]) || [];
+                ? loadout.weaponSlots : this.getSlotList(loadout, kind)) || [];
             const placed = modulesByKind[kind] || [];
             for (let i = 0; i < cap; i++) {
                 const id = equipped[i] || null;

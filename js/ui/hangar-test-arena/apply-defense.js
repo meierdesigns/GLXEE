@@ -49,6 +49,8 @@ extendClass(HangarTestArena, {
         this.unbindInput();
         this._keyDown = (e) => {
             if (!this.isVisible) return;
+            // Embedded in a menu: the menu's own key handling must not see the flight keys.
+            if (this._embedHost && !e.ctrlKey && !e.metaKey && !e.altKey) e.stopPropagation();
             this._keys[e.key] = true;
             if (e.key === 'Shift' || e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
                 this._keys['Shift'] = true;

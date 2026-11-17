@@ -242,6 +242,7 @@ extendClass(GameControlSystem, {
             enemiesElement.textContent = String(stats.enemiesKilled || 0);
         }
 
+        this._victoryCell = null; this._victoryNoGrow = false; // slot size is fitted to the screen after this render (fitVictoryGrids)
         const lootList = document.getElementById('victoryLootList');
         if (lootList) {
             lootList.innerHTML = this.renderVictoryLootHtml();
@@ -261,6 +262,7 @@ extendClass(GameControlSystem, {
         if (victoryOverlay && this.bindVictoryShipGridDrag) {
             this.bindVictoryShipGridDrag(victoryOverlay);
         }
+        if (this.fitVictoryGrids) this.fitVictoryGrids();
 
         const creditsElement = document.getElementById('victoryLootCredits');
         if (creditsElement) {

@@ -38,6 +38,27 @@
     --fr-open-side: calc(56 * var(--bz-u));
     --fr-open-bottom: calc(56 * var(--bz-u));
     --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
+    /* ONE bezel model for every faction:
+         rim  = the faction art, drawn ~45px (56u) thick at the same pixel density (≈2.8 screen px per art pixel);
+         open = --fr-open-* (the glass opening, = rim + 3px);
+         gap  = --fr-gap, the screen sits this far inside the opening (--vf-glass-inset below).
+       A faction only supplies art and colours; it must not change rim, opening or gap. */
+    --fr-gap: calc(3 * var(--bz-u));
+    /* Art size is a constant of the art (9-slice border) and no longer follows the opening. */
+    --fr-art-th: calc(58 * var(--bz-u));
+}
+/* Visible rim thickness of each faction's art, in u (measured; the art fills a different share of its border box:
+   terran / machine ~46u, kronax only ~24u, pirate ~60u, voidborn ~55u). The opening is rim + 2u and the screen sits
+   --fr-gap further in, so the gap between art and screen is the same ~5u on every faction. */
+html[data-faction="terran"]   { --fr-rim: 46.5; }
+html[data-faction="machine"]  { --fr-rim: 46.5; }
+html[data-faction="kronax"]   { --fr-rim: 24; }
+html[data-faction="voidborn"] { --fr-rim: 55; }
+html[data-faction="pirate"]   { --fr-rim: 59.5; }
+html[data-faction="terran"], html[data-faction="machine"], html[data-faction="kronax"],
+html[data-faction="voidborn"], html[data-faction="pirate"] {
+    --fr-open-side: calc((var(--fr-rim) + 2) * var(--bz-u));
+    --fr-open-bottom: calc((var(--fr-rim) + 2) * var(--bz-u));
 }
 
 .vf-bezel {
@@ -129,7 +150,7 @@ html[data-faction="machine"] {
        tentacle corners). Shared so the top mid thickener can clear those corner squares.
        Inward --_vine-ov is intentional (organic glass bite); fight HUD clears it via
        --fr-hud-inset on html[data-faction="voidborn"] (part-19.css). */
-    --_vine-th: calc(var(--fr-ol) - var(--_vi) * var(--u) + var(--_vine-ov) * var(--u));
+    --_vine-th: calc((56 - var(--_vi) + var(--_vine-ov)) * var(--u));
     --fr-bg-crop: 0;
 }
 .vf-bezel[data-faction="voidborn"] .vf-fr-lit { --fr-c: #14041c; }
@@ -153,7 +174,9 @@ html[data-faction="machine"] {
 }
 /* Thick top mid only — no end caps. Caps butted against the side vine made a flat
    shelf, not a tentacle bend. Corners come from the continuous 9-slice on .vf-fr::after;
-   this layer only fattens the top band between the corner squares. */
+   this layer only fattens the top band between the corner squares.
+   Solid hull under the mid-vine tile: stretching the scalloped tile alone to --fr-ot
+   left transparent valleys that read as a broken/chunked bezel over the band fill. */
 .vf-bezel[data-faction="voidborn"]::before {
     content: '' !important;
     display: block !important;
@@ -169,7 +192,12 @@ html[data-faction="machine"] {
     clip-path: var(--fr-shape);
     box-sizing: border-box;
     border: none;
-    background: url('../assets/ui/voidborn-vine-top-mid.svg') repeat-x 0 0 / calc(32 * 5 * var(--u)) var(--fr-ot);
+    background-color: #7a2468;
+    /* Seamless period-28 tile; +1px size closes subpixel gaps between repeats. */
+    background-image: url('../assets/ui/voidborn-vine-top-mid.svg?v=4');
+    background-repeat: repeat-x;
+    background-position: 0 0;
+    background-size: calc(28 * 5 * var(--u) + 1px) var(--fr-ot);
     image-rendering: pixelated;
     /* Never promote this alone — will-change/translateZ on pixel-frame layers dropped the vine. */
     will-change: auto;
@@ -190,6 +218,11 @@ html[data-faction="machine"] {
     clip-path: var(--fr-shape);
     border: var(--_vine-th) solid #14041c;
     border-image: url('../assets/ui/voidborn-bezel-vine.svg') 32 round;
+    /* The vine art fills only the outer half of its 32px slice, and 32 art px over a 45px border is 1.4 screen px per
+       art px — half the pixel size of the metal rims (16 slice over 45px). Drawing the slice at twice the border width
+       gives the same pixel size and puts the whole vine into the 45px rim; the transparent inner half only overlays
+       the (transparent) edge of the opening, so there is no dark band between vine and screen. */
+    border-image-width: calc(2 * var(--_vine-th));
     image-rendering: pixelated;
     /* Single static rim — life via brightness pulse, never image swaps. */
     animation: vf-bezel-live var(--vf-vine-dur, 48s) steps(1, end) infinite;
@@ -235,7 +268,7 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
        own --_vine-th (which is also inflated past --fr-ol via --fr-vine-ov) —
        a uniform border-image this much thicker is what reads as a chunky,
        voidborn-grade frame instead of a thin outline. */
-    --_art-th: calc(var(--fr-ol) + 2 * var(--u));
+    --_art-th: var(--fr-art-th);
     --fr-bg-crop: 0;
 }
 /* Plates/texture/deco off — the border-image paints the hull instead. */
@@ -327,7 +360,7 @@ html[data-faction="machine"] body .game-container .game-canvas-container > .game
 /* ── Terran: parted graphic (riveted panel border-image), same mechanism.
    Clean linear chamfer corner (regimented, machined precision) — flat panel
    end-caps need no top-mid thickener, same reasoning as machine. ── */
-.vf-bezel[data-faction="terran"] { --_art-th: calc(var(--fr-ol) + 2 * var(--u)); --fr-bg-crop: 0; }
+.vf-bezel[data-faction="terran"] { --_art-th: var(--fr-art-th); --fr-bg-crop: 0; }
 .vf-bezel[data-faction="terran"]::after { background: none !important; box-shadow: none !important; }
 #vf-bezel.vf-bezel[data-faction="terran"] .vf-fr > .vf-fr-p,
 #vf-bezel.vf-bezel[data-faction="terran"] .vf-bezel-deco { display: none !important; }
@@ -404,7 +437,7 @@ html[data-faction="terran"] body .game-container .game-canvas-container > .game-
 /* ── Kronax: parted graphic (clawed/jagged border-image), same mechanism.
    Sawtooth corner echoes the existing zigzag silhouette — a brawler's rim,
    sharper and more frequent twitches in its animation than terran/machine. ── */
-.vf-bezel[data-faction="kronax"] { --_art-th: calc(var(--fr-ol) + 2 * var(--u)); --fr-bg-crop: 0; }
+.vf-bezel[data-faction="kronax"] { --_art-th: var(--fr-art-th); --fr-bg-crop: 0; }
 .vf-bezel[data-faction="kronax"]::after { background: none !important; box-shadow: none !important; }
 #vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr > .vf-fr-p,
 #vf-bezel.vf-bezel[data-faction="kronax"] .vf-bezel-deco { display: none !important; }
@@ -485,7 +518,7 @@ html[data-faction="kronax"] body .game-container .game-canvas-container > .game-
 /* ── Pirate: parted graphic (welded-scrap border-image), same mechanism.
    Deliberately lopsided corner notch echoes the existing 'scrap' silhouette
    (never symmetric-smooth — a bolted-on replacement plate). ── */
-.vf-bezel[data-faction="pirate"] { --_art-th: calc(var(--fr-ol) + 2 * var(--u)); --fr-bg-crop: 0; }
+.vf-bezel[data-faction="pirate"] { --_art-th: var(--fr-art-th); --fr-bg-crop: 0; }
 .vf-bezel[data-faction="pirate"]::after { background: none !important; box-shadow: none !important; }
 #vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr > .vf-fr-p,
 #vf-bezel.vf-bezel[data-faction="pirate"] .vf-bezel-deco { display: none !important; }
@@ -584,7 +617,7 @@ html[data-faction="pirate"] body .game-container .game-canvas-container > .game-
 }
 @keyframes vf-bezel-strip-crawl {
     0%   { background-position: 0 0; }
-    100% { background-position: calc(32 * 5 * var(--u)) 0; }
+    100% { background-position: calc(28 * 5 * var(--u) + 1px) 0; }
 }
 .vf-bezel[data-faction="voidborn"]::before {
     animation: vf-bezel-strip-crawl 28s linear infinite;

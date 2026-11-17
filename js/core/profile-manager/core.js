@@ -315,6 +315,14 @@ class ProfileManager {
             return { ok: false, reason: 'RESOURCES' };
         }
         profile.homeStation.upgrades[nodeId] = check.nextLevel;
+        // Weapon nodes build their weapon into the station stash once, when first bought.
+        const nd = economyConfig.getStationUpgradeNode(nodeId);
+        if (nd && nd.grantsWeapon && check.nextLevel === 1) {
+            profile.parts = profile.parts || {};
+            profile.parts.weapons = profile.parts.weapons || {};
+            profile.parts.weapons[nd.grantsWeapon] = (profile.parts.weapons[nd.grantsWeapon] || 0) + 1;
+            if (this.discover) this.discover('weapons', nd.grantsWeapon);
+        }
         this.save();
         return { ok: true, level: check.nextLevel };
     }

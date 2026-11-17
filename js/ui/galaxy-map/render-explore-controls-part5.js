@@ -751,6 +751,64 @@ extendClass(GalaxyMapManager, {
 
         this.syncShipEdgeMarker(show);
         this.syncMissionEdgeMarker();
+        this.syncMainQuestGuide();
+    },
+
+    /**
+     * Main quest: a text hint at the top of the map plus a bouncing arrow over the target planet
+     * (when it is on screen; off screen the edge marker already points the way).
+     */
+    syncMainQuestGuide() {
+        const area = this.overlay && this.overlay.querySelector('#gmMapArea');
+        const svg = this.overlay && this.overlay.querySelector('.galaxy-map-svg');
+        if (!area || !svg) return;
+        const prof = (typeof profileManager !== 'undefined' && profileManager.getActiveProfile) ? profileManager.getActiveProfile() : null;
+        const m = prof && prof.activeMission;
+        const pt = (m && m.main && !this._flight) ? this.getActiveMissionPoint() : null;
+        let hint = area.querySelector('.gm-main-hint');
+        let ptr = area.querySelector('.gm-main-pointer');
+        if (!pt) {
+            if (hint) hint.hidden = true;
+            if (ptr) ptr.hidden = true;
+            return;
+        }
+        if (!hint) {
+            hint = document.createElement('div');
+            hint.className = 'gm-main-hint';
+            area.appendChild(hint);
+        }
+        const esc = (v) => String(v || '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+        const where = m.planetName ? ' → ' + m.planetName : '';
+        const text = (m.objective || m.hint || m.name || 'MAIN QUEST');
+        const key = text + '|' + where + '|' + (m.name || '');
+        if (hint._key !== key) {
+            hint._key = key;
+            hint.innerHTML = '<b>MAIN QUEST · ' + esc(String(m.name || '').toUpperCase()) + '</b><span>' + esc(text) + esc(where) + '</span>';
+        }
+        hint.hidden = false;
+        if (!ptr) {
+            ptr = document.createElement('div');
+            ptr.className = 'gm-main-pointer';
+            ptr.setAttribute('aria-hidden', 'true');
+            area.appendChild(ptr);
+        }
+        if (!this.isActiveMissionOnScreen()) { ptr.hidden = true; return; }
+        const vb = svg.viewBox && svg.viewBox.baseVal;
+        const r = svg.getBoundingClientRect();
+        const ar = area.getBoundingClientRect();
+        if (!vb || !vb.width || !r.width || !ar.width) { ptr.hidden = true; return; }
+        const sc = Math.min(r.width / vb.width, r.height / vb.height);
+        const left = vb.x + (vb.width - r.width / sc) / 2;
+        const top = vb.y + (vb.height - r.height / sc) / 2;
+        const z = area.offsetWidth ? ar.width / area.offsetWidth : 1;
+        const x = Math.round((r.left + (pt.x - left) * sc - ar.left) / z);
+        const y = Math.round((r.top + (pt.y - top) * sc - ar.top) / z);
+        ptr.hidden = false;
+        if (ptr._k !== x + '|' + y) {
+            ptr._k = x + '|' + y;
+            ptr.style.left = x + 'px';
+            ptr.style.top = y + 'px';
+        }
     },
 
     /** Active-mission planet point in map coords, or null when none / other galaxy. */

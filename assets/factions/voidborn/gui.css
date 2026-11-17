@@ -104,7 +104,8 @@ html[data-faction="voidborn"] .pause-button { border-style: dotted; }
 .vf-bezel[data-faction="voidborn"]::after,
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { }
 
-.vf-bezel[data-faction="voidborn"]::before { border-radius: calc(26 * var(--u)); }
+/* Bezel top strip (::before) is owned by css/screen-frame.css — do not restyle
+   border-radius/animation here (fought the continuous vine header fill). */
 
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco {
     background:
@@ -115,8 +116,6 @@ html[data-faction="voidborn"] .pause-button { border-style: dotted; }
 }
 
 .vf-bezel[data-faction="voidborn"]::after, .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { }
-
-.vf-bezel[data-faction="voidborn"]::before { border-radius: calc(70 * var(--u)) calc(20 * var(--u)) calc(54 * var(--u)) calc(38 * var(--u)) / calc(34 * var(--u)) calc(60 * var(--u)) calc(28 * var(--u)) calc(50 * var(--u)); }
 
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco {
     background:
@@ -177,8 +176,6 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
   html[data-vf-faction="voidborn"] body * { animation: none !important; }
 }
 
-.vf-bezel[data-faction="voidborn"]::before { border-radius: calc(34 * var(--u)) calc(60 * var(--u)) calc(30 * var(--u)) calc(52 * var(--u)) / calc(50 * var(--u)) calc(28 * var(--u)) calc(56 * var(--u)) calc(32 * var(--u));}
-
 html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .profile-faction-fact, .profile-faction-lore, .profile-faction-preview, .pd-tile, .pd-res-item, .pd-galaxy, .menu-item, .profile-faction-swatch, .hs-wallet-card, .hs-pilot-card) {
     transition: none !important;
     border-radius: 34px 12px 28px 18px / 16px 30px 14px 26px;
@@ -221,11 +218,6 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
 }
 
 .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: vf-bz-pulse 2.6s ease-in-out infinite alternate; }
-
-.vf-bezel[data-faction="voidborn"]::before {
-    animation: none;
-    border-radius: calc(24 * var(--u)) calc(16 * var(--u)) calc(22 * var(--u)) calc(18 * var(--u));
-}
 
 @media (prefers-reduced-motion: reduce) {
   .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: none; }

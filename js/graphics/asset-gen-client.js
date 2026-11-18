@@ -184,10 +184,12 @@ class AssetGenClient {
         const prompt = (opts.prompt != null && String(opts.prompt).trim())
             ? String(opts.prompt).trim()
             : (entry.promptSuffix || "");
-        const mode = opts.mode || (entry && entry.type === "portrait" ? "portrait" : "sprite");
+        const mode = opts.mode
+            || (entry && entry.type === "portrait" ? "portrait"
+                : (entry && entry.type === "bezel" ? "bezel" : "sprite"));
         const body = {
             prompt: prompt,
-            filenamePrefix: entry.filenamePrefix,
+            filenamePrefix: opts.filenamePrefix || entry.filenamePrefix,
             size: opts.size != null ? Number(opts.size) : (entry.size || 64),
             genSize: opts.genSize != null ? Number(opts.genSize) : 512,
             steps: opts.steps != null ? Number(opts.steps) : 4,
@@ -203,6 +205,11 @@ class AssetGenClient {
         if (opts.referencePath) body.referencePath = String(opts.referencePath);
         if (opts.outWidth != null) body.outWidth = Number(opts.outWidth);
         if (opts.outHeight != null) body.outHeight = Number(opts.outHeight);
+        if (mode === "bezel") {
+            body.faction = opts.faction || entry.faction || entry.id || "terran";
+            body.part = opts.part || entry.kind || "full";
+            if (opts.palette) body.palette = opts.palette;
+        }
         const seedVal = opts.seed != null ? opts.seed : seed;
         if (seedVal != null && seedVal !== "") body.seed = Number(seedVal);
         if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");

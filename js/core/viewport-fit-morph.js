@@ -113,6 +113,10 @@
         // The per-frame polygon on <body> repaints the whole page for 700 ms (flicker): the new silhouette is applied in one step instead.
         if (!window.vfMorphBezel) return;
         if (ROOT.getAttribute('data-vf-frame-px') === 'on') return;
+        // Unified bezel contract: all factions share a rectangular outer shape — nothing to morph.
+        const rawA = getComputedStyle(ROOT).getPropertyValue('--fr-shape-' + fromName).trim();
+        const rawB = getComputedStyle(ROOT).getPropertyValue('--fr-shape-' + toName).trim();
+        if (rawA && rawA === rawB) return;
         const A = outline(bz, fromName), B = outline(bz, toName);
         if (!A || !B) return;
         const W = B.W, H = B.H, a = resample(A.pts, A.W, A.H), b = resample(B.pts, W, H);

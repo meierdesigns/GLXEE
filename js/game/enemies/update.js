@@ -85,15 +85,29 @@ extendClass(EnemyManager, {
         let edx = this.enemy.speed * speedMultiplier;
         let edy = this.enemy.verticalSpeed * speedMultiplier + bobY;
 
-        // Faction/class flight wobble, amplified on downbeats
+        // Faction/class flight signatures (speed already baked at spawn; weave/dive style here)
         const enemyFlightProfile = this.enemy.flightProfile;
-        if (enemyFlightProfile && enemyFlightProfile.wobbleAmp > 0) {
-            this.enemy.wobblePhase = (this.enemy.wobblePhase || 0) + enemyFlightProfile.wobbleFreq * (effectiveDeltaTime / 1000);
+        if (enemyFlightProfile) {
+            const style = enemyFlightProfile.driftStyle || 'steady';
+            const amp = Number(enemyFlightProfile.wobbleAmp) || 0;
+            const freq = Number(enemyFlightProfile.wobbleFreq) || 0.6;
+            this.enemy.wobblePhase = (this.enemy.wobblePhase || 0) + freq * (effectiveDeltaTime / 1000)
+                * (style === 'skitter' ? 1.6 : style === 'weave' ? 1.25 : 1);
             let wobbleBoost = 1;
             if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
                 wobbleBoost = beatSyncManager.getWobbleAmpMul();
             }
-            edx += Math.sin(this.enemy.wobblePhase) * enemyFlightProfile.wobbleAmp * wobbleBoost * speedMultiplier;
+            if (amp > 0) {
+                let lat = Math.sin(this.enemy.wobblePhase) * amp * wobbleBoost;
+                if (style === 'weave') lat += Math.sin(this.enemy.wobblePhase * 2.1) * amp * 0.45 * wobbleBoost;
+                else if (style === 'skitter') lat += Math.sin(this.enemy.wobblePhase * 3.2) * amp * 0.35 * wobbleBoost;
+                else if (style === 'lockstep') lat *= 0.15;
+                else if (style === 'charge') lat *= 0.3;
+                edx += lat * speedMultiplier;
+            }
+            if (style === 'charge') edy *= 1.2;
+            else if (style === 'lockstep') edy *= 0.85;
+            else if (style === 'weave') edy += Math.sin(this.enemy.wobblePhase * 0.7) * amp * 0.35 * speedMultiplier;
         }
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         if (cv && cv.active && cv.active() && cv.stepMove) {
@@ -135,6 +149,10 @@ extendClass(EnemyManager, {
             if (this.currentEnemyModel && this.currentEnemyModel.shootInterval) {
                 // Convert shootInterval (ms) to chance per frame (60 FPS) with reduced rate
                 shootChance = (60 / this.currentEnemyModel.shootInterval) * 0.4; // 40% of original rate
+            }
+            // Faction/class fireRateMul: scouts chatter, heavies boom slower.
+            if (this.enemy && this.enemy.flightProfile && this.enemy.flightProfile.fireRateMul) {
+                shootChance *= Math.max(0.45, Number(this.enemy.flightProfile.fireRateMul) || 1);
             }
             if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
                 if (beatSyncManager.justDownbeat) shootChance = Math.max(shootChance, 0.65);

@@ -93,12 +93,31 @@ class HeroPlanetBackdrop {
         }
         if (this._ro) this._ro.observe(container);
         this._bindZoomWheel(container);
+        this._bindAssetReady();
         // draw() (called by _startLoop()/below) always re-measures the
         // element's own box first — see draw() — so a stale mid-transition
         // size here self-corrects on the very next paint instead of only
         // resyncing when ResizeObserver happens to fire.
         if (!this._reduceMotion) this._startLoop();
         else this.draw();
+    }
+
+    /**
+     * After a page refresh, ship/sprite assets arrive late. Orbit hulls baked
+     * too early can miss the enemy nose-down flip and stick in _orbitSpriteCache
+     * upside-down until a faction swap. Drop the cache when assets finish.
+     */
+    _bindAssetReady() {
+        if (this._assetReadyBound || typeof window === 'undefined') return;
+        this._assetReadyBound = true;
+        const bump = () => {
+            this._orbitSpriteCache = null;
+            this._fgBake = null;
+            if (this.el && this.el.isConnected && this.draw) this.draw(false);
+        };
+        window.addEventListener('vf-ships-loaded', bump);
+        window.addEventListener('vf-sprites-loaded', bump);
+        this._assetReadyBump = bump;
     }
 
     /** SETUP: mouse wheel over the backdrop (not over a scrolling panel) zooms the camera in / out. */
@@ -124,6 +143,12 @@ class HeroPlanetBackdrop {
     unmount() {
         if (this._ro) this._ro.disconnect();
         this._stopLoop();
+        if (this._assetReadyBump && typeof window !== 'undefined') {
+            window.removeEventListener('vf-ships-loaded', this._assetReadyBump);
+            window.removeEventListener('vf-sprites-loaded', this._assetReadyBump);
+            this._assetReadyBump = null;
+            this._assetReadyBound = false;
+        }
         if (this.el.parentNode) this.el.parentNode.removeChild(this.el);
     }
 
@@ -802,6 +827,191 @@ class HeroPlanetBackdrop {
         return { id, color, kind, count, spread, spacing, speed, w, h };
     }
 
+    /** Per-class doctrine gun — prototypes keep their kit; escorts pick by hull role. */
+    _classWeapon(cls, ship) {
+        if (ship && ship.isFocus) {
+            const kit = this._kitWeaponIds();
+            if (kit.length) return kit[0];
+        }
+        const fid = this._faction || 'terran';
+        const byFaction = {
+            terran:   { scout: 'laser', assault: 'laser_twin', heavy: 'railgun', elite: 'railgun', capital: 'laser_twin' },
+            kronax:   { scout: 'spike_burst', assault: 'claw_beam', heavy: 'plasma', elite: 'claw_beam', capital: 'plasma' },
+            voidborn: { scout: 'ion', assault: 'wave', heavy: 'nova', elite: 'pierce', capital: 'wave' },
+            pirate:   { scout: 'rapid', assault: 'spread', heavy: 'burst', elite: 'spread', capital: 'burst' },
+            machine:  { scout: 'pierce', assault: 'missile', heavy: 'missile', elite: 'pierce', capital: 'missile' }
+        };
+        const table = byFaction[fid] || byFaction.terran;
+        return table[cls] || table.assault || this._preferredWeapons()[0] || 'laser';
+    }
+
+    /** Fire profile for a fleet seat (faction + class + optional start-kit prototype). */
+    _shipFireProfile(ship) {
+        const cls = (ship && ship.cls) || 'assault';
+        const pid = ship && ship.playerShipId;
+        if (typeof flightProfiles !== 'undefined' && flightProfiles.resolveFire) {
+            return flightProfiles.resolveFire(this._faction, cls, pid);
+        }
+        if (typeof flightProfiles !== 'undefined' && flightProfiles.resolve) {
+            return flightProfiles.resolve(this._faction, cls);
+        }
+        return { fireStyle: 'volley', fireRateMul: 1, spreadMul: 1, shotCountMul: 1, aimJitter: 0.05, speedMul: 1 };
+    }
+
+    /**
+     * Spawn one volley from a hull. Fire cone / count / cadence come from
+     * faction fireStyle + class/prototype multipliers — not a flat down-beam.
+     */
+    _emitShipShots(demo, ship, ax, ay, inbound, dmgMul) {
+        const fire = this._shipFireProfile(ship);
+        const style = fire.fireStyle || 'volley';
+        const wid = ship.weapon || this._classWeapon(ship.cls, ship);
+        const fx = this._weaponFx(wid);
+        const spreadMul = Number(fire.spreadMul != null ? fire.spreadMul : 1);
+        const countMul = Number(fire.shotCountMul != null ? fire.shotCountMul : 1);
+        const jitter = Number(fire.aimJitter != null ? fire.aimJitter : 0.05);
+        let count = Math.max(1, Math.round(fx.count * countMul));
+        let spread = (fx.spread || (count > 1 ? 0.22 : 0)) * spreadMul;
+        // Faction doctrine reshapes the cone before class muls settle it.
+        if (style === 'spray') { count = Math.max(count, 3); spread = Math.max(spread, 0.38) * 1.25; }
+        else if (style === 'volley') { count = Math.max(count, 2); spread = Math.max(0.12, spread * 0.7); }
+        else if (style === 'claw') { count = 1; spread = 0; }
+        else if (style === 'arc') { count = Math.max(count, 2); spread = Math.max(spread, 0.3); }
+        else if (style === 'salvo') { count = Math.max(count, 2); spread = Math.max(0.06, spread * 0.45); }
+        else if (style === 'steady') { count = Math.max(1, Math.min(2, count)); spread *= 0.6; }
+
+        // Aim: pick nearest inbound under the nose; jitter / lead by doctrine.
+        let aimX = 0;
+        let aimY = 1;
+        const target = (inbound || []).reduce((best, e) => {
+            if (!e || e.y <= ay + 4) return best;
+            const d = Math.hypot(e.x - ax, e.y - ay);
+            if (!best || d < best.d) return { e, d };
+            return best;
+        }, null);
+        if (target && target.e) {
+            const dx = target.e.x - ax;
+            const dy = Math.max(12, target.e.y - ay);
+            const len = Math.hypot(dx, dy) || 1;
+            aimX = dx / len;
+            aimY = dy / len;
+            if (style === 'claw' || style === 'salvo') {
+                // Lead a little for heavy / machine lock shots.
+                aimX += (target.e.vx || 0) * 0.02;
+            } else if (style === 'spray' || style === 'skitter') {
+                aimX += (Math.random() - 0.5) * jitter * 2.5;
+            } else {
+                aimX += (Math.random() - 0.5) * jitter;
+            }
+            const n = Math.hypot(aimX, aimY) || 1;
+            aimX /= n;
+            aimY /= n;
+        } else {
+            aimX = (Math.random() - 0.5) * jitter;
+            aimY = 1;
+            const n = Math.hypot(aimX, aimY) || 1;
+            aimX /= n;
+            aimY /= n;
+        }
+
+        const hardpoints = ship.isFocus
+            ? this._focusHardpoints(ship)
+            : this._classHardpoints(ship, wid);
+        const shotSpeed = fx.speed * (0.85 + (dmgMul || 1) * 0.35);
+        hardpoints.forEach((hp, hi) => {
+            const hpWid = hp.wid || wid;
+            const hfx = hi === 0 ? fx : this._weaponFx(hpWid);
+            const muzzleX = ax + (hp.lat || 0);
+            const muzzleY = ay + (hp.fwd != null ? hp.fwd : (ship._sh || 18) * 0.45);
+            const useCount = hi === 0 ? count : Math.max(1, Math.round(hfx.count * Math.min(1.2, countMul)));
+            const useSpread = hi === 0 ? spread : (hfx.spread || spread) * spreadMul;
+            const gap = hfx.spacing || (hfx.kind === 'beam' && useCount > 1 ? 5 : 0);
+            for (let i = 0; i < useCount; i++) {
+                const t = useCount === 1 ? 0 : (i - (useCount - 1) / 2);
+                const ang = t * useSpread;
+                // Rotate aim by spread angle around +Y.
+                const cos = Math.cos(ang);
+                const sin = Math.sin(ang);
+                let dirX = aimX * cos - aimY * sin;
+                let dirY = aimX * sin + aimY * cos;
+                if (style === 'arc') {
+                    // Seed a lateral wave so voidborn shots snake.
+                    dirX += (i % 2 === 0 ? -1 : 1) * 0.12;
+                    const nn = Math.hypot(dirX, dirY) || 1;
+                    dirX /= nn;
+                    dirY /= nn;
+                }
+                let vx = dirX * shotSpeed * (hfx.kind === 'missile' ? 0.75 : 1);
+                let vy = dirY * shotSpeed * (hfx.kind === 'missile' ? 0.75 : 1);
+                let px = muzzleX + (useSpread < 0.05 ? t * gap : 0);
+                let py = muzzleY;
+                if (hfx.kind === 'nova') {
+                    vx = dirX * shotSpeed + t * 0.55;
+                    vy = dirY * shotSpeed;
+                    px = ax + t * 4;
+                    py = ay + 6;
+                }
+                demo.shots.push({
+                    x: px,
+                    y: py,
+                    vx, vy,
+                    w: hfx.w,
+                    h: hfx.h,
+                    kind: hfx.kind,
+                    color: hfx.color,
+                    weapon: hpWid,
+                    fireStyle: style,
+                    wavePhase: Math.random() * Math.PI * 2,
+                    waveAmp: style === 'arc' || hfx.kind === 'wave' ? (2.2 + Math.random() * 1.4) : 0,
+                    home: style === 'salvo' && hfx.kind === 'missile',
+                    target: target && target.e,
+                    life: hfx.kind === 'missile' ? 110 : (hfx.kind === 'nova' ? 70 : 90)
+                });
+            }
+        });
+        ship.weapon = wid;
+        ship.aimDirX = aimX;
+        ship.aimDirY = aimY;
+        ship.muzzle = style === 'claw' ? 12 : (style === 'spray' ? 6 : 8);
+    }
+
+    /** Escort hardpoints by class — capital/elite get wing guns, scouts a single nose. */
+    _classHardpoints(ship, wid) {
+        const sw = (ship && ship._sw) || 24;
+        const sh = (ship && ship._sh) || 18;
+        const cls = (ship && ship.cls) || 'assault';
+        const primary = wid || ship.weapon || 'laser';
+        if (cls === 'scout') {
+            return [{ wid: primary, lat: 0, fwd: sh * 0.48 }];
+        }
+        if (cls === 'heavy') {
+            return [{ wid: primary, lat: 0, fwd: sh * 0.4 }];
+        }
+        if (cls === 'elite') {
+            return [
+                { wid: primary, lat: -sw * 0.28, fwd: sh * 0.35 },
+                { wid: primary, lat: sw * 0.28, fwd: sh * 0.35 }
+            ];
+        }
+        if (cls === 'capital') {
+            const secondary = (this._preferredWeapons()[1]) || primary;
+            return [
+                { wid: primary, lat: -sw * 0.38, fwd: sh * 0.2 },
+                { wid: primary, lat: sw * 0.38, fwd: sh * 0.2 },
+                { wid: secondary, lat: 0, fwd: sh * 0.48 }
+            ];
+        }
+        // assault: nose + optional faction second
+        const second = (this._preferredWeapons()[1]) || null;
+        if (second && second !== primary) {
+            return [
+                { wid: primary, lat: 0, fwd: sh * 0.48 },
+                { wid: second, lat: 0, fwd: sh * 0.2 }
+            ];
+        }
+        return [{ wid: primary, lat: 0, fwd: sh * 0.45 }];
+    }
+
     _ensureWeaponDemo() {
         if (this._weaponDemo && this._weaponDemo.faction === this._faction) return this._weaponDemo;
         const speedMul = this._statMul('speed');
@@ -840,8 +1050,17 @@ class HeroPlanetBackdrop {
         const mul = 0.95;
         const fp = (typeof flightProfiles !== 'undefined' && flightProfiles.resolve)
             ? flightProfiles.resolve(rival, cls)
-            : { speedMul: 1, wobbleAmp: 0.2, wobbleFreq: 0.8 };
-        const dive = spd * (fp.speedMul || 1) * 1.15;
+            : { speedMul: 1, wobbleAmp: 0.2, wobbleFreq: 0.8, driftStyle: 'steady' };
+        const style = fp.driftStyle || 'steady';
+        let diveMul = 1.15;
+        if (style === 'charge') diveMul = 1.55;
+        else if (style === 'lockstep') diveMul = 0.78;
+        else if (style === 'weave') diveMul = 1.05;
+        else if (style === 'skitter') diveMul = 1.25;
+        const dive = spd * (fp.speedMul || 1) * diveMul;
+        const wobble = Number(fp.wobbleAmp != null ? fp.wobbleAmp : 0.2);
+        const freq = Number(fp.wobbleFreq != null ? fp.wobbleFreq : 0.8);
+        const evade = Number(fp.evasionFreqMul != null ? fp.evasionFreqMul : 1);
         demo.enemies.push({
             x: sx,
             y: sy,
@@ -851,9 +1070,9 @@ class HeroPlanetBackdrop {
             h: Math.max(20, Math.round(disp.height * mul)),
             vx: 0,
             vy: -dive,
-            strafeAmp: 10 + Math.random() * 12,
+            strafeAmp: (6 + Math.random() * 8) * (0.25 + wobble * 4.2),
             strafePhase: Math.random() * Math.PI * 2,
-            strafeSpeed: 0.03 + Math.random() * 0.015,
+            strafeSpeed: (0.018 + Math.random() * 0.016) * freq * evade,
             hp: 1,
             faction: rival,
             cls,
@@ -896,11 +1115,18 @@ class HeroPlanetBackdrop {
         const steps = Math.max(1, Math.round(dt / 16.67));
         for (let s = 0; s < steps; s++) {
             demo.enemies.forEach((e) => {
-                // Drift lane toward planet center, then strafe — still climbs straight up.
+                // Faction dive signatures: lockstep = straight, weave/skitter = lateral, charge = fast climb.
                 const tx = e.targetX != null ? e.targetX : planetX;
-                e.homeX = (e.homeX != null ? e.homeX : e.x) + (tx - e.homeX) * 0.02;
+                const style = (e.fp && e.fp.driftStyle) || 'steady';
+                const homeLerp = style === 'lockstep' ? 0.045 : (style === 'charge' ? 0.035 : 0.02);
+                e.homeX = (e.homeX != null ? e.homeX : e.x) + (tx - e.homeX) * homeLerp;
                 e.strafePhase = (e.strafePhase || 0) + (e.strafeSpeed || 0.04);
-                e.x = e.homeX + Math.sin(e.strafePhase) * (e.strafeAmp || 12);
+                let lat = Math.sin(e.strafePhase) * (e.strafeAmp || 12);
+                if (style === 'weave') lat += Math.sin(e.strafePhase * 2.1) * (e.strafeAmp || 12) * 0.45;
+                else if (style === 'skitter') lat += Math.sin(e.strafePhase * 3.3) * (e.strafeAmp || 12) * 0.35;
+                else if (style === 'lockstep') lat *= 0.12;
+                else if (style === 'charge') lat *= 0.28;
+                e.x = e.homeX + lat;
                 e.y += e.vy || -0.5;
             });
             demo.enemies = demo.enemies.filter((e) => {
@@ -914,85 +1140,57 @@ class HeroPlanetBackdrop {
                     && Math.abs(e.x - planetX) < planetR * 1.4;
             });
 
-            // Friendly hulls only shoot straight down (nose stays fixed).
-            const dirX = 0;
-            const dirY = 1;
             (fleet.ships || []).forEach((ship) => {
                 if (ship.muzzle > 0) ship.muzzle -= 1;
-                ship.cooldown = (ship.cooldown || 0) - 18 * speedMul;
+                const fire = this._shipFireProfile(ship);
+                const rateMul = Math.max(0.45, speedMul * (fire.fireRateMul || 1) * ((ship.fp && ship.fp.speedMul) || 1));
+                ship.cooldown = (ship.cooldown || 0) - 18 * rateMul;
                 if (ship.cooldown > 0) return;
                 const ax = ship._sx;
                 const ay = ship._sy;
                 if (ax == null || ay == null) return;
-                // Only fire when something is below this hull.
-                const below = inbound.some((e) => e.y > ay + 8 && Math.abs(e.x - ax) < 90);
-                if (!below) {
-                    ship.aimDirX = dirX;
-                    ship.aimDirY = dirY;
-                    return;
-                }
-                ship.aimDirX = dirX;
-                ship.aimDirY = dirY;
-                const fp = ship.fp || {};
-                const hardpoints = ship.isFocus
-                    ? this._focusHardpoints(ship)
-                    : [{
-                        wid: (demo.weapons && demo.weapons[(demo.wIdx || 0) % demo.weapons.length])
-                            || this._preferredWeapons()[0] || 'laser',
-                        lat: 0,
-                        fwd: (ship._sh || 18) * 0.45
-                    }];
-                if (!ship.isFocus) demo.wIdx = (demo.wIdx || 0) + 1;
-                const primary = hardpoints[0] && hardpoints[0].wid;
-                ship.weapon = primary;
-                const cdWid = primary || 'laser';
+                // Fire arc: spray/arc ships engage wider; claw/salvo wait for a tighter lane.
+                const style = fire.fireStyle || 'volley';
+                const laneW = style === 'spray' ? 130 : (style === 'arc' ? 110 : (style === 'claw' || style === 'salvo' ? 70 : 95));
+                const below = inbound.some((e) => e.y > ay + 8 && Math.abs(e.x - ax) < laneW);
+                if (!below) return;
+                const wid = ship.weapon || this._classWeapon(ship.cls, ship);
+                ship.weapon = wid;
                 const cdBase = (typeof weaponConfigManager !== 'undefined' && weaponConfigManager.getWeapon)
-                    ? Number((weaponConfigManager.getWeapon(cdWid) || {}).cooldown) || 320
+                    ? Number((weaponConfigManager.getWeapon(wid) || {}).cooldown) || 320
                     : 320;
+                const styleCd = style === 'spray' ? 0.55
+                    : style === 'claw' ? 1.35
+                    : style === 'salvo' ? 1.15
+                    : style === 'arc' ? 0.85
+                    : 1;
                 ship.cooldown = Math.round(
-                    (cdBase * (ship.isFocus ? 0.28 : (0.35 + Math.random() * 0.25)))
-                    / Math.max(0.65, speedMul * (fp.speedMul || 1))
-                    + (ship.cls === 'capital' && !ship.isFocus ? 80 : 0)
+                    (cdBase * (ship.isFocus ? 0.28 : 0.4) * styleCd)
+                    / Math.max(0.55, rateMul)
+                    + (ship.cls === 'capital' && !ship.isFocus ? 70 : 0)
+                    + (ship.cls === 'heavy' && !ship.isFocus ? 40 : 0)
                 );
-                ship.muzzle = 8;
-                hardpoints.forEach((hp) => {
-                    const wid = hp.wid || 'laser';
-                    const fx = this._weaponFx(wid);
-                    const shotSpeed = fx.speed * (0.85 + dmgMul * 0.35);
-                    // Nose down: fwd along +Y, lat along ±X.
-                    const muzzleX = ax + hp.lat;
-                    const muzzleY = ay + hp.fwd;
-                    const gap = fx.spacing || (fx.kind === 'beam' && fx.count > 1 ? 5 : 0);
-                    for (let i = 0; i < fx.count; i++) {
-                        const off = i - (fx.count - 1) / 2;
-                        let vx = 0;
-                        let vy = shotSpeed;
-                        let px = muzzleX + off * gap;
-                        let py = muzzleY;
-                        if (fx.kind === 'nova') {
-                            // Still dump downward as a short burst of pellets.
-                            vx = off * 0.6;
-                            vy = shotSpeed;
-                            px = ax + off * 4;
-                            py = ay + 6;
-                        }
-                        demo.shots.push({
-                            x: px,
-                            y: py,
-                            vx, vy,
-                            w: fx.w,
-                            h: fx.h,
-                            kind: fx.kind,
-                            color: fx.color,
-                            weapon: wid,
-                            life: fx.kind === 'missile' ? 110 : (fx.kind === 'nova' ? 70 : 90)
-                        });
-                    }
-                });
+                this._emitShipShots(demo, ship, ax, ay, inbound, dmgMul);
             });
             demo.allies = [];
 
             demo.shots.forEach((sh) => {
+                // Arc / wave: lateral sine. Salvo missiles gently home on their dive target.
+                if (sh.waveAmp) {
+                    sh.wavePhase = (sh.wavePhase || 0) + 0.22;
+                    sh.x += Math.sin(sh.wavePhase) * sh.waveAmp * 0.35;
+                }
+                if (sh.home && sh.target && sh.target.hp > 0) {
+                    const dx = sh.target.x - sh.x;
+                    const dy = sh.target.y - sh.y;
+                    const len = Math.hypot(dx, dy) || 1;
+                    sh.vx += (dx / len) * 0.18;
+                    sh.vy += (dy / len) * 0.18;
+                    const spd = Math.hypot(sh.vx, sh.vy) || 1;
+                    const cap = Math.max(2.5, Math.hypot(sh.vx, sh.vy));
+                    sh.vx = (sh.vx / spd) * Math.min(cap, spd);
+                    sh.vy = (sh.vy / spd) * Math.min(cap, spd);
+                }
                 sh.x += sh.vx;
                 sh.y += sh.vy;
                 sh.life -= 1;
@@ -1042,7 +1240,8 @@ class HeroPlanetBackdrop {
             const sprite = this._orbitHullSprite(e.cls || 'assault', e.w, e.h, e.faction || this._demoRivalFaction());
             c.save();
             c.translate(Math.round(e.x), Math.round(e.y));
-            // Stay upright — no dive rotation.
+            // Orbit hulls bake nose-down; divers climb +planet (−Y) so flip them nose-up.
+            c.scale(1, -1);
             c.drawImage(sprite, -Math.floor(e.w / 2), -Math.floor(e.h / 2));
             c.restore();
         });
@@ -1118,6 +1317,8 @@ class HeroPlanetBackdrop {
         let sprite = this._orbitSpriteCache[key];
         if (sprite) return sprite;
         const gm = typeof graphicsManager !== 'undefined' ? graphicsManager : null;
+        const loader = gm && gm.shipAssetLoader;
+        const assetsReady = !!(loader && (!loader.isLoaded || loader.isLoaded()));
         const pal = (typeof factionShipStyles !== 'undefined' && factionShipStyles.getFactionStyle)
             ? factionShipStyles.getFactionStyle(fid) : null;
         const accent = (pal && (pal.accent || pal.hull)) || '#c8a050';
@@ -1128,13 +1329,19 @@ class HeroPlanetBackdrop {
         canvas.height = Math.max(4, h);
         const bc = canvas.getContext('2d');
         bc.imageSmoothingEnabled = false;
-        // Transparent bake — never fill the canvas AABB.
+        // Stage fleet fires +Y (down): every hull must bake nose-down. Player
+        // kit models default nose-up; force enemy orientation so refresh/warm
+        // paths and prototypes all face the same way as escort class hulls.
         let ok = false;
+        let solid = 0;
         if (pid && typeof shipConfigManager !== 'undefined' && shipConfigManager.getMergedModel) {
             try {
-                const loader = gm && gm.shipAssetLoader;
                 const model = Object.assign({}, shipConfigManager.getMergedModel(pid), {
-                    id: pid, faction: fid, factionPreview: true
+                    id: pid,
+                    faction: fid,
+                    factionPreview: true,
+                    forceEnemyOrientation: true,
+                    type: 'enemy'
                 });
                 // Bake kit guns onto the defender so shots leave visible hardpoints.
                 if (pid === this._focusShipId) {
@@ -1172,7 +1379,8 @@ class HeroPlanetBackdrop {
                 hullSeed: 1,
                 tier: cls === 'capital' ? 3 : 1,
                 level: cls === 'capital' ? 5 : 1,
-                skipGuns: true
+                skipGuns: true,
+                variantSeed: 1
             };
             try {
                 if (gm && gm.renderEnemyShip) {
@@ -1191,10 +1399,24 @@ class HeroPlanetBackdrop {
             bc.fillRect(bx - 1, by - 1, bw + 2, bh + 2);
             bc.fillStyle = hull;
             bc.fillRect(bx, by, bw, bh);
+            // Nose marker at the BOTTOM (stage fires +Y).
             bc.fillStyle = accent;
             bc.fillRect(bx + Math.floor(bw / 2) - 1, by + bh - 2, 2, 2);
         }
-        this._orbitSpriteCache[key] = canvas;
+        // Count opaque pixels — empty/stub bakes must not stick in the cache
+        // across a refresh before ship assets finish loading.
+        try {
+            const data = bc.getImageData(0, 0, canvas.width, canvas.height).data;
+            for (let i = 3; i < data.length; i += 16) {
+                if (data[i] > 16) solid += 1;
+            }
+        } catch (e) { solid = ok ? 8 : 0; }
+        if (assetsReady && solid > 2) {
+            this._orbitSpriteCache[key] = canvas;
+        } else {
+            // Keep listening; next draw retries once assets/styles are up.
+            this._bindAssetReady();
+        }
         return canvas;
     }
 
@@ -1217,21 +1439,23 @@ class HeroPlanetBackdrop {
             && this._orbitFleet.focus === focusKey) return this._orbitFleet;
         const fss = typeof factionShipStyles !== 'undefined' ? factionShipStyles : null;
         const ratingSpeed = this._statMul('speed');
-        const weapons = this._preferredWeapons();
         const mk = (cls, i, opts) => {
             const o = opts || {};
             const disp = o.disp || (fss && fss.displaySizeForClass
                 ? fss.displaySizeForClass(cls)
                 : { width: 36 + i * 12, height: 28 + i * 8 });
-            const fp = (typeof flightProfiles !== 'undefined' && flightProfiles.resolve)
-                ? flightProfiles.resolve(this._faction, cls)
-                : { speedMul: 1, wobbleAmp: 0.2, wobbleFreq: 0.8, formationTightness: 0.7 };
+            const pid = o.playerShipId || null;
+            const fp = (typeof flightProfiles !== 'undefined' && flightProfiles.resolveFire)
+                ? flightProfiles.resolveFire(this._faction, cls, pid)
+                : ((typeof flightProfiles !== 'undefined' && flightProfiles.resolve)
+                    ? flightProfiles.resolve(this._faction, cls)
+                    : { speedMul: 1, wobbleAmp: 0.2, wobbleFreq: 0.8, formationTightness: 0.7, fireStyle: 'volley' });
             const base = o.baseSpeed != null ? o.baseSpeed : (0.00034 + i * 0.00004);
             const tempo = base * ratingSpeed * fp.speedMul;
-            return {
+            const seat = {
                 kind: 'ship',
                 cls,
-                playerShipId: o.playerShipId || null,
+                playerShipId: pid,
                 orbit: o.orbit != null ? o.orbit : (1.22 + i * 0.08),
                 speed: (i % 2 === 0 ? 1 : -1) * tempo * (o.tempoMul || 1),
                 phase: o.phase != null ? o.phase : (i * 1.1),
@@ -1240,13 +1464,15 @@ class HeroPlanetBackdrop {
                 baseW: disp.width,
                 baseH: disp.height,
                 fp,
-                weapon: weapons[i % weapons.length],
+                weapon: null,
                 cooldown: 40 + i * 55 + Math.floor(Math.random() * 60),
                 muzzle: 0,
                 aimDirX: 0,
                 aimDirY: 1,
                 isFocus: !!o.isFocus
             };
+            seat.weapon = this._classWeapon(cls, seat);
+            return seat;
         };
         let ships;
         if (this._focusShipId) {
@@ -1302,18 +1528,43 @@ class HeroPlanetBackdrop {
         const scale = Math.max(0.85, Math.min(1.25, (r * 0.55) / 48));
         const n = fleet.ships.length || 1;
         const out = fleet.ships.map((s, i) => {
-            // Smooth station-keeping: slow strafe + surge (ms → rad/s), no pixel snap.
+            // Faction flightProfiles drive lane width, weave amp, and tempo.
+            const fp = s.fp || {};
+            const tight = Number(fp.formationTightness != null ? fp.formationTightness : 0.7);
+            const wobble = Number(fp.wobbleAmp != null ? fp.wobbleAmp : 0.2);
+            const freq = Number(fp.wobbleFreq != null ? fp.wobbleFreq : 0.8);
+            const evade = Number(fp.evasionFreqMul != null ? fp.evasionFreqMul : 1);
+            const spd = Number(fp.speedMul != null ? fp.speedMul : 1);
+            const style = fp.driftStyle || 'steady';
             const lane = (i - (n - 1) / 2) / Math.max(1, n - 1);
-            const baseX = cx + lane * r * (s.isFocus ? 0.12 : 0.85);
-            const baseY = cy + r * (s.isFocus ? 0.72 : (0.55 + (i % 3) * 0.12));
-            const strafeAmp = r * (s.isFocus ? 0.18 : 0.12);
-            const surgeAmp = r * (s.isFocus ? 0.08 : 0.06);
-            const strafeHz = 0.00055 + i * 0.00008;
-            const surgeHz = 0.0004 + i * 0.00005;
-            const strafe = this._reduceMotion ? 0
+            const laneSpread = s.isFocus ? 0.12 : (0.38 + (1 - tight) * 0.95);
+            const baseX = cx + lane * r * laneSpread;
+            const baseY = cy + r * (s.isFocus ? 0.78 : (0.58 + (i % 3) * (0.08 + (1 - tight) * 0.07)));
+            let strafeAmp = r * (s.isFocus ? 0.16 : 0.10) * (0.35 + wobble * 2.5);
+            let surgeAmp = r * (s.isFocus ? 0.07 : 0.05) * (0.5 + wobble * 1.6);
+            let strafeHz = (0.0005 + i * 0.00007) * freq * evade * (0.7 + spd * 0.45);
+            let surgeHz = (0.00035 + i * 0.00005) * freq * (0.75 + spd * 0.35);
+            if (style === 'charge') {
+                surgeAmp *= 1.85; strafeAmp *= 0.32; surgeHz *= 1.45;
+            } else if (style === 'weave') {
+                strafeAmp *= 1.75; surgeAmp *= 1.25; strafeHz *= 1.35;
+            } else if (style === 'skitter') {
+                strafeAmp *= 1.3; strafeHz *= 1.7; surgeHz *= 1.55;
+            } else if (style === 'lockstep') {
+                strafeAmp *= 0.12; surgeAmp *= 0.18; strafeHz *= 0.35; surgeHz *= 0.4;
+            } else {
+                strafeAmp *= 0.85; surgeAmp *= 0.9;
+            }
+            let strafe = this._reduceMotion ? 0
                 : Math.sin(t * strafeHz + s.phase) * strafeAmp;
-            const surge = this._reduceMotion ? 0
+            let surge = this._reduceMotion ? 0
                 : Math.sin(t * surgeHz + s.phase * 1.3) * surgeAmp;
+            if (!this._reduceMotion && style === 'weave') {
+                strafe += Math.sin(t * strafeHz * 2.15 + s.phase) * strafeAmp * 0.4;
+            } else if (!this._reduceMotion && style === 'skitter') {
+                strafe += Math.sin(t * strafeHz * 3.4 + s.phase * 0.7) * strafeAmp * 0.28;
+                surge += Math.sin(t * surgeHz * 2.6 + s.phase) * surgeAmp * 0.35;
+            }
             const sx = baseX + strafe;
             const sy = baseY + surge;
             const mul = scale * (s.sizeMul || 1);
@@ -1501,8 +1752,12 @@ class HeroPlanetBackdrop {
             }
             const size = Math.min(this.W, this.H);
             const cx = this.W * 0.5;
-            const cy = this.H * 0.5;
-            const r = this._fitRadius(cx, cy, size * 0.42);
+            // Larger disc, seated higher — lower half stays clear for the defense fleet.
+            const cy = this.H * 0.30;
+            const desired = size * 0.58;
+            // Softer top fit so a bigger/higher planet isn't crushed by glow margin.
+            const room = Math.min(cx, this.W - cx, cy + desired * 0.18, this.H - cy) * 0.94;
+            const r = Math.min(desired, room / 1.55);
             this._stageCache = { x: 0, y: 0, w: this.W, h: this.H, cx: cx, cy: cy, r: r };
             return this._stageCache;
         }

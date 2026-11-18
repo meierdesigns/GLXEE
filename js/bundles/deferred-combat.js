@@ -5192,6 +5192,29 @@ extendClass(BulletManager, {
         }
 
         const cfg = Object.assign({}, weaponConfig);
+        // Faction/class fireStyle reshapes cone + cadence (spray wide, claw tight, etc.).
+        const fp = enemy && enemy.flightProfile;
+        if (fp) {
+            const style = fp.fireStyle || 'volley';
+            const spreadMul = Number(fp.spreadMul != null ? fp.spreadMul : 1);
+            const countMul = Number(fp.shotCountMul != null ? fp.shotCountMul : 1);
+            if (cfg.spreadAngle != null) cfg.spreadAngle = Number(cfg.spreadAngle) * spreadMul;
+            else if (style === 'spray') cfg.spreadAngle = 0.45;
+            if (cfg.bulletCount != null) {
+                cfg.bulletCount = Math.max(1, Math.round(Number(cfg.bulletCount) * countMul));
+            } else if (style === 'spray') {
+                cfg.bulletCount = 3;
+            }
+            if (style === 'claw') {
+                cfg.bulletCount = 1;
+                cfg.spreadAngle = 0;
+                if (cfg.damage != null) cfg.damage = Math.round(Number(cfg.damage) * 1.25);
+            } else if (style === 'salvo' && cfg.spreadAngle != null) {
+                cfg.spreadAngle *= 0.5;
+            } else if (style === 'arc' && cfg.waveAmp == null) {
+                cfg.waveAmp = 1.4;
+            }
+        }
         // Side craft size comes from getEnemyGunWidth → fitBulletsToBarrel
         // (weaponScale), not from shrinking cfg here — fireWeaponByType clamps
         // dims and would snap fractional escort shots back up.
@@ -6678,15 +6701,25 @@ extendClass(EnemyManager, {
             hullSeed: 1 + Math.floor(Math.random() * SIDE_HULL_SEEDS),
             muzzleGroups: this.sideMuzzleGroupCount(entry.enemyClass)
         };
-        // Give escorts distinct attack profiles instead of making the whole
-        // formation fire the champion's weapon in unison.
-        const factionWeapons = (typeof factionShipStyles !== 'undefined'
-            && factionShipStyles.getFactionDefaultWeapons)
-            ? factionShipStyles.getFactionDefaultWeapons(side.faction)
-            : ['laser'];
-        if (factionWeapons.length) {
-            side.weaponId = factionWeapons[(escortSlot >= 0 ? escortSlot : Math.floor(Math.random() * factionWeapons.length))
-                % factionWeapons.length];
+        // Class + faction doctrine gun (scouts chatter light, heavies boom).
+        const classGuns = ({
+            terran:   { scout: 'laser', assault: 'laser_twin', heavy: 'railgun', elite: 'railgun', capital: 'laser_twin' },
+            kronax:   { scout: 'spike_burst', assault: 'claw_beam', heavy: 'plasma', elite: 'claw_beam', capital: 'plasma' },
+            voidborn: { scout: 'ion', assault: 'wave', heavy: 'nova', elite: 'pierce', capital: 'wave' },
+            pirate:   { scout: 'rapid', assault: 'spread', heavy: 'burst', elite: 'spread', capital: 'burst' },
+            machine:  { scout: 'pierce', assault: 'missile', heavy: 'missile', elite: 'pierce', capital: 'missile' }
+        })[side.faction] || null;
+        if (classGuns && classGuns[side.enemyClass]) {
+            side.weaponId = classGuns[side.enemyClass];
+        } else {
+            const factionWeapons = (typeof factionShipStyles !== 'undefined'
+                && factionShipStyles.getFactionDefaultWeapons)
+                ? factionShipStyles.getFactionDefaultWeapons(side.faction)
+                : ['laser'];
+            if (factionWeapons.length) {
+                side.weaponId = factionWeapons[(escortSlot >= 0 ? escortSlot : Math.floor(Math.random() * factionWeapons.length))
+                    % factionWeapons.length];
+            }
         }
         this.applyEnemyHitProfile(side, {
             faction: side.faction,
@@ -7137,15 +7170,32 @@ extendClass(EnemyManager, {
                     if (!e.verticalSpeed) e.verticalSpeed = (Math.random() - 0.5) * 0.2;
                     if (!e.lifetimeMs) e.lifetimeMs = 12000 + Math.random() * 6000;
                 }
-                e.x += e.speed * speedMul;
-                e.y += e.verticalSpeed * speedMul;
-                if (e.flightProfile && e.flightProfile.wobbleAmp > 0) {
-                    e.wobblePhase = (e.wobblePhase || 0) + e.flightProfile.wobbleFreq * ((deltaTime || 16.67) / 1000);
+                let sx = e.speed * speedMul;
+                let sy = e.verticalSpeed * speedMul;
+                if (e.flightProfile) {
+                    const fp = e.flightProfile;
+                    const style = fp.driftStyle || 'steady';
+                    const amp = Number(fp.wobbleAmp) || 0;
+                    const freq = Number(fp.wobbleFreq) || 0.6;
+                    e.wobblePhase = (e.wobblePhase || 0) + freq * ((deltaTime || 16.67) / 1000)
+                        * (style === 'skitter' ? 1.6 : style === 'weave' ? 1.25 : 1);
                     const wobbleBoost = (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive())
                         ? beatSyncManager.getWobbleAmpMul()
                         : 1;
-                    e.x += Math.sin(e.wobblePhase) * e.flightProfile.wobbleAmp * wobbleBoost * speedMul;
+                    if (amp > 0) {
+                        let lat = Math.sin(e.wobblePhase) * amp * wobbleBoost;
+                        if (style === 'weave') lat += Math.sin(e.wobblePhase * 2.1) * amp * 0.45 * wobbleBoost;
+                        else if (style === 'skitter') lat += Math.sin(e.wobblePhase * 3.2) * amp * 0.35 * wobbleBoost;
+                        else if (style === 'lockstep') lat *= 0.15;
+                        else if (style === 'charge') lat *= 0.3;
+                        sx += lat * speedMul;
+                    }
+                    if (style === 'charge') sy *= 1.2;
+                    else if (style === 'lockstep') sy *= 0.85;
+                    else if (style === 'weave') sy += Math.sin(e.wobblePhase * 0.7) * amp * 0.35 * speedMul;
                 }
+                e.x += sx;
+                e.y += sy;
                 if (bobY) e.y += bobY * 0.12;
                 // Lazy vertical weave so roaming craft don't just hover.
                 e.y += Math.sin((e.wobblePhase || 0) * 0.6) * 0.35 * speedMul;
@@ -7198,6 +7248,10 @@ extendClass(EnemyManager, {
                 && (role === 'gunner' || role === 'assault' || role === 'bomber' || (role === 'blocker' && !e.lightClass))) {
                 e.shootTimer = (e.shootTimer || 0) + deltaTime;
                 let interval = e.shootInterval || 1900;
+                // Class/faction fireRateMul: scouts chatter, heavies/capitals boom slower.
+                const fireRateMul = e.flightProfile && e.flightProfile.fireRateMul
+                    ? Math.max(0.45, Number(e.flightProfile.fireRateMul) || 1) : 1;
+                interval = Math.max(420, Math.round(interval / fireRateMul));
                 if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
                     const beatMs = beatSyncManager.beatDurationMs();
                     interval = Math.max(beatMs * 2, interval * 0.85);
@@ -7591,15 +7645,29 @@ extendClass(EnemyManager, {
         let edx = this.enemy.speed * speedMultiplier;
         let edy = this.enemy.verticalSpeed * speedMultiplier + bobY;
 
-        // Faction/class flight wobble, amplified on downbeats
+        // Faction/class flight signatures (speed already baked at spawn; weave/dive style here)
         const enemyFlightProfile = this.enemy.flightProfile;
-        if (enemyFlightProfile && enemyFlightProfile.wobbleAmp > 0) {
-            this.enemy.wobblePhase = (this.enemy.wobblePhase || 0) + enemyFlightProfile.wobbleFreq * (effectiveDeltaTime / 1000);
+        if (enemyFlightProfile) {
+            const style = enemyFlightProfile.driftStyle || 'steady';
+            const amp = Number(enemyFlightProfile.wobbleAmp) || 0;
+            const freq = Number(enemyFlightProfile.wobbleFreq) || 0.6;
+            this.enemy.wobblePhase = (this.enemy.wobblePhase || 0) + freq * (effectiveDeltaTime / 1000)
+                * (style === 'skitter' ? 1.6 : style === 'weave' ? 1.25 : 1);
             let wobbleBoost = 1;
             if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
                 wobbleBoost = beatSyncManager.getWobbleAmpMul();
             }
-            edx += Math.sin(this.enemy.wobblePhase) * enemyFlightProfile.wobbleAmp * wobbleBoost * speedMultiplier;
+            if (amp > 0) {
+                let lat = Math.sin(this.enemy.wobblePhase) * amp * wobbleBoost;
+                if (style === 'weave') lat += Math.sin(this.enemy.wobblePhase * 2.1) * amp * 0.45 * wobbleBoost;
+                else if (style === 'skitter') lat += Math.sin(this.enemy.wobblePhase * 3.2) * amp * 0.35 * wobbleBoost;
+                else if (style === 'lockstep') lat *= 0.15;
+                else if (style === 'charge') lat *= 0.3;
+                edx += lat * speedMultiplier;
+            }
+            if (style === 'charge') edy *= 1.2;
+            else if (style === 'lockstep') edy *= 0.85;
+            else if (style === 'weave') edy += Math.sin(this.enemy.wobblePhase * 0.7) * amp * 0.35 * speedMultiplier;
         }
         const cv = (typeof window !== 'undefined') ? window.combatVoxels : null;
         if (cv && cv.active && cv.active() && cv.stepMove) {
@@ -7641,6 +7709,10 @@ extendClass(EnemyManager, {
             if (this.currentEnemyModel && this.currentEnemyModel.shootInterval) {
                 // Convert shootInterval (ms) to chance per frame (60 FPS) with reduced rate
                 shootChance = (60 / this.currentEnemyModel.shootInterval) * 0.4; // 40% of original rate
+            }
+            // Faction/class fireRateMul: scouts chatter, heavies boom slower.
+            if (this.enemy && this.enemy.flightProfile && this.enemy.flightProfile.fireRateMul) {
+                shootChance *= Math.max(0.45, Number(this.enemy.flightProfile.fireRateMul) || 1);
             }
             if (typeof beatSyncManager !== 'undefined' && beatSyncManager.isActive()) {
                 if (beatSyncManager.justDownbeat) shootChance = Math.max(shootChance, 0.65);

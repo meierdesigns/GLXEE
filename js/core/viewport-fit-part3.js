@@ -34,7 +34,8 @@
     }
     // Honor a saved DevMode preference as soon as this module loads (flag stays false until DevMode).
     window.vfAllowBrowserCtxMenu = false;
-    Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate }); // functions (hoisted)
+    Object.assign(NS, { guiZoom, onFxEsc, placeResPlate, sizesClose, startSway, syncBezelTools, syncPilotPlate, toggleFrameEdit, phSetFr, phFrValue, isFrameEditOn, renderFrameEditGrips }); // functions (hoisted)
+    function isFrameEditOn() { return !!vfs.frameEditOn; }
 
     // Measure the combined effect of the stage's stacked scale layers (CSS zoom, transform:
     // scale, …) directly rather than tracking down each factor by name — same technique as
@@ -274,6 +275,11 @@
             frameEdit: function (btn) {
                 toggleFrameEdit();
                 btn.classList.toggle('is-open', !!vfs.frameEditOn);
+                // Frame edit lives in Bezel Editor — open FRAME tab when grips turn on.
+                if (vfs.frameEditOn && typeof bezelEditorUI !== 'undefined') {
+                    if (bezelEditorUI.showTab) bezelEditorUI.showTab('frame');
+                    else if (bezelEditorUI.show) bezelEditorUI.show();
+                }
             },
             ctxMenu: function (btn) {
                 const on = !loadCtxMenuPref();
@@ -438,32 +444,240 @@
             fxSlot.title = meta.fx[0];
             fxSlot.setAttribute('aria-label', meta.fx[0]);
         }
-        // DevMode: Voxel Size dropdown at the left of the bezel tool strip.
+        // Labelled custom dropdowns (trigger carries the label; no native <select>).
+        // Menus are portaled to <html> while open: .vf-bezel is pointer-events:none, so an
+        // absolutely positioned panel below the 40px host would not receive hits over the stage.
+        const bezelDdMenu = function (host) {
+            return host._ddMenu || host.querySelector('.vf-bezel-dd-menu');
+        };
+        const parkBezelDdMenu = function (host) {
+            const menu = bezelDdMenu(host);
+            if (!menu) return;
+            host._ddMenu = menu;
+            menu.classList.remove('is-open');
+            menu.style.position = '';
+            menu.style.left = '';
+            menu.style.top = '';
+            menu.style.minWidth = '';
+            menu.style.maxHeight = '';
+            menu.style.zIndex = '';
+            if (menu.parentElement !== host) host.appendChild(menu);
+        };
+        const placeBezelDdMenu = function (host) {
+            const btn = host.querySelector('.vf-bezel-dd-btn');
+            const menu = bezelDdMenu(host);
+            if (!btn || !menu) return;
+            host._ddMenu = menu;
+            const r = btn.getBoundingClientRect();
+            const edit = menu.classList.contains('vf-bezel-dd-edit');
+            const minW = edit ? Math.max(Math.round(r.width), 400) : Math.round(r.width);
+            let left = Math.round(r.left);
+            const maxLeft = Math.max(8, window.innerWidth - minW - 8);
+            if (left > maxLeft) left = maxLeft;
+            if (left < 8) left = 8;
+            menu.classList.add('is-open');
+            menu.style.position = 'fixed';
+            menu.style.left = left + 'px';
+            menu.style.top = Math.round(r.bottom + 2) + 'px';
+            menu.style.minWidth = minW + 'px';
+            menu.style.maxHeight = '';
+            menu.style.zIndex = '100060';
+            if (menu.parentElement !== document.documentElement) document.documentElement.appendChild(menu);
+            // Flip above the trigger when the panel would run off the bottom of the viewport.
+            const mr = menu.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - r.bottom - 8;
+            const spaceAbove = r.top - 8;
+            if (mr.height > spaceBelow && spaceAbove > spaceBelow) {
+                const top = Math.max(8, Math.round(r.top - mr.height - 2));
+                menu.style.top = top + 'px';
+                menu.style.maxHeight = Math.min(mr.height, spaceAbove) + 'px';
+            } else if (mr.height > spaceBelow) {
+                menu.style.maxHeight = Math.max(120, spaceBelow) + 'px';
+            }
+        };
+        const closeBezelDd = function (except) {
+            document.querySelectorAll('.vf-bezel-voxel.is-open, .vf-bezel-editors.is-open').forEach(function (el) {
+                if (el === except) return;
+                el.classList.remove('is-open');
+                const b = el.querySelector('.vf-bezel-dd-btn');
+                if (b) b.setAttribute('aria-expanded', 'false');
+                parkBezelDdMenu(el);
+            });
+        };
+        if (!vfs._bezelDdDoc) {
+            vfs._bezelDdDoc = 1;
+            document.addEventListener('pointerdown', function (e) {
+                if (e.target.closest('.vf-bezel-voxel, .vf-bezel-editors, .vf-bezel-dd-menu')) return;
+                closeBezelDd();
+            }, true);
+            window.addEventListener('resize', function () {
+                document.querySelectorAll('.vf-bezel-voxel.is-open, .vf-bezel-editors.is-open').forEach(placeBezelDdMenu);
+            });
+        }
+        const wireBezelDdToggle = function (host) {
+            const btn = host.querySelector('.vf-bezel-dd-btn');
+            if (!btn || btn.dataset.ddBound === '1') return;
+            btn.dataset.ddBound = '1';
+            host._ddMenu = host.querySelector('.vf-bezel-dd-menu');
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const open = !host.classList.contains('is-open');
+                closeBezelDd(host);
+                host.classList.toggle('is-open', open);
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (open) placeBezelDdMenu(host);
+                else parkBezelDdMenu(host);
+            });
+            ['keydown', 'keyup', 'mousedown'].forEach(function (t) {
+                host.addEventListener(t, function (e) { e.stopPropagation(); });
+            });
+        };
+        // DevMode: Voxel Size — trigger reads "VOXEL 0.75×".
         let voxelLab = tq('.vf-bezel-voxel');
+        if (voxelLab && !voxelLab.querySelector('.vf-bezel-dd-btn')) {
+            voxelLab.remove();
+            voxelLab = null;
+        }
         if (!voxelLab) {
-            voxelLab = document.createElement('label');
+            voxelLab = document.createElement('div');
             voxelLab.className = 'vf-bezel-voxel';
             voxelLab.title = 'Voxel Size';
             voxelLab.hidden = true;
-            voxelLab.innerHTML = '<span>VOXEL</span><select aria-label="Voxel Size"></select>';
+            voxelLab.innerHTML = '<button type="button" class="vf-bezel-dd-btn" aria-haspopup="listbox" aria-expanded="false" aria-label="Voxel Size">' +
+                '<em>VOXEL</em><b>1×</b></button><div class="vf-bezel-dd-menu" role="listbox"></div>';
             tools.insertBefore(voxelLab, tools.firstChild);
-            const voxelSel = voxelLab.querySelector('select');
-            voxelSel.addEventListener('change', function (e) {
+            wireBezelDdToggle(voxelLab);
+            voxelLab.querySelector('.vf-bezel-dd-menu').addEventListener('click', function (e) {
+                const opt = e.target.closest('[data-v]');
+                if (!opt) return;
                 e.stopPropagation();
+                closeBezelDd();
                 if (typeof uiAppearanceManager !== 'undefined' && uiAppearanceManager.setVoxelSize) {
-                    uiAppearanceManager.setVoxelSize(voxelSel.value);
+                    uiAppearanceManager.setVoxelSize(opt.getAttribute('data-v'));
                 }
             });
-            ['keydown', 'keyup', 'click', 'mousedown'].forEach(function (t) {
-                voxelSel.addEventListener(t, function (e) { e.stopPropagation(); });
-            });
+        } else {
+            wireBezelDdToggle(voxelLab);
         }
-        // Dev keys live in the overlay dev bar (voxel size, layout edit, HUD remote, frame edit, ctx menu, music editor).
-        ['.vf-bezel-voxel', '[data-tool="save"]', '[data-tool="reset"]', '[data-tool="layout"]', '[data-tool="hud"]',
+        // DevMode: Editors — trigger is the label "EDIT"; clustered icon tiles.
+        let edLab = tq('.vf-bezel-editors');
+        // Menu may be portaled to <html> while open — look via _ddMenu, not only host children.
+        {
+            const edMenu = edLab && bezelDdMenu(edLab);
+            const edOk = edLab && edLab.querySelector('.vf-bezel-dd-btn')
+                && edMenu && edMenu.querySelector('.vf-bezel-dd-tile');
+            if (edLab && !edOk) {
+                if (edMenu && edMenu.parentElement === document.documentElement) edMenu.remove();
+                edLab.remove();
+                edLab = null;
+            }
+        }
+        if (!edLab) {
+            const edSvg = function (body) {
+                return '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" stroke-linejoin="miter">' + body + '</svg>';
+            };
+            const ED_ICONS = {
+                bezelEditor: edSvg('<rect x="2" y="2" width="12" height="12"/><rect x="5" y="5" width="6" height="6"/>'),
+                bezelFrame: FRAME_EDIT_ICON || edSvg('<circle cx="8" cy="8" r="5"/><path d="M8 1v3M8 12v3M1 8h3M12 8h3"/>'),
+                hudLayoutEditor: HUD_ICON || edSvg('<rect x="2" y="3" width="12" height="10"/><circle cx="6" cy="7" r="2"/><path d="M10 5h2M10 8h2M10 11h2"/>'),
+                themeEditor: edSvg('<circle cx="8" cy="8" r="5"/><path d="M8 3v10M3 8h10"/><circle cx="8" cy="8" r="2"/>'),
+                faceEditor: edSvg('<circle cx="8" cy="7" r="4"/><path d="M6 6.5h1M9 6.5h1M6.5 9c.8.8 2.2.8 3 0"/><path d="M3 13c1.5-2 8.5-2 10 0"/>'),
+                shotBehavior: edSvg('<path d="M2 8h9"/><path d="M11 5l4 3-4 3z"/>'),
+                difficultyEditor: edSvg('<path d="M3 13V8a5 5 0 0110 0v5zM6 9h1M9 9h1M6 13v-2M8 13v-2M10 13v-2"/>'),
+                abilityEditor: edSvg('<path d="M8 1l2 5h5l-4 3 2 5-5-3-5 3 2-5-4-3h5z"/>'),
+                soundtrackEditor: MUSIC_ICON || edSvg('<circle cx="5" cy="12" r="2"/><circle cx="11" cy="10" r="2"/><path d="M7 12V3l6-1v8"/>'),
+                startupSound: edSvg('<path d="M3 8h2l3-3v10L5 11H3z"/><path d="M11 5v6M13 3v10"/>'),
+                factionCommand: edSvg('<path d="M8 2l5 3v4c0 3-2.5 5-5 6-2.5-1-5-3-5-6V5z"/>'),
+                transmissionEditor: edSvg('<path d="M2 8h4M10 8h4M8 4v8"/><circle cx="8" cy="8" r="2"/>'),
+                planetEditor: edSvg('<circle cx="8" cy="8" r="5"/><path d="M3 8h10M8 3c2 2 2 8 0 10M8 3c-2 2-2 8 0 10"/>'),
+                hangarTestArena: edSvg('<rect x="2" y="4" width="12" height="9"/><path d="M5 4V3h6v1M5 8h6M5 11h3"/>'),
+                shipEditor: edSvg('<path d="M8 2l5 12H3z"/><path d="M5 10h6"/>'),
+                enemyEditor: edSvg('<path d="M3 6l2-3h6l2 3-2 7H5z"/><path d="M6 7h1M9 7h1M6.5 10h3"/>'),
+                componentEditor: edSvg('<rect x="3" y="3" width="4" height="4"/><rect x="9" y="3" width="4" height="4"/><rect x="3" y="9" width="4" height="4"/><path d="M10 10h3v3"/>'),
+                assetGen: edSvg('<path d="M3 12V5l5-3 5 3v7l-5 3z"/><path d="M8 2v13M3 5l5 3 5-3"/>'),
+                assetGenFaction: edSvg('<path d="M8 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z"/>'),
+                assetGenFactionShips: edSvg('<path d="M2 11l3-7h2l3 7M9 11l2-5h2l2 5"/><path d="M3 11h12"/>')
+            };
+            const EDITOR_CLUSTERS = [
+                ['SHELL', [
+                    ['bezelEditor', 'BEZEL'],
+                    ['bezelFrame', 'FRAME'],
+                    ['hudLayoutEditor', 'HUD'],
+                    ['themeEditor', 'COLORS'],
+                    ['faceEditor', 'FLUX']
+                ]],
+                ['COMBAT', [
+                    ['shotBehavior', 'SHOT'],
+                    ['difficultyEditor', 'TUNING'],
+                    ['abilityEditor', 'ABILITY']
+                ]],
+                ['SOUND', [
+                    ['soundtrackEditor', 'TRACK'],
+                    ['startupSound', 'STARTUP']
+                ]],
+                ['WORLD', [
+                    ['factionCommand', 'FACTION'],
+                    ['transmissionEditor', 'TX'],
+                    ['planetEditor', 'PLANET'],
+                    ['hangarTestArena', 'ARENA']
+                ]],
+                ['SHIPS', [
+                    ['shipEditor', 'SHIP'],
+                    ['enemyEditor', 'ENEMY'],
+                    ['componentEditor', 'PART']
+                ]],
+                ['GEN', [
+                    ['assetGen', 'ASSETS'],
+                    ['assetGenFaction', 'EMBLEMS'],
+                    ['assetGenFactionShips', 'SHIPS']
+                ]]
+            ];
+            const clusterHtml = EDITOR_CLUSTERS.map(function (cl) {
+                return '<section class="vf-bezel-dd-cluster" data-cluster="' + cl[0] + '">' +
+                    '<h4>' + cl[0] + '</h4>' +
+                    '<div class="vf-bezel-dd-tiles">' +
+                    cl[1].map(function (o) {
+                        return '<button type="button" class="vf-bezel-dd-tile" role="menuitem" data-tools-action="' + o[0] +
+                            '" title="' + o[1] + '" aria-label="' + o[1] + '">' +
+                            (ED_ICONS[o[0]] || '') + '<span>' + o[1] + '</span></button>';
+                    }).join('') +
+                    '</div></section>';
+            }).join('');
+            edLab = document.createElement('div');
+            edLab.className = 'vf-bezel-editors';
+            edLab.title = 'Editors';
+            edLab.hidden = true;
+            edLab.innerHTML = '<button type="button" class="vf-bezel-dd-btn" aria-haspopup="menu" aria-expanded="false" aria-label="Editors">' +
+                '<em>EDIT</em></button>' +
+                '<div class="vf-bezel-dd-menu vf-bezel-dd-edit" role="menu">' +
+                '<header class="vf-bezel-dd-head"><em>EDIT</em><span>DEV</span></header>' +
+                '<div class="vf-bezel-dd-clusters">' + clusterHtml + '</div>' +
+                '</div>';
+            const grip = devBar.querySelector('.vf-devbar-grip');
+            if (grip && grip.nextSibling) devBar.insertBefore(edLab, grip.nextSibling);
+            else if (grip) grip.insertAdjacentElement('afterend', edLab);
+            else devBar.appendChild(edLab);
+            wireBezelDdToggle(edLab);
+            edLab.querySelector('.vf-bezel-dd-menu').addEventListener('click', function (e) {
+                const item = e.target.closest('[data-tools-action]');
+                if (!item) return;
+                e.stopPropagation();
+                closeBezelDd();
+                if (typeof NS.runToolsAction === 'function') NS.runToolsAction(item.getAttribute('data-tools-action'));
+            });
+        } else {
+            wireBezelDdToggle(edLab);
+        }
+        // Dev keys live in the overlay DevBar (voxel, editors, layout, HUD, frame, ctx, music).
+        ['.vf-bezel-voxel', '.vf-bezel-editors', '[data-tool="save"]', '[data-tool="reset"]', '[data-tool="layout"]', '[data-tool="hud"]',
             '[data-tool="frameEdit"]', '[data-tool="ctxMenu"]', '[data-tool="soundtrack"]'].forEach(function (sel) {
-            const el = tools.querySelector(sel);
-            if (el) devBar.appendChild(el);
+            const el = tq(sel);
+            if (el && el.parentNode !== devBar) devBar.appendChild(el);
         });
+        // Keep EDIT next to VOXEL (after grip).
+        if (edLab && voxelLab && edLab.parentNode === devBar && voxelLab.parentNode === devBar) {
+            voxelLab.insertAdjacentElement('afterend', edLab);
+        }
         if (devBar.dataset.wired !== '1') devBar.dataset.wired = '0';
         if (tools.dataset.wired !== '1') {
             tools.dataset.wired = '1';
@@ -505,20 +719,24 @@
         {
             const voxelDev = typeof startScreenManager !== 'undefined' && !!startScreenManager.devMode;
             voxelLab.hidden = !voxelDev;
+            if (edLab) edLab.hidden = !voxelDev;
             if (voxelDev && typeof uiAppearanceManager !== 'undefined') {
                 const opts = uiAppearanceManager.getVoxelSizeOptions
                     ? uiAppearanceManager.getVoxelSizeOptions()
                     : ['0.25', '0.5', '0.75', '1', '2', '3', '4', '5', '6', '7', '8'];
                 const cur = String(uiAppearanceManager.voxelSize || '1');
-                const voxelSel = voxelLab.querySelector('select');
-                const optKey = opts.join('|');
-                if (voxelSel.dataset.opts !== optKey) {
-                    voxelSel.dataset.opts = optKey;
-                    voxelSel.innerHTML = opts.map(function (o) {
-                        return '<option value="' + o + '">' + o + '×</option>';
+                const voxelBtn = voxelLab.querySelector('.vf-bezel-dd-btn b');
+                const voxelMenu = bezelDdMenu(voxelLab);
+                const optKey = opts.join('|') + '#' + cur;
+                if (voxelMenu && voxelMenu.dataset.opts !== optKey) {
+                    voxelMenu.dataset.opts = optKey;
+                    voxelMenu.innerHTML = opts.map(function (o) {
+                        const on = String(o) === cur ? ' aria-selected="true" class="is-on"' : '';
+                        return '<button type="button" role="option" data-v="' + o + '"' + on + '>' + o + '×</button>';
                     }).join('');
+                    if (voxelLab.classList.contains('is-open')) placeBezelDdMenu(voxelLab);
                 }
-                if (voxelSel.value !== cur) voxelSel.value = cur;
+                if (voxelBtn && voxelBtn.textContent !== cur + '×') voxelBtn.textContent = cur + '×';
             }
         }
         const fsOk = !!(document.fullscreenEnabled || document.webkitFullscreenEnabled);

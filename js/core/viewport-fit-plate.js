@@ -602,6 +602,7 @@
                 '<section class="vf-fx-tools-sec">' +
                 '<div class="vf-fx-title">EDITORS</div>' +
                 '<div class="vf-fx-tools-actions">' +
+                (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="bezelEditor"><em>BEZEL EDITOR</em><i aria-hidden="true">›</i></button>' : '') +
                 (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="faceEditor"><em>FACE EDITOR · FLUX</em><i aria-hidden="true">›</i></button>' : '') +
                 (fxDevModeOn() ? '<button type="button" class="vf-fx-launch" data-tools-action="shotBehavior"><em>SHOT BEHAVIOR</em><i aria-hidden="true">›</i></button>' : '') +
                 '<button type="button" class="vf-fx-launch" data-tools-action="factionCommand"><em>FACTION COMMAND</em><i aria-hidden="true">›</i></button>' +

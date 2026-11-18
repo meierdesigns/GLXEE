@@ -88,6 +88,12 @@ var AssetGenRegistry = class AssetGenRegistry {
                 return this.segmentPrompt(id);
             case "faction":
                 return "faction emblem icon, " + name + ", simple glyph, 16x16 pixel feel, game UI icon, grayscale only";
+            case "bezel":
+                return (
+                    "hollow pixel UI screen bezel frame, " + name
+                    + ", thick rim band, magenta #FF00FF glass hole and background, "
+                    + "chunky retro pixels, no antialiasing, no soft rounded corners"
+                );
             case "factionShip":
                 return (
                     "top-down faction-specific retro sci-fi spacecraft, " + name
@@ -192,8 +198,26 @@ var AssetGenRegistry = class AssetGenRegistry {
             { id: "faction", label: "FACTIONS" },
             { id: "weapon", label: "WEAPONS" },
             { id: "planet", label: "PLANETS" },
-            { id: "obstacle", label: "OBSTACLES" }
+            { id: "obstacle", label: "OBSTACLES" },
+            { id: "bezel", label: "BEZELS" }
         ];
+    }
+
+    listBezels() {
+        const factions = ["terran", "kronax", "pirate", "machine", "voidborn"];
+        return factions.map((id) => this.entry("bezel", id, {
+            label: id.toUpperCase() + " BEZEL",
+            size: 192,
+            folder: "ui",
+            fileId: id + "-bezel-art",
+            targetPath: "assets/ui/" + id + "-bezel-art.svg",
+            filenamePrefix: "ui/vf_bezel_" + id,
+            promptSuffix:
+                "hollow pixel UI bezel frame for faction " + id
+                + ", chunky retro rim, magenta glass hole, no soft corners",
+            faction: id,
+            kind: "full"
+        }));
     }
 
     list(type) {
@@ -222,6 +246,8 @@ var AssetGenRegistry = class AssetGenRegistry {
                 return this.listObstacles();
             case "portrait":
                 return this.listPortraits();
+            case "bezel":
+                return this.listBezels();
             default:
                 return [];
         }
@@ -913,10 +939,12 @@ var AssetGenClient = class AssetGenClient {
         const prompt = (opts.prompt != null && String(opts.prompt).trim())
             ? String(opts.prompt).trim()
             : (entry.promptSuffix || "");
-        const mode = opts.mode || (entry && entry.type === "portrait" ? "portrait" : "sprite");
+        const mode = opts.mode
+            || (entry && entry.type === "portrait" ? "portrait"
+                : (entry && entry.type === "bezel" ? "bezel" : "sprite"));
         const body = {
             prompt: prompt,
-            filenamePrefix: entry.filenamePrefix,
+            filenamePrefix: opts.filenamePrefix || entry.filenamePrefix,
             size: opts.size != null ? Number(opts.size) : (entry.size || 64),
             genSize: opts.genSize != null ? Number(opts.genSize) : 512,
             steps: opts.steps != null ? Number(opts.steps) : 4,
@@ -932,6 +960,11 @@ var AssetGenClient = class AssetGenClient {
         if (opts.referencePath) body.referencePath = String(opts.referencePath);
         if (opts.outWidth != null) body.outWidth = Number(opts.outWidth);
         if (opts.outHeight != null) body.outHeight = Number(opts.outHeight);
+        if (mode === "bezel") {
+            body.faction = opts.faction || entry.faction || entry.id || "terran";
+            body.part = opts.part || entry.kind || "full";
+            if (opts.palette) body.palette = opts.palette;
+        }
         const seedVal = opts.seed != null ? opts.seed : seed;
         if (seedVal != null && seedVal !== "") body.seed = Number(seedVal);
         if (!this._bridgeAllowed()) throw new Error("Asset bridge is local-dev only");
@@ -4342,12 +4375,13 @@ extendClass(AssetGenUI, {
         }
         const s = this.renderSettings;
         const isPortrait = !!(entry && entry.type === "portrait");
+        const isBezel = !!(entry && entry.type === "bezel");
         const size = (s.useEntrySize && entry && entry.size) ? entry.size : s.outSize;
         const opts = {
-            size: isPortrait ? (entry.size || 96) : size,
+            size: isPortrait ? (entry.size || 96) : (isBezel ? (entry.size || 192) : size),
             genSize: s.genSize,
             steps: s.steps,
-            prependStyle: isPortrait ? false : s.prependStyle,
+            prependStyle: (isPortrait || isBezel) ? false : s.prependStyle,
             colors: isPortrait ? 24 : (s.colors != null ? s.colors : 15),
             bgColor: s.bgColor || "#FF00FF"
         };
@@ -4358,6 +4392,12 @@ extendClass(AssetGenUI, {
             if (this.portraitReferenceDataUrl) {
                 opts.referenceDataUrl = this.portraitReferenceDataUrl;
             }
+        }
+        if (isBezel) {
+            opts.mode = "bezel";
+            opts.faction = entry.faction || entry.id;
+            opts.part = entry.kind || "full";
+            opts.filenamePrefix = entry.filenamePrefix || ("ui/vf_bezel_" + (entry.id || "frame"));
         }
         if (s.seed !== "" && s.seed != null) opts.seed = Number(s.seed);
         if (promptOverride != null) opts.prompt = promptOverride;

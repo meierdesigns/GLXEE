@@ -19,11 +19,11 @@ const factionGui = (() => {
     // Bezel rim uses one static border-image per faction (screen-frame.css).
     // Warm the base asset so the first paint never flashes the solid hull fallback.
     const BEZEL_ART_FILES = {
-        terran: ['terran-bezel-art.svg?v=15'],
-        kronax: ['kronax-bezel-art.svg?v=15'],
-        machine: ['machine-bezel-art.svg?v=15'],
-        pirate: ['pirate-bezel-art.svg?v=16'],
-        voidborn: ['voidborn-bezel-vine.svg']
+        terran: ['terran-bezel-art.svg?v=bz33', 'terran-topstrip.svg?v=bz33'],
+        kronax: ['kronax-bezel-art.svg?v=bz33', 'kronax-topstrip.svg?v=bz33'],
+        machine: ['machine-bezel-art.svg?v=bz33', 'machine-topstrip.svg?v=bz33'],
+        pirate: ['pirate-bezel-art.svg?v=bz33', 'pirate-topstrip.svg?v=bz33'],
+        voidborn: ['voidborn-bezel-art.svg?v=bz34', 'voidborn-topstrip.svg?v=bz34']
     };
     const preloaded = new Set();
     // Keep decoded bitmaps alive so opacity-layer rim swaps never re-fetch/re-decode.

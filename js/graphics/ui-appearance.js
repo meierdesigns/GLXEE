@@ -171,7 +171,7 @@ class UIAppearanceManager {
         // Global pixel size (CSS px per art pixel) across combat, maps, planets, ships, previews and editors.
         this.pixelSize = '2';
         // Corner radius of the pixel frame's screen opening, in grid cells.
-        this.frameRound = '3';
+        this.frameRound = '0';
         this.guiVoxelParts = { lines: 'ON', corners: 'ON', text: 'ON', images: 'ON', svg: 'ON' };
         this.load();
         this.apply();

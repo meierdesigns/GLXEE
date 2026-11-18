@@ -330,6 +330,29 @@ extendClass(BulletManager, {
         }
 
         const cfg = Object.assign({}, weaponConfig);
+        // Faction/class fireStyle reshapes cone + cadence (spray wide, claw tight, etc.).
+        const fp = enemy && enemy.flightProfile;
+        if (fp) {
+            const style = fp.fireStyle || 'volley';
+            const spreadMul = Number(fp.spreadMul != null ? fp.spreadMul : 1);
+            const countMul = Number(fp.shotCountMul != null ? fp.shotCountMul : 1);
+            if (cfg.spreadAngle != null) cfg.spreadAngle = Number(cfg.spreadAngle) * spreadMul;
+            else if (style === 'spray') cfg.spreadAngle = 0.45;
+            if (cfg.bulletCount != null) {
+                cfg.bulletCount = Math.max(1, Math.round(Number(cfg.bulletCount) * countMul));
+            } else if (style === 'spray') {
+                cfg.bulletCount = 3;
+            }
+            if (style === 'claw') {
+                cfg.bulletCount = 1;
+                cfg.spreadAngle = 0;
+                if (cfg.damage != null) cfg.damage = Math.round(Number(cfg.damage) * 1.25);
+            } else if (style === 'salvo' && cfg.spreadAngle != null) {
+                cfg.spreadAngle *= 0.5;
+            } else if (style === 'arc' && cfg.waveAmp == null) {
+                cfg.waveAmp = 1.4;
+            }
+        }
         // Side craft size comes from getEnemyGunWidth → fitBulletsToBarrel
         // (weaponScale), not from shrinking cfg here — fireWeaponByType clamps
         // dims and would snap fractional escort shots back up.

@@ -55,12 +55,13 @@ extendClass(AssetGenUI, {
         }
         const s = this.renderSettings;
         const isPortrait = !!(entry && entry.type === "portrait");
+        const isBezel = !!(entry && entry.type === "bezel");
         const size = (s.useEntrySize && entry && entry.size) ? entry.size : s.outSize;
         const opts = {
-            size: isPortrait ? (entry.size || 96) : size,
+            size: isPortrait ? (entry.size || 96) : (isBezel ? (entry.size || 192) : size),
             genSize: s.genSize,
             steps: s.steps,
-            prependStyle: isPortrait ? false : s.prependStyle,
+            prependStyle: (isPortrait || isBezel) ? false : s.prependStyle,
             colors: isPortrait ? 24 : (s.colors != null ? s.colors : 15),
             bgColor: s.bgColor || "#FF00FF"
         };
@@ -71,6 +72,12 @@ extendClass(AssetGenUI, {
             if (this.portraitReferenceDataUrl) {
                 opts.referenceDataUrl = this.portraitReferenceDataUrl;
             }
+        }
+        if (isBezel) {
+            opts.mode = "bezel";
+            opts.faction = entry.faction || entry.id;
+            opts.part = entry.kind || "full";
+            opts.filenamePrefix = entry.filenamePrefix || ("ui/vf_bezel_" + (entry.id || "frame"));
         }
         if (s.seed !== "" && s.seed != null) opts.seed = Number(s.seed);
         if (promptOverride != null) opts.prompt = promptOverride;

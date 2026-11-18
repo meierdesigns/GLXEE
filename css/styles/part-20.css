@@ -514,8 +514,9 @@ html[data-vf-frame-px="on"] .vf-bezel { --fr-bevel: var(--fr-px, 3px); }
    filter steps that radius into voxel stairs. */
 html[data-vf-frame-px="on"] .vf-bezel,
 html[data-vf-frame-px="on"] .vf-bezel[data-faction] {
-    --fr-hole-r: var(--fr-rad, 0px);
-    --glass-r: var(--fr-rad, 0px);
+    /* Glass stays sharp; FRAME ROUND only affects outer voxel mask elsewhere. */
+    --fr-hole-r: 0px;
+    --glass-r: 0px;
 }
 
 /* Pixel/stepped silhouette: clip the band fill to the same mask as the plates. */
@@ -602,8 +603,12 @@ html[data-faction="machine"] { --fr-shape: var(--fr-shape-machine); }
    properties don't cross. Without this it fell back to a hardcoded 24u round
    corner on every faction — correct only for voidborn's own glass-r, but it
    rounded the sharp-cornered panel content on every other faction too. */
-:root { --fr-hole-r: 0px; }
-html[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--bz-u)); }
+:root { --fr-hole-r: 0px; --glass-r: 0; }
+html[data-faction="terran"],
+html[data-faction="kronax"],
+html[data-faction="pirate"],
+html[data-faction="machine"],
+html[data-faction="voidborn"] { --fr-hole-r: 0px; --glass-r: 0; }
 
 /* Stage is a rectangle; bezel silhouette has chamfers/notches. Without this,
    the black body corner peeks past the rounded rim as a square “screen” leak.
@@ -630,12 +635,12 @@ html:has(#vf-bezel) :is(#vf-cables, #vf-cables-old) {
    hardcoded 24u round here clipped the sharp-cornered panel content on every
    other faction into a rounded corner it was never designed to have. */
 html:has(#vf-bezel) {
+    /* Sharp glass opening — no CSS round (corners belong in pixel art). */
     --vf-stage-shape: inset(
         var(--fr-open-top)
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
-        round var(--fr-hole-r, 0px)
     );
 }
 html[data-vf-frame-px="on"][data-vf-frame-sil] {
@@ -644,7 +649,6 @@ html[data-vf-frame-px="on"][data-vf-frame-sil] {
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-bottom) + var(--vf-glass-inset, 0px))
         calc(var(--fr-open-side) + var(--vf-glass-inset, 0px))
-        round var(--fr-hole-r, 0px)
     );
 }
 /* Tint/glow that fill the stage box may clip to the silhouette.

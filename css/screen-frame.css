@@ -1,313 +1,145 @@
 /* ==========================================================================
-   SCREEN FRAME (bezel) — three layers, back to front:
+   SCREEN FRAME (bezel) — unified contract:
 
      1. BG image          (window / parallax, behind everything)
      2. Screen content    (station, fight, … sized to --fr-open-*)
      3. #vf-bezel         (frame on top; pointer-events:none except tools)
-          .vf-bezel-back  opaque band fill (--fr-bg-crop 0..1 = how far the
-                          fill reaches from the outer edge toward the glass)
-          .vf-fr          hull plates / faction art in the band
+          .vf-bezel-back  opaque band fill
+          .vf-fr          rim host (.vf-fr::after = border-image art)
 
-   A faction supplies (on .vf-bezel[data-faction="…"]):
-     --fr-shape    clip-path of the OUTER silhouette (polygon / inset round …)
-     --fr-hole-r   border-radius of the screen opening (one to four radii)
-     --hull / --hull-lit / --hull-dark   plate colours
-     --fr-bevel    optional, bevel width (default 3 * --u)
-   Decoration (.vf-bezel-deco, per-faction art in styles.css) is clipped by the
-   same --fr-shape.
-
-   Mechanic (DOM: #vf-bezel > .vf-fr, built in index.html / viewport-fit.js):
-     .vf-fr clips three stacked plates to the silhouette. Each plate paints the
-     hull as the giant outer shadow of the opening (.vf-fr-hole), so the opening
-     keeps its own rounded corners. Plates differ only by the clip being shifted:
-       dark  : silhouette in place                (shows on bottom/right band)
-       lit   : silhouette shifted up-left         (shows on top/left band)
-       hull  : silhouette shifted down-right AND shifted up-left (the middle)
-     The uncovered bands ARE the bevel; they follow every corner and notch of
-     --fr-shape by construction, so a new faction shape needs no bevel code.
+   ONE geometry for every faction (faction only supplies art + palette):
+     --fr-slice = 32 art px
+     --fr-rim   = 56 u   (rim thickness)
+     --fr-gap   = 3 u
+     --fr-art-th = rim   (border-image width)
+     open side/bottom = rim + 2u; open top = 44u + --bz-extra
+     --fr-hole-r = 0     (sharp glass; corners live in pixel art only)
+     outer --fr-shape = rectangle (9-slice corners stay whole)
    ========================================================================== */
 
-/* Critical boot tokens: must ship with screen-frame (not deferred app.css).
-   Without --bz-u / --fr-open-top the pirate/metal ::before top strip height
-   collapses and the upper bezel reads as disconnected corner blocks. */
 :root {
-    /* Was 50 — that stacked a ~26px hull gutter under the top rim art before
-       the glass/BG started. 12 → open-top = 56u, flush with side/bottom rim. */
     --bz-extra: 12;
     --bz-u: min(calc(var(--vw, 100vw) / 1640), calc(var(--vh, 100dvh) / 1110));
-    --fr-open-side: calc(56 * var(--bz-u));
-    --fr-open-bottom: calc(56 * var(--bz-u));
-    --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
-    /* ONE bezel model for every faction:
-         rim  = the faction art, drawn ~45px (56u) thick at the same pixel density (≈2.8 screen px per art pixel);
-         open = --fr-open-* (the glass opening, = rim + 3px);
-         gap  = --fr-gap, the screen sits this far inside the opening (--vf-glass-inset below).
-       A faction only supplies art and colours; it must not change rim, opening or gap. */
+    --u: var(--bz-u);
+    --fr-slice: 32;
+    --fr-rim: 56;
     --fr-gap: calc(3 * var(--bz-u));
-    /* Art size is a constant of the art (9-slice border) and no longer follows the opening. */
-    --fr-art-th: calc(58 * var(--bz-u));
-}
-/* Visible rim thickness of each faction's art, in u (measured; the art fills a different share of its border box:
-   terran / machine ~46u, kronax only ~24u, pirate ~60u, voidborn ~55u). The opening is rim + 2u and the screen sits
-   --fr-gap further in, so the gap between art and screen is the same ~5u on every faction. */
-html[data-faction="terran"]   { --fr-rim: 46.5; }
-html[data-faction="machine"]  { --fr-rim: 46.5; }
-html[data-faction="kronax"]   { --fr-rim: 24; }
-html[data-faction="voidborn"] { --fr-rim: 55; }
-html[data-faction="pirate"]   { --fr-rim: 59.5; }
-html[data-faction="terran"], html[data-faction="machine"], html[data-faction="kronax"],
-html[data-faction="voidborn"], html[data-faction="pirate"] {
+    --fr-art-th: calc(var(--fr-rim) * var(--bz-u));
     --fr-open-side: calc((var(--fr-rim) + 2) * var(--bz-u));
     --fr-open-bottom: calc((var(--fr-rim) + 2) * var(--bz-u));
+    --fr-open-top: calc((44 + var(--bz-extra, 12)) * var(--bz-u));
+    --fr-hole-r: 0px;
+    --glass-r: 0;
+    /* Outer silhouette: rectangle so 9-slice corner tiles stay intact. */
+    --fr-shape-rect: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+    --fr-shape: var(--fr-shape-rect);
+    /* Legacy named shapes kept for morph/dev reference (not used as live outer clip). */
+    --fr-shape-terran: var(--fr-shape-rect);
+    --fr-shape-kronax: var(--fr-shape-rect);
+    --fr-shape-voidborn: var(--fr-shape-rect);
+    --fr-shape-pirate: var(--fr-shape-rect);
+    --fr-shape-machine: var(--fr-shape-rect);
 }
 
 .vf-bezel {
     --fr-bevel: calc(5 * var(--u));
     --fr-hole-r: 0;
-    --fr-shape: none;
-    /* screen opening (glass edge): left/right/bottom via --fr-open-side/bottom
-       (56u), top 44u + --bz-extra strip. Keep in sync with :root --fr-open-*. */
-    --fr-ol: var(--fr-open-side, calc(56 * var(--u)));
-    --fr-or: var(--fr-open-side, calc(56 * var(--u)));
-    --fr-ob: var(--fr-open-bottom, calc(56 * var(--u)));
-    --fr-ot: var(--fr-open-top, calc((44 + var(--bz-extra, 12)) * var(--u)));
-    --glass-r: var(--fr-hole-r);
+    --glass-r: 0;
+    --fr-shape: var(--fr-shape-rect);
+    --fr-ol: var(--fr-open-side);
+    --fr-or: var(--fr-open-side);
+    --fr-ob: var(--fr-open-bottom);
+    --fr-ot: var(--fr-open-top);
+    --_art-th: var(--fr-art-th);
+    --fr-bg-crop: 0;
+    --fr-art: none;
+    --fr-art-fallback: var(--hull-dark, #05080e);
+    --fr-live-dur: 60s;
 }
 
-/* ── Faction tokens ───────────────────────────────────────────────────── */
-/* Silhouettes live on :root so the stage (body) is clipped by the very same shape. */
-:root {
-    --u: var(--bz-u);
-    /* Generated by tools/gen-bezel-art.py (tools/bezel-art/terran-shape.txt). */
-    --fr-shape-terran: polygon(calc(6 * var(--u)) 0, calc(100% - calc(6 * var(--u))) 0, calc(100% - calc(5 * var(--u))) calc(1 * var(--u)), calc(100% - calc(4 * var(--u))) calc(2 * var(--u)), calc(100% - calc(2 * var(--u))) calc(4 * var(--u)), 100% calc(6 * var(--u)), 100% calc(8 * var(--u)), 100% calc(100% - calc(8 * var(--u))), 100% calc(100% - calc(6 * var(--u))), calc(100% - calc(2 * var(--u))) calc(100% - calc(4 * var(--u))), calc(100% - calc(4 * var(--u))) calc(100% - calc(2 * var(--u))), calc(100% - calc(5 * var(--u))) calc(100% - calc(1 * var(--u))), calc(100% - calc(6 * var(--u))) 100%, calc(6 * var(--u)) 100%, calc(5 * var(--u)) calc(100% - calc(1 * var(--u))), calc(4 * var(--u)) calc(100% - calc(2 * var(--u))), calc(2 * var(--u)) calc(100% - calc(4 * var(--u))), 0 calc(100% - calc(6 * var(--u))), 0 calc(100% - calc(8 * var(--u))), 0 calc(8 * var(--u)), 0 calc(6 * var(--u)), calc(2 * var(--u)) calc(4 * var(--u)), calc(4 * var(--u)) calc(2 * var(--u)), calc(5 * var(--u)) calc(1 * var(--u)));
-    /* Generated by tools/gen-bezel-art.py (tools/bezel-art/kronax-shape.txt). */
-    --fr-shape-kronax: polygon(calc(6 * var(--u)) 0, calc(100% - calc(6 * var(--u))) 0, calc(100% - calc(4 * var(--u))) calc(1 * var(--u)), calc(100% - calc(3 * var(--u))) calc(3 * var(--u)), calc(100% - calc(1 * var(--u))) calc(4 * var(--u)), 100% calc(6 * var(--u)), 100% calc(8 * var(--u)), 100% calc(100% - calc(8 * var(--u))), 100% calc(100% - calc(6 * var(--u))), calc(100% - calc(1 * var(--u))) calc(100% - calc(4 * var(--u))), calc(100% - calc(3 * var(--u))) calc(100% - calc(3 * var(--u))), calc(100% - calc(4 * var(--u))) calc(100% - calc(1 * var(--u))), calc(100% - calc(6 * var(--u))) 100%, calc(6 * var(--u)) 100%, calc(4 * var(--u)) calc(100% - calc(1 * var(--u))), calc(3 * var(--u)) calc(100% - calc(3 * var(--u))), calc(1 * var(--u)) calc(100% - calc(4 * var(--u))), 0 calc(100% - calc(6 * var(--u))), 0 calc(100% - calc(8 * var(--u))), 0 calc(8 * var(--u)), 0 calc(6 * var(--u)), calc(1 * var(--u)) calc(4 * var(--u)), calc(3 * var(--u)) calc(3 * var(--u)), calc(4 * var(--u)) calc(1 * var(--u)));
-    /* A smooth circular round() clip cut through the vine's blocky pixel-art corner at an
-       angle that never lines up with the art's own steps, leaving a visibly uneven seam.
-       The vine corner tile is itself drawn as a straight 45° chamfer (flat, diagonal,
-       flat), so clip to that same chamfer instead of a circle — it tracks the pixel art
-       exactly, the same way terran/kronax/pirate/machine clip to their own drawn shape. */
-    --fr-shape-voidborn: polygon(calc(24 * var(--u)) 0, calc(100% - 24 * var(--u)) 0, 100% calc(24 * var(--u)), 100% calc(100% - 24 * var(--u)), calc(100% - 24 * var(--u)) 100%, calc(24 * var(--u)) 100%, 0 calc(100% - 24 * var(--u)), 0 calc(24 * var(--u)));
-    /* Generated by tools/gen-bezel-art.py (tools/bezel-art/pirate-shape.txt). */
-    --fr-shape-pirate: polygon(calc(7 * var(--u)) 0, calc(100% - calc(7 * var(--u))) 0, calc(100% - calc(2 * var(--u))) calc(1 * var(--u)), calc(100% - calc(1 * var(--u))) calc(3 * var(--u)), 100% calc(5 * var(--u)), 100% calc(8 * var(--u)), 100% calc(100% - calc(8 * var(--u))), 100% calc(100% - calc(5 * var(--u))), calc(100% - calc(1 * var(--u))) calc(100% - calc(3 * var(--u))), calc(100% - calc(2 * var(--u))) calc(100% - calc(1 * var(--u))), calc(100% - calc(7 * var(--u))) 100%, calc(7 * var(--u)) 100%, calc(2 * var(--u)) calc(100% - calc(1 * var(--u))), calc(1 * var(--u)) calc(100% - calc(3 * var(--u))), 0 calc(100% - calc(5 * var(--u))), 0 calc(100% - calc(8 * var(--u))), 0 calc(8 * var(--u)), 0 calc(5 * var(--u)), calc(1 * var(--u)) calc(3 * var(--u)), calc(2 * var(--u)) calc(1 * var(--u)));
-    /* Generated by tools/gen-bezel-art.py from the actual circuit-corner pixel art
-       (tools/bezel-art/machine-shape.txt) — traces the art's own stepped, right-angle
-       corner notch instead of a smooth chamfer, so shape and art can't drift apart. */
-    --fr-shape-machine: polygon(calc(8 * var(--u)) 0, calc(100% - calc(8 * var(--u))) 0, calc(100% - calc(5 * var(--u))) calc(3 * var(--u)), calc(100% - calc(3 * var(--u))) calc(5 * var(--u)), calc(100% - calc(3 * var(--u))) calc(8 * var(--u)), calc(100% - calc(3 * var(--u))) calc(100% - calc(8 * var(--u))), calc(100% - calc(3 * var(--u))) calc(100% - calc(5 * var(--u))), calc(100% - calc(5 * var(--u))) calc(100% - calc(3 * var(--u))), calc(100% - calc(8 * var(--u))) 100%, calc(8 * var(--u)) 100%, calc(5 * var(--u)) calc(100% - calc(3 * var(--u))), calc(3 * var(--u)) calc(100% - calc(5 * var(--u))), calc(3 * var(--u)) calc(100% - calc(8 * var(--u))), calc(3 * var(--u)) calc(8 * var(--u)), calc(3 * var(--u)) calc(5 * var(--u)), calc(5 * var(--u)) calc(3 * var(--u)));
+/* ── Faction palette + art URLs ───────────────────────────────────────── */
+.vf-bezel[data-faction="terran"] {
+    --hull: #131a26; --hull-lit: #2a3a52; --hull-dark: #05080e; --gold: #c9a24a;
+    --fr-art: url('../assets/ui/terran-bezel-art.svg?v=bz33');
+    --fr-topstrip: url('../assets/ui/terran-topstrip.svg?v=bz33');
+    --fr-art-fallback: #05080e;
+    --fr-live-dur: var(--vf-terran-art-dur, 80s);
+}
+.vf-bezel[data-faction="kronax"] {
+    --hull: #1c0d0a; --hull-lit: #4a1d14; --hull-dark: #060202;
+    --fr-art: url('../assets/ui/kronax-bezel-art.svg?v=bz33');
+    --fr-topstrip: url('../assets/ui/kronax-topstrip.svg?v=bz33');
+    --fr-art-fallback: #060202;
+    --fr-live-dur: var(--vf-kronax-art-dur, 50s);
+}
+.vf-bezel[data-faction="pirate"] {
+    --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4;
+    --fr-art: url('../assets/ui/pirate-bezel-art.svg?v=bz33');
+    --fr-topstrip: url('../assets/ui/pirate-topstrip.svg?v=bz33');
+    --fr-art-fallback: #040503;
+    --fr-live-dur: var(--vf-pirate-art-dur, 65s);
+}
+.vf-bezel[data-faction="machine"] {
+    --hull: #071312; --hull-lit: #143832; --hull-dark: #020706;
+    --fr-art: url('../assets/ui/machine-bezel-art.svg?v=bz33');
+    --fr-topstrip: url('../assets/ui/machine-topstrip.svg?v=bz33');
+    --fr-art-fallback: #020706;
+    --fr-live-dur: var(--vf-machine-art-dur, 70s);
+}
+.vf-bezel[data-faction="voidborn"] {
+    --hull: #3a0f36; --hull-lit: #7a2468; --hull-dark: #14041c;
+    --fr-bv: 0px;
+    --fr-art: url('../assets/ui/voidborn-bezel-art.svg?v=bz34');
+    --fr-topstrip: url('../assets/ui/voidborn-topstrip.svg?v=bz34');
+    --fr-art-fallback: #14041c;
+    --fr-live-dur: var(--vf-vine-dur, 48s);
+    --ph-tab-a: #d45cc0; --ph-tab-b: #4e1446;
 }
 
-.vf-bezel[data-faction="terran"] { --hull: #131a26; --hull-lit: #2a3a52; --hull-dark: #05080e; --gold: #c9a24a; --fr-shape: var(--fr-shape-terran); }
-.vf-bezel[data-faction="kronax"] { --hull: #1c0d0a; --hull-lit: #4a1d14; --hull-dark: #060202; --fr-shape: var(--fr-shape-kronax); }
-.vf-bezel[data-faction="voidborn"] { --hull: #0e0818; --hull-lit: #2a1a48; --hull-dark: #030108; --fr-shape: var(--fr-shape-voidborn); }
-.vf-bezel[data-faction="pirate"] { --hull: #14160f; --hull-lit: #3a4030; --hull-dark: #040503; --bone: #cdc7a4; --fr-shape: var(--fr-shape-pirate); }
-.vf-bezel[data-faction="machine"] { --hull: #071312; --hull-lit: #143832; --hull-dark: #020706; --fr-shape: var(--fr-shape-machine); }
-.vf-bezel[data-faction="voidborn"] { --fr-hole-r: calc(24 * var(--u)); }
-
-/* Metal parted-graphic rims: keep the OUTER silhouette rectangular so the
-   9-slice corner tiles stay whole. The old 6–8u chamfer clipped the tip of
-   every thick corner tile (black notch + gold lines that never met). Inner
-   tooth/step detail still comes from the art itself. */
-.vf-bezel[data-faction="terran"],
-.vf-bezel[data-faction="kronax"],
-.vf-bezel[data-faction="pirate"],
-.vf-bezel[data-faction="machine"],
 html[data-faction="terran"],
 html[data-faction="kronax"],
 html[data-faction="pirate"],
-html[data-faction="machine"] {
-    --fr-shape: polygon(0 0, 100% 0, 100% 100%, 0 100%);
+html[data-faction="machine"],
+html[data-faction="voidborn"] {
+    --fr-shape: var(--fr-shape-rect);
+    --fr-hole-r: 0px;
+    --glass-r: 0;
 }
 
-/* Metal: rim lives on .vf-fr::after, but .vf-fr was z-index:0 while the
-   header fill (::before) is z-index:1 — so the solid header painted OVER the
-   top/side rim and corners looked like a flat bar sitting on disconnected
-   stripes. Raise the plate stack above the header fill. */
-.vf-bezel[data-faction="machine"] .vf-fr,
-.vf-bezel[data-faction="terran"] .vf-fr,
-.vf-bezel[data-faction="kronax"] .vf-fr,
-.vf-bezel[data-faction="pirate"] .vf-fr {
+/* ── Shared rim template (all factions) ───────────────────────────────── */
+.vf-bezel[data-faction]::after { background: none !important; box-shadow: none !important; }
+#vf-bezel.vf-bezel[data-faction] .vf-fr > .vf-fr-p,
+#vf-bezel.vf-bezel[data-faction] .vf-bezel-deco { display: none !important; }
+#vf-bezel.vf-bezel[data-faction] .vf-fr {
     z-index: 2;
-}
-
-
-
-/* Voidborn: the hull is nothing but vine. Plates take the vine's outline colour (no
-   lit/dark bevel bands, no screen-edge bevel), and bolts, vents and hazard strips are
-   gone — whatever shows between the vines reads as vine outline, not as a panel.
-   --fr-bg-crop: 0 also makes .vf-bezel-back's hull fill fully transparent (part-19.css):
-   a smooth CSS round clip cutting through blocky pixel-art vine can never align to the
-   art's own pixel steps, so some gap between vine and the true silhouette is unavoidable.
-   With the fill transparent, that gap shows the parallax BG — already sitting behind
-   everything — instead of a flat hull-dark patch that reads as a rendering error. */
-.vf-bezel[data-faction="voidborn"] {
-    --hull: #14041c;
-    --hull-lit: #14041c;
-    --hull-dark: #14041c;
-    --fr-bv: 0px;
-    --_vi: var(--fr-vine-inset, 2);
-    --_vine-ov: var(--fr-vine-ov, 16);
-    /* One stroke width for the rim vine (sides + bottom + the organic TL/TR/BL/BR
-       tentacle corners). Shared so the top mid thickener can clear those corner squares.
-       Inward --_vine-ov is intentional (organic glass bite); fight HUD clears it via
-       --fr-hud-inset on html[data-faction="voidborn"] (part-19.css). */
-    --_vine-th: calc((56 - var(--_vi) + var(--_vine-ov)) * var(--u));
-    --fr-bg-crop: 0;
-}
-.vf-bezel[data-faction="voidborn"] .vf-fr-lit { --fr-c: #14041c; }
-/* Voidborn: no metal hull texture — vines + .vf-bezel-back fill only. */
-.vf-bezel[data-faction="voidborn"]::after {
-    background: none !important;
-    box-shadow: none !important;
-}
-/* The metal hull must not show at all: saved frame colours (inline --hull) and the pixel
-   frame's baked voxel bitmap (inline background on .vf-fr) would bring it back, and the
-   deco layer adds light strips and service panels. So the plates and deco are off and
-   .vf-fr is fully transparent — .vf-bezel-back + vines paint the band. */
-#vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr > .vf-fr-p,
-#vf-bezel.vf-bezel[data-faction="voidborn"] .vf-bezel-deco { display: none !important; }
-#vf-bezel.vf-bezel[data-faction="voidborn"] .vf-fr {
-    /* Keep a paint layer: plates are display:none and the voxel bitmap is suppressed.
-       An empty .vf-fr can be culled by the compositor, taking ::after (the vine rim) with it. */
     background-color: transparent !important;
     background-image: linear-gradient(transparent, transparent) !important;
     outline: 1px solid transparent;
 }
-/* Thick top mid only — no end caps. Caps butted against the side vine made a flat
-   shelf, not a tentacle bend. Corners come from the continuous 9-slice on .vf-fr::after;
-   this layer only fattens the top band between the corner squares.
-   Solid hull under the mid-vine tile: stretching the scalloped tile alone to --fr-ot
-   left transparent valleys that read as a broken/chunked bezel over the band fill. */
-.vf-bezel[data-faction="voidborn"]::before {
-    content: '' !important;
-    display: block !important;
-    position: absolute;
-    z-index: 3;
-    pointer-events: none;
-    /* Clear the TL/TR 9-slice corner squares so the rim vine's tentacle bend stays visible. */
-    left: calc(var(--_vi) * var(--u) + var(--_vine-th));
-    right: calc(var(--_vi) * var(--u) + var(--_vine-th));
-    top: 0;
-    height: var(--fr-ot);
-    border-radius: 0 !important;
-    clip-path: var(--fr-shape);
-    box-sizing: border-box;
-    border: none;
-    background-color: #7a2468;
-    /* Seamless period-28 tile; +1px size closes subpixel gaps between repeats. */
-    background-image: url('../assets/ui/voidborn-vine-top-mid.svg?v=4');
-    background-repeat: repeat-x;
-    background-position: 0 0;
-    background-size: calc(28 * 5 * var(--u) + 1px) var(--fr-ot);
-    image-rendering: pixelated;
-    /* Never promote this alone — will-change/translateZ on pixel-frame layers dropped the vine. */
-    will-change: auto;
-    transform: none;
-    backface-visibility: visible;
-}
-/* Rim vine: full 9-slice including top. One asset wraps TL→top→TR→… so the corners are
-   a continuous tentacle bend instead of two vines meeting at a hard step. top:0 keeps the
-   outer top flush; side/bottom keep --_vi inset.
-   Solid hull border colour is the fallback when border-image briefly fails to paint
-   (frame swap / decode / compositor cull) — otherwise the whole bezel goes blank. */
-.vf-bezel[data-faction="voidborn"] .vf-fr::after {
-    content: '';
-    position: absolute;
-    z-index: 2;
-    pointer-events: none;
-    box-sizing: border-box;
-    clip-path: var(--fr-shape);
-    border: var(--_vine-th) solid #14041c;
-    border-image: url('../assets/ui/voidborn-bezel-vine.svg') 32 round;
-    /* The vine art fills only the outer half of its 32px slice, and 32 art px over a 45px border is 1.4 screen px per
-       art px — half the pixel size of the metal rims (16 slice over 45px). Drawing the slice at twice the border width
-       gives the same pixel size and puts the whole vine into the 45px rim; the transparent inner half only overlays
-       the (transparent) edge of the opening, so there is no dark band between vine and screen. */
-    border-image-width: calc(2 * var(--_vine-th));
-    image-rendering: pixelated;
-    /* Single static rim — life via brightness pulse, never image swaps. */
-    animation: vf-bezel-live var(--vf-vine-dur, 48s) steps(1, end) infinite;
-    left: calc(var(--_vi) * var(--u));
-    right: calc(var(--_vi) * var(--u));
-    bottom: calc(var(--_vi) * var(--u));
-    top: 0;
-    will-change: auto;
-    transform: none;
-    backface-visibility: visible;
-}
-/* Legacy keyframes kept for station/profile cards that still reference them. */
-@keyframes vf-void-vine-creep {
-    0%      { border-image-source: url('../assets/ui/voidborn-bezel-vine.svg'); }
-    4%      { border-image-source: url('../assets/ui/voidborn-bezel-vine-4.svg'); }
-    18%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-4.svg'); }
-    21%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-9.svg'); }
-    23%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-9.svg'); }
-    40%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-2.svg'); }
-    41%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-2.svg'); }
-    60%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-7.svg'); }
-    62%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-7.svg'); }
-    64%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-10.svg'); }
-    80%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-10.svg'); }
-    83%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-5.svg'); }
-    97%     { border-image-source: url('../assets/ui/voidborn-bezel-vine-5.svg'); }
-    100%    { border-image-source: url('../assets/ui/voidborn-bezel-vine.svg'); }
-}
-html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after,
-html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation: none; }
-@media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="voidborn"] .vf-fr::after,
-    .vf-bezel[data-faction="voidborn"]::before { animation: none; }
-}
 
-/* ── Machine: parted graphic (circuit-plate border-image), same mechanism as
-   voidborn above. Art generated by tools/gen-bezel-art.py (assets/ui/machine-
-   bezel-art*.svg) — a stepped, right-angle corner (no organic bend, so no
-   top-mid thickener layer is needed: a flat panel end-cap against a flat
-   panel edge has no mismatch to hide, unlike voidborn's vine corners). ── */
-.vf-bezel[data-faction="machine"] {
-    /* Thicker than the plain side-opening width, matching voidborn's
-       own --_vine-th (which is also inflated past --fr-ol via --fr-vine-ov) —
-       a uniform border-image this much thicker is what reads as a chunky,
-       voidborn-grade frame instead of a thin outline. */
-    --_art-th: var(--fr-art-th);
-    --fr-bg-crop: 0;
-}
-/* Plates/texture/deco off — the border-image paints the hull instead. */
-.vf-bezel[data-faction="machine"]::after { background: none !important; box-shadow: none !important; }
-#vf-bezel.vf-bezel[data-faction="machine"] .vf-fr > .vf-fr-p,
-#vf-bezel.vf-bezel[data-faction="machine"] .vf-bezel-deco { display: none !important; }
-#vf-bezel.vf-bezel[data-faction="machine"] .vf-fr {
-    /* Keep a paint layer so the empty .vf-fr isn't culled, taking ::after with it. */
-    background-color: transparent !important;
-    background-image: linear-gradient(transparent, transparent) !important;
-    outline: 1px solid transparent;
-}
-/* Fill the top strip above the uniform-width border: the real opening is
-   --fr-ot tall (nav strip + HUD), well past the border-image's own uniform
-   thickness, so without this the content above the border would show the
-   raw background instead of hull — the exact "gap to the screen" bug voidborn
-   hit first (fixed there with its own top-mid vine layer; same root cause). */
-.vf-bezel[data-faction="machine"]::before {
+/* Header band seal under the uniform rim: hull fill + matching topstrip tile
+   so the taller nav strip reads as the same plate as the side/bottom rim. */
+.vf-bezel[data-faction]::before {
     content: '' !important;
     display: block !important;
     position: absolute;
     z-index: 1;
     pointer-events: none;
-    /* Header band above the uniform rim: solid hull only. Stretching the
-       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
-       the top read as a different plate from the sides — corners looked
-       spliced and the bezel felt disconnected. Rim art is the border-image;
-       this layer only seals the taller nav strip with the same hull. */
     left: 0;
     right: 0;
     top: 0;
     height: var(--fr-ot);
     clip-path: var(--fr-shape);
-    background-color: #020706;
-    background-image: none;
+    background-color: var(--fr-art-fallback);
+    background-image: var(--fr-topstrip, none);
+    background-repeat: repeat-x;
+    background-position: center top;
+    background-size: auto 100%;
+    image-rendering: pixelated;
     border-radius: 0 !important;
-
 }
-.vf-bezel[data-faction="machine"] .vf-fr::after {
+
+.vf-bezel[data-faction] .vf-fr::after {
     content: '';
     position: absolute;
     z-index: 4;
@@ -315,293 +147,111 @@ html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation:
     box-sizing: border-box;
     inset: 0;
     clip-path: var(--fr-shape);
-    border: var(--_art-th) solid #020706;
-    border-image: url('../assets/ui/machine-bezel-art.svg?v=21') 16 round;
+    /* Longhand: shorthand + var(--fr-art) fails to paint in some engines. */
+    border-style: solid;
+    border-color: var(--fr-art-fallback);
+    border-width: var(--_art-th);
+    border-image-source: var(--fr-art);
+    border-image-slice: var(--fr-slice);
+    border-image-width: var(--_art-th);
+    border-image-repeat: round;
     image-rendering: pixelated;
-    animation: vf-bezel-live var(--vf-machine-art-dur, 70s) steps(1, end) infinite;
+    animation: vf-bezel-live var(--fr-live-dur) steps(1, end) infinite;
     will-change: auto;
     transform: none;
     backface-visibility: visible;
 }
-/* Legacy keyframes kept for station/profile cards that still reference them. */
-@keyframes vf-bezel-art-creep-machine {
-    0%   { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=21'); }
-    6%   { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=21'); }
-    10%  { border-image-source: url('../assets/ui/machine-bezel-art-2.svg?v=21'); }
-    11%  { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=21'); }
-    34%  { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=21'); }
-    35%  { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=21'); }
-    40%  { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=21'); }
-    41%  { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=21'); }
-    63%  { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=21'); }
-    64%  { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=21'); }
-    68%  { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=21'); }
-    69%  { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=21'); }
-    90%  { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=21'); }
-    91%  { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=21'); }
-    97%  { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=21'); }
-    100% { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=21'); }
-}
-@media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="machine"] .vf-fr::after,
-    .vf-bezel[data-faction="machine"]::before { animation: none; }
-}
-/* No inward bite: the art sits flush with --fr-shape, so --fr-hud-inset
-   stays at its root default (0px, part-19.css) — the fight HUD never needs
-   compensating, which structurally avoids the "screen renders outside the
-   frame" bug class voidborn had. */
-html[data-faction="machine"] body .game-container .game-canvas-container > .game-stage {
+
+/* Fight-stage thin frame uses the same art pack. */
+html[data-faction="terran"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="kronax"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="pirate"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="machine"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage {
     border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/machine-bezel-art.svg?v=21') 16 round;
+    border-image: var(--fr-art, none);
+    /* fight stage reads art from bezel vars when available; fallback URLs: */
     image-rendering: pixelated;
     padding: 0;
 }
-
-/* ── Terran: parted graphic (riveted panel border-image), same mechanism.
-   Clean linear chamfer corner (regimented, machined precision) — flat panel
-   end-caps need no top-mid thickener, same reasoning as machine. ── */
-.vf-bezel[data-faction="terran"] { --_art-th: var(--fr-art-th); --fr-bg-crop: 0; }
-.vf-bezel[data-faction="terran"]::after { background: none !important; box-shadow: none !important; }
-#vf-bezel.vf-bezel[data-faction="terran"] .vf-fr > .vf-fr-p,
-#vf-bezel.vf-bezel[data-faction="terran"] .vf-bezel-deco { display: none !important; }
-#vf-bezel.vf-bezel[data-faction="terran"] .vf-fr {
-    background-color: transparent !important;
-    background-image: linear-gradient(transparent, transparent) !important;
-    outline: 1px solid transparent;
-}
-/* Fill the top strip above the uniform-width border: the real opening is
-   --fr-ot tall (nav strip + HUD), well past the border-image's own uniform
-   thickness, so without this the content above the border would show the
-   raw background instead of hull — the exact "gap to the screen" bug voidborn
-   hit first (fixed there with its own top-mid vine layer; same root cause). */
-.vf-bezel[data-faction="terran"]::before {
-    content: '' !important;
-    display: block !important;
-    position: absolute;
-    z-index: 1;
-    pointer-events: none;
-    /* Header band above the uniform rim: solid hull only. Stretching the
-       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
-       the top read as a different plate from the sides — corners looked
-       spliced and the bezel felt disconnected. Rim art is the border-image;
-       this layer only seals the taller nav strip with the same hull. */
-    left: 0;
-    right: 0;
-    top: 0;
-    height: var(--fr-ot);
-    clip-path: var(--fr-shape);
-    background-color: #05080e;
-    background-image: none;
-    border-radius: 0 !important;
-
-}
-.vf-bezel[data-faction="terran"] .vf-fr::after {
-    content: '';
-    position: absolute;
-    z-index: 4;
-    pointer-events: none;
-    box-sizing: border-box;
-    inset: 0;
-    clip-path: var(--fr-shape);
-    border: var(--_art-th) solid #05080e;
-    border-image: url('../assets/ui/terran-bezel-art.svg?v=21') 16 round;
-    image-rendering: pixelated;
-    animation: vf-bezel-live var(--vf-terran-art-dur, 80s) steps(1, end) infinite;
-    will-change: auto;
-    transform: none;
-    backface-visibility: visible;
-}
-/* Legacy keyframes kept for station/profile cards that still reference them. */
-@keyframes vf-bezel-art-creep-terran {
-    0%   { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=21'); }
-    15%  { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=21'); }
-    16%  { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=21'); }
-    48%  { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=21'); }
-    49%  { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=21'); }
-    82%  { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=21'); }
-    83%  { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=21'); }
-    97%  { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=21'); }
-    100% { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=21'); }
-}
-@media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="terran"] .vf-fr::after,
-    .vf-bezel[data-faction="terran"]::before { animation: none; }
+html[data-faction="terran"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="kronax"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="pirate"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="machine"] body .game-container .game-canvas-container > .game-stage,
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage {
+    border-image-source: none; /* set per faction below */
 }
 html[data-faction="terran"] body .game-container .game-canvas-container > .game-stage {
-    border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/terran-bezel-art.svg?v=21') 16 round;
-    image-rendering: pixelated;
-    padding: 0;
-}
-
-/* ── Kronax: parted graphic (clawed/jagged border-image), same mechanism.
-   Sawtooth corner echoes the existing zigzag silhouette — a brawler's rim,
-   sharper and more frequent twitches in its animation than terran/machine. ── */
-.vf-bezel[data-faction="kronax"] { --_art-th: var(--fr-art-th); --fr-bg-crop: 0; }
-.vf-bezel[data-faction="kronax"]::after { background: none !important; box-shadow: none !important; }
-#vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr > .vf-fr-p,
-#vf-bezel.vf-bezel[data-faction="kronax"] .vf-bezel-deco { display: none !important; }
-#vf-bezel.vf-bezel[data-faction="kronax"] .vf-fr {
-    background-color: transparent !important;
-    background-image: linear-gradient(transparent, transparent) !important;
-    outline: 1px solid transparent;
-}
-/* Fill the top strip above the uniform-width border: the real opening is
-   --fr-ot tall (nav strip + HUD), well past the border-image's own uniform
-   thickness, so without this the content above the border would show the
-   raw background instead of hull — the exact "gap to the screen" bug voidborn
-   hit first (fixed there with its own top-mid vine layer; same root cause). */
-.vf-bezel[data-faction="kronax"]::before {
-    content: '' !important;
-    display: block !important;
-    position: absolute;
-    z-index: 1;
-    pointer-events: none;
-    /* Header band above the uniform rim: solid hull only. Stretching the
-       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
-       the top read as a different plate from the sides — corners looked
-       spliced and the bezel felt disconnected. Rim art is the border-image;
-       this layer only seals the taller nav strip with the same hull. */
-    left: 0;
-    right: 0;
-    top: 0;
-    height: var(--fr-ot);
-    clip-path: var(--fr-shape);
-    background-color: #060202;
-    background-image: none;
-    border-radius: 0 !important;
-
-}
-.vf-bezel[data-faction="kronax"] .vf-fr::after {
-    content: '';
-    position: absolute;
-    z-index: 4;
-    pointer-events: none;
-    box-sizing: border-box;
-    inset: 0;
-    clip-path: var(--fr-shape);
-    border: var(--_art-th) solid #060202;
-    border-image: url('../assets/ui/kronax-bezel-art.svg?v=21') 16 round;
-    image-rendering: pixelated;
-    animation: vf-bezel-live var(--vf-kronax-art-dur, 50s) steps(1, end) infinite;
-    will-change: auto;
-    transform: none;
-    backface-visibility: visible;
-}
-/* Legacy keyframes kept for station/profile cards that still reference them. */
-@keyframes vf-bezel-art-creep-kronax {
-    0%   { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=21'); }
-    7%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=21'); }
-    9%   { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=21'); }
-    10%  { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=21'); }
-    30%  { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=21'); }
-    31%  { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=21'); }
-    33%  { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=21'); }
-    34%  { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=21'); }
-    60%  { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=21'); }
-    61%  { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=21'); }
-    63%  { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=21'); }
-    64%  { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=21'); }
-    100% { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=21'); }
-}
-@media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="kronax"] .vf-fr::after,
-    .vf-bezel[data-faction="kronax"]::before { animation: none; }
+    border-image-source: url('../assets/ui/terran-bezel-art.svg?v=bz33');
+    border-image-slice: 32;
+    border-image-repeat: round;
 }
 html[data-faction="kronax"] body .game-container .game-canvas-container > .game-stage {
-    border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/kronax-bezel-art.svg?v=21') 16 round;
-    image-rendering: pixelated;
-    padding: 0;
-}
-
-/* ── Pirate: parted graphic (welded-scrap border-image), same mechanism.
-   Deliberately lopsided corner notch echoes the existing 'scrap' silhouette
-   (never symmetric-smooth — a bolted-on replacement plate). ── */
-.vf-bezel[data-faction="pirate"] { --_art-th: var(--fr-art-th); --fr-bg-crop: 0; }
-.vf-bezel[data-faction="pirate"]::after { background: none !important; box-shadow: none !important; }
-#vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr > .vf-fr-p,
-#vf-bezel.vf-bezel[data-faction="pirate"] .vf-bezel-deco { display: none !important; }
-#vf-bezel.vf-bezel[data-faction="pirate"] .vf-fr {
-    background-color: transparent !important;
-    background-image: linear-gradient(transparent, transparent) !important;
-    outline: 1px solid transparent;
-}
-/* Fill the top strip above the uniform-width border: the real opening is
-   --fr-ot tall (nav strip + HUD), well past the border-image's own uniform
-   thickness, so without this the content above the border would show the
-   raw background instead of hull — the exact "gap to the screen" bug voidborn
-   hit first (fixed there with its own top-mid vine layer; same root cause). */
-.vf-bezel[data-faction="pirate"]::before {
-    content: '' !important;
-    display: block !important;
-    position: absolute;
-    z-index: 1;
-    pointer-events: none;
-    /* Header band above the uniform rim: solid hull only. Stretching the
-       mid-edge topstrip to --fr-ot (and/or full-bleed under corners) made
-       the top read as a different plate from the sides — corners looked
-       spliced and the bezel felt disconnected. Rim art is the border-image;
-       this layer only seals the taller nav strip with the same hull. */
-    left: 0;
-    right: 0;
-    top: 0;
-    height: var(--fr-ot);
-    clip-path: var(--fr-shape);
-    background-color: #040503;
-    background-image: none;
-    border-radius: 0 !important;
-
-}
-.vf-bezel[data-faction="pirate"] .vf-fr::after {
-    content: '';
-    position: absolute;
-    z-index: 4;
-    pointer-events: none;
-    box-sizing: border-box;
-    inset: 0;
-    clip-path: var(--fr-shape);
-    border: var(--_art-th) solid #040503;
-    border-image: url('../assets/ui/pirate-bezel-art.svg?v=21') 16 round;
-    image-rendering: pixelated;
-    animation: vf-bezel-live var(--vf-pirate-art-dur, 65s) steps(1, end) infinite;
-    will-change: auto;
-    transform: none;
-    backface-visibility: visible;
-}
-/* Legacy keyframes kept for station/profile cards that still reference them. */
-@keyframes vf-bezel-art-creep-pirate {
-    0%   { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=21'); }
-    12%  { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=21'); }
-    13%  { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=21'); }
-    38%  { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=21'); }
-    39%  { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=21'); }
-    41%  { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=21'); }
-    42%  { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=21'); }
-    70%  { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=21'); }
-    71%  { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=21'); }
-    95%  { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=21'); }
-    100% { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=21'); }
-}
-@media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="pirate"] .vf-fr::after,
-    .vf-bezel[data-faction="pirate"]::before { animation: none; }
+    border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=bz33');
+    border-image-slice: 32;
+    border-image-repeat: round;
 }
 html[data-faction="pirate"] body .game-container .game-canvas-container > .game-stage {
-    border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/pirate-bezel-art.svg?v=21') 16 round;
-    image-rendering: pixelated;
-    padding: 0;
+    border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=bz33');
+    border-image-slice: 32;
+    border-image-repeat: round;
+}
+html[data-faction="machine"] body .game-container .game-canvas-container > .game-stage {
+    border-image-source: url('../assets/ui/machine-bezel-art.svg?v=bz33');
+    border-image-slice: 32;
+    border-image-repeat: round;
+}
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage {
+    border-image-source: url('../assets/ui/voidborn-bezel-art.svg?v=bz34');
+    border-image-slice: 32;
+    border-image-repeat: round;
+}
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas {
+    border-radius: 0 !important;
+    box-shadow: 0 0 0 2px #05060a !important;
 }
 
-/* No open-hole mask on metal rims: art-th is only fr-ol+2u (flush), so the
-   border barely kisses the gutter. The previous mask punched from
-   fr-ot+inset and interacted badly with border-image — top/side rim in the
-   header band fell back to flat hull and corners looked disconnected. */
+/* Legacy creep keyframes (station/profile cards may still reference them). */
+@keyframes vf-bezel-art-creep-machine {
+    0%, 100% { border-image-source: url('../assets/ui/machine-bezel-art.svg?v=bz32'); }
+    11% { border-image-source: url('../assets/ui/machine-bezel-art-5.svg?v=bz32'); }
+    35% { border-image-source: url('../assets/ui/machine-bezel-art-1.svg?v=bz32'); }
+    41% { border-image-source: url('../assets/ui/machine-bezel-art-7.svg?v=bz32'); }
+    64% { border-image-source: url('../assets/ui/machine-bezel-art-3.svg?v=bz32'); }
+    69% { border-image-source: url('../assets/ui/machine-bezel-art-6.svg?v=bz32'); }
+    91% { border-image-source: url('../assets/ui/machine-bezel-art-8.svg?v=bz32'); }
+}
+@keyframes vf-bezel-art-creep-terran {
+    0%, 100% { border-image-source: url('../assets/ui/terran-bezel-art.svg?v=bz32'); }
+    16% { border-image-source: url('../assets/ui/terran-bezel-art-3.svg?v=bz32'); }
+    49% { border-image-source: url('../assets/ui/terran-bezel-art-6.svg?v=bz32'); }
+    83% { border-image-source: url('../assets/ui/terran-bezel-art-1.svg?v=bz32'); }
+}
+@keyframes vf-bezel-art-creep-kronax {
+    0%, 100% { border-image-source: url('../assets/ui/kronax-bezel-art.svg?v=bz32'); }
+    7% { border-image-source: url('../assets/ui/kronax-bezel-art-4.svg?v=bz32'); }
+    10% { border-image-source: url('../assets/ui/kronax-bezel-art-2.svg?v=bz32'); }
+    31% { border-image-source: url('../assets/ui/kronax-bezel-art-7.svg?v=bz32'); }
+    34% { border-image-source: url('../assets/ui/kronax-bezel-art-5.svg?v=bz32'); }
+    61% { border-image-source: url('../assets/ui/kronax-bezel-art-8.svg?v=bz32'); }
+}
+@keyframes vf-bezel-art-creep-pirate {
+    0%, 100% { border-image-source: url('../assets/ui/pirate-bezel-art.svg?v=bz32'); }
+    13% { border-image-source: url('../assets/ui/pirate-bezel-art-5.svg?v=bz32'); }
+    39% { border-image-source: url('../assets/ui/pirate-bezel-art-2.svg?v=bz32'); }
+    42% { border-image-source: url('../assets/ui/pirate-bezel-art-8.svg?v=bz32'); }
+    71% { border-image-source: url('../assets/ui/pirate-bezel-art-4.svg?v=bz32'); }
+}
+@keyframes vf-void-vine-creep {
+    0%, 100% { border-image-source: url('../assets/ui/voidborn-bezel-vine.svg?v=bz32'); }
+    4% { border-image-source: url('../assets/ui/voidborn-bezel-vine-4.svg?v=bz32'); }
+    21% { border-image-source: url('../assets/ui/voidborn-bezel-vine-9.svg?v=bz32'); }
+    40% { border-image-source: url('../assets/ui/voidborn-bezel-vine-2.svg?v=bz32'); }
+    60% { border-image-source: url('../assets/ui/voidborn-bezel-vine-7.svg?v=bz32'); }
+    64% { border-image-source: url('../assets/ui/voidborn-bezel-vine-10.svg?v=bz32'); }
+    83% { border-image-source: url('../assets/ui/voidborn-bezel-vine-5.svg?v=bz32'); }
+}
 
-
-/* Rim life without image swaps: occasional stepped brightness on the single
-   border-image, plus a slow crawl on the top-strip fill (::before). */
 @keyframes vf-bezel-live {
     0%, 100% { filter: brightness(1); }
     18%      { filter: brightness(1); }
@@ -615,21 +265,14 @@ html[data-faction="pirate"] body .game-container .game-canvas-container > .game-
     82%      { filter: brightness(1.06); }
     84%      { filter: brightness(1); }
 }
-@keyframes vf-bezel-strip-crawl {
-    0%   { background-position: 0 0; }
-    100% { background-position: calc(28 * 5 * var(--u) + 1px) 0; }
-}
-.vf-bezel[data-faction="voidborn"]::before {
-    animation: vf-bezel-strip-crawl 28s linear infinite;
-}
+
+html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"] .vf-fr::after,
 html[data-vf-vine="off"] .vf-bezel[data-faction="voidborn"]::before { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-    .vf-bezel[data-faction="voidborn"]::before,
-    .vf-bezel[data-faction="machine"]::before,
-    .vf-bezel[data-faction="terran"]::before,
-    .vf-bezel[data-faction="kronax"]::before,
-    .vf-bezel[data-faction="pirate"]::before { animation: none; }
+    .vf-bezel[data-faction] .vf-fr::after,
+    .vf-bezel[data-faction]::before { animation: none; }
 }
+
 
 /* ── Plates ───────────────────────────────────────────────────────────── */
 .vf-fr {
@@ -807,17 +450,11 @@ html body .game-container .game-canvas-container > .game-stage #gameCanvas {
         var(--fight-frame-bv) var(--fight-frame-bv) 0 calc(var(--fight-frame) - var(--fight-frame-bv)) var(--ff-dark),
         0 0 0 var(--fight-frame) #05060a !important;
 }
-html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas { border-radius: 10px; }
-/* Voidborn: the flat fight-frame bevel is vine too, not a painted band. The canvas itself
-   can't take a border-image (replaced element), so the vine sits on the padding box that
-   wraps it (.game-stage), using the thin panel vine at the fight-frame's own 12px width. */
-html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage {
-    border: var(--fight-frame) solid transparent;
-    border-image: url('../assets/ui/voidborn-vine-frame.svg') 32 round;
-    image-rendering: pixelated;
-    padding: 0;
+/* Voidborn fight-frame art is set in the shared faction stage block above. */
+html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas {
+    border-radius: 0 !important;
+    box-shadow: 0 0 0 2px #05060a !important;
 }
-html[data-faction="voidborn"] body .game-container .game-canvas-container > .game-stage #gameCanvas { box-shadow: 0 0 0 2px #05060a !important; }
 /* The pilot crest badge is a flat --ph-accent fill by default (pilot-hud.css); for
    voidborn it gets the same dithered checker as the bezel hull instead of a solid blob. */
 .vf-bezel[data-faction="voidborn"] .vf-pilot-crest {
@@ -827,3 +464,198 @@ html[data-faction="voidborn"] body .game-container .game-canvas-container > .gam
    hull tokens; for voidborn those are flattened to one dark tone (above), so swap its
    two dither colours for the vine's own palette instead, same mechanism, organic tones. */
 .vf-bezel[data-faction="voidborn"] { --ph-tab-a: #d45cc0; --ph-tab-b: #4e1446; }
+
+/* ── DevMode Bezel Editor ─────────────────────────────────────────────── */
+.vf-bezel-editor {
+    position: fixed;
+    right: 12px;
+    top: 56px;
+    z-index: 10050;
+    width: min(360px, 92vw);
+    max-height: calc(100dvh - 72px);
+    overflow: auto;
+    background: #0c1018;
+    color: #d8dde8;
+    border: 2px solid #3a4558;
+    font: 11px/1.35 var(--font-mono, monospace);
+    box-shadow: 0 8px 24px #000a;
+    pointer-events: auto;
+}
+.vf-bezel-editor.is-placed {
+    right: auto;
+}
+.vf-bezel-editor.is-dragging {
+    opacity: 0.92;
+    user-select: none;
+}
+.vf-bz-ed-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #151c28;
+    border-bottom: 1px solid #2a3344;
+    letter-spacing: 0.08em;
+    cursor: grab;
+    touch-action: none;
+}
+.vf-bezel-editor.is-dragging .vf-bz-ed-head {
+    cursor: grabbing;
+}
+.vf-bz-ed-head button {
+    background: transparent;
+    border: 0;
+    color: #9aa6bc;
+    cursor: pointer;
+    font-size: 14px;
+}
+.vf-bz-ed-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 6px;
+    border-bottom: 1px solid #2a3344;
+}
+.vf-bz-ed-tabs button {
+    background: #151c28;
+    border: 1px solid #2a3344;
+    color: #8a96aa;
+    padding: 4px 6px;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.04em;
+}
+.vf-bz-ed-tabs button.is-on {
+    color: #e8eef8;
+    border-color: #c9a24a;
+    background: #1c2433;
+}
+.vf-bz-ed-body { padding: 10px; }
+.vf-bz-ed-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+.vf-bz-ed-row output, .vf-bz-ed-row select, .vf-bz-ed-row input {
+    font: inherit;
+    color: #e8eef8;
+    background: #151c28;
+    border: 1px solid #2a3344;
+    padding: 3px 6px;
+    min-width: 88px;
+    text-align: right;
+}
+.vf-bz-ed-note { opacity: 0.7; margin: 8px 0 0; }
+.vf-bz-ed-tones { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.vf-bz-ed-tone {
+    width: 22px;
+    height: 22px;
+    border: 1px solid #445;
+    cursor: pointer;
+    padding: 0;
+}
+.vf-bz-ed-tone.is-on { outline: 2px solid #c9a24a; }
+.vf-bz-ed-canvas {
+    width: 100%;
+    aspect-ratio: 1;
+    image-rendering: pixelated;
+    background: #05080e;
+    border: 1px solid #2a3344;
+    touch-action: none;
+    cursor: crosshair;
+}
+.vf-bz-ed-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+}
+.vf-bz-ed-actions button, .vf-bz-ed-body > button {
+    background: #1c2433;
+    border: 1px solid #3a4558;
+    color: #d8dde8;
+    padding: 5px 8px;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.05em;
+}
+.vf-bz-ed-swatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 8px 8px 0;
+    padding: 4px;
+    border: 1px solid #2a3344;
+    cursor: pointer;
+}
+.vf-bz-ed-swatch.is-on { border-color: #c9a24a; }
+.vf-bz-ed-swatch input[type="color"] {
+    width: 28px;
+    height: 22px;
+    border: 0;
+    padding: 0;
+    background: var(--sw);
+}
+.vf-bz-ed-prompt { display: block; margin-bottom: 8px; }
+.vf-bz-ed-prompt textarea {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    background: #151c28;
+    color: #e8eef8;
+    border: 1px solid #2a3344;
+    font: inherit;
+    resize: vertical;
+}
+.vf-bz-ed-preview {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    image-rendering: pixelated;
+    border: 1px solid #2a3344;
+}
+.vf-bz-ed-regions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-bottom: 8px;
+}
+.vf-bz-ed-region {
+    background: #151c28;
+    border: 1px solid #2a3344;
+    color: #8a96aa;
+    padding: 3px 5px;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.04em;
+}
+.vf-bz-ed-region.is-on {
+    color: #e8eef8;
+    border-color: #c9a24a;
+    background: #1c2433;
+}
+.vf-bz-ed-row input[type="range"] {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+}
+.vf-bz-ed-row input[type="number"] {
+    min-width: 64px;
+}
+.vf-bz-ed-toggle {
+    background: #151c28;
+    border: 1px solid #2a3344;
+    color: #8a96aa;
+    padding: 3px 10px;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: 0.06em;
+    min-width: 48px;
+}
+.vf-bz-ed-toggle.is-on {
+    color: #e8eef8;
+    border-color: #c9a24a;
+    background: #1c2433;
+}

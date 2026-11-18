@@ -20,6 +20,27 @@ from urllib.request import Request, urlopen
 REPO_ROOT = Path(__file__).resolve().parents[2]
 API_WORKFLOW = REPO_ROOT / "tools" / "comfyui" / "workflows" / "vf-flux-sprite-api.json"
 PORTRAIT_WORKFLOW = REPO_ROOT / "tools" / "comfyui" / "workflows" / "vf-flux-portrait-api.json"
+BEZEL_WORKFLOW = REPO_ROOT / "tools" / "comfyui" / "workflows" / "vf-flux-bezel-api.json"
+BEZEL_SLICE = 32
+BEZEL_GRID = 192
+BEZEL_STYLE = (
+    "pixel art UI screen bezel frame, hollow rectangular rim only, solid magenta #FF00FF "
+    "background and glass hole, chunky retro pixels, no antialiasing, no soft rounded corners, "
+    "symmetric 9-slice compatible border art, crisp hard edges"
+)
+BEZEL_PART_HINTS = {
+    "full": "complete hollow frame filling the square, thick rim band, empty magenta center",
+    "corner": "single square corner tile of a pixel frame, L-shaped plate motif, magenta outside the corner",
+    "edge": "straight mid-edge strip of a pixel frame, repeatable horizontal band, magenta above and below",
+    "topstrip": "solid header plate strip for a UI bezel top band, no hollow center, magenta only outside",
+}
+BEZEL_FACTION_HINTS = {
+    "terran": "regimented military parade metal, gold rivets and honor stripes",
+    "kronax": "jagged sawtooth clawed hull plates, brutal red-brown metal",
+    "pirate": "welded scrap plates, bone-white accents, lopsided notches",
+    "machine": "rectilinear circuit traces, teal chip nodes, right-angle steps",
+    "voidborn": "organic vine tendrils, purple buds, living frame",
+}
 STAGING_DIR = REPO_ROOT / "assets" / "_generated" / "_staging"
 COMFY_START_SH = REPO_ROOT / "tools" / "comfyui" / "start.sh"
 COMFY_STOP_SH = REPO_ROOT / "tools" / "comfyui" / "stop.sh"
@@ -681,6 +702,190 @@ def process_portrait_image(
     return buf.getvalue()
 
 
+def _shift_hex(hex_color: str, amount: float) -> tuple[int, int, int]:
+    h = str(hex_color or "#000000").lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    n = int(h, 16)
+    r, g, b = (n >> 16) & 255, (n >> 8) & 255, n & 255
+
+    def ch(v: int) -> int:
+        if amount < 0:
+            return max(0, min(255, int(round(v * (1 + amount)))))
+        return max(0, min(255, int(round(v + (255 - v) * amount))))
+
+    return ch(r), ch(g), ch(b)
+
+
+def bezel_palette_rgb(palette: dict | None) -> list[tuple[int, int, int]]:
+    p = palette or {}
+    hull = str(p.get("hull") or "#131a26")
+    lit = str(p.get("lit") or p.get("hull_lit") or "#2a3a52")
+    dark = str(p.get("dark") or p.get("hull_dark") or "#05080e")
+    accent = str(p.get("accent") or "#c9a24a")
+    return [
+        _shift_hex(dark, 0),
+        _shift_hex(hull, 0),
+        _shift_hex(lit, 0),
+        _shift_hex(hull, -0.38),
+        _shift_hex(hull, 0.34),
+        _shift_hex(accent, -0.4),
+        _shift_hex(accent, 0),
+        _shift_hex(accent, 0.35),
+    ]
+
+
+def build_bezel_prompt(
+    positive: str,
+    filename_prefix: str,
+    width: int,
+    height: int,
+    seed: int | None,
+    steps: int,
+    faction: str,
+    part: str,
+) -> dict:
+    wf = load_api_workflow(BEZEL_WORKFLOW if BEZEL_WORKFLOW.is_file() else API_WORKFLOW)
+    fac = BEZEL_FACTION_HINTS.get(faction, faction or "sci-fi")
+    part_h = BEZEL_PART_HINTS.get(part, BEZEL_PART_HINTS["full"])
+    user = (positive or "").strip()
+    full = ", ".join(
+        x for x in (BEZEL_STYLE, fac, part_h, user) if x
+    )
+    gen_w = max(256, int(width or 512))
+    gen_h = max(256, int(height or gen_w))
+    noise_seed = int(seed) if seed is not None else random.randint(0, 2147483647)
+    wf["74"]["inputs"]["text"] = full
+    wf["66"]["inputs"]["width"] = gen_w
+    wf["66"]["inputs"]["height"] = gen_h
+    wf["62"]["inputs"]["steps"] = max(1, int(steps or 4))
+    wf["62"]["inputs"]["width"] = gen_w
+    wf["62"]["inputs"]["height"] = gen_h
+    wf["73"]["inputs"]["noise_seed"] = noise_seed
+    wf["9"]["inputs"]["filename_prefix"] = filename_prefix or "ui/vf_bezel"
+    return wf
+
+
+def process_bezel_image(
+    raw: bytes,
+    out_size: int = BEZEL_GRID,
+    part: str = "full",
+    palette: dict | None = None,
+    bg_hex: str = "#FF00FF",
+) -> tuple[bytes, list[int]]:
+    """Snap Flux output to GRID×GRID hollow band + 8-tone faction palette."""
+    ensure_pil()
+    key = parse_hex_color(bg_hex, MAGENTA)
+    img = Image.open(io.BytesIO(raw)).convert("RGBA")
+    img = make_transparent(img, key)
+    side = max(BEZEL_SLICE * 2, int(out_size or BEZEL_GRID))
+    if part == "corner":
+        side = BEZEL_SLICE
+    elif part in ("edge", "topstrip"):
+        # Keep square staging preview; editor/stamps crop regions.
+        side = BEZEL_GRID if part == "topstrip" else BEZEL_GRID
+    cw, ch = img.size
+    if max(cw, ch) > side * 2:
+        mid = max(side * 2, int(max(cw, ch) * 0.5))
+        img = img.resize((mid, mid), Image.Resampling.BOX)
+    img = img.resize((side, side), Image.NEAREST)
+    tones = bezel_palette_rgb(palette)
+    px = img.load()
+    cells: list[int] = [0] * (side * side)
+    for y in range(side):
+        for x in range(side):
+            r, g, b, a = px[x, y]
+            if a < 40 or (r > 200 and g < 60 and b > 200):
+                px[x, y] = (0, 0, 0, 0)
+                cells[y * side + x] = 0
+                continue
+            best_i = 1
+            best_d = 1 << 30
+            for i, (tr, tg, tb) in enumerate(tones, start=1):
+                d = (r - tr) ** 2 + (g - tg) ** 2 + (b - tb) ** 2
+                if d < best_d:
+                    best_d = d
+                    best_i = i
+            # Enforce hollow band for full frames at GRID size.
+            if part == "full" and side >= BEZEL_GRID:
+                in_band = x < BEZEL_SLICE or y < BEZEL_SLICE or x >= side - BEZEL_SLICE or y >= side - BEZEL_SLICE
+                if not in_band:
+                    px[x, y] = (0, 0, 0, 0)
+                    cells[y * side + x] = 0
+                    continue
+            tr, tg, tb = tones[best_i - 1]
+            px[x, y] = (tr, tg, tb, 255)
+            cells[y * side + x] = best_i
+    # Upscale corner/edge previews to GRID hollow for editor merge convenience.
+    if part == "corner" and side == BEZEL_SLICE:
+        canvas = Image.new("RGBA", (BEZEL_GRID, BEZEL_GRID), (0, 0, 0, 0))
+        for oy, ox in ((0, 0), (0, BEZEL_GRID - BEZEL_SLICE), (BEZEL_GRID - BEZEL_SLICE, 0), (BEZEL_GRID - BEZEL_SLICE, BEZEL_GRID - BEZEL_SLICE)):
+            # Mirror corner into four corners
+            tile = img
+            if ox > 0:
+                tile = tile.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+            if oy > 0:
+                tile = tile.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+            canvas.paste(tile, (ox, oy), tile)
+        img = canvas
+        cells = [0] * (BEZEL_GRID * BEZEL_GRID)
+        px = img.load()
+        for y in range(BEZEL_GRID):
+            for x in range(BEZEL_GRID):
+                r, g, b, a = px[x, y]
+                if a < 40:
+                    continue
+                best_i = 1
+                best_d = 1 << 30
+                for i, (tr, tg, tb) in enumerate(tones, start=1):
+                    d = (r - tr) ** 2 + (g - tg) ** 2 + (b - tb) ** 2
+                    if d < best_d:
+                        best_d = d
+                        best_i = i
+                cells[y * BEZEL_GRID + x] = best_i
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue(), cells
+
+
+def bezel_cells_to_svg(cells: list, palette: dict, n: int = BEZEL_GRID) -> str:
+    """RLE SVG matching tools/gen-bezel-art.py grid_to_svg output."""
+    tones = bezel_palette_rgb(palette)
+    tone_hex = {
+        i + 1: "#%02x%02x%02x" % tones[i]
+        for i in range(len(tones))
+    }
+    by_tone: dict[int, list[str]] = {}
+    n = max(1, int(n or BEZEL_GRID))
+    flat = list(cells or [])
+    if len(flat) < n * n:
+        flat = flat + [0] * (n * n - len(flat))
+    for y in range(n):
+        x = 0
+        while x < n:
+            t = int(flat[y * n + x] or 0)
+            if not t:
+                x += 1
+                continue
+            w = 1
+            while x + w < n and int(flat[y * n + x + w] or 0) == t:
+                w += 1
+            by_tone.setdefault(t, []).append(f"M{x} {y}h{w}v1h-{w}z")
+            x += w
+    body = []
+    for t in sorted(by_tone.keys()):
+        hex_c = tone_hex.get(t)
+        if not hex_c:
+            continue
+        body.append(f"<path fill='{hex_c}' d='{''.join(by_tone[t])}'/>")
+    return (
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='{n}' height='{n}' "
+        f"viewBox='0 0 {n} {n}' shape-rendering='crispEdges'>"
+        + "".join(body)
+        + "</svg>"
+    )
+
+
 def png_to_data_url(png: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png).decode("ascii")
 
@@ -795,6 +1000,7 @@ class Handler(BaseHTTPRequestHandler):
                     "pillow": pillow_ok,
                     "workflow": wf_ok,
                     "portraitWorkflow": PORTRAIT_WORKFLOW.is_file(),
+                    "bezelWorkflow": BEZEL_WORKFLOW.is_file(),
                     "comfyStatus": comfy_status(),
                 },
             )
@@ -940,9 +1146,12 @@ class Handler(BaseHTTPRequestHandler):
         mode = str(data.get("mode") or "sprite").strip().lower()
         prompt_text = str(data.get("prompt") or "")
         filename_prefix = str(data.get("filenamePrefix") or (
-            "portraits/vf_flux" if mode == "portrait" else "ships/vf_flux"
+            "portraits/vf_flux" if mode == "portrait"
+            else ("ui/vf_bezel" if mode == "bezel" else "ships/vf_flux")
         ))
-        out_size = int(data.get("size") or (96 if mode == "portrait" else 64))
+        out_size = int(data.get("size") or (
+            BEZEL_GRID if mode == "bezel" else (96 if mode == "portrait" else 64)
+        ))
         gen_size = int(data.get("genSize") or 512)
         seed = data.get("seed")
         steps = int(data.get("steps") or 4)
@@ -950,9 +1159,39 @@ class Handler(BaseHTTPRequestHandler):
         bg_hex = str(data.get("bgColor") or "#FF00FF")
         prepend_style = data.get("prependStyle")
         skip_style = str(prepend_style).lower() == "false" or prepend_style is False
+        bezel_cells = None
 
         try:
-            if mode == "portrait":
+            if mode == "bezel":
+                faction = str(data.get("faction") or "terran").strip().lower()
+                part = str(data.get("part") or "full").strip().lower()
+                if part not in BEZEL_PART_HINTS:
+                    part = "full"
+                palette = data.get("palette") if isinstance(data.get("palette"), dict) else {}
+                gen_w = max(256, gen_size)
+                gen_h = gen_w
+                prompt = build_bezel_prompt(
+                    prompt_text,
+                    filename_prefix,
+                    gen_w,
+                    gen_h,
+                    int(seed) if seed not in (None, "") else None,
+                    steps,
+                    faction,
+                    part,
+                )
+                used_seed = prompt["73"]["inputs"]["noise_seed"]
+                entry = queue_and_wait(prompt)
+                raw = fetch_image_bytes(entry)
+                png, bezel_cells = process_bezel_image(
+                    raw,
+                    out_size=out_size or BEZEL_GRID,
+                    part=part,
+                    palette=palette,
+                    bg_hex=bg_hex,
+                )
+                gw, gh = gen_w, gen_h
+            elif mode == "portrait":
                 if not PORTRAIT_WORKFLOW.is_file():
                     self._json(500, {"ok": False, "error": "Portrait workflow missing"})
                     return
@@ -1022,18 +1261,27 @@ class Handler(BaseHTTPRequestHandler):
         staging_id = uuid.uuid4().hex
         staging_path = STAGING_DIR / (staging_id + ".png")
         staging_path.write_bytes(png)
-        self._json(
-            200,
-            {
-                "ok": True,
-                "stagingId": staging_id,
-                "seed": used_seed,
-                "genWidth": gw,
-                "genHeight": gh,
-                "previewDataUrl": png_to_data_url(png),
-                "mode": mode,
-            },
-        )
+        payload = {
+            "ok": True,
+            "stagingId": staging_id,
+            "seed": used_seed,
+            "genWidth": gw,
+            "genHeight": gh,
+            "previewDataUrl": png_to_data_url(png),
+            "mode": mode,
+        }
+        if bezel_cells is not None:
+            payload["cells"] = bezel_cells
+            payload["slice"] = BEZEL_SLICE
+            payload["grid"] = BEZEL_GRID
+            meta = {
+                "cells": bezel_cells,
+                "slice": BEZEL_SLICE,
+                "grid": len(bezel_cells) and int(len(bezel_cells) ** 0.5) or BEZEL_GRID,
+                "palette": data.get("palette") if isinstance(data.get("palette"), dict) else {},
+            }
+            (STAGING_DIR / (staging_id + ".json")).write_text(json.dumps(meta), encoding="utf-8")
+        self._json(200, payload)
 
     def _handle_accept(self, data: dict):
         staging_id = str(data.get("stagingId") or "")
@@ -1051,6 +1299,21 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"ok": False, "error": str(e)})
             return
         dest.parent.mkdir(parents=True, exist_ok=True)
+        # Bezel SVG accept: bake indexed cells → RLE SVG (runtime border-image).
+        if dest.suffix.lower() == ".svg":
+            meta_path = STAGING_DIR / (staging_id + ".json")
+            if meta_path.is_file():
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                svg = bezel_cells_to_svg(
+                    meta.get("cells") or [],
+                    meta.get("palette") or {},
+                    int(meta.get("grid") or BEZEL_GRID),
+                )
+                dest.write_text(svg, encoding="utf-8")
+                self._json(200, {"ok": True, "path": dest.relative_to(REPO_ROOT).as_posix(), "url": "/" + dest.relative_to(REPO_ROOT).as_posix()})
+                return
+            self._json(400, {"ok": False, "error": "bezel SVG accept needs staging cells (.json)"})
+            return
         ensure_pil()
         img = Image.open(io.BytesIO(src.read_bytes()))
         rel = dest.relative_to(REPO_ROOT).as_posix()

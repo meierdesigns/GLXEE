@@ -229,15 +229,25 @@ extendClass(EnemyManager, {
             hullSeed: 1 + Math.floor(Math.random() * SIDE_HULL_SEEDS),
             muzzleGroups: this.sideMuzzleGroupCount(entry.enemyClass)
         };
-        // Give escorts distinct attack profiles instead of making the whole
-        // formation fire the champion's weapon in unison.
-        const factionWeapons = (typeof factionShipStyles !== 'undefined'
-            && factionShipStyles.getFactionDefaultWeapons)
-            ? factionShipStyles.getFactionDefaultWeapons(side.faction)
-            : ['laser'];
-        if (factionWeapons.length) {
-            side.weaponId = factionWeapons[(escortSlot >= 0 ? escortSlot : Math.floor(Math.random() * factionWeapons.length))
-                % factionWeapons.length];
+        // Class + faction doctrine gun (scouts chatter light, heavies boom).
+        const classGuns = ({
+            terran:   { scout: 'laser', assault: 'laser_twin', heavy: 'railgun', elite: 'railgun', capital: 'laser_twin' },
+            kronax:   { scout: 'spike_burst', assault: 'claw_beam', heavy: 'plasma', elite: 'claw_beam', capital: 'plasma' },
+            voidborn: { scout: 'ion', assault: 'wave', heavy: 'nova', elite: 'pierce', capital: 'wave' },
+            pirate:   { scout: 'rapid', assault: 'spread', heavy: 'burst', elite: 'spread', capital: 'burst' },
+            machine:  { scout: 'pierce', assault: 'missile', heavy: 'missile', elite: 'pierce', capital: 'missile' }
+        })[side.faction] || null;
+        if (classGuns && classGuns[side.enemyClass]) {
+            side.weaponId = classGuns[side.enemyClass];
+        } else {
+            const factionWeapons = (typeof factionShipStyles !== 'undefined'
+                && factionShipStyles.getFactionDefaultWeapons)
+                ? factionShipStyles.getFactionDefaultWeapons(side.faction)
+                : ['laser'];
+            if (factionWeapons.length) {
+                side.weaponId = factionWeapons[(escortSlot >= 0 ? escortSlot : Math.floor(Math.random() * factionWeapons.length))
+                    % factionWeapons.length];
+            }
         }
         this.applyEnemyHitProfile(side, {
             faction: side.faction,

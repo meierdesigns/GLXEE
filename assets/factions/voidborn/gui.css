@@ -223,7 +223,7 @@ html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-select
   .vf-bezel[data-faction="voidborn"] .vf-bezel-deco { animation: none; }
 }
 
-.vf-bezel[data-faction="voidborn"] { --glass-r: calc(24 * var(--u)) calc(16 * var(--u)) calc(22 * var(--u)) calc(18 * var(--u)); }
+.vf-bezel[data-faction="voidborn"] { --glass-r: 0; --fr-hole-r: 0; }
 
 html[data-vf-faction="voidborn"] body :is(.home-station-overlay, .profile-selection-overlay, .start-screen) :is(.hs-panel, .hs-comp-layout, .hs-hangar, [class*="hs-hangar"], [class*="hs-ships"], .hs-body) :is(.hs-tab, .hs-area-btn, .hs-subnav-tab, .hs-menu-tab-btn, .action-button, .hs-panel, .menu-item, .pd-tile, .pd-res-item, .pd-galaxy, .profile-faction-fact) {
     background: color-mix(in srgb, var(--color-primary) 9%, #07010d) !important;

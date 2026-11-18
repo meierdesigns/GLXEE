@@ -85,6 +85,12 @@ class AssetGenRegistry {
                 return this.segmentPrompt(id);
             case "faction":
                 return "faction emblem icon, " + name + ", simple glyph, 16x16 pixel feel, game UI icon, grayscale only";
+            case "bezel":
+                return (
+                    "hollow pixel UI screen bezel frame, " + name
+                    + ", thick rim band, magenta #FF00FF glass hole and background, "
+                    + "chunky retro pixels, no antialiasing, no soft rounded corners"
+                );
             case "factionShip":
                 return (
                     "top-down faction-specific retro sci-fi spacecraft, " + name
@@ -189,8 +195,26 @@ class AssetGenRegistry {
             { id: "faction", label: "FACTIONS" },
             { id: "weapon", label: "WEAPONS" },
             { id: "planet", label: "PLANETS" },
-            { id: "obstacle", label: "OBSTACLES" }
+            { id: "obstacle", label: "OBSTACLES" },
+            { id: "bezel", label: "BEZELS" }
         ];
+    }
+
+    listBezels() {
+        const factions = ["terran", "kronax", "pirate", "machine", "voidborn"];
+        return factions.map((id) => this.entry("bezel", id, {
+            label: id.toUpperCase() + " BEZEL",
+            size: 192,
+            folder: "ui",
+            fileId: id + "-bezel-art",
+            targetPath: "assets/ui/" + id + "-bezel-art.svg",
+            filenamePrefix: "ui/vf_bezel_" + id,
+            promptSuffix:
+                "hollow pixel UI bezel frame for faction " + id
+                + ", chunky retro rim, magenta glass hole, no soft corners",
+            faction: id,
+            kind: "full"
+        }));
     }
 
     list(type) {
@@ -219,6 +243,8 @@ class AssetGenRegistry {
                 return this.listObstacles();
             case "portrait":
                 return this.listPortraits();
+            case "bezel":
+                return this.listBezels();
             default:
                 return [];
         }

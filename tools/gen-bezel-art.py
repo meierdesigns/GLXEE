@@ -269,7 +269,10 @@ def grid_to_svg(grid, palette, n=GRID, w=None, h=None):
             continue
         paths.append(f"<path fill='{hexcol}' d='{''.join(d)}'/>")
     body = ''.join(paths)
-    return (f"<svg xmlns='http://www.w3.org/2000/svg' width='{gw * 2}' height='{gh * 2}' "
+    # width/height MUST equal viewBox for CSS border-image-slice: numbers are
+    # resolved against the SVG's intrinsic CSS size. A 2x width (legacy) made
+    # slice=BAND only cover half the rim and left hollow mid-edge seams.
+    return (f"<svg xmlns='http://www.w3.org/2000/svg' width='{gw}' height='{gh}' "
             f"viewBox='0 0 {gw} {gh}' shape-rendering='crispEdges'>{body}</svg>")
 
 
@@ -883,11 +886,241 @@ def gen_scrap_motif(seed=0, variant=0):
     return g
 
 
+def _vh(a, b, k=0):
+    """Deterministic hash 0..99 for organic noise."""
+    return (((a * 73856093) ^ (b * 19349663) ^ (k * 83492791)) & 0x7fffffff) % 100
+
+
+def _put_disk(g, n, cx, cy, r, tone, only_empty=False):
+    r2 = r * r
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            if dx * dx + dy * dy > r2:
+                continue
+            x, y = cx + dx, cy + dy
+            if 0 <= x < n and 0 <= y < n:
+                if only_empty and g[y][x]:
+                    continue
+                g[y][x] = tone
+
+
+def _put_blob(g, n, cx, cy, rx, ry, tone):
+    for dy in range(-ry, ry + 1):
+        for dx in range(-rx, rx + 1):
+            if (dx * dx) * (ry * ry) + (dy * dy) * (rx * rx) > (rx * rx) * (ry * ry):
+                continue
+            x, y = cx + dx, cy + dy
+            if 0 <= x < n and 0 <= y < n:
+                g[y][x] = tone
+
+
+def _stroke_vine(g, n, points, thickness, core_tone, bark_tone):
+    """Paint a thick organic cord along polyline `points`."""
+    if len(points) < 2:
+        return
+    for i in range(len(points) - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        steps = max(1, int(max(abs(x1 - x0), abs(y1 - y0))))
+        for s in range(steps + 1):
+            t = s / steps
+            x = int(round(x0 + (x1 - x0) * t))
+            y = int(round(y0 + (y1 - y0) * t))
+            th = max(2, thickness + (_vh(x, y, 11) % 5) - 2)
+            _put_disk(g, n, x, y, th, bark_tone)
+            _put_disk(g, n, x, y, max(1, th // 2), core_tone)
+
+
+def gen_vine_motif(seed=0, variant=0):
+    """Voidborn: living vine frame — multi-layer cords, tentacles, buds,
+    thorns, scalloped bite silhouette. Full BAND depth for slice=32."""
+    import math
+    g = blank_grid()
+    n = GRID
+    band = BAND
+    on = (variant % 3) != 2
+    pulse = 8 if on else 6
+    vein = 7 if on else 6
+    amp_boost = 1.0 + 0.35 * (variant % 3)
+
+    # Soft organic band fill with noisy / scalloped edges.
+    for y in range(n):
+        for x in range(n):
+            d_out = min(x, y, n - 1 - x, n - 1 - y)
+            ang = math.atan2(y - n / 2, x - n / 2)
+            scallop = int(
+                4 * math.sin(ang * 5 + seed) +
+                3 * math.sin(ang * 11 + seed * 0.7) +
+                2 * math.sin(ang * 17 + variant)
+            )
+            outer_cut = max(0, (_vh(x // 3, y // 3, seed + 3) % 5) + scallop // 2)
+            if d_out < outer_cut:
+                continue
+            wave = int(
+                5 * math.sin((x + y) * 0.08 + seed) +
+                4 * math.cos((x - y) * 0.06) +
+                2 * math.sin((x * 0.13) - (y * 0.11) + variant)
+            )
+            inner = band - 2 + (_vh(x, y, seed + 5) % 6) - 2 + wave // 2
+            inner = max(band // 2, min(band - 1, inner))
+            if d_out >= inner:
+                continue
+            depth = d_out - outer_cut
+            if depth <= 1:
+                tone = 1
+            elif depth <= 3:
+                tone = 4
+            elif depth <= inner // 2:
+                tone = 2
+            elif depth <= inner - 3:
+                tone = 5
+            else:
+                tone = 1
+            g[y][x] = tone
+
+    def edge_polyline(edge, amp=6, period=48, thick=5, phase=0.0):
+        pts = []
+        amp = int(amp * amp_boost)
+        if edge == 'top':
+            y0 = band // 2
+            for x in range(0, n, 2):
+                wob = int(amp * math.sin(x / period * math.pi * 2 + seed + phase) +
+                          (amp // 2) * math.sin(x / (period * 0.37) * math.pi * 2 + variant) +
+                          (amp // 3) * math.cos(x / (period * 0.19) * math.pi * 2))
+                pts.append((x, max(2, min(band - 3, y0 + wob))))
+        elif edge == 'bottom':
+            y0 = n - 1 - band // 2
+            for x in range(0, n, 2):
+                wob = int(amp * math.sin(x / period * math.pi * 2 + seed + 1.2 + phase) +
+                          (amp // 2) * math.cos(x / (period * 0.41) * math.pi * 2) +
+                          (amp // 3) * math.sin(x / (period * 0.21) * math.pi * 2))
+                pts.append((x, max(n - band + 2, min(n - 3, y0 + wob))))
+        elif edge == 'left':
+            x0 = band // 2
+            for y in range(0, n, 2):
+                wob = int(amp * math.sin(y / period * math.pi * 2 + seed + 0.4 + phase) +
+                          (amp // 2) * math.sin(y / (period * 0.33) * math.pi * 2) +
+                          (amp // 3) * math.cos(y / (period * 0.17) * math.pi * 2))
+                pts.append((max(2, min(band - 3, x0 + wob)), y))
+        else:
+            x0 = n - 1 - band // 2
+            for y in range(0, n, 2):
+                wob = int(amp * math.cos(y / period * math.pi * 2 + seed + 0.9 + phase) +
+                          (amp // 2) * math.sin(y / (period * 0.29) * math.pi * 2) +
+                          (amp // 3) * math.sin(y / (period * 0.15) * math.pi * 2))
+                pts.append((max(n - band + 2, min(n - 3, x0 + wob)), y))
+        _stroke_vine(g, n, pts, thick, vein, 1)
+        return pts
+
+    # Dual cords per edge (offset phase) for a braided living rim.
+    for e in ('top', 'bottom', 'left', 'right'):
+        edge_polyline(e, amp=9, period=36 + (seed % 9), thick=5, phase=0.0)
+        edge_polyline(e, amp=5, period=52 + (seed % 5), thick=3, phase=1.7)
+
+    def corner_tentacle(ox, oy, sx, sy, bend=1.0, thick=6):
+        pts = []
+        for i in range(34):
+            t = i / 33
+            cx = int(ox + sx * (3 + t * (band + 8)) + sy * 10 * bend * math.sin(t * math.pi * 1.3))
+            cy = int(oy + sy * (3 + t * (band + 8)) + sx * 10 * bend * math.sin(t * math.pi * 0.95))
+            cx = max(1, min(n - 2, cx))
+            cy = max(1, min(n - 2, cy))
+            pts.append((cx, cy))
+        _stroke_vine(g, n, pts, thick, pulse, 1)
+        if pts:
+            bx, by = pts[len(pts) // 2]
+            _put_blob(g, n, bx, by, 5, 4, pulse)
+            _put_disk(g, n, bx, by, 2, 8 if on else 7)
+            # Mid-fork tendril
+            fx = bx + sx * 6
+            fy = by + sy * 6
+            _stroke_vine(g, n, [(bx, by), (fx + sy * 5, fy - sx * 5), (fx + sy * 9, fy - sx * 3)],
+                         3, vein, 1)
+            tx, ty = pts[-1]
+            _put_blob(g, n, tx, ty, 4, 3, vein)
+
+    corner_tentacle(0, 0, 1, 1, bend=1.1)
+    corner_tentacle(n - 1, 0, -1, 1, bend=0.9)
+    corner_tentacle(0, n - 1, 1, -1, bend=1.0)
+    corner_tentacle(n - 1, n - 1, -1, -1, bend=1.2)
+    # Secondary thinner tentacles offset from corners
+    corner_tentacle(4, 2, 1, 1, bend=0.55, thick=3)
+    corner_tentacle(n - 5, 2, -1, 1, bend=0.6, thick=3)
+    corner_tentacle(4, n - 3, 1, -1, bend=0.5, thick=3)
+    corner_tentacle(n - 5, n - 3, -1, -1, bend=0.65, thick=3)
+
+    # Side branches / suckers + outward thorns
+    for edge, horiz in (('top', True), ('bottom', True), ('left', False), ('right', False)):
+        for k in range(7):
+            pos = band + 10 + k * ((n - 2 * band - 20) // 6)
+            if horiz:
+                x = pos + (_vh(k, seed, 20) % 11) - 5
+                y = (band // 2) if edge == 'top' else (n - 1 - band // 2)
+                for j in range(10):
+                    yy = y + (j if edge == 'top' else -j)
+                    xx = x + int(3 * math.sin(j * 0.65 + k + seed * 0.1))
+                    if 0 <= xx < n and 0 <= yy < n and in_band(xx, yy, n, band):
+                        g[yy][xx] = vein
+                        if j > 4:
+                            _put_disk(g, n, xx, yy, 2, pulse)
+                for j in range(6):
+                    yy = y - (j if edge == 'top' else -j)
+                    if 0 <= x < n and 0 <= yy < n:
+                        g[yy][x] = 1
+            else:
+                y = pos + (_vh(k, seed, 21) % 11) - 5
+                x = (band // 2) if edge == 'left' else (n - 1 - band // 2)
+                for j in range(10):
+                    xx = x + (j if edge == 'left' else -j)
+                    yy = y + int(3 * math.cos(j * 0.65 + k + seed * 0.1))
+                    if 0 <= xx < n and 0 <= yy < n and in_band(xx, yy, n, band):
+                        g[yy][xx] = vein
+                        if j > 4:
+                            _put_disk(g, n, xx, yy, 2, pulse)
+
+    # Scattered buds + cysts
+    for i in range(26):
+        side = _vh(i, seed, 31) % 4
+        if side == 0:
+            bx = band + (_vh(i, seed, 30) % max(1, n - 2 * band))
+            by = 3 + (_vh(i, seed, 32) % (band - 6))
+        elif side == 1:
+            bx = band + (_vh(i, seed, 30) % max(1, n - 2 * band))
+            by = n - band + 3 + (_vh(i, seed, 32) % (band - 6))
+        elif side == 2:
+            by = band + (_vh(i, seed, 33) % max(1, n - 2 * band))
+            bx = 3 + (_vh(i, seed, 34) % (band - 6))
+        else:
+            by = band + (_vh(i, seed, 33) % max(1, n - 2 * band))
+            bx = n - band + 3 + (_vh(i, seed, 34) % (band - 6))
+        if g[by][bx]:
+            _put_blob(g, n, bx, by, 3 + (i % 3), 2 + (i % 2), pulse if (i + variant) % 2 == 0 else 5)
+            if on and i % 3 == 0:
+                _put_disk(g, n, bx, by, 1, 8)
+            if i % 5 == 0:
+                _put_blob(g, n, bx + 2, by - 1, 2, 2, vein)
+
+    # Living tissue grain
+    for y in range(n):
+        for x in range(n):
+            if not g[y][x]:
+                continue
+            h = _vh(x, y, seed + variant)
+            if h < 8 and g[y][x] in (2, 5):
+                g[y][x] = vein
+            elif h > 92 and g[y][x] in (2, 4, 5):
+                g[y][x] = 1
+
+    return g
+
+
+
 MOTIFS = {
     'terran': gen_modular_motif,
     'kronax': gen_spikes_motif,
     'pirate': gen_scrap_motif,
     'machine': gen_circuit_motif,
+    'voidborn': gen_vine_motif,
 }
 
 
@@ -901,21 +1134,16 @@ def faction_tokens(faction):
         'kronax': dict(hull='#1c0d0a', hull_lit='#4a1d14', hull_dark='#060202', accent='#e0603a'),
         'pirate': dict(hull='#14160f', hull_lit='#3a4030', hull_dark='#040503', accent='#cdc7a4'),
         'machine': dict(hull='#071312', hull_lit='#143832', hull_dark='#020706', accent='#50e0a8'),
+        'voidborn': dict(hull='#3a0f36', hull_lit='#7a2468', hull_dark='#14041c', accent='#d45cc0'),
     }
     return table[faction]
 
 
-DOWNSAMPLE = 4        # motifs are authored at GRID/BAND; exported at GRID/DOWNSAMPLE.
-                       # Bumped 2 -> 4: the structural fixes (BAND, glyphs,
-                       # plate segments) made the *shapes* bigger, but each
-                       # exported pixel was still only a 2x2 raw-cell block —
-                       # fine-grained up close, reported as "die gröber
-                       # auflösen die Rahmen". Doubling this halves the
-                       # exported pixel count and doubles each cell's
-                       # on-screen size, for a visibly chunkier retro-pixel
-                       # look at the same physical border thickness.
+# Unified contract with CSS: GRID=192, BAND=SLICE=32, rim width = 56u.
+# Export at authored resolution so border-image slice 32 matches the solid band.
+DOWNSAMPLE = 1
 BAND_OUT = BAND // DOWNSAMPLE
-SLICE_OUT = BAND_OUT * 2   # natural px, matches voidborn's own slice=16
+SLICE_OUT = BAND_OUT  # 32 — must equal solid ring depth in the exported SVG
 
 
 def generate(faction, frames=8):

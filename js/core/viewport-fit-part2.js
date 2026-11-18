@@ -7,7 +7,87 @@
     const onFxEsc = (...args) => NS.onFxEsc(...args); // defined in a later part
     const startSway = (...args) => NS.startSway(...args); // defined in a later part
     const fillFxPlate = (...args) => NS.fillFxPlate(...args); // defined in viewport-fit-plate.js
-    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot, syncFxAudioMusicSplit }); // functions (hoisted)
+    Object.assign(NS, { setFxOpen, restoreFxScroll, buildFxPlate, startDebugFps, applyFxGeom, startPerfFps, collectPerfSnapshot, syncFxAudioMusicSplit, runToolsAction }); // functions (hoisted)
+
+    function runToolsAction(action) {
+        if (!action) return;
+        if (action === 'startupSound' && typeof startupSoundEditorUI !== 'undefined') startupSoundEditorUI.show();
+        else if (action === 'soundtrackEditor' && typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
+        else if (action === 'shotBehavior') {
+            const openShot = function () {
+                if (typeof shotBehaviorEditorUI !== 'undefined') shotBehaviorEditorUI.show('laser');
+            };
+            if (typeof ensureVfEditors === 'function') ensureVfEditors(openShot);
+            else openShot();
+        }
+        else if (action === 'factionCommand' && typeof factionCommandUI !== 'undefined' && factionCommandUI.show) factionCommandUI.show();
+        else if (action === 'bezelEditor') {
+            if (typeof bezelEditorUI !== 'undefined') {
+                if (bezelEditorUI.isOpen && bezelEditorUI.isOpen()) bezelEditorUI.hide();
+                else if (bezelEditorUI.show) bezelEditorUI.show();
+            }
+        }
+        else if (action === 'bezelFrame') {
+            if (typeof bezelEditorUI !== 'undefined' && bezelEditorUI.showTab) bezelEditorUI.showTab('frame');
+            else if (typeof bezelEditorUI !== 'undefined' && bezelEditorUI.show) bezelEditorUI.show();
+        }
+        else if (action === 'faceEditor' && typeof startScreenManager !== 'undefined') {
+            if (startScreenManager.openFaceEditor) startScreenManager.openFaceEditor();
+            else startScreenManager.openAssetGenerator({ typeId: 'portrait' });
+        }
+        else if (action === 'assetGen' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator(null);
+        else if (action === 'assetGenFaction' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
+        else if (action === 'assetGenFactionShips' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
+        else if (action === 'transmissionEditor') {
+            const openTx = function () { if (typeof transmissionEditorUI !== 'undefined') transmissionEditorUI.show(); };
+            if (typeof transmissionEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openTx);
+            else openTx();
+        }
+        else if (action === 'difficultyEditor') {
+            const openDiff = function () { if (typeof difficultyEditorUI !== 'undefined') difficultyEditorUI.show(); };
+            if (typeof difficultyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openDiff);
+            else openDiff();
+        }
+        else if (action === 'themeEditor') {
+            const open = function () { if (typeof themeEditorUI !== 'undefined') themeEditorUI.show(); };
+            if (typeof themeEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'shipEditor') {
+            const open = function () { if (typeof shipEditorUI !== 'undefined') shipEditorUI.show(); };
+            if (typeof shipEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'enemyEditor') {
+            const open = function () { if (typeof enemyEditorUI !== 'undefined') enemyEditorUI.show(); };
+            if (typeof enemyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'planetEditor') {
+            const open = function () { if (typeof planetEditorUI !== 'undefined') planetEditorUI.show(); };
+            if (typeof planetEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'componentEditor') {
+            const open = function () { if (typeof componentEditorUI !== 'undefined') componentEditorUI.open({}); };
+            if (typeof componentEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'abilityEditor') {
+            const open = function () { if (typeof abilityEditorUI !== 'undefined') abilityEditorUI.show(); };
+            if (typeof abilityEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'hangarTestArena') {
+            const open = function () { if (typeof hangarTestArena !== 'undefined') hangarTestArena.show({}); };
+            if (typeof hangarTestArena === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
+            else open();
+        }
+        else if (action === 'hudLayoutEditor' && typeof hudLayoutEditor !== 'undefined') hudLayoutEditor.toggleEdit();
+        else if (action === 'saveDevDefaults' && typeof vfDevDefaults !== 'undefined') {
+            vfDevDefaults.save(function () { /* no UI em here */ });
+        }
+    }
 
     function restoreFxScroll() {
         const body = document.querySelector('#vf-fx .vf-fx-body');
@@ -362,72 +442,16 @@
         else if (d.lkIndicator) { ui.setIndicatorWeight(d.lkIndicator); }
         else if (d.toolsAction) {
             setFxOpen(false);
-            if (d.toolsAction === 'startupSound' && typeof startupSoundEditorUI !== 'undefined') startupSoundEditorUI.show();
-            else if (d.toolsAction === 'soundtrackEditor' && typeof soundtrackEditorUI !== 'undefined') soundtrackEditorUI.show();
-            else if (d.toolsAction === 'shotBehavior') {
-                const openShot = () => {
-                    if (typeof shotBehaviorEditorUI !== 'undefined') shotBehaviorEditorUI.show('laser');
-                };
-                if (typeof ensureVfEditors === 'function') ensureVfEditors(() => openShot());
-                else openShot();
-            }
-            else if (d.toolsAction === 'factionCommand' && typeof factionCommandUI !== 'undefined' && factionCommandUI.show) factionCommandUI.show();
-            else if (d.toolsAction === 'faceEditor' && typeof startScreenManager !== 'undefined') {
-                if (startScreenManager.openFaceEditor) startScreenManager.openFaceEditor();
-                else startScreenManager.openAssetGenerator({ typeId: 'portrait' });
-            }
-            else if (d.toolsAction === 'assetGen' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator(null);
-            else if (d.toolsAction === 'assetGenFaction' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
-            else if (d.toolsAction === 'assetGenFactionShips' && typeof startScreenManager !== 'undefined') startScreenManager.openAssetGenerator({ typeId: 'faction' });
-            else if (d.toolsAction === 'transmissionEditor') {
-                const openTx = () => { if (typeof transmissionEditorUI !== 'undefined') transmissionEditorUI.show(); };
-                if (typeof transmissionEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openTx);
-                else openTx();
-            }
-            else if (d.toolsAction === 'difficultyEditor') {
-                const openDiff = () => { if (typeof difficultyEditorUI !== 'undefined') difficultyEditorUI.show(); };
-                if (typeof difficultyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(openDiff);
-                else openDiff();
-            }
-            else if (d.toolsAction === 'themeEditor') {
-                const open = () => { if (typeof themeEditorUI !== 'undefined') themeEditorUI.show(); };
-                if (typeof themeEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'shipEditor') {
-                const open = () => { if (typeof shipEditorUI !== 'undefined') shipEditorUI.show(); };
-                if (typeof shipEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'enemyEditor') {
-                const open = () => { if (typeof enemyEditorUI !== 'undefined') enemyEditorUI.show(); };
-                if (typeof enemyEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'planetEditor') {
-                const open = () => { if (typeof planetEditorUI !== 'undefined') planetEditorUI.show(); };
-                if (typeof planetEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'componentEditor') {
-                const open = () => { if (typeof componentEditorUI !== 'undefined') componentEditorUI.open({}); };
-                if (typeof componentEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'abilityEditor') {
-                const open = () => { if (typeof abilityEditorUI !== 'undefined') abilityEditorUI.show(); };
-                if (typeof abilityEditorUI === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'hangarTestArena') {
-                const open = () => { if (typeof hangarTestArena !== 'undefined') hangarTestArena.show({}); };
-                if (typeof hangarTestArena === 'undefined' && typeof ensureVfEditors === 'function') ensureVfEditors(open);
-                else open();
-            }
-            else if (d.toolsAction === 'hudLayoutEditor' && typeof hudLayoutEditor !== 'undefined') hudLayoutEditor.toggleEdit();
-            else if (d.toolsAction === 'saveDevDefaults' && typeof vfDevDefaults !== 'undefined') {
+            if (d.toolsAction === 'saveDevDefaults' && typeof vfDevDefaults !== 'undefined') {
                 const em = b.querySelector('em');
-                vfDevDefaults.save((ok, n, msg) => { if (em) { em.textContent = ok ? 'SAVED ' + n + ' SETTINGS' : String(msg).toUpperCase().slice(0, 40); setTimeout(() => { em.textContent = 'SAVE DEV DEFAULTS'; }, 3500); } });
+                vfDevDefaults.save(function (ok, n, msg) {
+                    if (em) {
+                        em.textContent = ok ? 'SAVED ' + n + ' SETTINGS' : String(msg).toUpperCase().slice(0, 40);
+                        setTimeout(function () { em.textContent = 'SAVE DEV DEFAULTS'; }, 3500);
+                    }
+                });
+            } else {
+                runToolsAction(d.toolsAction);
             }
         }
         else if (d.dfPreset) { if (typeof difficultyConfigManager !== 'undefined') difficultyConfigManager.setDifficulty(d.dfPreset); }

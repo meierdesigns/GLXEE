@@ -1513,6 +1513,7 @@ html body .profile-selection-name-mode.is-name-step .profile-faction-lore, html 
     z-index: 0;
     pointer-events: none;
     background: var(--fr-band-fill, #000);
+    opacity: var(--fr-bg-crop, 1);
     clip-path: var(--fr-shape);
     /* Punch the glass opening; composite keeps the band fill. */
     -webkit-mask:

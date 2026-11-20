@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GLXEE</title>
+    <script>/* A saved custom bezel replaces the stock art right after boot: hide the stock art until it is in (no flash). */
+    try { var s = localStorage.getItem('vf-bezel-saved-v1'); if (s && s !== '{}') { document.documentElement.setAttribute('data-vf-bz-pending', '1'); setTimeout(function () { document.documentElement.removeAttribute('data-vf-bz-pending'); }, 2500); } } catch (e) { /* ignore */ }</script>
     <style>/* The fight screen stays hidden until a fight is really shown (no flash of it while the page boots). */
     html:not(.vf-game-shown) .game-container { display: none !important; }</style>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">

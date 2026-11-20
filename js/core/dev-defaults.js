@@ -82,7 +82,33 @@ var vfDevDefaults = (function () {
             .catch(download);
     }
 
+    // Autosave: on localhost every saved setting is mirrored into assets/settings/dev-settings.json (via the
+    // dev server), so settings live in files and not only in the browser cache.
+    var syncT = 0, applying = false;
+    function syncNow() {
+        syncT = 0;
+        if (typeof fetch !== 'function') return;
+        try {
+            fetch('/__settings-sync', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(collect()) }).catch(function () { /* no dev server */ });
+        } catch (e) { /* ignore */ }
+    }
+    function scheduleSync(key) {
+        if (applying || !key || !/^(vf|paletteUI)/.test(key) || SKIP.test(key)) return;
+        clearTimeout(syncT);
+        syncT = setTimeout(syncNow, 600);
+    }
+    (function hookStorage() {
+        if (!/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return;
+        try {
+            var proto = Storage.prototype, set = proto.setItem, rem = proto.removeItem;
+            proto.setItem = function (k, v) { var r = set.apply(this, arguments); if (this === localStorage) scheduleSync(k); return r; };
+            proto.removeItem = function (k) { var r = rem.apply(this, arguments); if (this === localStorage) scheduleSync(k); return r; };
+        } catch (e) { /* ignore */ }
+    })();
+
+    applying = true;
     apply();
+    applying = false;
     return { apply: apply, collect: collect, save: save };
 })();
 window.vfDevDefaults = vfDevDefaults;

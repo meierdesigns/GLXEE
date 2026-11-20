@@ -309,8 +309,8 @@
                     fxSlider('BEVEL', 'fr:bevel', 0, 14, 1, st.bevel != null ? st.bevel : 5, '') +
                     fxSlider('DECO', 'fr:deco', 0, 100, 10, st.deco != null ? st.deco : 100, '%');
                 if (cur === 'voidborn') {
-                    h += fxSlider('BEZEL FILL', 'fr:bgCrop', 0, 100, 5, st.bgCrop != null ? st.bgCrop : 50, '%') +
-                        fxSlider('VINE INSET', 'fr:vineInset', 0, 8, 1, st.vineInset != null ? st.vineInset : 2, '');
+                    h += fxSlider('BEZEL FILL', 'fr:bgCrop', 0, 100, 5, st.bgCrop != null ? st.bgCrop : 100, '%') +
+                        fxSlider('VINE INSET', 'fr:vineInset', 0, 8, 1, st.vineInset != null ? st.vineInset : 0, '');
                 }
             })();
         } else if (vfs.fxTab === 'look') {

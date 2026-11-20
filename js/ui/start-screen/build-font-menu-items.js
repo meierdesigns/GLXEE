@@ -153,7 +153,7 @@ extendClass(StartScreenManager, {
                 onboardingManager.createUI();
             }
             try {
-                window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync'));
+                window.dispatchEvent(new CustomEvent('vf-bezel-tools-sync', { detail: { devToggle: true } }));
             } catch (e) { /* ignore */ }
             // Combat Q/E weapon-fill cheat must not stick after DevMode is off.
             if (!this.devMode && typeof bulletManager !== 'undefined'

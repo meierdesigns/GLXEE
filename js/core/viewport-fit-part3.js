@@ -914,7 +914,7 @@
         return { plate: '<span class="vf-pilot-crest" data-f="' + esc(fac) + '"><span class="vf-pilot-crest-in">' + big + '</span></span><span class="vf-pilot-name">' + esc(p.name || '') + '</span>', res: res };
     }
     let pilotSig = '';
-    function syncPilotPlate() {
+    function syncPilotPlate(keepFaction) {
         const frame = document.getElementById('vf-bezel');
         if (!frame) return;
         const frameEl = document.getElementById('vf-bezel');
@@ -929,8 +929,10 @@
             try { fac = ROOT.getAttribute('data-faction') || (frameEl && frameEl.getAttribute('data-faction')) || (window.vfGuiState && window.vfGuiState.id) || ''; } catch (e) { /* ignore */ }
             fac = fac || 'terran';
         }
+        // DevMode flip: only chrome changes — never touch / release the bezel's faction (no switching).
+        if (keepFaction) { /* leave the bezel exactly as it is */ }
         // While a faction is being picked, the picker drives the bezel; release it afterwards.
-        if (frameEl && frameEl.hasAttribute('data-fx-preview')) {
+        else if (frameEl && frameEl.hasAttribute('data-fx-preview')) {
             // The frame editor in the FX dropdown is previewing another faction.
             fac = frameEl.getAttribute('data-faction') || fac;
         } else if (frameEl && frameEl.hasAttribute('data-preview')) {
@@ -943,7 +945,8 @@
             }
         }
         // One owner for the switch (see faction-gui.js): it animates a real change and ignores previews / the wizard.
-        if (typeof factionGui !== 'undefined') { factionGui.reconcile(); if (known) factionGui.follow(fac); }
+        if (keepFaction) { /* see above */ }
+        else if (typeof factionGui !== 'undefined') { factionGui.reconcile(); if (known) factionGui.follow(fac); }
         else if (frameEl && !frameEl.getAttribute('data-faction')) frameEl.setAttribute('data-faction', fac);
         if (frameEl && !frameEl.querySelector('.vf-bezel-deco')) {
             const d = document.createElement('div');
@@ -978,7 +981,7 @@
         syncPilotTuner(frame);
     }
     window.addEventListener('vf-pilot-changed', function () { syncPilotPlate(); });
-    window.addEventListener('vf-bezel-tools-sync', function () { syncPilotPlate(); });
+    window.addEventListener('vf-bezel-tools-sync', function (e) { syncPilotPlate(!!(e && e.detail && e.detail.devToggle)); });
     // One boot sync; further updates are event-driven (login/logout/faction).
     // Slow refresh only while a pilot is active (resource counters on the plate).
     if (document.readyState === 'loading') {
@@ -1052,7 +1055,7 @@
         ]
     };
     const PH_ALL = PH_TABS.reduce(function (a, t) { return a.concat(PH_SECTIONS[t[0]] || []); }, []);
-    const PH_FR_DEFAULTS = { bgCrop: 50, vineInset: 2 };
+    const PH_FR_DEFAULTS = { bgCrop: 100, vineInset: 0 };
 
     // Frame edit (Devmode): draggable on-screen grips for bezel fill / vine inset.
     // Lives on #vf-bezel so the grip sits in the band. Writes via phSetFr (same keys as HUD).
@@ -1081,7 +1084,9 @@
             const row = document.createElement('div');
             row.className = 'vf-frame-edit-row';
             row.style.top = h.topPct + '%';
-            row.innerHTML = '<span class="vf-frame-edit-label">' + h.label + '</span><i class="vf-frame-edit-grip" data-fe="' + h.key + '"></i>';
+            row.innerHTML = '<i class="vf-frame-edit-track" style="width:' + h.lenExpr + '"></i>' +
+                '<span class="vf-frame-edit-label" style="left:calc(' + h.lenExpr + ' + 18px)">' + h.label + ' <b data-fe-val="' + h.key + '"></b></span>' +
+                '<i class="vf-frame-edit-grip" data-fe="' + h.key + '"></i>';
             ov.appendChild(row);
         });
         ov.addEventListener('pointerdown', onFrameEditGripDown);
@@ -1101,6 +1106,8 @@
             const frac = lenPx > 0 ? clamp((v - h.min) / (h.max - h.min), 0, 1) : 0;
             grip.style.left = (frac * lenPx) + 'px';
             grip.title = h.label + ': ' + v;
+            const vo = ov.querySelector('[data-fe-val="' + h.key + '"]');
+            if (vo) vo.textContent = String(v);
         });
     }
     function onFrameEditGripDown(e) {
@@ -1121,6 +1128,8 @@
             const v = Math.round(raw / h.step) * h.step;
             grip.style.left = (clamp((v - h.min) / (h.max - h.min), 0, 1) * lenPx) + 'px';
             grip.title = h.label + ': ' + v;
+            const vo2 = grip.parentElement.querySelector('[data-fe-val]');
+            if (vo2) vo2.textContent = String(v);
             phSetFr(key, v);
             if (vfs.phOpen) buildPilotTunePanel(frame);
         };
